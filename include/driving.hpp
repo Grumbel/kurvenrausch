@@ -21,6 +21,7 @@ public:
     void update(float dt);
     void refill() { canisters_ = capacity; }
     void reset() { canisters_ = capacity; burn_ = 0.f; }
+    void stop() { burn_ = 0.f; } // cuts the current burn short
 
     bool burning() const { return burn_ > 0.f; }
     int canisters() const { return canisters_; }
@@ -32,6 +33,29 @@ public:
 private:
     int canisters_ = capacity;
     float burn_ = 0.f;
+};
+
+// The fuel tank. Burning depends on the engine's load; at a gas station the
+// tank fills up quickly.
+class Fuel {
+public:
+    static constexpr float tank_seconds = 100.f; // a full tank at full load
+    static constexpr float fill_seconds = 4.f;   // empty to full at the pump
+    static constexpr float low = 0.2f;           // the gauge warns below this
+
+    // Engine load 0 .. 1 from the pedal and the revs: idling still burns a little.
+    static float load(float throttle, float rpm);
+    void burn(float load, float dt);
+    void refuel(float dt);
+    void reset() { level_ = 1.f; }
+    void set(float level);
+
+    float level() const { return level_; }
+    bool empty() const { return level_ <= 0.f; }
+    bool full() const { return level_ >= 1.f; }
+
+private:
+    float level_ = 1.f;
 };
 
 // Speed after one step that changed it from `before` to `after`: the engine
@@ -59,5 +83,30 @@ bool close_pass(float gap_before, float gap_after, float lateral, float car_widt
 // keeps `clearance` from the player's line and is not `busy`, or -1. A car
 // never cuts across the player's line, unless it is right in it.
 int yield_lane(int lanes, float car_x, float player_x, float clearance, const std::vector<bool>& busy);
+
+// Speed a car wants when following a vehicle going `leader_speed` at
+// `distance` ahead: the leader's speed at the gap it keeps, a bit faster
+// (`closing` per unit of distance) further back to close in, slower when
+// too close to open the gap again; never above `cruise`, never backwards.
+float follow_speed(float cruise, float leader_speed, float distance, float gap, float closing);
+
+// The crash when the car hits something solid at speed, as a function of the
+// time since the impact: the car tumbles through a few decaying hops while
+// rolling over twice, slides outwards and comes to rest upright, then is put
+// back on the road, blinking.
+struct CrashPose {
+    float angle = 0.f;   // roll in radians, clockwise on screen
+    float lift = 0.f;    // pixels above the ground
+    float slide = 0.f;   // pixels sideways, towards the crash side
+    float recover = 0.f; // 0 .. 1: progress of being put back on the road
+    bool visible = true; // blinks while being put back
+};
+constexpr float crash_tumble_seconds = 1.5f;
+constexpr float crash_recover_start = 2.0f;
+constexpr float crash_seconds = 2.8f;
+// side: -1 crashed on the left of the road, +1 on the right.
+CrashPose crash_pose(float t, int side);
+// Number of times the car touched down in (t0, t1].
+int crash_landings(float t0, float t1);
 
 } // namespace racer

@@ -4,6 +4,7 @@
 #include "driving.hpp"
 
 #include "track.hpp"
+#include "types.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -25,6 +26,22 @@ float Nitro::intensity() const {
     return std::clamp(burn_ / 0.4f, 0.f, 1.f);
 }
 
+float Fuel::load(float throttle, float rpm) {
+    return 0.15f + 0.85f * std::clamp(throttle, 0.f, 1.f) * (0.5f + 0.5f * std::clamp(rpm, 0.f, 1.f));
+}
+
+void Fuel::burn(float load, float dt) {
+    level_ = std::max(0.f, level_ - std::clamp(load, 0.f, 1.f) * dt / tank_seconds);
+}
+
+void Fuel::refuel(float dt) {
+    level_ = std::min(1.f, level_ + dt / fill_seconds);
+}
+
+void Fuel::set(float level) {
+    level_ = std::clamp(level, 0.f, 1.f);
+}
+
 float limit_speed(float before, float after, float top, float drag, float dt) {
     if (after <= top) return after;
     // Braking still works up here; accelerating does not.
@@ -44,6 +61,55 @@ float signed_gap(float from, float to, float length) {
 bool close_pass(float gap_before, float gap_after, float lateral, float car_width, float max_step) {
     return gap_before > 0.f && gap_after <= 0.f && gap_before - gap_after < max_step &&
            std::abs(lateral) < 2.f * car_width;
+}
+
+namespace {
+
+// The hops of a crash: duration in seconds and height in pixels.
+constexpr float hop_time[] = {0.6f, 0.5f, 0.4f};
+constexpr float hop_height[] = {46.f, 20.f, 8.f};
+constexpr float slide_pixels = 28.f;
+
+float smoothstep(float x) {
+    x = std::clamp(x, 0.f, 1.f);
+    return x * x * (3.f - 2.f * x);
+}
+
+} // namespace
+
+CrashPose crash_pose(float t, int side) {
+    CrashPose p;
+    const float dir = side < 0 ? -1.f : 1.f;
+    const float u = std::clamp(t / crash_tumble_seconds, 0.f, 1.f);
+    const float ease = 1.f - (1.f - u) * (1.f - u); // fast at first, slowing down
+    // Two full rolls, so it ends upright.
+    p.angle = t < crash_tumble_seconds ? dir * 4.f * PI * ease : 0.f;
+    float start = 0.f;
+    for (size_t i = 0; i < 3; ++i) {
+        if (t >= start && t < start + hop_time[i]) {
+            const float x = (t - start) / hop_time[i];
+            p.lift = 4.f * hop_height[i] * x * (1.f - x);
+        }
+        start += hop_time[i];
+    }
+    p.recover = smoothstep((t - crash_recover_start) / (crash_seconds - crash_recover_start));
+    p.slide = dir * slide_pixels * ease * (1.f - p.recover);
+    p.visible = t < crash_recover_start || t >= crash_seconds || static_cast<int>(t / 0.08f) % 2 == 0;
+    return p;
+}
+
+int crash_landings(float t0, float t1) {
+    int n = 0;
+    float end = 0.f;
+    for (float d : hop_time) {
+        end += d;
+        if (t0 < end && end <= t1) ++n;
+    }
+    return n;
+}
+
+float follow_speed(float cruise, float leader_speed, float distance, float gap, float closing) {
+    return std::clamp(leader_speed + (distance - gap) * closing, 0.f, cruise);
 }
 
 int yield_lane(int lanes, float car_x, float player_x, float clearance, const std::vector<bool>& busy) {

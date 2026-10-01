@@ -516,6 +516,79 @@ void test_speed_rules() {
     CHECK(!close_pass(4000.f, -4000.f, 0.f, car, 500.f)); // a jump, not a pass
 }
 
+void test_fuel() {
+    using racer::Fuel;
+    Fuel f;
+    CHECK(f.full() && !f.empty());
+    // Idling burns less than full throttle at high revs, which burns a tank
+    // in tank_seconds.
+    CHECK(Fuel::load(0.f, 0.f) > 0.f);
+    CHECK(Fuel::load(0.f, 0.f) < 0.5f * Fuel::load(1.f, 0.5f));
+    CHECK_NEAR(Fuel::load(1.f, 1.f), 1.f, 1e-6f);
+    f.burn(1.f, Fuel::tank_seconds / 2.f);
+    CHECK_NEAR(f.level(), 0.5f, 1e-5f);
+    f.burn(1.f, Fuel::tank_seconds);
+    CHECK(f.empty() && f.level() == 0.f); // never below empty
+    // The pump fills it in fill_seconds, never above full.
+    f.refuel(Fuel::fill_seconds / 4.f);
+    CHECK_NEAR(f.level(), 0.25f, 1e-5f);
+    f.refuel(Fuel::fill_seconds);
+    CHECK(f.full() && f.level() == 1.f);
+    f.set(0.1f);
+    CHECK_NEAR(f.level(), 0.1f, 1e-6f);
+    f.reset();
+    CHECK(f.full());
+}
+
+void test_follow_speed() {
+    using racer::follow_speed;
+    // Far behind it closes in, but no faster than it cruises.
+    CHECK_NEAR(follow_speed(100.f, 50.f, 1000.f, 400.f, 1.5f), 100.f, 1e-4f);
+    CHECK_NEAR(follow_speed(100.f, 50.f, 420.f, 400.f, 1.5f), 80.f, 1e-4f);
+    // At the gap it matches the leader, closer it drops back.
+    CHECK_NEAR(follow_speed(100.f, 50.f, 400.f, 400.f, 1.5f), 50.f, 1e-4f);
+    CHECK(follow_speed(100.f, 50.f, 380.f, 400.f, 1.5f) < 50.f);
+    // Behind a stopped car it stops short of it, never reversing.
+    CHECK_NEAR(follow_speed(100.f, 0.f, 400.f, 400.f, 1.5f), 0.f, 1e-4f);
+    CHECK_NEAR(follow_speed(100.f, 0.f, 100.f, 400.f, 1.5f), 0.f, 1e-4f);
+}
+
+void test_crash_pose() {
+    using namespace racer;
+    // Starts and ends on the ground, upright and in place.
+    const CrashPose start = crash_pose(0.f, 1);
+    CHECK_NEAR(start.angle, 0.f, 1e-6f);
+    CHECK_NEAR(start.lift, 0.f, 1e-6f);
+    CHECK_NEAR(start.slide, 0.f, 1e-6f);
+    const CrashPose end = crash_pose(crash_seconds, 1);
+    CHECK_NEAR(std::remainder(end.angle, 2.f * PI), 0.f, 1e-4f);
+    CHECK_NEAR(end.lift, 0.f, 1e-6f);
+    CHECK_NEAR(end.slide, 0.f, 1e-4f);
+    CHECK_NEAR(end.recover, 1.f, 1e-6f);
+    CHECK(end.visible);
+    // Up in the air during the first hop, higher than during the last.
+    CHECK(crash_pose(0.3f, 1).lift > 40.f);
+    CHECK(crash_pose(0.3f, 1).lift > 3.f * crash_pose(1.3f, 1).lift);
+    // Rolls over twice, in the direction of the crash side.
+    CHECK(crash_pose(0.5f, 1).angle > 0.f);
+    CHECK(crash_pose(0.5f, -1).angle < 0.f);
+    CHECK_NEAR(crash_pose(crash_tumble_seconds - 1e-4f, 1).angle, 4.f * PI, 1e-2f);
+    // Slides outwards, rests upright, then is put back.
+    CHECK(crash_pose(1.8f, -1).slide < -20.f);
+    CHECK_NEAR(crash_pose(1.8f, 1).angle, 0.f, 1e-6f);
+    CHECK_NEAR(crash_pose(1.8f, 1).lift, 0.f, 1e-6f);
+    CHECK(crash_pose(1.8f, 1).recover == 0.f);
+    CHECK(crash_pose(2.4f, 1).recover > 0.f && crash_pose(2.4f, 1).recover < 1.f);
+    int hidden = 0;
+    for (float t = crash_recover_start; t < crash_seconds; t += 0.01f) hidden += !crash_pose(t, 1).visible;
+    CHECK(hidden > 10); // blinks
+    // Three touchdowns, each counted once however the time is stepped.
+    CHECK(crash_landings(0.f, crash_seconds) == 3);
+    int n = 0;
+    for (float t = 0.f; t < crash_seconds; t += 1.f / 60.f) n += crash_landings(t, t + 1.f / 60.f);
+    CHECK(n == 3);
+}
+
 void test_yield_lane() {
     using namespace racer;
     const std::vector<bool> free3(3, false);
@@ -911,6 +984,9 @@ int main() {
     test_nitro();
     test_speed_rules();
     test_yield_lane();
+    test_follow_speed();
+    test_fuel();
+    test_crash_pose();
     test_road_mirror();
     test_framebuffer_blit();
     test_blit_rotated();
