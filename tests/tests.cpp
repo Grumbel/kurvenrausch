@@ -289,7 +289,7 @@ void test_start_line() {
     CHECK(!crossed_line_forward(50.f, 90.f, line, L));      // short of the line
     CHECK(!crossed_line_forward(150.f, 190.f, line, L));    // already past it
     // Stepping backwards, e.g. after bumping a car, is not a crossing ...
-    CHECK(!crossed_line_forward(140.f, 99.f, line, L));
+    CHECK(!crossed_line_forward(140.f, 100.f - 1.f, line, L));
     CHECK(!crossed_line_forward(160.f, 120.f, line, L));
     // ... nor is crossing the line backwards.
     CHECK(!crossed_line_forward(110.f, 90.f, line, L));
@@ -299,6 +299,61 @@ void test_start_line() {
     // A step that carries the car over the seam and on past a line just behind it.
     CHECK(crossed_line_forward(L - 5.f, 105.f, line, L));
     CHECK(!crossed_line_forward(L - 5.f, 95.f, line, L));
+}
+
+// Invariants of the real route that the renderer and the physics rely on.
+void test_demo_track() {
+    using namespace racer;
+    const Track t = build_demo_track();
+    const int n = static_cast<int>(t.segments.size());
+
+    CHECK(t.zones.size() == 6);
+    CHECK(t.zones.front().first_segment == 0);
+    CHECK((int)t.zone_index.size() == n && (int)t.looks.size() == n);
+    for (size_t k = 1; k < t.zones.size(); ++k) {
+        const int length = t.zones[k].first_segment - t.zones[k - 1].first_segment;
+        CHECK(length > 200); // longer than the blend between zones
+    }
+    CHECK(n - t.zones.back().first_segment > 200);
+
+    // The lap closes: no jump in height at the seam, and every segment joins the next.
+    CHECK_NEAR(t.segments.front().y1, 0.f, 1e-3f);
+    CHECK_NEAR(t.segments.back().y2, 0.f, 1.f);
+    for (int i = 1; i < n; ++i) {
+        CHECK_NEAR(t.segments[static_cast<size_t>(i)].y1, t.segments[static_cast<size_t>(i) - 1].y2, 1e-3f);
+    }
+
+    for (int i = 0; i < n; ++i) {
+        const Segment& s = t.segments[static_cast<size_t>(i)];
+        const RoadTheme& look = t.look(i);
+        CHECK(look.lanes == 2 || look.lanes == 3);
+        CHECK(look.grip > 0.3f && look.grip <= 1.f);
+        // Nothing is planted on a side that carries a rail or cliff.
+        for (const RoadsideObject& o : s.scenery) {
+            if (o.kind == Scenery::Gantry) continue;
+            CHECK(!(o.offset < 0.f && s.left != Edge::None));
+            CHECK(!(o.offset > 0.f && s.right != Edge::None));
+            // Landmarks and solid objects must stay clear of the road itself.
+            CHECK(std::abs(o.offset) >= 1.1f);
+        }
+    }
+
+    // The route has cliffs, rails and all the weather the zones promise.
+    bool cliff = false, rail = false;
+    float max_rain = 0.f, max_snow = 0.f;
+    for (int i = 0; i < n; ++i) {
+        const Segment& s = t.segments[static_cast<size_t>(i)];
+        cliff = cliff || s.left == Edge::Cliff || s.right == Edge::Cliff;
+        rail = rail || s.left == Edge::Rail || s.right == Edge::Rail;
+        max_rain = std::max(max_rain, t.look(i).rain);
+        max_snow = std::max(max_snow, t.look(i).snowfall);
+    }
+    CHECK(cliff && rail);
+    CHECK(max_rain > 0.5f && max_snow > 0.5f);
+
+    // The start line and its gantry are on the first straight.
+    CHECK(t.segments[8].checker && t.segments[9].checker);
+    CHECK(t.zone_number_at(t.start_z) == 0);
 }
 
 void test_lanes() {
@@ -345,6 +400,7 @@ int main() {
     test_weather_mixing();
     test_lanes();
     test_start_line();
+    test_demo_track();
 
     if (failures) {
         std::fprintf(stderr, "%d check(s) failed\n", failures);

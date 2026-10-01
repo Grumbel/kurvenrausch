@@ -16,6 +16,8 @@ struct HudState {
     float best_lap = 0.f;
     std::string message;         // centred banner, empty for none
     bool message_visible = false;// for blinking
+    std::string banner;          // country, shown when entering a new zone
+    std::string banner_sub;      // region below it
 };
 
 void draw_hud(Framebuffer& fb, const HudState& hud);

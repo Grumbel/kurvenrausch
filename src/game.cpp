@@ -6,6 +6,7 @@
 #include <SDL2/SDL.h>
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <iostream>
 
 namespace racer {
@@ -82,6 +83,8 @@ void Game::reset() {
     lap_time_ = last_lap_ = best_lap_ = 0.f;
     message_.clear();
     message_time_ = 0.f;
+    zone_ = -1;
+    banner_time_ = 0.f;
 }
 
 void Game::update_rumble() {
@@ -133,8 +136,27 @@ void Game::run() {
     }
 }
 
+float Game::zone_start_position(int index) const {
+    const Zone& zone = track_.zones.at(static_cast<size_t>(index));
+    // Past the fade into the zone, and the camera sits player_z behind the car.
+    const float cam = world_.get<Camera>(camera_).player_z();
+    return track_.wrap(static_cast<float>(zone.first_segment + 80) * track_.segment_length - cam);
+}
+
+void Game::print_zones() const {
+    for (size_t i = 0; i < track_.zones.size(); ++i) {
+        const Zone& z = track_.zones[i];
+        const int end = i + 1 < track_.zones.size() ? track_.zones[i + 1].first_segment
+                                                    : static_cast<int>(track_.segments.size());
+        std::printf("%zu\t%s\t%s\tsegments %d..%d\tposition %.0f\n", i, z.country.c_str(), z.region.c_str(),
+                    z.first_segment, end - 1, zone_start_position(static_cast<int>(i)));
+    }
+}
+
 bool Game::screenshot(const ScreenshotOptions& opts) {
-    world_.get<Transform>(player_).z = track_.wrap(opts.position);
+    const float start = opts.zone >= 0 ? zone_start_position(opts.zone) : opts.position;
+    world_.get<Transform>(player_).z = track_.wrap(start);
+    zone_ = -1;
     for (int i = 0; i < opts.frames; ++i) {
         InputState in = autopilot();
         if (opts.force_steer) in.steer = opts.steer;
@@ -317,6 +339,15 @@ void Game::update_traffic(float dt) {
 
 void Game::update_laps(float prev_z, float z, float dt) {
     clock_ += dt;
+
+    // Entering a new zone: announce the country and region for a few seconds.
+    const int zone = track_.zone_number_at(z);
+    if (zone != zone_) {
+        zone_ = zone;
+        banner_time_ = 4.f;
+    }
+    if (banner_time_ > 0.f) banner_time_ -= dt;
+
     if (race_started_) lap_time_ += dt;
     if (message_time_ > 0.f) {
         message_time_ -= dt;
@@ -408,6 +439,10 @@ void Game::render() {
     hud.best_lap = best_lap_;
     hud.message = message_;
     hud.message_visible = std::fmod(clock_, 0.5f) < 0.35f;
+    if (banner_time_ > 0.f && zone_ >= 0) {
+        hud.banner = track_.zones[static_cast<size_t>(zone_)].country;
+        hud.banner_sub = track_.zones[static_cast<size_t>(zone_)].region;
+    }
     draw_hud(fb_, hud);
 }
 

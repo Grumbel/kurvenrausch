@@ -84,6 +84,11 @@ void draw_hud(Framebuffer& fb, const HudState& hud) {
     text(fb, 56, h - 14, "KM/H", Label);
     draw_tacho(fb, 6, h - 37, hud.speed_fraction);
 
+    if (!hud.banner.empty()) {
+        text_center(fb, 40, hud.banner, Value, 2);
+        text_center(fb, 57, hud.banner_sub, Label);
+    }
+
     if (!hud.message.empty() && hud.message_visible) {
         text_center(fb, h / 2 - 50, hud.message, Label, 3);
     }

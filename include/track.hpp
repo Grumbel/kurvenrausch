@@ -132,12 +132,23 @@ inline float lane_center(int lanes, int index) {
 // taken from the nearer one. Used to fade smoothly between zones.
 RoadTheme mix_themes(const RoadTheme& a, const RoadTheme& b, float t);
 
+// Rules for what is planted along the road in a zone.
+enum class Decor : uint8_t {
+    Riviera,   // palm avenues, billboards
+    Forest,    // dense firs
+    Alpine,    // snowy firs, chalets, boulders
+    Tuscany,   // cypress avenues, oaks, bushes
+    Desert,    // cacti, shrubs, red rocks, mesas, telephone poles
+    Coast,     // sparse: shrubs, rocks, poles where the sides are free
+};
+
 // A stretch of track with its own country, scenery and atmosphere.
 struct Zone {
     std::string country;
     std::string region;
     RoadTheme theme;
     int first_segment = 0;  // set by the track builder
+    Decor decor = Decor::Riviera;
 };
 
 // A looping track: a circular array of fixed-length segments.

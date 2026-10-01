@@ -15,6 +15,8 @@ void usage(const char* argv0) {
               << "  --screenshot FILE   render headless and save a BMP, then exit\n"
               << "  --frames N          simulation steps (60/s) before the screenshot (default 0)\n"
               << "  --position Z        start distance along the track for the screenshot\n"
+              << "  --zone N            start the screenshot inside zone N (see --print-zones)\n"
+              << "  --print-zones       list the zones of the track and exit\n"
               << "  --steer S           hold steering at S (-1 .. 1) instead of the autopilot\n"
               << "  --help              show this help\n";
 }
@@ -23,6 +25,7 @@ void usage(const char* argv0) {
 
 int main(int argc, char* argv[]) {
     racer::ScreenshotOptions shot;
+    bool print_zones = false;
 
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
@@ -32,6 +35,10 @@ int main(int argc, char* argv[]) {
             shot.frames = std::atoi(argv[++i]);
         } else if (arg == "--position" && i + 1 < argc) {
             shot.position = static_cast<float>(std::atof(argv[++i]));
+        } else if (arg == "--zone" && i + 1 < argc) {
+            shot.zone = std::atoi(argv[++i]);
+        } else if (arg == "--print-zones") {
+            print_zones = true;
         } else if (arg == "--steer" && i + 1 < argc) {
             shot.force_steer = true;
             shot.steer = static_cast<float>(std::atof(argv[++i]));
@@ -46,6 +53,11 @@ int main(int argc, char* argv[]) {
     }
 
     racer::Game game;
+
+    if (print_zones) {
+        game.print_zones();
+        return 0;
+    }
 
     if (!shot.path.empty()) {
         return game.screenshot(shot) ? 0 : 1;

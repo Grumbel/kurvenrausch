@@ -25,6 +25,7 @@ struct ScreenshotOptions {
     std::string path;
     int frames = 0;          // simulation steps at 60 Hz
     float position = 0.f;    // start distance along the track
+    int zone = -1;           // if >= 0, start inside this zone instead
     bool force_steer = false; // replace the autopilot's steering by a constant
     float steer = 0.f;
 };
@@ -45,6 +46,13 @@ public:
     // Headless mode: simulates with an autopilot, renders one frame and
     // writes it as a BMP. No window is opened.
     bool screenshot(const ScreenshotOptions& opts);
+
+    // Lists the zones of the track with their start positions on stdout.
+    void print_zones() const;
+
+    // Camera position that shows the start of zone `index` once its
+    // transition from the previous zone is over.
+    float zone_start_position(int index) const;
 
 private:
     void reset();
@@ -88,6 +96,10 @@ private:
     std::string message_;
     float message_time_ = 0.f;
     float clock_ = 0.f;
+
+    // Country banner shown when a new zone is entered.
+    int zone_ = -1;
+    float banner_time_ = 0.f;
 
     static constexpr float fixed_dt_ = 1.f / 60.f;
 };

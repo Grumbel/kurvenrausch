@@ -275,6 +275,12 @@ public:
 
     int size() const { return static_cast<int>(t_.segments.size()); }
 
+    // Starts a new zone at the current end of the track.
+    void begin_zone(Zone zone) {
+        zone.first_segment = size();
+        t_.zones.push_back(std::move(zone));
+    }
+
     // Puts edge features along segments [from, to). Cliffs fade in and out over
     // the first and last few segments of the run.
     void mark(int from, int to, Edge left, Edge right) {
@@ -311,33 +317,309 @@ private:
 
 } // namespace
 
+// ---- The six zones of the demo route ---------------------------------------
+
+Zone zone_france() {
+    Zone z{"FRANCE", "COTE D'AZUR", RoadTheme{}, 0, Decor::Riviera};
+    z.theme.sun_amount = 0.3f; // a small noon sun, the classic default look otherwise
+    return z;
+}
+
+Zone zone_germany() {
+    Zone z{"GERMANY", "SCHWARZWALD", RoadTheme{}, 0, Decor::Forest};
+    RoadTheme& t = z.theme;
+    t.sky_top = Color{0x56, 0x62, 0x78};
+    t.sky_horizon = Color{0x9e, 0xaa, 0xb6};
+    t.fog = Color{0x9e, 0xaa, 0xb6};
+    t.grass[0] = Color{0x2c, 0x5c, 0x34};
+    t.grass[1] = Color{0x28, 0x54, 0x30};
+    t.road[0] = Color{0x4c, 0x50, 0x58};
+    t.road[1] = Color{0x46, 0x4a, 0x52};
+    t.lane = Color{0xd0, 0xd4, 0xd8};
+    t.mountain_lit = Color{0x5c, 0x70, 0x74};
+    t.mountain_shade = Color{0x48, 0x5c, 0x64};
+    t.hill_lit = Color{0x30, 0x60, 0x3c};
+    t.hill_shade = Color{0x28, 0x50, 0x34};
+    t.cloud_tint = Color{0x50, 0x58, 0x66};
+    t.cloud_tint_amount = 0.75f;
+    t.fog_density = 9.f;
+    t.haze = 0.5f;
+    t.mountain_scale = 0.55f;
+    t.snow_line = 1.0e9f;
+    t.rain = 0.85f;
+    t.grip = 0.8f;
+    return z;
+}
+
+Zone zone_switzerland() {
+    Zone z{"SWITZERLAND", "ALPS", RoadTheme{}, 0, Decor::Alpine};
+    RoadTheme& t = z.theme;
+    t.sky_top = Color{0x6c, 0x88, 0xb8};
+    t.sky_horizon = Color{0xd0, 0xdc, 0xec};
+    t.fog = Color{0xd8, 0xe2, 0xee};
+    t.grass[0] = Color{0xec, 0xf2, 0xf8};
+    t.grass[1] = Color{0xdc, 0xe6, 0xf0};
+    t.road[0] = Color{0x5c, 0x60, 0x68};
+    t.road[1] = Color{0x56, 0x5a, 0x62};
+    t.cloud_tint = Color{0xb0, 0xbc, 0xd0};
+    t.cloud_tint_amount = 0.45f;
+    t.mountain_lit = Color{0x88, 0x98, 0xc0};
+    t.mountain_shade = Color{0x68, 0x78, 0xa4};
+    t.hill_lit = Color{0xc8, 0xd8, 0xe8};
+    t.hill_shade = Color{0xa8, 0xbc, 0xd4};
+    t.rock[0] = Color{0x4c, 0x50, 0x5c};
+    t.rock[1] = Color{0x72, 0x78, 0x84};
+    t.rock[2] = Color{0x9c, 0xa2, 0xae};
+    t.cap = Color{0xf4, 0xf8, 0xff};
+    t.cap_amount = 0.8f;
+    t.beyond[0] = Color{0x9c, 0xb4, 0xd0}; // the valley far below, in haze
+    t.beyond[1] = Color{0xa8, 0xbe, 0xd8};
+    t.fog_density = 7.f;
+    t.haze = 0.25f;
+    t.mountain_scale = 1.6f;
+    t.hill_scale = 0.7f;
+    t.snow_line = 36.f;
+    t.snowfall = 0.7f;
+    t.grip = 0.7f;
+    t.lanes = 2;
+    return z;
+}
+
+Zone zone_italy() {
+    Zone z{"ITALY", "TOSCANA", RoadTheme{}, 0, Decor::Tuscany};
+    RoadTheme& t = z.theme;
+    t.sky_top = Color{0x38, 0x24, 0x68};
+    t.sky_horizon = Color{0xf4, 0x9a, 0x54};
+    t.fog = Color{0xec, 0xa4, 0x72};
+    t.grass[0] = Color{0xa8, 0x98, 0x44};
+    t.grass[1] = Color{0x98, 0x88, 0x3c};
+    t.road[0] = Color{0x6e, 0x60, 0x64};
+    t.road[1] = Color{0x66, 0x58, 0x5c};
+    t.mountain_lit = Color{0xa4, 0x68, 0x7c};
+    t.mountain_shade = Color{0x70, 0x46, 0x6c};
+    t.hill_lit = Color{0x9c, 0x88, 0x44};
+    t.hill_shade = Color{0x7c, 0x6c, 0x3a};
+    t.cloud_tint = Color{0xf0, 0x84, 0x54};
+    t.cloud_tint_amount = 0.6f;
+    t.sun_amount = 1.f;
+    t.fog_density = 4.f;
+    t.haze = 0.2f;
+    t.mountain_scale = 0.8f;
+    t.snow_line = 1.0e9f;
+    t.lanes = 2;
+    return z;
+}
+
+Zone zone_arizona() {
+    Zone z{"USA", "ARIZONA", RoadTheme{}, 0, Decor::Desert};
+    RoadTheme& t = z.theme;
+    t.sky_top = Color{0x1c, 0x5c, 0xc4};
+    t.sky_horizon = Color{0xf2, 0xe2, 0xb4};
+    t.fog = Color{0xf0, 0xdc, 0xb0};
+    t.grass[0] = Color{0xe2, 0xb2, 0x72};
+    t.grass[1] = Color{0xd6, 0xa6, 0x66};
+    t.road[0] = Color{0x7a, 0x72, 0x6e};
+    t.road[1] = Color{0x72, 0x6a, 0x66};
+    t.rumble[0] = Color{0xf0, 0xe8, 0xd8};
+    t.rumble[1] = Color{0xc8, 0x50, 0x30};
+    t.mountain_lit = Color{0xc4, 0x78, 0x52};
+    t.mountain_shade = Color{0x92, 0x52, 0x3e};
+    t.hill_lit = Color{0xd4, 0x9c, 0x62};
+    t.hill_shade = Color{0xb8, 0x84, 0x52};
+    t.cloud_tint = Color{0xff, 0xf0, 0xd8};
+    t.cloud_tint_amount = 0.3f;
+    t.sun_amount = 0.6f;
+    t.fog_density = 3.f;
+    t.haze = 0.2f;
+    t.mountain_scale = 0.6f;
+    t.snow_line = 1.0e9f;
+    t.lanes = 2;
+    t.us_markings = true;
+    return z;
+}
+
+Zone zone_california() {
+    Zone z{"USA", "CALIFORNIA", RoadTheme{}, 0, Decor::Coast};
+    RoadTheme& t = z.theme;
+    t.sky_top = Color{0xa8, 0xb8, 0xc4};
+    t.sky_horizon = Color{0xd0, 0xd8, 0xdc};
+    t.fog = Color{0xd0, 0xd8, 0xdc};
+    t.grass[0] = Color{0x98, 0x90, 0x4c};
+    t.grass[1] = Color{0x8c, 0x84, 0x44};
+    t.road[0] = Color{0x66, 0x66, 0x68};
+    t.road[1] = Color{0x5e, 0x5e, 0x60};
+    t.mountain_lit = Color{0x8c, 0x98, 0xa0};
+    t.mountain_shade = Color{0x74, 0x80, 0x8c};
+    t.hill_lit = Color{0x88, 0x88, 0x58};
+    t.hill_shade = Color{0x70, 0x70, 0x4c};
+    t.rock[0] = Color{0x6c, 0x50, 0x38};
+    t.rock[1] = Color{0x9c, 0x78, 0x50};
+    t.rock[2] = Color{0xc0, 0x98, 0x68};
+    t.cap = Color{0x7c, 0x8c, 0x48}; // scrub on top of the sandstone
+    t.cap_amount = 0.5f;
+    t.beyond[0] = Color{0x48, 0x70, 0x98};
+    t.beyond[1] = Color{0x50, 0x7a, 0xa4};
+    t.cloud_tint = Color{0xd0, 0xd8, 0xdc};
+    t.cloud_tint_amount = 0.5f;
+    t.fog_density = 18.f;
+    t.haze = 0.8f;
+    t.mountain_scale = 0.6f;
+    t.snow_line = 1.0e9f;
+    t.grip = 0.95f;
+    t.lanes = 2;
+    t.us_markings = true;
+    return z;
+}
+
+// Plants scenery along the road according to each zone's decor rules. Sides
+// that carry a rail or cliff stay free: nothing grows out of the rock or out
+// of the sea.
+void decorate(Track& track, TrackBuilder& b) {
+    Rng rng(0x6b75727au);
+    const int n = static_cast<int>(track.segments.size());
+    int last_mesa = -1000;
+
+    for (int i = 10; i < n; ++i) {
+        const Segment& seg = track.segments[static_cast<size_t>(i)];
+        const Zone& zone = track.zones[static_cast<size_t>(track.zone_index[static_cast<size_t>(i)])];
+        const auto free_side = [&](int side) { return (side < 0 ? seg.left : seg.right) == Edge::None; };
+        const auto put = [&](Scenery kind, int side, float magnitude) {
+            if (free_side(side)) b.scenery(i, kind, static_cast<float>(side) * magnitude);
+        };
+        const auto both = [&](Scenery kind, float lo, float hi) {
+            const float l = rng.range(lo, hi), r = rng.range(lo, hi);
+            put(kind, -1, l);
+            put(kind, +1, r);
+        };
+        const auto random_side = [&] { return rng.chance(0.5f) ? -1 : 1; };
+
+        switch (zone.decor) {
+            case Decor::Riviera:
+                if (i % 5 == 0) both(Scenery::Palm, 1.15f, 1.35f);
+                if (rng.chance(0.04f)) put(Scenery::Bush, random_side(), 2.2f);
+                break;
+
+            case Decor::Forest:
+                for (int side = -1; side <= 1; side += 2) {
+                    if (rng.chance(0.62f)) put(Scenery::Fir, side, rng.range(1.15f, 3.8f));
+                }
+                if (rng.chance(0.06f)) put(Scenery::Bush, random_side(), rng.range(1.1f, 2.4f));
+                if (rng.chance(0.02f)) put(Scenery::Boulder, random_side(), rng.range(1.2f, 2.5f));
+                break;
+
+            case Decor::Alpine:
+                for (int side = -1; side <= 1; side += 2) {
+                    if (rng.chance(0.3f)) put(Scenery::SnowFir, side, rng.range(1.15f, 4.f));
+                }
+                if (rng.chance(0.014f)) put(Scenery::Chalet, random_side(), rng.range(1.5f, 2.8f));
+                if (rng.chance(0.025f)) put(Scenery::Boulder, random_side(), rng.range(1.2f, 2.6f));
+                break;
+
+            case Decor::Tuscany: {
+                // Cypress avenues alternate with open countryside.
+                const bool avenue = (i / 90) % 3 == 0;
+                if (avenue) {
+                    if (i % 2 == 0) both(Scenery::Cypress, 1.12f, 1.22f);
+                } else {
+                    if (rng.chance(0.12f)) put(Scenery::Tree, random_side(), rng.range(1.3f, 4.f));
+                    if (rng.chance(0.05f)) put(Scenery::Cypress, random_side(), rng.range(1.2f, 3.f));
+                    if (rng.chance(0.06f)) put(Scenery::Bush, random_side(), rng.range(1.1f, 2.5f));
+                    if (rng.chance(0.015f)) put(Scenery::Boulder, random_side(), rng.range(1.3f, 3.f));
+                }
+                break;
+            }
+
+            case Decor::Desert:
+                if (i % 5 == 0) put(Scenery::Pole, +1, 1.2f);
+                if (rng.chance(0.07f)) put(Scenery::Cactus, random_side(), rng.range(1.2f, 4.f));
+                if (rng.chance(0.08f)) put(Scenery::DryShrub, random_side(), rng.range(1.1f, 3.f));
+                if (rng.chance(0.03f)) put(Scenery::RedRock, random_side(), rng.range(1.3f, 3.5f));
+                if (i - last_mesa > 70 && rng.chance(0.03f)) {
+                    // Far from the road so the car can never touch them.
+                    put(Scenery::Mesa, random_side(), rng.range(3.6f, 7.f));
+                    last_mesa = i;
+                }
+                if (i % 220 == 110) put(Scenery::BillboardUs, i % 440 == 110 ? -1 : 1, 1.3f);
+                break;
+
+            case Decor::Coast:
+                if (i % 6 == 0) put(Scenery::Pole, +1, 1.2f);
+                if (rng.chance(0.06f)) put(Scenery::DryShrub, random_side(), rng.range(1.1f, 3.f));
+                if (rng.chance(0.02f)) put(Scenery::RedRock, random_side(), rng.range(1.3f, 3.f));
+                if (i % 300 == 150) put(Scenery::BillboardUs, -1, 1.3f);
+                break;
+        }
+    }
+
+    // Billboards greeting the driver along the start straight.
+    for (int i = 20; i < 160; i += 20) {
+        b.scenery(i, Scenery::Billboard, (i / 20) % 2 ? -1.15f : 1.15f);
+    }
+}
+
 Track build_demo_track() {
     Track track;
     TrackBuilder b(track);
 
+    // The route: six zones, one lap through five regions of Europe and the USA.
+    // Section lengths are chosen so every zone is longer than its transition
+    // and the height returns to zero at the end of the lap.
+
+    b.begin_zone(zone_france());
     b.straight(Len::Short);
     b.low_rolling_hills();
-    const int corniche = b.size();
-    b.s_curves();
-    b.mark(corniche, b.size(), Edge::Cliff, Edge::Rail);
+    const int corniche = b.size(); // a cliff road above the sea
     b.curve(Len::Medium, Bend::Medium, Hill::Low);
+    b.curve(Len::Medium, -Bend::Medium, Hill::Medium);
+    b.road(Len::Medium, Len::Medium, Len::Medium, Bend::Easy, -Hill::Medium);
+    b.mark(corniche, b.size(), Edge::Cliff, Edge::Rail);
     b.bumps();
-    b.low_rolling_hills();
-    b.curve(Len::Long * 2, Bend::Medium, Hill::Medium);
-    b.straight(Len::Medium);
-    b.hill(Len::Medium, Hill::High);
-    b.s_curves();
-    b.curve(Len::Long, -Bend::Medium, Hill::None);
-    b.hill(Len::Long, Hill::High);
-    b.curve(Len::Long, Bend::Medium, -Hill::Low);
-    b.bumps();
-    b.hill(Len::Long, -Hill::Medium);
-    b.straight(Len::Medium);
-    b.curve(Len::Medium, -Bend::Hard, Hill::None);
-    b.s_curves();
-    b.downhill_to_end(200);
 
-    track.zones.push_back(Zone{"FRANCE", "COTE D'AZUR", RoadTheme{}, 0});
+    b.begin_zone(zone_germany());
+    b.curve(Len::Medium, -Bend::Medium, Hill::Low);
+    b.hill(Len::Medium, Hill::Medium);
+    b.curve(Len::Medium, Bend::Hard, -Hill::Low);
+    b.bumps();
+    b.curve(Len::Medium, -Bend::Medium, -Hill::Medium);
+    b.straight(Len::Medium);
+
+    b.begin_zone(zone_switzerland());
+    b.hill(Len::Medium, Hill::High);
+    const int pass = b.size(); // the pass: a wall on one side, a drop on the other
+    b.curve(Len::Medium, Bend::Hard, Hill::Medium);
+    b.curve(Len::Medium, -Bend::Hard, Hill::Medium);
+    b.mark(pass, b.size(), Edge::Cliff, Edge::Rail);
+    b.curve(Len::Short, Bend::Medium, Hill::None);
+    const int descent = b.size();
+    b.curve(Len::Medium, -Bend::Medium, -Hill::High);
+    b.hill(Len::Medium, -Hill::High);
+    b.mark(descent, b.size(), Edge::Rail, Edge::Cliff);
+    b.curve(Len::Medium, Bend::Hard, -Hill::Medium);
+
+    b.begin_zone(zone_italy());
+    b.low_rolling_hills();
+    b.curve(Len::Medium, Bend::Medium, Hill::Low);
+    b.curve(Len::Medium, -Bend::Medium, -Hill::Low);
+    b.curve(Len::Long, Bend::Easy, -Hill::Low);
+
+    b.begin_zone(zone_arizona());
+    b.hill(Len::Long, Hill::Low);
+    b.curve(Len::Long, Bend::Easy, Hill::None);
+    b.hill(Len::Medium, -Hill::Low);
+    b.bumps();
+    b.curve(Len::Medium, -Bend::Medium, Hill::Low);
+    b.straight(Len::Medium);
+
+    b.begin_zone(zone_california());
+    const int pch = b.size(); // the coast road: the ocean on the left, sandstone on the right
+    b.curve(Len::Medium, Bend::Medium, Hill::None);
+    b.curve(Len::Medium, -Bend::Medium, Hill::Low);
+    b.curve(Len::Medium, Bend::Hard, -Hill::Low);
+    b.mark(pch, b.size(), Edge::Rail, Edge::Cliff);
+    b.curve(Len::Medium, -Bend::Easy, Hill::None);
+    b.downhill_to_end(Len::Long);
+
+    track.finish();
 
     // Start/finish line a few segments ahead of the starting grid.
     const int start = 8;
@@ -346,46 +628,7 @@ Track build_demo_track() {
     track.segments[start + 1].checker = true;
     b.scenery(start, Scenery::Gantry, 0.f);
 
-    const int n = static_cast<int>(track.segments.size());
-    Rng rng(0x6b75727au);
-
-    // Billboards greeting the driver along the start straight.
-    for (int i = 20; i < 160; i += 20) {
-        b.scenery(i, Scenery::Billboard, (i / 20) % 2 ? -1.15f : 1.15f);
-    }
-
-    for (int i = 10; i < n; ++i) {
-        const float progress = static_cast<float>(i) / static_cast<float>(n);
-
-        if (progress < 0.18f || (progress > 0.62f && progress < 0.8f)) {
-            // Beach sections: palm avenues on both sides.
-            if (i % 5 == 0) {
-                b.scenery(i, Scenery::Palm, -rng.range(1.15f, 1.35f));
-                b.scenery(i, Scenery::Palm, rng.range(1.15f, 1.35f));
-            }
-            if (rng.chance(0.04f)) b.scenery(i, Scenery::Bush, rng.chance(0.5f) ? -2.2f : 2.2f);
-        } else {
-            // Countryside: scattered trees, bushes and rocks.
-            if (rng.chance(0.18f)) {
-                const float side = rng.chance(0.5f) ? -1.f : 1.f;
-                b.scenery(i, Scenery::Tree, side * rng.range(1.2f, 4.f));
-            }
-            if (rng.chance(0.06f)) {
-                const float side = rng.chance(0.5f) ? -1.f : 1.f;
-                b.scenery(i, Scenery::Bush, side * rng.range(1.1f, 2.5f));
-            }
-            if (rng.chance(0.03f)) {
-                const float side = rng.chance(0.5f) ? -1.f : 1.f;
-                b.scenery(i, Scenery::Boulder, side * rng.range(1.2f, 3.f));
-            }
-        }
-
-        if (i % 400 == 200) {
-            b.scenery(i, Scenery::Billboard, (i / 400) % 2 ? -1.15f : 1.15f);
-        }
-    }
-
-    track.finish();
+    decorate(track, b);
     return track;
 }
 
