@@ -500,15 +500,19 @@ using Samples = std::vector<int16_t>;
 
 // Renders `seconds` of sound with constant parameters; optionally a crash after
 // `crash_at` seconds.
-Samples render_sound(const racer::SynthParams& p, double seconds, double crash_at = -1.0) {
+// Renders `seconds` of sound; at `event_at` a crash (or a whoosh) is triggered.
+Samples render_sound(const racer::SynthParams& p, double seconds, double event_at = -1.0, bool whoosh = false) {
     racer::Synth synth;
     synth.set_params(p);
     Samples out(static_cast<size_t>(seconds * racer::Synth::sample_rate));
-    const size_t crash_sample = crash_at < 0 ? out.size() : static_cast<size_t>(crash_at * racer::Synth::sample_rate);
+    const size_t event_sample = event_at < 0 ? out.size() : static_cast<size_t>(event_at * racer::Synth::sample_rate);
     size_t done = 0;
     while (done < out.size()) {
         const size_t block = std::min<size_t>(735, out.size() - done);
-        if (crash_sample >= done && crash_sample < done + block) synth.trigger_crash(1.f);
+        if (event_sample >= done && event_sample < done + block) {
+            if (whoosh) synth.trigger_whoosh(1.f);
+            else synth.trigger_crash(1.f);
+        }
         synth.render(out.data() + done, static_cast<int>(block));
         done += block;
     }
@@ -591,6 +595,7 @@ void test_synth_basics() {
     // Everything at once stays inside the 16-bit range without clipping hard.
     SynthParams all;
     all.rpm = all.throttle = all.speed = all.skid = all.gravel = all.scrape = all.rain = 1.f;
+    all.horn = all.nitro = 1.f;
     const Samples loud = render_sound(all, 2.0, 0.5);
     CHECK(peak(loud) < 31000);
     size_t clipped = 0;
@@ -688,6 +693,31 @@ void test_synth_effects() {
         const double later = rms(crash, sr * 5 / 2, sr * 3);
         CHECK(burst > 2.2 * before);
         CHECK(later < 1.3 * before);
+    }
+    {   // The horn is a chord of two tones, 415 and 523 Hz.
+        SynthParams p = driving();
+        p.horn = 1.f;
+        const Samples horn = render_sound(p, 1.5);
+        const size_t from = Synth::sample_rate / 2, n = 16384;
+        for (double f : {415.0, 523.0}) CHECK(power_at(horn, from, n, f) > 10.0 * power_at(base, from, n, f));
+        CHECK(power_at(horn, from, n, 415.0) > 10.0 * power_at(horn, from, n, 470.0));
+    }
+    {   // Nitro roars in the lows.
+        SynthParams p = driving();
+        p.nitro = 1.f;
+        CHECK(band_power(render_sound(p, 1.5), 40, 700) > 2.0 * band_power(base, 40, 700));
+    }
+    {   // A whoosh is a short burst that is gone within a second.
+        const Samples w = render_sound(driving(), 3.0, 1.0, true);
+        const size_t sr = Synth::sample_rate;
+        const double before = rms(w, sr * 3 / 4, sr);
+        const double burst = rms(w, sr + sr / 25, sr + sr / 5);
+        const double later = rms(w, sr * 2, sr * 3);
+        CHECK(burst > 1.5 * before);
+        CHECK(later < 1.2 * before);
+        // It is a hiss in the mids, not a thump.
+        const Samples early = render_sound(driving(), 1.5, 0.55, true);
+        CHECK(band_power(early, 1000, 3000) > 2.0 * band_power(base, 1000, 3000));
     }
 }
 

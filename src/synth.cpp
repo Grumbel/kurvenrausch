@@ -37,11 +37,18 @@ void Synth::set_params(const SynthParams& p) {
     scrape_.store(p.scrape, std::memory_order_relaxed);
     rain_.store(p.rain, std::memory_order_relaxed);
     volume_.store(p.volume, std::memory_order_relaxed);
+    horn_.store(p.horn, std::memory_order_relaxed);
+    nitro_.store(p.nitro, std::memory_order_relaxed);
 }
 
 void Synth::trigger_crash(float intensity) {
     crash_intensity_.store(std::clamp(intensity, 0.f, 1.f), std::memory_order_relaxed);
     crash_events_.fetch_add(1, std::memory_order_release);
+}
+
+void Synth::trigger_whoosh(float intensity) {
+    whoosh_intensity_.store(std::clamp(intensity, 0.f, 1.f), std::memory_order_relaxed);
+    whoosh_events_.fetch_add(1, std::memory_order_release);
 }
 
 float Synth::noise() {
@@ -57,10 +64,12 @@ void Synth::render(int16_t* out, int frames) {
     const float t_rpm = load(rpm_), t_throttle = load(throttle_), t_speed = load(speed_);
     const float t_skid = load(skid_), t_gravel = load(gravel_), t_scrape = load(scrape_);
     const float t_rain = load(rain_), t_volume = load(volume_);
+    const float t_horn = load(horn_), t_nitro = load(nitro_);
 
     if (!primed_) { // start from the current state instead of fading in from silence
         s_rpm_ = t_rpm; s_throttle_ = t_throttle; s_speed_ = t_speed; s_skid_ = t_skid;
         s_gravel_ = t_gravel; s_scrape_ = t_scrape; s_rain_ = t_rain; s_volume_ = t_volume;
+        s_horn_ = t_horn; s_nitro_ = t_nitro;
         primed_ = true;
     }
 
@@ -70,6 +79,12 @@ void Synth::render(int16_t* out, int frames) {
         crash_env_ = std::max(crash_env_, crash_intensity_.load(std::memory_order_relaxed));
         thump_phase_ = 0.0;
     }
+    const int whooshes = whoosh_events_.load(std::memory_order_acquire);
+    if (whooshes != whoosh_seen_) {
+        whoosh_seen_ = whooshes;
+        whoosh_env_ = std::max(whoosh_env_, whoosh_intensity_.load(std::memory_order_relaxed));
+        whoosh_age_ = 0.f;
+    }
 
     // Smoothing: revs follow the pedals with some inertia, noise sources fade
     // in and out quickly enough to feel immediate but without clicks.
@@ -77,6 +92,8 @@ void Synth::render(int16_t* out, int frames) {
     const float a_vol = smoothing(0.02f), a_speed = smoothing(0.1f);
     const float crash_decay = std::exp(-1.f / (sr * 0.22f));
     const float thump_decay = std::exp(-1.f / (sr * 0.12f));
+    const float whoosh_decay = std::exp(-1.f / (sr * 0.16f));
+    const float a_horn = smoothing(0.006f), a_nitro = smoothing(0.06f);
     float thump_env = crash_env_ * crash_env_;
 
     for (int i = 0; i < frames; ++i, ++samples_) {
@@ -95,6 +112,8 @@ void Synth::render(int16_t* out, int frames) {
         s_scrape_ += (t_scrape - s_scrape_) * a_fast;
         s_rain_ += (t_rain - s_rain_) * a_vol;
         s_volume_ += (t_volume - s_volume_) * a_vol;
+        s_horn_ += (t_horn - s_horn_) * a_horn;
+        s_nitro_ += (t_nitro - s_nitro_) * a_nitro;
 
         // ---- Engine ------------------------------------------------------
         const float rpm = idle_rpm + s_rpm_ * rpm_range;
@@ -178,7 +197,43 @@ void Synth::render(int16_t* out, int frames) {
             thump_env *= thump_decay;
         }
 
-        const float mix = engine + roar + wind + gravel + rain + skid + scrape + crash;
+        // ---- Horn: two tones a major third apart, square-ish and filtered ---
+        float horn = 0.f;
+        if (s_horn_ > 1e-4f) {
+            const double tones[2] = {415.0, 523.0};
+            float h = 0.f;
+            for (int k = 0; k < 2; ++k) {
+                horn_phase_[k] += tones[k] / sample_rate;
+                horn_phase_[k] -= std::floor(horn_phase_[k]);
+                h += std::tanh(3.f * static_cast<float>(std::sin(two_pi * horn_phase_[k])));
+            }
+            horn_lp_ += (h - horn_lp_) * lowpass_coeff(2200.f);
+            horn = horn_lp_ * 0.22f * s_horn_;
+        }
+
+        // ---- Nitro: a deep burner roar with a hiss on top --------------------
+        float nitro = 0.f;
+        if (s_nitro_ > 1e-4f) {
+            nitro_lp_ += (n - nitro_lp_) * lowpass_coeff(700.f);
+            nitro_rumble_ += (nitro_lp_ - nitro_rumble_) * lowpass_coeff(120.f);
+            nitro = (nitro_lp_ * 1.1f + nitro_rumble_ * 2.f + (n - rain_lp_) * 0.12f) * s_nitro_;
+        }
+
+        // ---- Whoosh: band-passed noise sweeping down as the car goes by ----
+        float whoosh = 0.f;
+        if (whoosh_env_ > 1e-4f) {
+            whoosh_age_ += 1.f / sr;
+            const float centre_hz = 400.f + 1800.f * std::exp(-whoosh_age_ * 9.f);
+            const float f = 2.f * std::sin(3.14159265f * centre_hz / sr);
+            whoosh_low_ += f * whoosh_band_;
+            const float high = n - whoosh_low_ - 0.7f * whoosh_band_;
+            whoosh_band_ += f * high;
+            const float attack = std::min(1.f, whoosh_age_ / 0.04f);
+            whoosh = whoosh_band_ * 3.5f * whoosh_env_ * attack;
+            whoosh_env_ *= whoosh_decay;
+        }
+
+        const float mix = engine + roar + wind + gravel + rain + skid + scrape + crash + horn + nitro + whoosh;
         const float x = std::tanh(mix * s_volume_ * 1.1f);
         out[i] = static_cast<int16_t>(std::lround(x * 30000.f));
     }
