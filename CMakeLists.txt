@@ -2,7 +2,16 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 cmake_minimum_required(VERSION 3.16)
-project(kurvenrausch VERSION 1.0.0 LANGUAGES CXX)
+
+# Source of truth: the top-level VERSION file (e.g. "0.1.0-dev"), unless
+# packaging passes the full version, e.g. Nix with .<revCount>+g<rev>
+# appended for development builds: -DPROJECT_VERSION_FULL=...
+if(NOT DEFINED PROJECT_VERSION_FULL)
+    file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" PROJECT_VERSION_FULL LIMIT_COUNT 1)
+endif()
+# project() only takes a numeric version: strip -dev, +g... and the like.
+string(REGEX MATCH "^[0-9]+(\\.[0-9]+)*" _project_version_numeric "${PROJECT_VERSION_FULL}")
+project(kurvenrausch VERSION ${_project_version_numeric} LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -33,6 +42,7 @@ target_link_libraries(kurvenrausch_core PUBLIC ${SDL2_LIBRARIES})
 
 add_executable(kurvenrausch src/main.cpp)
 target_link_libraries(kurvenrausch PRIVATE kurvenrausch_core)
+target_compile_definitions(kurvenrausch PRIVATE KURVENRAUSCH_VERSION="${PROJECT_VERSION_FULL}")
 
 include(CTest)
 if(BUILD_TESTING)

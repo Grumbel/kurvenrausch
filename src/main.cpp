@@ -23,6 +23,7 @@ void usage(const char* argv0) {
               << "  --horn              hold the horn during the headless run\n"
               << "  --fuel L            start the headless run with L (0 .. 1) of a tank\n"
               << "  --nitro N           press nitro at step N of the headless run\n"
+              << "  --version           print the version and exit\n"
               << "  --help              show this help\n";
 }
 
@@ -57,6 +58,9 @@ int main(int argc, char* argv[]) {
             shot.horn = true;
         } else if (arg == "--nitro" && i + 1 < argc) {
             shot.nitro_frame = std::atoi(argv[++i]);
+        } else if (arg == "--version") {
+            std::cout << "kurvenrausch " << KURVENRAUSCH_VERSION << "\n";
+            return 0;
         } else if (arg == "--help" || arg == "-h") {
             usage(argv[0]);
             return 0;

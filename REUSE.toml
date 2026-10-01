@@ -5,7 +5,7 @@ version = 1
 
 # Files that cannot carry a header of their own (prose, generated data, images).
 [[annotations]]
-path = [".gitignore", "AGENTS.md", "README.md", "TODO.md", "flake.lock", "docs/**"]
+path = [".gitignore", "AGENTS.md", "README.md", "TODO.md", "VERSION", "flake.lock", "docs/**"]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 Ingo Ruhnke <grumbel@gmail.com>"
 SPDX-License-Identifier = "GPL-3.0-or-later"
