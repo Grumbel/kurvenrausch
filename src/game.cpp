@@ -23,9 +23,33 @@ constexpr float honk_range = 60.f;
 constexpr float honk_clearance = 0.45f;
 constexpr float startled_seconds = 1.5f;
 
+// Traffic following a slower vehicle in its lane: it looks this many segments
+// ahead, keeps a gap of follow_gap segments, may close in at follow_closing
+// units per second per unit of gap above that, and treats anything within
+// follow_width road half-widths as in its lane. Braking and accelerating are
+// fractions of the player's top speed per second.
+constexpr float follow_range = 6.f;
+constexpr float follow_gap = 2.f;
+constexpr float follow_closing = 1.5f;
+constexpr float follow_width = 0.3f;
+constexpr float traffic_brake = 0.6f;
+constexpr float traffic_accel = 0.15f;
+
 // Above the top speed (after nitro or a pass boost) the car loses this much
 // of the top speed per second until it is back down.
 constexpr float overspeed_drag = 0.15f;
+
+// Refuelling works on the forecourt below this fraction of the top speed.
+constexpr float refuel_speed = 0.08f;
+// Stranded with an empty tank this long, the driver pours in a spare can.
+constexpr float stranded_seconds = 3.f;
+constexpr float spare_can = 0.15f;
+
+// Hitting something solid faster than this fraction of the top speed is a
+// crash with the tumbling animation; slower it is a knock that slows the car.
+constexpr float crash_speed = 0.4f;
+// Where the car's tyres touch the ground on screen, for dust and debris.
+constexpr float ground_y = static_cast<float>(Game::height) - 3.f;
 
 // The mirror's camera sits in the car, lower than the chase camera, and sees
 // a narrower field than the main view.
@@ -114,6 +138,8 @@ bool overlap(float c1, float w1, float c2, float w2) {
 Game::Game()
     : fb_(width, height), track_(build_demo_track()), mirror_fb_(mirror_width, mirror_height),
       weather_(width, height) {
+    stations_ = track_.gas_stations();
+    map_ = track_map(track_);
     player_ = world_.create();
     world_.add<Transform>(player_);
     world_.add<Velocity>(player_);
@@ -145,8 +171,13 @@ void Game::spawn_traffic() {
         const int lanes = track_.look(static_cast<int>(segment)).lanes;
         const float lane = lane_center(lanes, static_cast<int>(rnd() * static_cast<float>(lanes)) % lanes);
         world_.add<Transform>(car, Transform{lane, 0.f, segment * seg_len});
-        world_.add<Velocity>(car, Velocity{max_speed * (0.25f + 0.35f * rnd())});
-        world_.add<Traffic>(car, Traffic{i % SpriteSheet::traffic_styles, lane});
+        const float speed = max_speed * (0.25f + 0.35f * rnd());
+        world_.add<Velocity>(car, Velocity{speed});
+        Traffic traffic;
+        traffic.style = i % SpriteSheet::traffic_styles;
+        traffic.target_x = lane;
+        traffic.cruise = speed;
+        world_.add<Traffic>(car, traffic);
     }
 }
 
@@ -181,6 +212,12 @@ void Game::reset() {
     nitro_.reset();
     nitro_held_ = false;
     wave_time_ = 0.f;
+    crash_time_ = -1.f;
+    particles_.clear();
+    fuel_.reset();
+    engine_on_ = true;
+    refuelling_ = false;
+    stranded_time_ = 0.f;
 }
 
 void Game::update_rumble() {
@@ -195,7 +232,8 @@ void Game::update_rumble() {
         input_.rumble(0.3f * nitro_.intensity(), 0.5f * nitro_.intensity(), 60);
     } else if (scraping_ && speed_pct > 0.05f) {
         input_.rumble(0.6f, 0.6f, 60);
-    } else if (std::abs(tr.x) > 1.f && speed_pct > 0.05f) {
+    } else if (std::abs(tr.x) > 1.f && speed_pct > 0.05f &&
+               !track_.on_forecourt(tr.z + world_.get<Camera>(camera_).player_z(), tr.x)) {
         input_.rumble(0.35f * speed_pct, 0.1f, 60); // rattling along the verge
     }
 }
@@ -259,11 +297,12 @@ bool Game::screenshot(const ScreenshotOptions& opts) {
     const float start = opts.zone >= 0 ? zone_start_position(opts.zone) : opts.position;
     world_.get<Transform>(player_).z = track_.wrap(start);
     zone_ = -1;
+    if (opts.fuel >= 0.f) fuel_.set(opts.fuel);
     std::vector<int16_t> sound;
     constexpr int samples_per_step = Synth::sample_rate / 60; // 735, exactly
     for (int i = 0; i < opts.frames; ++i) {
         InputState in = autopilot();
-        if (opts.force_steer) in.steer = opts.steer;
+        if (opts.force_steer && i >= opts.steer_from) in.steer = opts.steer;
         in.horn = opts.horn;
         in.nitro = i == opts.nitro_frame;
         fixed_update(in, fixed_dt_);
@@ -291,17 +330,41 @@ InputState Game::autopilot() const {
     // Lateral push the curve will apply this tick, relative to one steering tick.
     const float grip = std::max(track_.look_at(tr.z + cam.player_z()).grip, 0.2f);
     const float drift = -pct * seg.curve * player.centrifugal / grip;
-    const float wanted = -tr.x * 4.f - drift;
+
+    // Low on fuel with a gas station coming up: move over to the right, slow
+    // down, pull onto the forecourt and wait there until the tank is full.
+    float target_x = 0.f;
+    float speed_limit = 1.f;
+    if (fuel_.level() < 0.45f || (refuelling_ && !fuel_.full())) {
+        const int n = static_cast<int>(track_.segments.size());
+        const int here = track_.index_at(tr.z + cam.player_z());
+        const bool on = seg.forecourt >= forecourt_width;
+        for (int start : stations_) {
+            const int ahead = ((start - here) % n + n) % n;
+            if (!on && ahead > 120) continue;
+            target_x = on || seg.forecourt > 1.3f ? 1.45f : 0.6f;
+            speed_limit = on ? refuel_speed * 0.6f : 0.1f + 0.9f * static_cast<float>(ahead) / 120.f;
+            break;
+        }
+    }
+    const float wanted = (target_x - tr.x) * 4.f - drift;
 
     InputState in;
     in.steer = wanted > 0.3f ? 1.f : wanted < -0.3f ? -1.f : 0.f;
-    const bool coast = std::abs(drift) > 1.f && std::abs(tr.x) > 0.6f;
-    in.throttle = coast ? 0.f : 1.f;
-    in.brake = coast ? 1.f : 0.f;
+    const bool coast = std::abs(drift) > 1.f && std::abs(tr.x) > 0.6f && target_x == 0.f;
+    const bool slow = pct > speed_limit;
+    in.throttle = coast || slow || pct > speed_limit * 0.9f ? 0.f : 1.f;
+    in.brake = coast || slow ? 1.f : 0.f;
     return in;
 }
 
 void Game::fixed_update(const InputState& input, float dt) {
+    update_particles(dt);
+    if (crash_time_ >= 0.f) {
+        update_crash(dt);
+        return;
+    }
+
     auto& tr = world_.get<Transform>(player_);
     auto& vel = world_.get<Velocity>(player_);
     const auto& player = world_.get<Player>(player_);
@@ -315,7 +378,7 @@ void Game::fixed_update(const InputState& input, float dt) {
     // Horn, nitro and the wave after a close pass.
     horn_ = input.horn;
     nitro_.update(dt);
-    if (input.nitro && !nitro_held_) nitro_.fire();
+    if (input.nitro && !nitro_held_ && !fuel_.empty()) nitro_.fire();
     nitro_held_ = input.nitro;
     if (wave_time_ > 0.f) wave_time_ -= dt;
 
@@ -328,13 +391,15 @@ void Game::fixed_update(const InputState& input, float dt) {
     const RoadTheme& look = track_.look_at(tr.z + player_z);
     const float grip = std::max(look.grip, 0.2f);
     steer_ = input.steer > 0.3f ? 1 : input.steer < -0.3f ? -1 : 0;
+    braking_ = input.brake > 0.1f;
     tr.x += dx * input.steer * (0.5f + 0.5f * grip);
     tr.x -= dx * speed_pct * seg.curve * player.centrifugal / grip;
 
     weather_.update(look.rain, look.snowfall, -seg.curve * 25.f * speed_pct, dt);
 
     // Braking overrides the throttle; without either the car coasts down.
-    const float drive = input.throttle * (1.f - input.brake);
+    update_fuel(input, dt);
+    const float drive = engine_on_ ? input.throttle * (1.f - input.brake) : 0.f;
     float accel = player.accel * drive;
     if (input.brake > 0.01f) accel += player.brake * input.brake;
     else accel += player.decel * (1.f - drive);
@@ -343,7 +408,9 @@ void Game::fixed_update(const InputState& input, float dt) {
     vel.speed += accel * dt;
 
     if (std::abs(tr.x) > 1.f) {
-        if (vel.speed > player.offroad_limit) vel.speed += player.offroad_decel * dt;
+        // The forecourt is paved: no slowing down there.
+        if (vel.speed > player.offroad_limit && !track_.on_forecourt(tr.z + player_z, tr.x))
+            vel.speed += player.offroad_decel * dt;
 
         // Crash into solid roadside objects on the car's segment.
         const float car_w = player.car_width / track_.road_width;
@@ -354,6 +421,10 @@ void Game::fixed_update(const InputState& input, float dt) {
             const float center = info.centered ? obj.offset
                                                : obj.offset + (obj.offset < 0.f ? -w : w) / 2.f;
             if (overlap(tr.x, car_w, center, w)) {
+                if (speed_pct >= crash_speed) {
+                    start_crash(speed_pct);
+                    break;
+                }
                 vel.speed = player.max_speed / 5.f;
                 crashed_ = true;
                 synth_.trigger_crash(0.55f + 0.45f * speed_pct);
@@ -408,6 +479,159 @@ void Game::fixed_update(const InputState& input, float dt) {
     update_audio(input, dt);
 }
 
+// Burns fuel with the engine's load, refuels on a forecourt, sputters when
+// nearly empty and dies when empty; stranded, the driver uses a spare can.
+void Game::update_fuel(const InputState& input, float dt) {
+    const auto& tr = world_.get<Transform>(player_);
+    const auto& vel = world_.get<Velocity>(player_);
+    const auto& player = world_.get<Player>(player_);
+    const float car_z = tr.z + world_.get<Camera>(camera_).player_z();
+    const float speed_pct = vel.speed / player.max_speed;
+
+    const bool at_pump = track_.segment_at(car_z).forecourt >= forecourt_width &&
+                         track_.on_forecourt(car_z, tr.x) && speed_pct < refuel_speed;
+    const bool was_refuelling = refuelling_;
+    refuelling_ = at_pump && !fuel_.full();
+    if (refuelling_) {
+        fuel_.refuel(dt);
+        stranded_time_ = 0.f;
+        if (fuel_.full()) {
+            refuelling_ = false;
+            synth_.trigger_ding();
+            show_message("TANK FULL", 2.f);
+        } else {
+            show_message("REFUELLING", 0.2f);
+        }
+    } else if (was_refuelling) {
+        message_.clear(); // drove off before the tank was full
+    }
+
+    fuel_.burn(Fuel::load(input.throttle * (1.f - input.brake), drivetrain::rpm(speed_pct)), dt);
+    rng_ = rng_ * 1664525u + 1013904223u;
+    const bool sputter = fuel_.level() < 0.03f && (rng_ >> 28) < 4; // a quarter of the time
+    engine_on_ = !fuel_.empty() && !sputter;
+
+    if (fuel_.empty()) {
+        if (message_ != "OUT OF FUEL") show_message("OUT OF FUEL", 1.f);
+        message_time_ = 1.f;
+        if (vel.speed < 1.f) stranded_time_ += dt;
+        if (stranded_time_ > stranded_seconds) {
+            fuel_.set(spare_can);
+            stranded_time_ = 0.f;
+            show_message("SPARE CAN", 2.f);
+        }
+    }
+}
+
+// Hitting something solid at speed: the car tumbles off (crash_pose()) and is
+// put back on the road in the lane nearest to where it crashed.
+void Game::start_crash(float speed_pct) {
+    const auto& tr = world_.get<Transform>(player_);
+    crash_time_ = 0.f;
+    crash_side_ = tr.x < 0.f ? -1 : 1;
+    crash_x_ = tr.x;
+    const int lanes = track_.look_at(tr.z + world_.get<Camera>(camera_).player_z()).lanes;
+    crash_target_x_ = lane_center(lanes, crash_side_ < 0 ? 0 : lanes - 1);
+    crashed_ = true;
+    nitro_.stop();
+    wave_time_ = 0.f;
+    synth_.trigger_crash(1.f);
+
+    // Bits of car flying off, and a cloud of dust.
+    const float x = static_cast<float>(width) / 2.f;
+    const Color chips[] = {{0xd0, 0x18, 0x1c}, {0x88, 0x08, 0x10}, {0x9a, 0x9a, 0xa8}, {0x20, 0x20, 0x24}, {0xa0, 0xc8, 0xe8}};
+    for (int i = 0; i < 24; ++i) {
+        rng_ = rng_ * 1664525u + 1013904223u;
+        const float a = static_cast<float>(rng_ >> 8) / 16777216.f;
+        rng_ = rng_ * 1664525u + 1013904223u;
+        const float b = static_cast<float>(rng_ >> 8) / 16777216.f;
+        particles_.push_back({x + (a - 0.5f) * 60.f, ground_y - 20.f * b,
+                              (a - 0.5f) * 320.f + static_cast<float>(crash_side_) * 60.f, -80.f - 220.f * b,
+                              0.9f + 0.6f * b, 0.9f + 0.6f * b, 1.f, chips[i % 5], false});
+    }
+    spawn_dust(x, ground_y, 10, 1.f + speed_pct);
+}
+
+void Game::update_crash(float dt) {
+    auto& tr = world_.get<Transform>(player_);
+    auto& vel = world_.get<Velocity>(player_);
+    const auto& player = world_.get<Player>(player_);
+    const float player_z = world_.get<Camera>(camera_).player_z();
+
+    const float t0 = crash_time_;
+    crash_time_ += dt;
+    // The car skids to a stop at the crash site.
+    vel.speed = std::max(0.f, vel.speed - player.max_speed * 1.2f * dt);
+    const float prev_z = tr.z;
+    tr.z = track_.wrap(tr.z + dt * vel.speed);
+    const Segment& seg = track_.segment_at(tr.z + player_z);
+    background_.update(seg.curve, dt * vel.speed / track_.segment_length, dt);
+    const RoadTheme& look = track_.look_at(tr.z + player_z);
+    weather_.update(look.rain, look.snowfall, 0.f, dt);
+    tr.y = track_.height_at(tr.z + player_z);
+
+    const CrashPose pose = crash_pose(crash_time_, crash_side_);
+    tr.x = crash_x_ + (crash_target_x_ - crash_x_) * pose.recover;
+    const int landings = crash_landings(t0, crash_time_);
+    if (landings > 0) {
+        // Each touchdown is softer than the one before.
+        const float strength = pose.recover > 0.f ? 0.f : 1.f - std::min(crash_time_ / crash_tumble_seconds, 0.8f);
+        synth_.trigger_crash(0.3f + 0.4f * strength);
+        spawn_dust(static_cast<float>(width) / 2.f + pose.slide, ground_y, 6, 0.5f + strength);
+        crashed_ = true;
+    }
+    scraping_ = false;
+    bounce_ = 0.f;
+    steer_ = 0;
+    braking_ = false;
+    if (crash_time_ >= crash_seconds) {
+        crash_time_ = -1.f;
+        vel.speed = 0.f;
+    }
+
+    update_laps(prev_z + player_z, tr.z + player_z, dt);
+    update_traffic(dt);
+    check_close_passes();
+    update_audio(InputState{}, dt);
+}
+
+void Game::spawn_dust(float x, float y, int count, float strength) {
+    const RoadTheme& look = track_.look_at(world_.get<Transform>(player_).z + world_.get<Camera>(camera_).player_z());
+    const Color dust = blend(look.grass[0], Color{0xc8, 0xc0, 0xb0}, 0.6f);
+    for (int i = 0; i < count; ++i) {
+        rng_ = rng_ * 1664525u + 1013904223u;
+        const float a = static_cast<float>(rng_ >> 8) / 16777216.f;
+        rng_ = rng_ * 1664525u + 1013904223u;
+        const float b = static_cast<float>(rng_ >> 8) / 16777216.f;
+        particles_.push_back({x + (a - 0.5f) * 80.f, y - 4.f * b, (a - 0.5f) * 140.f * strength,
+                              -20.f - 40.f * b * strength, 0.7f + 0.5f * b, 0.7f + 0.5f * b,
+                              3.f + 3.f * b * strength, blend(dust, Color{0xff, 0xff, 0xff}, 0.3f * b), true});
+    }
+}
+
+void Game::update_particles(float dt) {
+    for (Particle& p : particles_) {
+        p.life -= dt;
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        if (p.dust) {
+            p.vx *= 1.f - 2.f * dt; // dust hangs in the air and spreads
+            p.vy *= 1.f - 2.f * dt;
+            p.size += 10.f * dt;
+        } else {
+            p.vy += 600.f * dt; // debris falls
+            if (p.y > ground_y) {
+                p.y = ground_y;
+                p.vy *= -0.3f;
+                p.vx *= 0.6f;
+            }
+        }
+    }
+    particles_.erase(std::remove_if(particles_.begin(), particles_.end(),
+                                    [](const Particle& p) { return p.life <= 0.f; }),
+                     particles_.end());
+}
+
 // Passing close by a car: a wave from the side it was passed on, a whoosh
 // and a little boost.
 void Game::check_close_passes() {
@@ -419,7 +643,7 @@ void Game::check_close_passes() {
     const float max_step = 4.f * track_.segment_length;
     world_.view<Transform, Traffic>([&](Entity, Transform& t, Traffic& traffic) {
         const float gap = signed_gap(car_z, t.z, track_.length());
-        if (close_pass(traffic.gap, gap, t.x - tr.x, car_w, max_step)) {
+        if (crash_time_ < 0.f && close_pass(traffic.gap, gap, t.x - tr.x, car_w, max_step)) {
             const float speed_pct = vel.speed / player.max_speed;
             vel.speed = boosted_speed(vel.speed, player.max_speed);
             wave_side_ = t.x < tr.x ? -1 : 1;
@@ -449,7 +673,9 @@ void Game::update_audio(const InputState& input, float dt) {
 
     SynthParams p;
     p.rpm = drivetrain::rpm(speed_pct);
-    p.throttle = shift_cut_ > 0.f ? 0.f : input.throttle * (1.f - input.brake);
+    p.throttle = shift_cut_ > 0.f || !engine_on_ ? 0.f : input.throttle * (1.f - input.brake);
+    p.engine = engine_on_ ? 1.f : 0.f;
+    p.pump = refuelling_ ? 1.f : 0.f;
     p.speed = speed_pct;
 
     // The tyres squeal when the lateral demand (steering plus the push of the
@@ -460,7 +686,7 @@ void Game::update_audio(const InputState& input, float dt) {
                        (grip * 1.6f);
     float skid = std::clamp((slip - 0.6f) / 0.4f, 0.f, 1.f);
     skid = std::max(skid, 0.7f * std::clamp((input.brake * speed_pct - 0.6f) / 0.4f, 0.f, 1.f));
-    const bool off_road = std::abs(tr.x) > 1.f;
+    const bool off_road = std::abs(tr.x) > 1.f && !track_.on_forecourt(tr.z + player_z, tr.x);
     p.skid = skid * std::clamp(speed_pct * 5.f, 0.f, 1.f) * (off_road ? 0.3f : 1.f);
 
     p.gravel = off_road && speed_pct > 0.01f ? std::clamp((std::abs(tr.x) - 1.f) * 8.f, 0.f, 1.f) : 0.f;
@@ -503,6 +729,7 @@ void Game::update_traffic(float dt) {
         return false;
     };
 
+    const float max_speed = world_.get<Player>(player_).max_speed;
     world_.view<Transform, Velocity, Traffic>([&](Entity e, Transform& t, Velocity& v, Traffic& traffic) {
         // The road may have a different number of lanes here than where the
         // car was heading: aim for the nearest lane that exists.
@@ -548,6 +775,23 @@ void Game::update_traffic(float dt) {
 
         const float step = (traffic.startled > 0.f ? 1.8f : 0.8f) * dt;
         t.x += std::clamp(traffic.target_x - t.x, -step, step);
+
+        // Following: closing in on something slower in its lane (another car,
+        // or the player), a car brakes to keep a gap instead of driving
+        // through it, and gets back up to its cruising speed once clear.
+        float wanted = traffic.cruise;
+        for (const Mover& m : movers) {
+            if (m.e == e || std::abs(m.x - t.x) > follow_width) continue;
+            const float d = distance_ahead(t.z, m.z);
+            if (d < follow_range * track_.segment_length) {
+                wanted = std::min(wanted, follow_speed(traffic.cruise, m.speed, d,
+                                                       follow_gap * track_.segment_length, follow_closing));
+            }
+        }
+        // Small trims while following steadily don't light the brake lights.
+        traffic.braking = v.speed - wanted > 0.02f * max_speed;
+        if (wanted < v.speed) v.speed = std::max(wanted, v.speed - traffic_brake * max_speed * dt);
+        else v.speed = std::min(wanted, v.speed + traffic_accel * max_speed * dt);
         t.z = track_.wrap(t.z + v.speed * dt);
     });
 }
@@ -607,7 +851,7 @@ void Game::render() {
     world_.view<Transform, Traffic>([&](Entity e, Transform& t, Traffic& traffic) {
         RoadSprite s;
         s.z = t.z;
-        s.bitmap = &sprites_.traffic(traffic.style, indicator(e, t, traffic));
+        s.bitmap = &sprites_.traffic(traffic.style, indicator(e, t, traffic), traffic.braking);
         s.offset = t.x;
         s.world_width = player.car_width;
         road_sprites_.push_back(s);
@@ -617,7 +861,7 @@ void Game::render() {
     // is drawn at the projection scale of player_z, which maps car_width to
     // the sprite's native size, so the pixel art is shown 1:1.
     const Bitmap& car = sprites_.player(steer_, wave_time_ > 0.f ? wave_side_ : 0,
-                                        static_cast<int>(clock_ / 0.15f) & 1);
+                                        static_cast<int>(clock_ / 0.15f) & 1, braking_);
     const float scale = cam.depth / cam.player_z() * (width / 2.f);
     RoadSprite me;
     me.z = tr.z + cam.player_z();
@@ -627,7 +871,15 @@ void Game::render() {
     me.sh = me.sw * static_cast<float>(car.h) / static_cast<float>(car.w);
     me.sx = (width - me.sw) / 2.f;
     me.sy = height - me.sh - 1.f + bounce_;
-    road_sprites_.push_back(me);
+    bool car_visible = true;
+    if (crash_time_ >= 0.f) {
+        const CrashPose pose = crash_pose(crash_time_, crash_side_);
+        me.angle = pose.angle;
+        me.sx += pose.slide;
+        me.sy -= pose.lift;
+        car_visible = pose.visible;
+    }
+    if (car_visible) road_sprites_.push_back(me);
 
     road_.render(fb_, track_, view, sprites_, road_sprites_);
 
@@ -644,6 +896,22 @@ void Game::render() {
             fb_.put_pixel(px, py, bright ? Color{255, 240, 120} : Color{255, 170, 50});
             fb_.put_pixel(px - scrape_side_, py + 1, Color{255, 130, 30});
             if (i % 2 == 0) fb_.put_pixel(px - 2 * scrape_side_, py + 2, Color{200, 80, 25});
+        }
+    }
+    for (const Particle& p : particles_) {
+        const float fade = p.life / p.max_life;
+        if (p.dust) {
+            const int r = static_cast<int>(p.size);
+            for (int dy = -r; dy <= r; ++dy) {
+                for (int dx = -r; dx <= r; ++dx) {
+                    if (dx * dx + dy * dy > r * r) continue;
+                    const int px = static_cast<int>(p.x) + dx, py = static_cast<int>(p.y) + dy;
+                    if (bayer4(px, py) < 0.85f * fade) fb_.blend_pixel(px, py, p.color, 0.8f);
+                }
+            }
+        } else {
+            fb_.put_pixel(static_cast<int>(p.x), static_cast<int>(p.y), p.color);
+            if (fade > 0.5f) fb_.put_pixel(static_cast<int>(p.x) + 1, static_cast<int>(p.y), p.color);
         }
     }
     if (nitro_.burning()) {
@@ -665,6 +933,13 @@ void Game::render() {
     hud.message_visible = std::fmod(clock_, 0.5f) < 0.35f;
     hud.muted = muted_;
     hud.nitro = nitro_.canisters();
+    hud.fuel = fuel_.level();
+    hud.map = &map_;
+    hud.map_player = track_.index_at(tr.z + cam.player_z());
+    hud.map_start = track_.index_at(track_.start_z);
+    hud.map_stations = &stations_;
+    hud.map_blink = std::fmod(clock_, 0.4f) < 0.2f;
+    hud.fuel_warning = fuel_.level() < Fuel::low && std::fmod(clock_, 0.5f) < 0.3f;
     hud.nitro_burn = nitro_.burn_left();
     if (banner_time_ > 0.f && zone_ >= 0) {
         hud.banner = track_.zones[static_cast<size_t>(zone_)].country;

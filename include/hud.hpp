@@ -3,6 +3,7 @@
 
 #pragma once
 #include "framebuffer.hpp"
+#include "track.hpp"
 
 #include <string>
 
@@ -18,6 +19,15 @@ struct HudState {
     bool message_visible = false;// for blinking
     bool muted = false;          // sound off
     int nitro = 0;               // canisters left
+    float fuel = 1.f;            // 0..1
+    bool fuel_warning = false;   // low fuel, blinking
+    // Mini map: the plan view from track_map(), the segment the player's car
+    // is on, the start line and the gas stations (segments).
+    const std::vector<MapPoint>* map = nullptr;
+    int map_player = 0;
+    int map_start = 0;
+    const std::vector<int>* map_stations = nullptr;
+    bool map_blink = false;      // the player's dot blinks
     float nitro_burn = 0.f;      // fraction left of the canister burning now, 0 for none
     std::string banner;          // country, shown when entering a new zone
     std::string banner_sub;      // region below it

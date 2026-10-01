@@ -44,11 +44,13 @@ struct Player {
     }
 };
 
-// AI traffic: keeps to a lane, changes lanes to pass slower vehicles and
-// pulls over when the player honks.
+// AI traffic: keeps to a lane, changes lanes to pass slower vehicles (or
+// brakes behind them when it can't), and pulls over when the player honks.
 struct Traffic {
     int style = 0;          // sprite variant
     float target_x = 0.f;   // lateral position of the lane it is heading for
+    float cruise = 0.f;     // the speed it drives at when the way is clear
+    bool braking = false;   // slowing down this step: brake lights on
     float gap = 0.f;        // distance ahead of the player's car at the last step
     float startled = 0.f;   // seconds of hurried swerving left after a honk
 };

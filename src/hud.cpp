@@ -50,6 +50,71 @@ void draw_tacho(Framebuffer& fb, int x, int y, float speed_fraction) {
     }
 }
 
+// Mini map in a size x size box at (x, y): the track as a light line with a
+// dark border, the start line, the gas stations and a blinking dot for the car.
+void draw_minimap(Framebuffer& fb, int x, int y, int size, const HudState& hud) {
+    const std::vector<MapPoint>& map = *hud.map;
+    const int n = static_cast<int>(map.size());
+    if (n == 0) return;
+    for (int j = y; j < y + size; ++j)
+        for (int i = x; i < x + size; ++i) fb.blend_pixel(i, j, Shadow, 0.45f);
+
+    const float inner = static_cast<float>(size - 6);
+    auto px = [&](int seg) {
+        const MapPoint& p = map[static_cast<size_t>(((seg % n) + n) % n)];
+        return std::make_pair(x + 3 + static_cast<int>(std::lround(p.x * inner)),
+                              y + 3 + static_cast<int>(std::lround(p.y * inner)));
+    };
+    const int step = std::max(1, n / 240);
+    for (int pass = 0; pass < 2; ++pass) {
+        for (int i = 0; i < n; i += step) {
+            const auto [x0, y0] = px(i);
+            const auto [x1, y1] = px(i + step);
+            if (pass == 0) {
+                for (int d = -1; d <= 1; d += 2) {
+                    fb.line(x0 + d, y0, x1 + d, y1, Shadow);
+                    fb.line(x0, y0 + d, x1, y1 + d, Shadow);
+                }
+            } else {
+                fb.line(x0, y0, x1, y1, Color{0xd8, 0xdc, 0xe4});
+            }
+        }
+    }
+    auto dot = [&](int seg, Color c, Color centre) {
+        const auto [cx, cy] = px(seg);
+        fb.fill_rect(cx - 2, cy - 2, 5, 5, Shadow);
+        fb.fill_rect(cx - 1, cy - 1, 3, 3, c);
+        fb.put_pixel(cx, cy, centre);
+    };
+    {   // Chequered start line.
+        const auto [cx, cy] = px(hud.map_start);
+        fb.fill_rect(cx - 2, cy - 1, 4, 3, Color{0x10, 0x10, 0x10});
+        fb.put_pixel(cx - 2, cy - 1, Value); fb.put_pixel(cx, cy - 1, Value);
+        fb.put_pixel(cx - 1, cy, Value); fb.put_pixel(cx + 1, cy, Value);
+        fb.put_pixel(cx - 2, cy + 1, Value); fb.put_pixel(cx, cy + 1, Value);
+    }
+    if (hud.map_stations) {
+        for (int s : *hud.map_stations) dot(s, Color{0x30, 0x90, 0xf0}, Color{0xb0, 0xe0, 0xff});
+    }
+    const Color car{0xf0, 0x30, 0x20};
+    dot(hud.map_player, car, hud.map_blink ? Value : car);
+}
+
+// Fuel gauge: a pump symbol and a bar, red and blinking when low.
+void draw_fuel(Framebuffer& fb, int x, int y, float level, bool warning) {
+    const Color icon = warning ? Color{0xf0, 0x30, 0x20} : Label;
+    fb.fill_rect(x, y + 1, 5, 7, icon); // the pump
+    fb.fill_rect(x + 1, y + 2, 3, 2, Shadow);
+    fb.fill_rect(x + 5, y + 2, 1, 1, icon); // hose
+    fb.fill_rect(x + 6, y + 3, 1, 4, icon);
+    const int bx = x + 9, w = 21;
+    fb.fill_rect(bx - 1, y + 1, w + 2, 7, Shadow);
+    const int filled = static_cast<int>(std::lround(std::clamp(level, 0.f, 1.f) * static_cast<float>(w)));
+    const Color c = level < Fuel::low ? Color{0xf0, 0x30, 0x20} : level < 0.5f ? Color{0xf8, 0xd0, 0x20}
+                                                                                : Color{0x30, 0xe0, 0x40};
+    if (filled > 0 && !(warning && level <= 0.f)) fb.fill_rect(bx, y + 2, filled, 5, c);
+}
+
 // Nitro canisters, right-aligned at `right`: full ones, the one burning now
 // draining, and the empty ones.
 void draw_nitro(Framebuffer& fb, int right, int y, int full, float burning) {
@@ -96,11 +161,15 @@ void draw_hud(Framebuffer& fb, const HudState& hud) {
     text_right(fb, w - 6, 25, "LAST", Label);
     text_right(fb, w - 6, 34, hud.last_lap > 0.f ? format_lap_time(hud.last_lap) : "-'--\"--", Value);
 
+    // Below them, the mini map.
+    if (hud.map) draw_minimap(fb, w - 6 - 58, 46, 58, hud);
+
     // Bottom left: speed and revs.
     const int kmh = static_cast<int>(std::lround(hud.speed_fraction * top_speed_kmh));
     text_right(fb, 52, h - 28, std::to_string(kmh), Value, 3);
     text(fb, 56, h - 14, "KM/H", Label);
     draw_tacho(fb, 6, h - 37, hud.speed_fraction);
+    draw_fuel(fb, 56, h - 28, hud.fuel, hud.fuel_warning);
 
     // Bottom right: nitro.
     text_right(fb, w - 6, h - 37, "NITRO", Label);

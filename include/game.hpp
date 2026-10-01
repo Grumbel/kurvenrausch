@@ -32,8 +32,10 @@ struct ScreenshotOptions {
     std::string wav_path;    // if set, also write the sound of the run as a WAV
     bool force_steer = false; // replace the autopilot's steering by a constant
     float steer = 0.f;
+    int steer_from = 0;      // ... from this step on
     bool horn = false;       // hold the horn all the way
     int nitro_frame = -1;    // if >= 0, press nitro at this step
+    float fuel = -1.f;       // if >= 0, start with this much fuel (0 .. 1)
 };
 
 class Game {
@@ -76,8 +78,13 @@ private:
     void update_rumble();
     void update_audio(const InputState& input, float dt);
     void check_close_passes();
+    void start_crash(float speed_pct);
+    void update_crash(float dt);
+    void update_particles(float dt);
+    void spawn_dust(float x, float y, int count, float strength);
     int indicator(Entity e, const Transform& t, const Traffic& traffic) const;
     InputState autopilot() const;
+    void update_fuel(const InputState& input, float dt);
     void render();
     void render_mirror();
 
@@ -112,6 +119,31 @@ private:
     int scrape_side_ = 1;
     bool crashed_ = false; // a collision happened since the last frame
     int steer_ = 0;     // -1, 0, +1, for the car sprite
+    bool braking_ = false; // brake lights
+
+    Fuel fuel_;
+    std::vector<int> stations_; // first full-width forecourt segment of each gas station
+    std::vector<MapPoint> map_; // plan view for the mini map
+    bool engine_on_ = true;     // false when out of fuel, or for a sputter
+    bool refuelling_ = false;
+    float stranded_time_ = 0.f; // seconds standing with an empty tank
+
+    // The crash after hitting something solid at speed: seconds since the
+    // impact, or negative when not crashing.
+    float crash_time_ = -1.f;
+    int crash_side_ = 1;       // side of the road it happened on
+    float crash_x_ = 0.f;      // lateral position at the impact
+    float crash_target_x_ = 0.f; // where the car is put back on the road
+
+    // Debris and dust, in screen space.
+    struct Particle {
+        float x, y, vx, vy;
+        float life, max_life;
+        float size;  // radius for dust; debris are single pixels
+        Color color;
+        bool dust;
+    };
+    std::vector<Particle> particles_;
     float bounce_ = 0.f; // vertical shake of the car in pixels
     uint32_t rng_ = 0x2545f491u;
 

@@ -19,7 +19,9 @@ void usage(const char* argv0) {
               << "  --zone N            start the screenshot inside zone N (see --print-zones)\n"
               << "  --print-zones       list the zones of the track and exit\n"
               << "  --steer S           hold steering at S (-1 .. 1) instead of the autopilot\n"
+              << "  --steer-from N      start holding the steering at step N (default 0)\n"
               << "  --horn              hold the horn during the headless run\n"
+              << "  --fuel L            start the headless run with L (0 .. 1) of a tank\n"
               << "  --nitro N           press nitro at step N of the headless run\n"
               << "  --help              show this help\n";
 }
@@ -47,6 +49,10 @@ int main(int argc, char* argv[]) {
         } else if (arg == "--steer" && i + 1 < argc) {
             shot.force_steer = true;
             shot.steer = static_cast<float>(std::atof(argv[++i]));
+        } else if (arg == "--steer-from" && i + 1 < argc) {
+            shot.steer_from = std::atoi(argv[++i]);
+        } else if (arg == "--fuel" && i + 1 < argc) {
+            shot.fuel = static_cast<float>(std::atof(argv[++i]));
         } else if (arg == "--horn") {
             shot.horn = true;
         } else if (arg == "--nitro" && i + 1 < argc) {
