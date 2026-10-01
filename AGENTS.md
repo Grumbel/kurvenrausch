@@ -11,6 +11,8 @@ with SDL2. All drawing is done in software into a low-resolution framebuffer
 that is scaled up with nearest-neighbour filtering for chunky pixels.
 
 - Build: `cmake -B build && cmake --build build` (or `nix build`).
+- Tests: `ctest --test-dir build --output-on-failure` (`tests/tests.cpp`, no
+  framework). Add a test for new pure logic.
 - Headless check: `./build/kurvenrausch --screenshot out.bmp --frames 600`
   renders a frame without opening a window. Use this to verify rendering
   changes in environments without a display.

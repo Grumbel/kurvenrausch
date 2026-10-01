@@ -62,9 +62,12 @@ bool Game::init() {
     display_ = std::make_unique<Display>();
     if (!display_->init("Kurvenrausch", width, height, window_scale)) return false;
 
+    input_.init(); // not fatal: the keyboard always works
+
     std::cout << "Kurvenrausch: " << track_.segments.size() << " segments, "
               << track_.length() << " units.\n"
-              << "Controls: Arrows / WASD to drive, R to restart, F11 fullscreen, Esc to quit.\n";
+              << "Controls: Arrows / WASD or gamepad to drive, R / Start to restart,\n"
+              << "          F11 fullscreen, Esc to quit.\n";
     return true;
 }
 
@@ -78,6 +81,17 @@ void Game::reset() {
     lap_time_ = last_lap_ = best_lap_ = 0.f;
     message_.clear();
     message_time_ = 0.f;
+}
+
+void Game::update_rumble() {
+    const auto& vel = world_.get<Velocity>(player_);
+    const auto& tr = world_.get<Transform>(player_);
+    const float speed_pct = vel.speed / world_.get<Player>(player_).max_speed;
+    if (crashed_) {
+        input_.rumble(1.f, 0.8f, 250);
+    } else if (std::abs(tr.x) > 1.f && speed_pct > 0.05f) {
+        input_.rumble(0.35f * speed_pct, 0.1f, 60); // rattling along the verge
+    }
 }
 
 void Game::show_message(std::string text, float seconds) {
@@ -102,10 +116,12 @@ void Game::run() {
         if (input.toggle_fullscreen) display_->toggle_fullscreen();
 
         accumulator += dt;
+        crashed_ = false;
         while (accumulator >= fixed_dt_) {
             fixed_update(input, fixed_dt_);
             accumulator -= fixed_dt_;
         }
+        update_rumble();
 
         render();
         display_->present(fb_.pixels());
@@ -134,10 +150,10 @@ InputState Game::autopilot() const {
     const float wanted = -tr.x * 4.f - drift;
 
     InputState in;
-    in.right = wanted > 0.3f;
-    in.left = wanted < -0.3f;
-    in.up = !(std::abs(drift) > 1.f && std::abs(tr.x) > 0.6f);
-    in.down = !in.up;
+    in.steer = wanted > 0.3f ? 1.f : wanted < -0.3f ? -1.f : 0.f;
+    const bool coast = std::abs(drift) > 1.f && std::abs(tr.x) > 0.6f;
+    in.throttle = coast ? 0.f : 1.f;
+    in.brake = coast ? 1.f : 0.f;
     return in;
 }
 
@@ -156,13 +172,16 @@ void Game::fixed_update(const InputState& input, float dt) {
     tr.z = track_.wrap(tr.z + dt * vel.speed);
     background_.update(seg.curve, dt * vel.speed / track_.segment_length, dt);
 
-    steer_ = (input.right ? 1 : 0) - (input.left ? 1 : 0);
-    tr.x += dx * static_cast<float>(steer_);
+    steer_ = input.steer > 0.3f ? 1 : input.steer < -0.3f ? -1 : 0;
+    tr.x += dx * input.steer;
     tr.x -= dx * speed_pct * seg.curve * player.centrifugal;
 
-    if (input.up) vel.speed += player.accel * dt;
-    else if (input.down) vel.speed += player.brake * dt;
-    else vel.speed += player.decel * dt;
+    // Braking overrides the throttle; without either the car coasts down.
+    const float drive = input.throttle * (1.f - input.brake);
+    float accel = player.accel * drive;
+    if (input.brake > 0.01f) accel += player.brake * input.brake;
+    else accel += player.decel * (1.f - drive);
+    vel.speed += accel * dt;
 
     if (std::abs(tr.x) > 1.f) {
         if (vel.speed > player.offroad_limit) vel.speed += player.offroad_decel * dt;
@@ -177,6 +196,7 @@ void Game::fixed_update(const InputState& input, float dt) {
                                                : obj.offset + (obj.offset < 0.f ? -w : w) / 2.f;
             if (overlap(tr.x, car_w, center, w)) {
                 vel.speed = player.max_speed / 5.f;
+                crashed_ = true;
                 // Put the car back to the start of the segment it hit.
                 const float seg_start = static_cast<float>(track_.index_at(tr.z + player_z)) *
                                         track_.segment_length;
@@ -194,6 +214,7 @@ void Game::fixed_update(const InputState& input, float dt) {
         if (!overlap(tr.x, car_w, t.x, car_w * 0.8f)) return;
         vel.speed = v.speed * (v.speed / vel.speed);
         tr.z = track_.wrap(t.z - player_z);
+        crashed_ = true;
     });
 
     tr.x = std::clamp(tr.x, -3.f, 3.f);

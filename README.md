@@ -44,14 +44,27 @@ cmake --build build
 
 ## Controls
 
-| Key              | Action             |
-|------------------|--------------------|
-| ↑ / W            | Accelerate         |
-| ↓ / S            | Brake              |
-| ← → / A D        | Steer              |
-| R                | Restart            |
-| F11 / Alt+Enter  | Toggle fullscreen  |
-| Esc              | Quit               |
+| Keyboard         | Gamepad                  | Action             |
+|------------------|--------------------------|--------------------|
+| ↑ / W            | Right trigger, A         | Accelerate         |
+| ↓ / S            | Left trigger, B          | Brake              |
+| ← → / A D        | Left stick, D-pad        | Steer              |
+| R                | Start                    | Restart            |
+| F11 / Alt+Enter  |                          | Toggle fullscreen  |
+| Esc              |                          | Quit               |
+
+Any controller SDL knows (Xbox, PlayStation, Switch Pro, most generic pads) works
+and can be plugged in at any time; analog sticks and triggers steer and
+accelerate proportionally, and the pad rumbles on crashes and when you leave the
+road. Additional mappings can be supplied through SDL's `SDL_GAMECONTROLLERCONFIG`
+environment variable. Keyboard and gamepad can be used together.
+
+## Tests
+
+```bash
+cmake -B build && cmake --build build
+ctest --test-dir build --output-on-failure
+```
 
 ## Headless screenshots
 
@@ -80,7 +93,7 @@ include/
   hud.hpp          HUD drawing
   framebuffer.hpp  software framebuffer: clipping, trapezoids, scaled blits
   display.hpp      SDL window presentation, BMP export
-  input.hpp        keyboard polling
+  input.hpp        keyboard and gamepad input (analog), rumble
   game.hpp         game loop, physics, traffic, lap timing
 src/               implementations
 ```

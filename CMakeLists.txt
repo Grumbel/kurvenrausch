@@ -10,8 +10,8 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 find_package(SDL2 REQUIRED)
 
-add_executable(kurvenrausch
-    src/main.cpp
+# Everything except main() lives in a library so the tests can link it too.
+add_library(kurvenrausch_core STATIC
     src/background.cpp
     src/bitmap.cpp
     src/display.cpp
@@ -24,12 +24,25 @@ add_executable(kurvenrausch
     src/sprites.cpp
     src/track.cpp
 )
+target_include_directories(kurvenrausch_core PUBLIC include ${SDL2_INCLUDE_DIRS})
+target_link_libraries(kurvenrausch_core PUBLIC ${SDL2_LIBRARIES})
 
-target_include_directories(kurvenrausch PRIVATE include ${SDL2_INCLUDE_DIRS})
-target_link_libraries(kurvenrausch PRIVATE ${SDL2_LIBRARIES})
+add_executable(kurvenrausch src/main.cpp)
+target_link_libraries(kurvenrausch PRIVATE kurvenrausch_core)
 
-if(MSVC)
-    target_compile_options(kurvenrausch PRIVATE /W4)
-else()
-    target_compile_options(kurvenrausch PRIVATE -Wall -Wextra -Wpedantic -O2)
+include(CTest)
+if(BUILD_TESTING)
+    add_executable(kurvenrausch_tests tests/tests.cpp)
+    target_link_libraries(kurvenrausch_tests PRIVATE kurvenrausch_core)
+    add_test(NAME unit COMMAND kurvenrausch_tests)
 endif()
+
+foreach(target kurvenrausch_core kurvenrausch kurvenrausch_tests)
+    if(TARGET ${target})
+        if(MSVC)
+            target_compile_options(${target} PRIVATE /W4)
+        else()
+            target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic -O2)
+        endif()
+    endif()
+endforeach()

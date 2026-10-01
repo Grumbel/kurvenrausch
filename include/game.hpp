@@ -50,6 +50,7 @@ private:
     void fixed_update(const InputState& input, float dt);
     void update_laps(float prev_z, float z, float dt);
     void show_message(std::string text, float seconds);
+    void update_rumble();
     InputState autopilot() const;
     void render();
 
@@ -65,6 +66,7 @@ private:
 
     Entity player_ = INVALID_ENTITY;
     Entity camera_ = INVALID_ENTITY;
+    bool crashed_ = false; // a collision happened since the last frame
     int steer_ = 0;     // -1, 0, +1, for the car sprite
     float bounce_ = 0.f; // vertical shake of the car in pixels
     uint32_t rng_ = 0x2545f491u;
