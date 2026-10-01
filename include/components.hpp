@@ -3,9 +3,10 @@
 
 namespace racer {
 
-// Position on the track. For the player, z is the camera position along the
-// track (the car itself is drawn player_z ahead of it), x is the lateral
-// offset in road half-widths and y the road height under the car.
+// Position on the track: x is the lateral offset in road half-widths, z the
+// distance along the track. For the player, z is the camera position (the car
+// itself is player_z ahead of it) and y the road height under the car; for
+// traffic, z is the car's own position.
 struct Transform {
     float x = 0.f;
     float y = 0.f;
@@ -38,6 +39,12 @@ struct Player {
         p.offroad_limit = p.max_speed / 4.f;
         return p;
     }
+};
+
+// AI traffic: keeps to a lane, changes lanes to pass slower vehicles.
+struct Traffic {
+    int style = 0;          // sprite variant
+    float target_x = 0.f;   // lateral position of the lane it is heading for
 };
 
 struct Camera {

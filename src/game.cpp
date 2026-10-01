@@ -9,6 +9,9 @@ namespace racer {
 
 namespace {
 
+constexpr int traffic_count = 48;
+constexpr float lane_offsets[] = {-2.f / 3.f, 0.f, 2.f / 3.f};
+
 // Do the intervals [c1 - w1/2, c1 + w1/2] and [c2 - w2/2, c2 + w2/2] overlap?
 bool overlap(float c1, float w1, float c2, float w2) {
     return std::abs(c1 - c2) * 2.f < w1 + w2;
@@ -24,6 +27,32 @@ Game::Game() : fb_(width, height), track_(build_demo_track()) {
 
     camera_ = world_.create();
     world_.add<Camera>(camera_);
+
+    spawn_traffic();
+}
+
+void Game::spawn_traffic() {
+    std::vector<Entity> old;
+    world_.view<Traffic>([&](Entity e, Traffic&) { old.push_back(e); });
+    for (Entity e : old) world_.destroy(e);
+
+    const float max_speed = world_.get<Player>(player_).max_speed;
+    const float seg_len = track_.segment_length;
+    const float n = static_cast<float>(track_.segments.size());
+    uint32_t seed = 0x7a3c9e11u;
+    auto rnd = [&seed] {
+        seed = seed * 1664525u + 1013904223u;
+        return static_cast<float>(seed >> 8) / 16777216.f;
+    };
+    for (int i = 0; i < traffic_count; ++i) {
+        const Entity car = world_.create();
+        // Keep the start straight clear.
+        const float segment = 60.f + rnd() * (n - 80.f);
+        const float lane = lane_offsets[static_cast<int>(rnd() * 3.f) % 3];
+        world_.add<Transform>(car, Transform{lane, 0.f, segment * seg_len});
+        world_.add<Velocity>(car, Velocity{max_speed * (0.25f + 0.35f * rnd())});
+        world_.add<Traffic>(car, Traffic{i % SpriteSheet::traffic_styles, lane});
+    }
 }
 
 bool Game::init() {
@@ -40,6 +69,7 @@ void Game::reset() {
     world_.get<Transform>(player_) = Transform{};
     world_.get<Velocity>(player_) = Velocity{};
     background_.reset();
+    spawn_traffic();
     race_started_ = false;
     lap_ = 0;
     lap_time_ = last_lap_ = best_lap_ = 0.f;
@@ -153,6 +183,16 @@ void Game::fixed_update(const InputState& input, float dt) {
         }
     }
 
+    // Rear-ending traffic: bounce off and drop behind it.
+    const int car_segment = track_.index_at(tr.z + player_z);
+    const float car_w = player.car_width / track_.road_width;
+    world_.view<Transform, Velocity, Traffic>([&](Entity, Transform& t, Velocity& v, Traffic&) {
+        if (vel.speed <= v.speed || track_.index_at(t.z) != car_segment) return;
+        if (!overlap(tr.x, car_w, t.x, car_w * 0.8f)) return;
+        vel.speed = v.speed * (v.speed / vel.speed);
+        tr.z = track_.wrap(t.z - player_z);
+    });
+
     tr.x = std::clamp(tr.x, -3.f, 3.f);
     vel.speed = std::clamp(vel.speed, 0.f, player.max_speed);
     tr.y = track_.height_at(tr.z + player_z);
@@ -164,6 +204,50 @@ void Game::fixed_update(const InputState& input, float dt) {
     bounce_ = (rng_ >> 31) && shake > 0.25f ? -std::round(shake) : 0.f;
 
     update_laps(prev_z + player_z, tr.z + player_z, dt);
+    update_traffic(dt);
+}
+
+void Game::update_traffic(float dt) {
+    struct Mover { Entity e; float x, z, speed; };
+    std::vector<Mover> movers;
+    const auto& ptr = world_.get<Transform>(player_);
+    const float player_world_z = ptr.z + world_.get<Camera>(camera_).player_z();
+    movers.push_back({player_, ptr.x, player_world_z, world_.get<Velocity>(player_).speed});
+    world_.view<Transform, Velocity, Traffic>([&](Entity e, Transform& t, Velocity& v, Traffic&) {
+        movers.push_back({e, t.x, t.z, v.speed});
+    });
+
+    const float look_ahead = 6.f * track_.segment_length;
+    auto distance_ahead = [&](float from, float to) { return track_.wrap(to - from); };
+    // Is anyone within `range` ahead or behind near lateral position x?
+    auto lane_busy = [&](Entity self, float z, float x, float range) {
+        for (const Mover& m : movers) {
+            if (m.e == self || std::abs(m.x - x) > 0.4f) continue;
+            const float d = distance_ahead(z, m.z);
+            if (d < range || track_.length() - d < range * 0.5f) return true;
+        }
+        return false;
+    };
+
+    world_.view<Transform, Velocity, Traffic>([&](Entity e, Transform& t, Velocity& v, Traffic& traffic) {
+        // Blocked by something slower ahead in this lane? Pull out if the
+        // neighbouring lane is clear.
+        bool blocked = false;
+        for (const Mover& m : movers) {
+            if (m.e == e || std::abs(m.x - t.x) > 0.5f || m.speed >= v.speed) continue;
+            if (distance_ahead(t.z, m.z) < look_ahead) { blocked = true; break; }
+        }
+        if (blocked && std::abs(t.x - traffic.target_x) < 0.05f) {
+            for (float lane : lane_offsets) {
+                if (std::abs(lane - t.x) < 0.1f || std::abs(lane - t.x) > 0.7f) continue;
+                if (!lane_busy(e, t.z, lane, look_ahead)) { traffic.target_x = lane; break; }
+            }
+        }
+
+        const float step = 0.8f * dt;
+        t.x += std::clamp(traffic.target_x - t.x, -step, step);
+        t.z = track_.wrap(t.z + v.speed * dt);
+    });
 }
 
 void Game::update_laps(float prev_z, float z, float dt) {
@@ -209,16 +293,32 @@ void Game::render() {
     view.player_z = cam.player_z();
     view.draw_distance = cam.draw_distance;
     view.fog_density = cam.fog_density;
-    road_.render(fb_, track_, view, sprites_);
+    road_sprites_.clear();
+    world_.view<Transform, Traffic>([&](Entity, Transform& t, Traffic& traffic) {
+        RoadSprite s;
+        s.z = t.z;
+        s.bitmap = &sprites_.traffic(traffic.style);
+        s.offset = t.x;
+        s.world_width = player.car_width;
+        road_sprites_.push_back(s);
+    });
 
-    // The car sits centred, its tyres on the bottom screen row. It is drawn at
-    // the projection scale of player_z, which maps car_width to the sprite's
-    // native size, so the pixel art is shown 1:1.
+    // The player's car sits centred, its tyres on the bottom screen row. It
+    // is drawn at the projection scale of player_z, which maps car_width to
+    // the sprite's native size, so the pixel art is shown 1:1.
     const Bitmap& car = sprites_.player(steer_);
     const float scale = cam.depth / cam.player_z() * (width / 2.f);
-    const float car_w = player.car_width * scale;
-    const float car_h = car_w * static_cast<float>(car.h) / static_cast<float>(car.w);
-    fb_.blit_scaled(car, (width - car_w) / 2.f, height - car_h - 1.f + bounce_, car_w, car_h);
+    RoadSprite me;
+    me.z = tr.z + cam.player_z();
+    me.bitmap = &car;
+    me.fixed = true;
+    me.sw = player.car_width * scale;
+    me.sh = me.sw * static_cast<float>(car.h) / static_cast<float>(car.w);
+    me.sx = (width - me.sw) / 2.f;
+    me.sy = height - me.sh - 1.f + bounce_;
+    road_sprites_.push_back(me);
+
+    road_.render(fb_, track_, view, sprites_, road_sprites_);
     HudState hud;
     hud.speed_fraction = vel.speed / player.max_speed;
     hud.lap = lap_;

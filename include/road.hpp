@@ -27,11 +27,26 @@ struct ScreenPoint {
     float w = 0.f;      // screen half-width of the road
 };
 
+// A moving object on the road (traffic, the player's car), drawn in depth
+// order together with the scenery.
+struct RoadSprite {
+    float z = 0.f;                 // position along the track
+    const Bitmap* bitmap = nullptr;
+    // Placement on the road, projected: centred on offset (road half-widths).
+    float offset = 0.f;
+    float world_width = 0.f;
+    // Alternatively a fixed screen rectangle, not clipped by the terrain
+    // (the player's car, which the camera always looks over).
+    bool fixed = false;
+    float sx = 0.f, sy = 0.f, sw = 0.f, sh = 0.f;
+};
+
 // Classic segment based pseudo-3D road renderer.
 class RoadRenderer {
 public:
+    // `objects` may be in any order; it is sorted in place.
     void render(Framebuffer& fb, const Track& track, const RoadView& view,
-                const SpriteSheet& sprites);
+                const SpriteSheet& sprites, std::vector<RoadSprite>& objects);
 
 private:
     struct Slice {
@@ -43,7 +58,8 @@ private:
     };
 
     void draw_segment(Framebuffer& fb, const Track& track, const Slice& s) const;
-    void draw_scenery(Framebuffer& fb, const Track& track, const SpriteSheet& sprites) const;
+    void draw_sprites(Framebuffer& fb, const Track& track, const SpriteSheet& sprites,
+                      const std::vector<RoadSprite>& objects) const;
 
     std::vector<Slice> slices_;
     float camera_depth_ = 1.f;

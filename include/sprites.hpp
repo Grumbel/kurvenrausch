@@ -24,10 +24,15 @@ public:
     const Bitmap& scenery(Scenery kind) const { return scenery_[static_cast<size_t>(kind)]; }
     // steer: -1 left, 0 straight, +1 right
     const Bitmap& player(int steer) const { return player_[static_cast<size_t>(steer + 1)]; }
+    const Bitmap& traffic(int style) const {
+        return traffic_[static_cast<size_t>(style) % traffic_.size()];
+    }
+    static constexpr int traffic_styles = 4;
 
 private:
     std::array<Bitmap, 6> scenery_;
     std::array<Bitmap, 3> player_;
+    std::array<Bitmap, traffic_styles> traffic_;
 };
 
 } // namespace racer

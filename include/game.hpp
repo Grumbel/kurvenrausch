@@ -12,6 +12,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <vector>
 #include <string>
 
 namespace racer {
@@ -41,6 +42,8 @@ public:
 
 private:
     void reset();
+    void spawn_traffic();
+    void update_traffic(float dt);
     void fixed_update(const InputState& input, float dt);
     void update_laps(float prev_z, float z, float dt);
     void show_message(std::string text, float seconds);
@@ -53,6 +56,7 @@ private:
     World world_;
     Track track_;
     RoadRenderer road_;
+    std::vector<RoadSprite> road_sprites_;
     SpriteSheet sprites_;
     Background background_;
 

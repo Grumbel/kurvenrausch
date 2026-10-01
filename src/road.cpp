@@ -28,7 +28,7 @@ int clip_row(float clip_y) { return pixel_edge(clip_y); }
 } // namespace
 
 void RoadRenderer::render(Framebuffer& fb, const Track& track, const RoadView& view,
-                          const SpriteSheet& sprites) {
+                          const SpriteSheet& sprites, std::vector<RoadSprite>& objects) {
     const int n_segments = static_cast<int>(track.segments.size());
     const float seg_len = track.segment_length;
     const float track_len = track.length();
@@ -80,7 +80,10 @@ void RoadRenderer::render(Framebuffer& fb, const Track& track, const RoadView& v
         slices_.push_back(s);
     }
 
-    draw_scenery(fb, track, sprites);
+    for (RoadSprite& o : objects) o.z = track.wrap(o.z);
+    std::sort(objects.begin(), objects.end(),
+              [](const RoadSprite& a, const RoadSprite& b) { return a.z < b.z; });
+    draw_sprites(fb, track, sprites, objects);
 }
 
 void RoadRenderer::draw_segment(Framebuffer& fb, const Track& track, const Slice& s) const {
@@ -140,21 +143,26 @@ void RoadRenderer::draw_segment(Framebuffer& fb, const Track& track, const Slice
     fb.reset_clip();
 }
 
-void RoadRenderer::draw_scenery(Framebuffer& fb, const Track& track,
-                                const SpriteSheet& sprites) const {
+void RoadRenderer::draw_sprites(Framebuffer& fb, const Track& track, const SpriteSheet& sprites,
+                                const std::vector<RoadSprite>& objects) const {
     const float half_w = static_cast<float>(fb.width()) / 2.f;
+    const float seg_len = track.segment_length;
 
     // Far to near so nearer objects overdraw farther ones. Each object is
     // clipped against the road that was in front of its segment, so objects
     // behind a crest peek over it.
     for (auto it = slices_.rbegin(); it != slices_.rend(); ++it) {
         const Slice& s = *it;
-        if (s.p1.cam_z <= camera_depth_) continue;
+        // Projected objects on segments reaching behind the camera would blow
+        // up to absurd sizes; fixed screen objects are still drawn.
+        const bool projectable = s.p1.cam_z > camera_depth_;
         const Segment& seg = track.segment(s.index);
-        if (seg.scenery.empty()) continue;
+        const int clip = clip_row(s.clip);
+        const float fog_amount = 1.f - s.fog;
 
-        fb.set_clip(0, 0, fb.width(), clip_row(s.clip));
+        fb.set_clip(0, 0, fb.width(), clip);
         for (const RoadsideObject& obj : seg.scenery) {
+            if (!projectable) break;
             const SceneryInfo& info = scenery_info(obj.kind);
             const float px_per_unit = s.p1.scale * half_w;
             const float width = info.width * px_per_unit;
@@ -165,7 +173,34 @@ void RoadRenderer::draw_scenery(Framebuffer& fb, const Track& track,
             const float height = width * static_cast<float>(bmp.h) / static_cast<float>(bmp.w);
             const bool flip = info.mirrorable && obj.offset < 0.f;
             fb.blit_scaled(bmp, left, s.p1.y - height, width, height, flip,
-                           1.f - s.fog, track.theme.fog);
+                           fog_amount, track.theme.fog);
+        }
+
+        // Moving objects on this segment, far to near.
+        const float z0 = static_cast<float>(s.index) * seg_len;
+        auto first = std::lower_bound(objects.begin(), objects.end(), z0,
+                                      [](const RoadSprite& o, float z) { return o.z < z; });
+        auto last = std::lower_bound(first, objects.end(), z0 + seg_len,
+                                     [](const RoadSprite& o, float z) { return o.z < z; });
+        for (auto o = std::make_reverse_iterator(last); o != std::make_reverse_iterator(first); ++o) {
+            const Bitmap& bmp = *o->bitmap;
+            if (o->fixed) {
+                fb.reset_clip();
+                fb.blit_scaled(bmp, o->sx, o->sy, o->sw, o->sh);
+                fb.set_clip(0, 0, fb.width(), clip);
+                continue;
+            }
+            if (!projectable) continue;
+            const float t = (o->z - z0) / seg_len;
+            const float scale = s.p1.scale + (s.p2.scale - s.p1.scale) * t;
+            const float x = s.p1.x + (s.p2.x - s.p1.x) * t;
+            const float y = s.p1.y + (s.p2.y - s.p1.y) * t;
+            const float px_per_unit = scale * half_w;
+            const float width = o->world_width * px_per_unit;
+            const float height = width * static_cast<float>(bmp.h) / static_cast<float>(bmp.w);
+            const float cx = x + o->offset * track.road_width * px_per_unit;
+            fb.blit_scaled(bmp, cx - width / 2.f, y - height, width, height, false,
+                           fog_amount, track.theme.fog);
         }
     }
     fb.reset_clip();
