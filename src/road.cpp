@@ -1,192 +1,170 @@
 #include "road.hpp"
+
+#include "placeholder.hpp"
+
 #include <algorithm>
 #include <cmath>
 
 namespace racer {
 
-void RoadSystem::add_segment(Track& t, float curve, float y) {
-    Segment s;
-    s.index = static_cast<int>(t.segments.size());
-    s.curve = curve;
-    s.y = y;
-    bool alt = ((s.index / 3) % 2) == 0;
-    s.color_road   = alt ? Palette::RoadLight : Palette::RoadDark;
-    s.color_grass  = alt ? Palette::GrassLight : Palette::GrassDark;
-    s.color_rumble = alt ? Palette::RumbleLight : Palette::RumbleDark;
-    s.color_lane   = Palette::Lane;
-    t.segments.push_back(s);
+namespace {
+
+void project(ScreenPoint& p, float world_x, float world_y, float world_z,
+             float cam_x, float cam_y, float cam_z, float depth,
+             int screen_w, int screen_h, float road_width) {
+    p.cam_z = world_z - cam_z;
+    p.scale = depth / p.cam_z;
+    const float half_w = static_cast<float>(screen_w) / 2.f;
+    const float half_h = static_cast<float>(screen_h) / 2.f;
+    p.x = half_w + p.scale * (world_x - cam_x) * half_w;
+    p.y = half_h - p.scale * (world_y - cam_y) * half_h;
+    p.w = p.scale * road_width * half_w;
 }
 
-void RoadSystem::add_road(Track& t, int enter, int hold, int leave, float curve, float y) {
-    float y0 = t.segments.empty() ? 0.f : t.segments.back().y;
-    auto ease_in  = [](float a, float b, float p) { return a + (b - a) * p * p; };
-    auto ease_out = [](float a, float b, float p) { return a + (b - a) * (1.f - (1.f - p) * (1.f - p)); };
-    auto ease_inout = [&](float a, float b, float p) {
-        return p < 0.5f ? ease_in(a, (a + b) * 0.5f, p * 2.f)
-                        : ease_out((a + b) * 0.5f, b, p * 2.f - 1.f);
-    };
-
-    for (int n = 0; n < enter; ++n) {
-        float p = static_cast<float>(n) / std::max(1, enter);
-        add_segment(t, ease_in(0.f, curve, p), ease_inout(y0, y, p));
-    }
-    for (int n = 0; n < hold; ++n)
-        add_segment(t, curve, y);
-    for (int n = 0; n < leave; ++n) {
-        float p = static_cast<float>(n) / std::max(1, leave);
-        add_segment(t, ease_out(curve, 0.f, p), y);
-    }
+float exponential_fog(float distance, float density) {
+    return 1.f / std::exp(distance * distance * density);
 }
 
-void RoadSystem::add_sprite(Track& t, int seg, float offset, int type, float scale) {
-    if (seg < 0 || seg >= static_cast<int>(t.segments.size())) return;
-    t.segments[seg].sprites.push_back({offset, scale, type});
-}
+int clip_row(float clip_y) { return pixel_edge(clip_y); }
 
-void RoadSystem::build_demo_track(Track& track) {
-    track.segments.clear();
-    track.segment_length = 200.f;
-    track.road_width     = 2000.f;
-    track.rumble_width   = 0.12f;
-    track.lanes          = 3;
+} // namespace
 
-    add_road(track, 0, 40, 0, 0.f, 0.f);
-    add_road(track, 15, 30, 15, 3.f, 600.f);
-    add_road(track, 12, 25, 12, 0.f, -300.f);
-    add_road(track, 10, 35, 15, -4.5f, 200.f);
-    add_road(track, 12, 18, 12, 3.5f, 900.f);
-    add_road(track, 12, 18, 12, -3.5f, 1100.f);
-    add_road(track, 8, 50, 8, 0.f, -100.f);
-    add_road(track, 5, 12, 5, 1.5f, -700.f);
-    add_road(track, 8, 30, 8, 0.f, -500.f);
-    add_road(track, 15, 25, 15, -2.5f, 300.f);
-    add_road(track, 12, 30, 12, 2.5f, 0.f);
-    add_road(track, 0, 60, 0, 0.f, 0.f);
+void RoadRenderer::render(Framebuffer& fb, const Track& track, const RoadView& view) {
+    const int n_segments = static_cast<int>(track.segments.size());
+    const float seg_len = track.segment_length;
+    const float track_len = track.length();
 
-    for (size_t i = 0; i < track.segments.size(); ++i) {
-        if (i % 6 == 0)
-            add_sprite(track, static_cast<int>(i), -1.35f, 0, 1.0f + (i % 4) * 0.15f);
-        if (i % 9 == 3)
-            add_sprite(track, static_cast<int>(i),  1.40f, 0, 0.9f + (i % 3) * 0.1f);
-        if (track.segments[i].y < -250.f && i % 4 == 0) {
-            add_sprite(track, static_cast<int>(i), -1.55f, 1, 1.4f);
-            add_sprite(track, static_cast<int>(i),  1.55f, 1, 1.4f);
-        }
-        if (i % 35 == 17)
-            add_sprite(track, static_cast<int>(i), 1.7f, 2, 1.1f);
-    }
-    track.rebuild();
-}
+    const int base = track.index_at(view.position);
+    const float base_percent = std::fmod(track.wrap(view.position), seg_len) / seg_len;
+    const float cam_y = view.player_y + view.camera_height;
 
-/*
- * Classic pseudo-3D projection (Jake Gordon javascript-racer / Lou)
- *
- *   camera_space.z = world.z - camera.z
- *   scale          = cameraDepth / camera_space.z
- *   screen.x       = width/2  + scale * camera_space.x * width/2
- *   screen.y       = height/2 - scale * camera_space.y * height/2
- *   screen.w       = scale * roadWidth * width/2
- *
- * Curves: while walking segments, x += dx; dx += segment.curve
- * Hills:  segment.y feeds into camera_space.y; far→near + maxY clip
- */
-void RoadSystem::project_segments(const Track& track,
-                                  float player_z, float player_x,
-                                  const Camera& cam,
-                                  int screen_w, int screen_h,
-                                  std::vector<Projected>& projected,
-                                  float& max_y) {
-    const int n_seg  = static_cast<int>(track.segments.size());
-    const int draw_n = std::min(n_seg - 1, static_cast<int>(cam.draw_distance));
-    projected.assign(static_cast<size_t>(draw_n + 1), Projected{});
+    // The camera may sit partway into the base segment, so start the curve
+    // accumulation with the part of the curve already passed.
+    float x = 0.f;
+    float dx = -track.segment(base).curve * base_percent;
+    float max_y = static_cast<float>(fb.height());
 
-    const int   base_idx     = track.index_from_z(player_z);
-    const float base_percent = player_z / track.segment_length
-                               - std::floor(player_z / track.segment_length);
+    camera_depth_ = view.camera_depth;
+    const int count = std::min(view.draw_distance, n_segments);
+    slices_.clear();
+    slices_.reserve(static_cast<size_t>(count));
 
-    const float camera_x     = player_x * track.road_width;
-    const float camera_y     = cam.height;
-    const float camera_z     = player_z;
-    const float camera_depth = cam.depth;   // ~0.84
+    for (int n = 0; n < count; ++n) {
+        const int index = (base + n) % n_segments;
+        const Segment& seg = track.segment(index);
+        // Segments past the end of the track are seen through the loop.
+        const float loop = index < base ? track_len : 0.f;
+        const float cam_z = view.position - loop;
+        const float cam_x = view.player_x * track.road_width;
+        const float z1 = static_cast<float>(index) * seg_len;
 
-    float x  = 0.f;
-    float dx = -(base_percent * track.get(base_idx).curve);  // start mid-segment
-
-    max_y = static_cast<float>(screen_h);
-
-    for (int n = 0; n <= draw_n; ++n) {
-        const int idx = (base_idx + n) % n_seg;
-        const Segment& seg = track.get(idx);
-
-        // World Z of this segment's near edge
-        float world_z = (static_cast<float>(base_idx + n) - base_percent)
-                        * track.segment_length;
-        // Actually simpler: distance in front of camera
-        float cz = (n - base_percent) * track.segment_length;
-        if (cz < 1.f) cz = 1.f;
-
-        float cx = x - camera_x;
-        float cy = seg.y - camera_y;
-
-        // THE classic formula
-        float scale = camera_depth / cz;
-
-        Projected& p = projected[static_cast<size_t>(n)];
-        p.scale = scale;
-        p.x = (screen_w / 2.f) + (scale * cx * screen_w  / 2.f);
-        p.y = (screen_h / 2.f) - (scale * cy * screen_h  / 2.f);
-        p.w = (scale * track.road_width * screen_w / 2.f);
-        p.clip = max_y;
-
-        // Accumulate curve for next segment
-        x  += dx;
+        Slice s;
+        s.index = index;
+        project(s.p1, x, seg.y1, z1, cam_x, cam_y, cam_z, view.camera_depth,
+                fb.width(), fb.height(), track.road_width);
+        project(s.p2, x + dx, seg.y2, z1 + seg_len, cam_x, cam_y, cam_z, view.camera_depth,
+                fb.width(), fb.height(), track.road_width);
+        x += dx;
         dx += seg.curve;
-        (void)world_z;
-        (void)camera_z;
+
+        s.clip = max_y;
+        s.fog = exponential_fog(static_cast<float>(n) / static_cast<float>(count), view.fog_density);
+        // Skip segments behind the camera, facing away (downhill beyond a
+        // crest), or fully hidden behind nearer road.
+        s.road_visible = s.p1.cam_z > view.camera_depth &&
+                         s.p2.y < s.p1.y &&
+                         s.p2.y < max_y;
+        if (s.road_visible) {
+            draw_segment(fb, track, s);
+            max_y = s.p2.y;
+        }
+        slices_.push_back(s);
     }
+
+    draw_scenery(fb, track);
 }
 
-void RoadSystem::render(Renderer& r, const Track& track,
-                        const std::vector<Projected>& projected,
-                        float player_z, float /*player_x*/,
-                        const Camera& cam) {
-    const int n_seg    = static_cast<int>(track.segments.size());
-    const int base_idx = track.index_from_z(player_z);
-    const int draw_n   = static_cast<int>(projected.size()) - 1;
-    if (draw_n < 1) return;
+void RoadRenderer::draw_segment(Framebuffer& fb, const Track& track, const Slice& s) const {
+    const Segment& seg = track.segment(s.index);
+    const RoadTheme& theme = track.theme;
+    const int band = seg.alt ? 0 : 1;
+    const float fog_amount = 1.f - s.fog;
+    auto fogged = [&](Color c) { return blend(c, theme.fog, fog_amount); };
 
-    float max_y = static_cast<float>(r.height());
+    const ScreenPoint& a = s.p1; // near
+    const ScreenPoint& b = s.p2; // far
+    const int lanes = std::max(1, track.lanes);
 
-    for (int n = draw_n - 1; n >= 0; --n) {
-        const Projected& p1 = projected[static_cast<size_t>(n)];
-        const Projected& p2 = projected[static_cast<size_t>(n + 1)];
+    // Only draw rows above the nearer road already on screen.
+    fb.set_clip(0, 0, fb.width(), clip_row(s.clip));
 
-        if (p1.scale <= 0.f || p2.scale <= 0.f) continue;
-        if (p1.y >= max_y && p2.y >= max_y) continue;
+    // Grass spans the full width.
+    fb.fill_trapezoid(b.y, 0.f, static_cast<float>(fb.width()),
+                      a.y, 0.f, static_cast<float>(fb.width()), fogged(theme.grass[band]));
 
-        // Don't draw segments that are above the screen or inverted
-        if (p1.y < 0.f && p2.y < 0.f) continue;
+    // Rumble strips.
+    const float ra = a.w / static_cast<float>(std::max(6, 2 * lanes));
+    const float rb = b.w / static_cast<float>(std::max(6, 2 * lanes));
+    const Color rumble = fogged(theme.rumble[band]);
+    fb.fill_trapezoid(b.y, b.x - b.w - rb, b.x - b.w, a.y, a.x - a.w - ra, a.x - a.w, rumble);
+    fb.fill_trapezoid(b.y, b.x + b.w, b.x + b.w + rb, a.y, a.x + a.w, a.x + a.w + ra, rumble);
 
-        const int idx = (base_idx + n) % n_seg;
-        const Segment& seg = track.get(idx);
-
-        r.draw_segment(p1, p2,
-                       seg.color_road, seg.color_grass,
-                       seg.color_rumble, seg.color_lane,
-                       track.lanes, track.rumble_width);
-
-        for (const auto& sp : seg.sprites) {
-            float sx = p1.x + p1.w * sp.offset;
-            float sy = p1.y;
-            float sc = p1.scale * sp.scale * 300.f;  // sprite size tune
-            if (sy < max_y + 50.f && sc > 0.5f)
-                r.draw_sprite(sx, sy, sc, sp.type, sp.offset < 0.f);
+    if (seg.checker) {
+        // Chequered start/finish line, two rows of squares.
+        constexpr int squares = 8;
+        const int parity = s.index % 2;
+        for (int i = 0; i < squares; ++i) {
+            const float f0 = static_cast<float>(i) / squares;
+            const float f1 = static_cast<float>(i + 1) / squares;
+            const Color c = fogged(theme.checker[(i + parity) % 2]);
+            fb.fill_trapezoid(b.y, b.x - b.w + 2.f * b.w * f0, b.x - b.w + 2.f * b.w * f1,
+                              a.y, a.x - a.w + 2.f * a.w * f0, a.x - a.w + 2.f * a.w * f1, c);
         }
+    } else {
+        fb.fill_trapezoid(b.y, b.x - b.w, b.x + b.w, a.y, a.x - a.w, a.x + a.w,
+                          fogged(theme.road[band]));
 
-        if (p1.y < max_y)
-            max_y = p1.y;
+        // Dashed lane markers on alternating bands.
+        if (seg.alt && lanes > 1) {
+            const float la = a.w / static_cast<float>(std::max(32, 8 * lanes));
+            const float lb = b.w / static_cast<float>(std::max(32, 8 * lanes));
+            const Color lane = fogged(theme.lane);
+            for (int i = 1; i < lanes; ++i) {
+                const float f = static_cast<float>(i) / static_cast<float>(lanes);
+                const float xa = a.x - a.w + 2.f * a.w * f;
+                const float xb = b.x - b.w + 2.f * b.w * f;
+                fb.fill_trapezoid(b.y, xb - lb, xb + lb, a.y, xa - la, xa + la, lane);
+            }
+        }
     }
-    (void)cam;
+
+    fb.reset_clip();
+}
+
+void RoadRenderer::draw_scenery(Framebuffer& fb, const Track& track) const {
+    const float half_w = static_cast<float>(fb.width()) / 2.f;
+
+    // Far to near so nearer objects overdraw farther ones. Each object is
+    // clipped against the road that was in front of its segment, so objects
+    // behind a crest peek over it.
+    for (auto it = slices_.rbegin(); it != slices_.rend(); ++it) {
+        const Slice& s = *it;
+        if (s.p1.cam_z <= camera_depth_) continue;
+        const Segment& seg = track.segment(s.index);
+        if (seg.scenery.empty()) continue;
+
+        fb.set_clip(0, 0, fb.width(), clip_row(s.clip));
+        for (const RoadsideObject& obj : seg.scenery) {
+            const SceneryInfo& info = scenery_info(obj.kind);
+            const float px_per_unit = s.p1.scale * half_w;
+            const float width = info.width * px_per_unit;
+            float left = s.p1.x + obj.offset * track.road_width * px_per_unit;
+            if (info.centered) left -= width / 2.f;
+            else if (obj.offset < 0.f) left -= width;
+            placeholder::draw_scenery(fb, obj.kind, left, s.p1.y, width, s.fog);
+        }
+    }
+    fb.reset_clip();
 }
 
 } // namespace racer

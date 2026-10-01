@@ -25,6 +25,15 @@ struct Color {
     }
 };
 
+// Linear blend from a to b; t = 0 gives a, t = 1 gives b.
+constexpr Color blend(Color a, Color b, float t) {
+    auto mix = [t](uint8_t x, uint8_t y) {
+        return static_cast<uint8_t>(static_cast<float>(x) + (static_cast<float>(y) - static_cast<float>(x)) * t + 0.5f);
+    };
+    return Color(mix(a.r, b.r), mix(a.g, b.g), mix(a.b, b.b), a.a);
+}
+
+// Classic palette inspired by OutRun / Lotus
 namespace Palette {
     constexpr Color SkyTop{0x5B, 0x9B, 0xD5};
     constexpr Color SkyBottom{0xC8, 0xE0, 0xF0};

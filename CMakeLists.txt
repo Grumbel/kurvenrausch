@@ -9,11 +9,13 @@ find_package(SDL2 REQUIRED)
 
 add_executable(kurvenrausch
     src/main.cpp
-    src/renderer.cpp
     src/display.cpp
-    src/road.cpp
+    src/framebuffer.cpp
     src/game.cpp
     src/input.cpp
+    src/placeholder.cpp
+    src/road.cpp
+    src/track.cpp
 )
 
 target_include_directories(kurvenrausch PRIVATE include ${SDL2_INCLUDE_DIRS})

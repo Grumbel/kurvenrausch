@@ -1,5 +1,7 @@
 #include "game.hpp"
 
+#include "placeholder.hpp"
+
 #include <SDL2/SDL.h>
 #include <algorithm>
 #include <cmath>
@@ -7,30 +9,31 @@
 
 namespace racer {
 
-Game::Game(int width, int height)
-    : width_(width), height_(height), renderer_(width, height) {}
+namespace {
 
-void Game::setup_world() {
-    road_.build_demo_track(track_);
+// Do the intervals [c1 - w1/2, c1 + w1/2] and [c2 - w2/2, c2 + w2/2] overlap?
+bool overlap(float c1, float w1, float c2, float w2) {
+    return std::abs(c1 - c2) * 2.f < w1 + w2;
+}
 
+} // namespace
+
+Game::Game() : fb_(width, height), track_(build_demo_track()) {
     player_ = world_.create();
     world_.add<Transform>(player_);
     world_.add<Velocity>(player_);
-    world_.add<Player>(player_);
+    world_.add<Player>(player_, Player::for_segment_length(track_.segment_length));
 
     camera_ = world_.create();
     world_.add<Camera>(camera_);
-
-    projected_.resize(track_.segments.size());
 }
 
 bool Game::init() {
     display_ = std::make_unique<Display>();
-    if (!display_->init("Kurvenrausch", width_, height_, 1)) return false;
+    if (!display_->init("Kurvenrausch", width, height, window_scale)) return false;
 
-    setup_world();
-
-    std::cout << "Kurvenrausch ready.\n"
+    std::cout << "Kurvenrausch: " << track_.segments.size() << " segments, "
+              << track_.length() << " units.\n"
               << "Controls: Arrows / WASD to drive, R to restart, F11 fullscreen, Esc to quit.\n";
     return true;
 }
@@ -38,7 +41,9 @@ bool Game::init() {
 void Game::reset() {
     world_.get<Transform>(player_) = Transform{};
     world_.get<Velocity>(player_) = Velocity{};
-    lap_ = 1;
+    race_started_ = false;
+    lap_ = 0;
+    lap_time_ = last_lap_ = best_lap_ = 0.f;
 }
 
 void Game::run() {
@@ -49,9 +54,8 @@ void Game::run() {
 
     for (;;) {
         const Uint64 now = SDL_GetPerformanceCounter();
-        float dt = static_cast<float>((now - prev) / freq);
+        const float dt = std::min(static_cast<float>((now - prev) / freq), 0.25f);
         prev = now;
-        dt = std::min(dt, 0.25f); // don't try to catch up after a stall
 
         input_.poll(input);
         if (input.quit) break;
@@ -65,70 +69,128 @@ void Game::run() {
         }
 
         render();
-        display_->present(renderer_.pixels());
+        display_->present(fb_.pixels());
 
         if (!display_->vsync()) SDL_Delay(1);
     }
 }
 
-bool Game::screenshot(const std::string& path, int frames) {
-    setup_world();
-    InputState input;
-    input.up = true;
-    for (int i = 0; i < frames; ++i) fixed_update(input, fixed_dt_);
+bool Game::screenshot(const ScreenshotOptions& opts) {
+    world_.get<Transform>(player_).z = track_.wrap(opts.position);
+    for (int i = 0; i < opts.frames; ++i) fixed_update(autopilot(), fixed_dt_);
     render();
-    return save_bmp(path, renderer_.pixels(), width_, height_);
+    return save_bmp(opts.path, fb_.pixels(), width, height);
+}
+
+InputState Game::autopilot() const {
+    const auto& tr = world_.get<Transform>(player_);
+    const auto& vel = world_.get<Velocity>(player_);
+    const auto& player = world_.get<Player>(player_);
+    const auto& cam = world_.get<Camera>(camera_);
+
+    const Segment& seg = track_.segment_at(tr.z + cam.player_z());
+    const float pct = vel.speed / player.max_speed;
+    // Lateral push the curve will apply this tick, relative to one steering tick.
+    const float drift = -pct * seg.curve * player.centrifugal;
+    const float wanted = -tr.x * 4.f - drift;
+
+    InputState in;
+    in.right = wanted > 0.3f;
+    in.left = wanted < -0.3f;
+    in.up = !(std::abs(drift) > 1.f && std::abs(tr.x) > 0.6f);
+    in.down = !in.up;
+    return in;
 }
 
 void Game::fixed_update(const InputState& input, float dt) {
-    auto& player = world_.get<Player>(player_);
-    auto& vel = world_.get<Velocity>(player_);
     auto& tr = world_.get<Transform>(player_);
+    auto& vel = world_.get<Velocity>(player_);
+    const auto& player = world_.get<Player>(player_);
+    const auto& cam = world_.get<Camera>(camera_);
+    const float player_z = cam.player_z();
 
-    if (input.up) {
-        vel.speed += player.accel * dt;
-    } else if (input.down) {
-        vel.speed -= player.brake * dt;
-    } else {
-        vel.speed -= 30.f * dt; // drag
+    const Segment& seg = track_.segment_at(tr.z + player_z);
+    const float speed_pct = vel.speed / player.max_speed;
+    const float dx = dt * 2.f * speed_pct; // steering is stronger at speed
+
+    const float prev_z = tr.z;
+    tr.z = track_.wrap(tr.z + dt * vel.speed);
+
+    steer_ = (input.right ? 1 : 0) - (input.left ? 1 : 0);
+    tr.x += dx * static_cast<float>(steer_);
+    tr.x -= dx * speed_pct * seg.curve * player.centrifugal;
+
+    if (input.up) vel.speed += player.accel * dt;
+    else if (input.down) vel.speed += player.brake * dt;
+    else vel.speed += player.decel * dt;
+
+    if (std::abs(tr.x) > 1.f) {
+        if (vel.speed > player.offroad_limit) vel.speed += player.offroad_decel * dt;
+
+        // Crash into solid roadside objects on the car's segment.
+        const float car_w = player.car_width / track_.road_width;
+        for (const RoadsideObject& obj : seg.scenery) {
+            const SceneryInfo& info = scenery_info(obj.kind);
+            if (!info.solid) continue;
+            const float w = info.width / track_.road_width;
+            const float center = info.centered ? obj.offset
+                                               : obj.offset + (obj.offset < 0.f ? -w : w) / 2.f;
+            if (overlap(tr.x, car_w, center, w)) {
+                vel.speed = player.max_speed / 5.f;
+                // Put the car back to the start of the segment it hit.
+                const float seg_start = static_cast<float>(track_.index_at(tr.z + player_z)) *
+                                        track_.segment_length;
+                tr.z = track_.wrap(seg_start - player_z);
+                break;
+            }
+        }
     }
+
+    tr.x = std::clamp(tr.x, -3.f, 3.f);
     vel.speed = std::clamp(vel.speed, 0.f, player.max_speed);
+    tr.y = track_.height_at(tr.z + player_z);
 
-    float steer = 0.f;
-    if (input.left)  steer -= 1.f;
-    if (input.right) steer += 1.f;
+    update_laps(prev_z + player_z, tr.z + player_z, dt);
+}
 
-    const int seg_idx = track_.index_from_z(tr.z);
-    const float curve = track_.get(seg_idx).curve;
-    const float centrifugal = curve * vel.speed * player.centrifugal * 0.001f;
-    tr.x += (steer * player.steer_speed - centrifugal) * (vel.speed / player.max_speed) * dt * 2.f;
-    tr.x = std::clamp(tr.x, -1.5f, 1.5f);
+void Game::update_laps(float prev_z, float z, float dt) {
+    if (race_started_) lap_time_ += dt;
 
-    tr.z += vel.speed * dt;
-    if (tr.z >= track_.total_length) {
-        tr.z -= track_.total_length;
-        ++lap_;
+    // Distance travelled past the start line; it drops when the line is crossed.
+    const float before = track_.wrap(prev_z - track_.start_z);
+    const float after = track_.wrap(z - track_.start_z);
+    if (after >= before) return;
+
+    if (race_started_) {
+        last_lap_ = lap_time_;
+        if (best_lap_ == 0.f || lap_time_ < best_lap_) best_lap_ = lap_time_;
     }
-    tr.y = track_.get(seg_idx).y;
+    race_started_ = true;
+    lap_time_ = 0.f;
+    ++lap_;
 }
 
 void Game::render() {
-    renderer_.begin_frame();
-
-    const auto& cam = world_.get<Camera>(camera_);
     const auto& tr = world_.get<Transform>(player_);
     const auto& vel = world_.get<Velocity>(player_);
+    const auto& player = world_.get<Player>(player_);
+    const auto& cam = world_.get<Camera>(camera_);
 
-    renderer_.draw_background(tr.x * 50.f + tr.z * 0.01f, 0.f);
+    placeholder::draw_background(fb_, track_.theme);
 
-    float max_y = 0.f;
-    road_.project_segments(track_, tr.z, tr.x, cam, width_, height_, projected_, max_y);
-    road_.render(renderer_, track_, projected_, tr.z, tr.x, cam);
+    RoadView view;
+    view.position = tr.z;
+    view.player_x = tr.x;
+    view.player_y = tr.y;
+    view.camera_height = cam.height;
+    view.camera_depth = cam.depth;
+    view.player_z = cam.player_z();
+    view.draw_distance = cam.draw_distance;
+    view.fog_density = cam.fog_density;
+    road_.render(fb_, track_, view);
 
-    const float car_x = width_ / 2.f + tr.x * (width_ * 0.3f);
-    const float car_y = height_ - 60.f;
-    renderer_.draw_player_car(car_x, car_y, tr.x * 0.5f, vel.speed);
-    renderer_.draw_hud(vel.speed, tr.z, lap_);
+    placeholder::draw_car(fb_, width / 2.f, static_cast<float>(height), steer_);
+    placeholder::draw_hud(fb_, vel.speed / player.max_speed, lap_);
 }
 
 } // namespace racer

@@ -1,29 +1,50 @@
 #pragma once
-#include "components.hpp"
-#include "renderer.hpp"
+#include "framebuffer.hpp"
+#include "track.hpp"
+
 #include <vector>
 
 namespace racer {
 
-// Data-driven track builder and road projection system.
-// Implements classic pseudo-3D: segments with curve + height,
-// projected with 1/z, cumulative dx for bends, dy for hills.
+// Everything the road renderer needs to know about the viewer.
+struct RoadView {
+    float position = 0.f;   // camera z along the track
+    float player_x = 0.f;   // lateral offset in road half-widths
+    float player_y = 0.f;   // road height under the car
+    float camera_height = 1000.f;
+    float camera_depth = 0.84f;
+    float player_z = 840.f;
+    int draw_distance = 300;
+    float fog_density = 5.f;
+};
 
-class RoadSystem {
+struct ScreenPoint {
+    float cam_z = 0.f;  // depth relative to the camera
+    float scale = 0.f;  // camera_depth / cam_z
+    float x = 0.f;      // screen position of the road centre
+    float y = 0.f;
+    float w = 0.f;      // screen half-width of the road
+};
+
+// Classic segment based pseudo-3D road renderer.
+class RoadRenderer {
 public:
-    void build_demo_track(Track& track);
-    void project_segments(const Track& track, float player_z, float player_x,
-                          const Camera& cam, int screen_w, int screen_h,
-                          std::vector<Projected>& projected,
-                          float& max_y);
-    void render(Renderer& r, const Track& track,
-                const std::vector<Projected>& projected,
-                float player_z, float player_x, const Camera& cam);
+    void render(Framebuffer& fb, const Track& track, const RoadView& view);
 
 private:
-    void add_segment(Track& t, float curve, float y);
-    void add_road(Track& t, int enter, int hold, int leave, float curve, float y);
-    void add_sprite(Track& t, int seg, float offset, int type, float scale = 1.f);
+    struct Slice {
+        int index;          // segment index
+        ScreenPoint p1, p2; // near and far edge
+        float clip;         // occlusion line from nearer road: draw only above
+        float fog;          // 1 = clear, 0 = fully fogged
+        bool road_visible;
+    };
+
+    void draw_segment(Framebuffer& fb, const Track& track, const Slice& s) const;
+    void draw_scenery(Framebuffer& fb, const Track& track) const;
+
+    std::vector<Slice> slices_;
+    float camera_depth_ = 1.f;
 };
 
 } // namespace racer
