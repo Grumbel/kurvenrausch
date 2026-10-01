@@ -40,6 +40,8 @@ weather and road markings, fading smoothly into one another:
 - Road markings per region: dashed white lines in Europe, double yellow centre
   line and white edge lines in the USA
 - AI traffic that changes lanes to pass; rear-ending a car slows you down
+- **Rear-view mirror** at the top of the screen: the road behind, drawn by the
+  same renderer looking back, with the fronts of the cars you have passed
 - Arcade handling with analog steering and pedals; centrifugal force, off-road
   slowdown, crashes into roadside objects
 - **Synthesised sound**: a six-cylinder engine that follows revs and load, with
@@ -122,7 +124,8 @@ include/
   components.hpp   Transform, Velocity, Player, Traffic, Camera
   track.hpp        Track, Segment, Zone, RoadTheme (the blendable look),
                    edges (rails, cliffs), scenery kinds, the route builder
-  road.hpp         road projection and rendering, cliffs, road sprites
+  road.hpp         road projection and rendering (ahead or, for the mirror,
+                   behind), cliffs, road sprites
   background.hpp   parallax sky, sun, clouds, mountains, hills
   weather.hpp      rain and snow particles
   sprites.hpp      procedural pixel-art sprite sheet

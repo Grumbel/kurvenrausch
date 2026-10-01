@@ -6,8 +6,9 @@ Base: `fc65858 Fix rendering: correct projection, pixel format, colors &
 sprites` (upstream master). Work line: kurvenrausch-003.x, bundles are
 cumulative from `fc65858`.
 
-Latest bundle: `kurvenrausch-003.1-biomes-audio-gamepad-fc65858.bundle`, tip is
-the "Update README, TODO and AGENTS" commit on `master`.
+Latest bundle: `kurvenrausch-004.1-rear-view-mirror-fc65858.bundle`, tip is
+the "Show the mirror in the README screenshots, update TODO" commit on `master`.
+004.1 builds on 003.1 (`fe8e0df`) and adds the rear-view mirror.
 
 History: 001.1 was built on `d66c91a`; upstream then added a rename and its own
 rendering fix, so the work was rebased onto `fc65858` (002.1). 003.1 adds the
@@ -17,6 +18,46 @@ Upstream master has since been fast-forwarded to `64fda32`, the tip of 002.1, so
 from `fc65858` regardless, as the rules require.
 The rebase notes: upstream's rename is kept, its rendering fix is superseded by
 the road/framebuffer rewrite, `Color::to_u32()` became `Color::argb()`.
+
+## Round 3 (004.1): rear-view mirror, done
+
+Requested: a mirror at the top of the screen showing what goes on behind the
+car. Delivered as a 112x30 mirror centred at the top, in a housing on a stem.
+
+Design decisions:
+
+- No separate renderer: `RoadView::direction = -1` makes `RoadRenderer` walk
+  the segments backwards from the camera (`cam_z = (z - camera) * direction`,
+  near/far edges and heights swapped, loop seam handled both ways). Lateral
+  positions keep their sign, which is exactly the mirror image (left stays
+  left), so nothing is flipped; curves accumulate with the same sign (a
+  right-hand bend curves right behind the car as well). Unit-tested in
+  `test_road_mirror`.
+- `RoadView::horizon` / `y_scale` let a view put eye level anywhere and keep
+  the main view's proportions in a framebuffer of another shape; 0 keeps the
+  old H/2 behaviour, the main view renders bit-identically to before.
+- The mirror camera sits at the car (not the chase camera), 700 units up,
+  depth 1.2 (narrower than the main view); constants at the top of game.cpp.
+  It renders into its own `Framebuffer` and `RoadRenderer` (the slices are
+  per renderer), then `Framebuffer::blit` copies it into the housing.
+- Backdrop: `BackdropView {horizon, zoom, mirror}`. Mirrored, the layers show
+  the opposite half of their panorama, flipped and scrolling the other way;
+  no sun (it is ahead). Cloud positions are now altitudes above the horizon.
+- Sprites: traffic shows its front in the mirror (`make_car_front`, driver on
+  the left as a mirror shows it), billboards their back
+  (`SpriteSheet::scenery_back`); other scenery is the same from both sides.
+- HUD: the lap counter moved from the top centre to under the lap time; the
+  country banner and the lap messages moved down a little to clear the mirror.
+
+Verified: builds warning-free, unit tests, ASan+UBSan on a full headless lap,
+on positions around the track including both sides of the lap seam, and on
+the live loop with the dummy drivers; `nix build` (now available, works);
+screenshots of every zone, the start gantry and billboard backs behind,
+traffic behind, uphill behind, bends.
+Not verified: how it looks/feels in interactive play on a real display.
+
+Ideas: a key to toggle the mirror; weather drops on the mirror; headlights of
+cars behind in a night stage.
 
 ## Round 2 (003.1): done
 
