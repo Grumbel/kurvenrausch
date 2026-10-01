@@ -6,6 +6,7 @@
 #include "audio.hpp"
 #include "components.hpp"
 #include "display.hpp"
+#include "driving.hpp"
 #include "ecs.hpp"
 #include "framebuffer.hpp"
 #include "hud.hpp"
@@ -31,6 +32,8 @@ struct ScreenshotOptions {
     std::string wav_path;    // if set, also write the sound of the run as a WAV
     bool force_steer = false; // replace the autopilot's steering by a constant
     float steer = 0.f;
+    bool horn = false;       // hold the horn all the way
+    int nitro_frame = -1;    // if >= 0, press nitro at this step
 };
 
 class Game {
@@ -72,6 +75,8 @@ private:
     void show_message(std::string text, float seconds);
     void update_rumble();
     void update_audio(const InputState& input, float dt);
+    void check_close_passes();
+    int indicator(Entity e, const Transform& t, const Traffic& traffic) const;
     InputState autopilot() const;
     void render();
     void render_mirror();
@@ -92,6 +97,12 @@ private:
     Synth synth_;   // declared before audio_, which must be destroyed first
     Audio audio_;
     bool muted_ = false;
+    bool horn_ = false;
+    Nitro nitro_;
+    bool nitro_held_ = false; // a burn starts when the button goes down
+    float wave_time_ = 0.f;   // seconds left of the wave after a close pass
+    int wave_side_ = -1;      // -1 the driver waves (car passed on the left), +1 the passenger
+    bool passed_ = false;     // a close pass happened since the last frame (rumble)
     int gear_ = 1;
     float shift_cut_ = 0.f; // seconds left of the throttle lift during an upshift
 

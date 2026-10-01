@@ -19,6 +19,8 @@ void usage(const char* argv0) {
               << "  --zone N            start the screenshot inside zone N (see --print-zones)\n"
               << "  --print-zones       list the zones of the track and exit\n"
               << "  --steer S           hold steering at S (-1 .. 1) instead of the autopilot\n"
+              << "  --horn              hold the horn during the headless run\n"
+              << "  --nitro N           press nitro at step N of the headless run\n"
               << "  --help              show this help\n";
 }
 
@@ -45,6 +47,10 @@ int main(int argc, char* argv[]) {
         } else if (arg == "--steer" && i + 1 < argc) {
             shot.force_steer = true;
             shot.steer = static_cast<float>(std::atof(argv[++i]));
+        } else if (arg == "--horn") {
+            shot.horn = true;
+        } else if (arg == "--nitro" && i + 1 < argc) {
+            shot.nitro_frame = std::atoi(argv[++i]);
         } else if (arg == "--help" || arg == "-h") {
             usage(argv[0]);
             return 0;

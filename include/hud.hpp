@@ -17,6 +17,8 @@ struct HudState {
     std::string message;         // centred banner, empty for none
     bool message_visible = false;// for blinking
     bool muted = false;          // sound off
+    int nitro = 0;               // canisters left
+    float nitro_burn = 0.f;      // fraction left of the canister burning now, 0 for none
     std::string banner;          // country, shown when entering a new zone
     std::string banner_sub;      // region below it
 };

@@ -4,6 +4,7 @@
 #include "hud.hpp"
 
 #include "drivetrain.hpp"
+#include "driving.hpp"
 #include "font.hpp"
 
 #include <algorithm>
@@ -49,6 +50,25 @@ void draw_tacho(Framebuffer& fb, int x, int y, float speed_fraction) {
     }
 }
 
+// Nitro canisters, right-aligned at `right`: full ones, the one burning now
+// draining, and the empty ones.
+void draw_nitro(Framebuffer& fb, int right, int y, int full, float burning) {
+    constexpr int count = Nitro::capacity, w = 7, gap = 3, h = 14;
+    const Color glass{0x1c, 0x24, 0x3c}, fill{0x30, 0x90, 0xf0}, shine{0xb0, 0xe0, 0xff}, cap{0xc8, 0xc8, 0xd0};
+    for (int i = 0; i < count; ++i) {
+        const int x = right - (count - i) * (w + gap) + gap;
+        fb.fill_rect(x - 1, y + 2, w + 2, h - 1, Shadow);
+        fb.fill_rect(x + 2, y, 3, 3, cap);
+        fb.fill_rect(x, y + 3, w, h - 3, glass);
+        float level = i < full ? 1.f : (i == full ? burning : 0.f);
+        const int filled = static_cast<int>(std::lround(level * static_cast<float>(h - 4)));
+        if (filled > 0) {
+            fb.fill_rect(x + 1, y + h - 1 - filled, w - 2, filled, fill);
+            fb.fill_rect(x + 1, y + h - 1 - filled, 1, filled, shine);
+        }
+    }
+}
+
 } // namespace
 
 std::string format_lap_time(float seconds) {
@@ -82,7 +102,11 @@ void draw_hud(Framebuffer& fb, const HudState& hud) {
     text(fb, 56, h - 14, "KM/H", Label);
     draw_tacho(fb, 6, h - 37, hud.speed_fraction);
 
-    if (hud.muted) text_right(fb, w - 6, h - 12, "MUTE", Label);
+    // Bottom right: nitro.
+    text_right(fb, w - 6, h - 37, "NITRO", Label);
+    draw_nitro(fb, w - 6, h - 27, hud.nitro, hud.nitro_burn);
+
+    if (hud.muted) text_right(fb, w - 6, h - 9, "MUTE", Label);
 
     if (!hud.banner.empty()) {
         text_center(fb, 48, hud.banner, Value, 2);

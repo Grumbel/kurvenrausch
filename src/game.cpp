@@ -17,6 +17,16 @@ namespace {
 
 constexpr int traffic_count = 48;
 
+// Honking: cars this far ahead (in segments) and this close to the player's
+// line (road half-widths) pull over; they swerve faster for a while.
+constexpr float honk_range = 60.f;
+constexpr float honk_clearance = 0.45f;
+constexpr float startled_seconds = 1.5f;
+
+// Above the top speed (after nitro or a pass boost) the car loses this much
+// of the top speed per second until it is back down.
+constexpr float overspeed_drag = 0.15f;
+
 // The mirror's camera sits in the car, lower than the chase camera, and sees
 // a narrower field than the main view.
 constexpr float mirror_camera_height = 700.f;
@@ -53,6 +63,44 @@ void draw_mirror_sheen(Framebuffer& fb, int x, int y, int w, int h) {
                 if (col < w) fb.blend_pixel(x + col, y + row, Color{255, 255, 255}, 0.12f);
             }
         }
+    }
+}
+
+// Nitro flame bursting out of the exhaust pipe at (x, y) on `side` (-1 left,
+// +1 right): a white-hot core in an orange glow, with flickering tongues
+// flaring outwards and upwards (the pipes sit too low on the screen for a
+// flame streaming towards the camera), and a few sparks.
+void draw_flame(Framebuffer& fb, float x, float y, int side, float intensity, uint32_t& rng) {
+    auto random = [&rng] {
+        rng = rng * 1664525u + 1013904223u;
+        return static_cast<float>(rng >> 8) / 16777216.f;
+    };
+    const Color hot{235, 245, 255}, yellow{255, 220, 90}, orange{255, 120, 30};
+    const float r = (3.f + 1.5f * random()) * intensity;
+    for (int py = static_cast<int>(y - 2.f * r); py <= static_cast<int>(y + 2.f * r); ++py) {
+        for (int px = static_cast<int>(x - 2.f * r); px <= static_cast<int>(x + 2.f * r); ++px) {
+            const float d = std::hypot(static_cast<float>(px) + 0.5f - x, static_cast<float>(py) + 0.5f - y) / r +
+                            0.3f * (bayer4(px, py) - 0.5f);
+            if (d < 1.f) fb.put_pixel(px, py, d < 0.45f ? hot : d < 0.75f ? yellow : orange);
+            else if (d < 2.f) fb.blend_pixel(px, py, orange, 0.4f * (2.f - d) * intensity);
+        }
+    }
+    // Tongues: tapering streaks from the core, fanning out from the side the
+    // pipe is on over to straight up.
+    for (int i = 0; i < 4; ++i) {
+        const float angle = static_cast<float>(side) * (0.25f + 1.1f * random()) * PI / 2.f;
+        const float dx = std::sin(angle), dy = -std::cos(angle) * 0.7f;
+        const float len = r * (1.5f + 2.f * random());
+        for (float t = 0.6f * r; t < len; t += 0.5f) {
+            const float f = t / len;
+            fb.put_pixel(static_cast<int>(x + dx * t), static_cast<int>(y + dy * t),
+                         f < 0.4f ? yellow : f < 0.8f ? orange : Color{200, 60, 20});
+        }
+    }
+    for (int i = 0; i < 3; ++i) {
+        const int px = static_cast<int>(x + static_cast<float>(side) * random() * 5.f * r);
+        const int py = static_cast<int>(y - random() * 3.f * r);
+        fb.put_pixel(px, py, Color{255, 200, 90});
     }
 }
 
@@ -129,6 +177,10 @@ void Game::reset() {
     message_time_ = 0.f;
     zone_ = -1;
     banner_time_ = 0.f;
+    horn_ = false;
+    nitro_.reset();
+    nitro_held_ = false;
+    wave_time_ = 0.f;
 }
 
 void Game::update_rumble() {
@@ -137,6 +189,10 @@ void Game::update_rumble() {
     const float speed_pct = vel.speed / world_.get<Player>(player_).max_speed;
     if (crashed_) {
         input_.rumble(1.f, 0.8f, 250);
+    } else if (passed_) {
+        input_.rumble(0.2f, 0.6f, 120);
+    } else if (nitro_.burning()) {
+        input_.rumble(0.3f * nitro_.intensity(), 0.5f * nitro_.intensity(), 60);
     } else if (scraping_ && speed_pct > 0.05f) {
         input_.rumble(0.6f, 0.6f, 60);
     } else if (std::abs(tr.x) > 1.f && speed_pct > 0.05f) {
@@ -168,6 +224,7 @@ void Game::run() {
 
         accumulator += dt;
         crashed_ = false;
+        passed_ = false;
         while (accumulator >= fixed_dt_) {
             fixed_update(input, fixed_dt_);
             accumulator -= fixed_dt_;
@@ -207,6 +264,8 @@ bool Game::screenshot(const ScreenshotOptions& opts) {
     for (int i = 0; i < opts.frames; ++i) {
         InputState in = autopilot();
         if (opts.force_steer) in.steer = opts.steer;
+        in.horn = opts.horn;
+        in.nitro = i == opts.nitro_frame;
         fixed_update(in, fixed_dt_);
         if (!opts.wav_path.empty()) {
             sound.resize(sound.size() + samples_per_step);
@@ -253,6 +312,13 @@ void Game::fixed_update(const InputState& input, float dt) {
     const float speed_pct = vel.speed / player.max_speed;
     const float dx = dt * 2.f * speed_pct; // steering is stronger at speed
 
+    // Horn, nitro and the wave after a close pass.
+    horn_ = input.horn;
+    nitro_.update(dt);
+    if (input.nitro && !nitro_held_) nitro_.fire();
+    nitro_held_ = input.nitro;
+    if (wave_time_ > 0.f) wave_time_ -= dt;
+
     const float prev_z = tr.z;
     tr.z = track_.wrap(tr.z + dt * vel.speed);
     background_.update(seg.curve, dt * vel.speed / track_.segment_length, dt);
@@ -272,6 +338,8 @@ void Game::fixed_update(const InputState& input, float dt) {
     float accel = player.accel * drive;
     if (input.brake > 0.01f) accel += player.brake * input.brake;
     else accel += player.decel * (1.f - drive);
+    accel += player.accel * Nitro::thrust * nitro_.intensity();
+    const float speed_before = vel.speed;
     vel.speed += accel * dt;
 
     if (std::abs(tr.x) > 1.f) {
@@ -324,7 +392,8 @@ void Game::fixed_update(const InputState& input, float dt) {
     });
 
     tr.x = std::clamp(tr.x, -3.f, 3.f);
-    vel.speed = std::clamp(vel.speed, 0.f, player.max_speed);
+    const float top = player.max_speed * (nitro_.burning() ? Nitro::top_speed : 1.f);
+    vel.speed = std::max(0.f, limit_speed(speed_before, vel.speed, top, overspeed_drag * player.max_speed, dt));
     tr.y = track_.height_at(tr.z + player_z);
 
     // Engine and road shake; rougher off the road. Whole pixels only, the
@@ -335,7 +404,31 @@ void Game::fixed_update(const InputState& input, float dt) {
 
     update_laps(prev_z + player_z, tr.z + player_z, dt);
     update_traffic(dt);
+    check_close_passes();
     update_audio(input, dt);
+}
+
+// Passing close by a car: a wave from the side it was passed on, a whoosh
+// and a little boost.
+void Game::check_close_passes() {
+    auto& tr = world_.get<Transform>(player_);
+    auto& vel = world_.get<Velocity>(player_);
+    const auto& player = world_.get<Player>(player_);
+    const float car_z = tr.z + world_.get<Camera>(camera_).player_z();
+    const float car_w = player.car_width / track_.road_width;
+    const float max_step = 4.f * track_.segment_length;
+    world_.view<Transform, Traffic>([&](Entity, Transform& t, Traffic& traffic) {
+        const float gap = signed_gap(car_z, t.z, track_.length());
+        if (close_pass(traffic.gap, gap, t.x - tr.x, car_w, max_step)) {
+            const float speed_pct = vel.speed / player.max_speed;
+            vel.speed = boosted_speed(vel.speed, player.max_speed);
+            wave_side_ = t.x < tr.x ? -1 : 1;
+            wave_time_ = 1.2f;
+            passed_ = true;
+            synth_.trigger_whoosh(0.4f + 0.6f * std::min(speed_pct, 1.f));
+        }
+        traffic.gap = gap;
+    });
 }
 
 // Derives the engine and tyre sounds from the state of the car.
@@ -373,8 +466,19 @@ void Game::update_audio(const InputState& input, float dt) {
     p.gravel = off_road && speed_pct > 0.01f ? std::clamp((std::abs(tr.x) - 1.f) * 8.f, 0.f, 1.f) : 0.f;
     p.scrape = scraping_ && vel.speed > 0.f ? 1.f : 0.f;
     p.rain = look.rain;
+    p.horn = horn_ ? 1.f : 0.f;
+    p.nitro = nitro_.intensity();
+    p.throttle = std::max(p.throttle, p.nitro);
     p.volume = muted_ ? 0.f : 1.f;
     synth_.set_params(p);
+}
+
+// Indicator a car shows while changing lanes: -1, +1, or 0 between blinks.
+int Game::indicator(Entity e, const Transform& t, const Traffic& traffic) const {
+    const float d = traffic.target_x - t.x;
+    if (std::abs(d) < 0.02f) return 0;
+    const float phase = static_cast<float>(e % 5) * 0.11f; // they don't all blink in step
+    return std::fmod(clock_ + phase, 0.7f) < 0.4f ? (d < 0.f ? -1 : 1) : 0;
 }
 
 void Game::update_traffic(float dt) {
@@ -413,6 +517,20 @@ void Game::update_traffic(float dt) {
             traffic.target_x = best;
         }
 
+        // Honked at from behind while in the player's way: pull over to the
+        // nearest free lane out of the player's line, in a hurry.
+        if (horn_ && distance_ahead(player_world_z, t.z) < honk_range * track_.segment_length &&
+            std::abs(t.x - ptr.x) < honk_clearance && std::abs(traffic.target_x - ptr.x) < honk_clearance) {
+            std::vector<bool> busy(static_cast<size_t>(lanes));
+            for (int i = 0; i < lanes; ++i) busy[static_cast<size_t>(i)] = lane_busy(e, t.z, lane_center(lanes, i), look_ahead);
+            const int lane = yield_lane(lanes, t.x, ptr.x, honk_clearance, busy);
+            if (lane >= 0) {
+                traffic.target_x = lane_center(lanes, lane);
+                traffic.startled = startled_seconds;
+            }
+        }
+        if (traffic.startled > 0.f) traffic.startled -= dt;
+
         // Blocked by something slower ahead in this lane? Pull out if the
         // neighbouring lane is clear.
         bool blocked = false;
@@ -428,7 +546,7 @@ void Game::update_traffic(float dt) {
             }
         }
 
-        const float step = 0.8f * dt;
+        const float step = (traffic.startled > 0.f ? 1.8f : 0.8f) * dt;
         t.x += std::clamp(traffic.target_x - t.x, -step, step);
         t.z = track_.wrap(t.z + v.speed * dt);
     });
@@ -454,6 +572,7 @@ void Game::update_laps(float prev_z, float z, float dt) {
     if (!crossed_line_forward(prev_z, z, track_.start_z, track_.length())) return;
 
     if (race_started_) {
+        nitro_.refill(); // a full set of canisters for every lap
         last_lap_ = lap_time_;
         const bool record = best_lap_ == 0.f || lap_time_ < best_lap_;
         if (record) best_lap_ = lap_time_;
@@ -485,10 +604,10 @@ void Game::render() {
     view.draw_distance = cam.draw_distance;
     view.fog_density = look.fog_density;
     road_sprites_.clear();
-    world_.view<Transform, Traffic>([&](Entity, Transform& t, Traffic& traffic) {
+    world_.view<Transform, Traffic>([&](Entity e, Transform& t, Traffic& traffic) {
         RoadSprite s;
         s.z = t.z;
-        s.bitmap = &sprites_.traffic(traffic.style);
+        s.bitmap = &sprites_.traffic(traffic.style, indicator(e, t, traffic));
         s.offset = t.x;
         s.world_width = player.car_width;
         road_sprites_.push_back(s);
@@ -497,7 +616,8 @@ void Game::render() {
     // The player's car sits centred, its tyres on the bottom screen row. It
     // is drawn at the projection scale of player_z, which maps car_width to
     // the sprite's native size, so the pixel art is shown 1:1.
-    const Bitmap& car = sprites_.player(steer_);
+    const Bitmap& car = sprites_.player(steer_, wave_time_ > 0.f ? wave_side_ : 0,
+                                        static_cast<int>(clock_ / 0.15f) & 1);
     const float scale = cam.depth / cam.player_z() * (width / 2.f);
     RoadSprite me;
     me.z = tr.z + cam.player_z();
@@ -526,6 +646,12 @@ void Game::render() {
             if (i % 2 == 0) fb_.put_pixel(px - 2 * scrape_side_, py + 2, Color{200, 80, 25});
         }
     }
+    if (nitro_.burning()) {
+        for (int side = -1; side <= 1; side += 2) {
+            draw_flame(fb_, me.sx + SpriteSheet::exhaust_x(steer_, side), me.sy + SpriteSheet::exhaust_y,
+                       side, nitro_.intensity(), rng_);
+        }
+    }
     weather_.render(fb_);
     render_mirror();
 
@@ -538,6 +664,8 @@ void Game::render() {
     hud.message = message_;
     hud.message_visible = std::fmod(clock_, 0.5f) < 0.35f;
     hud.muted = muted_;
+    hud.nitro = nitro_.canisters();
+    hud.nitro_burn = nitro_.burn_left();
     if (banner_time_ > 0.f && zone_ >= 0) {
         hud.banner = track_.zones[static_cast<size_t>(zone_)].country;
         hud.banner_sub = track_.zones[static_cast<size_t>(zone_)].region;
@@ -575,10 +703,10 @@ void Game::render_mirror() {
     view.horizon = mirror_horizon;
     view.y_scale = y_scale;
     mirror_sprites_.clear();
-    world_.view<Transform, Traffic>([&](Entity, Transform& t, Traffic& traffic) {
+    world_.view<Transform, Traffic>([&](Entity e, Transform& t, Traffic& traffic) {
         RoadSprite s;
         s.z = t.z;
-        s.bitmap = &sprites_.traffic_front(traffic.style);
+        s.bitmap = &sprites_.traffic_front(traffic.style, indicator(e, t, traffic));
         s.offset = t.x;
         s.world_width = player.car_width;
         mirror_sprites_.push_back(s);
