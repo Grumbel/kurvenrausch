@@ -6,10 +6,11 @@ Base: `fc65858 Fix rendering: correct projection, pixel format, colors &
 sprites` (upstream master). Work line: kurvenrausch-003.x, bundles are
 cumulative from `fc65858`.
 
-Latest bundle: `kurvenrausch-005.1-horn-wave-nitro-fc65858.bundle`, tip is
-the "Document horn, close passes and nitro" commit on `master`. 004.1 added
-the rear-view mirror on top of 003.1 (`fe8e0df`); 005.1 adds horn, close-pass
-wave and boost, and nitro on top of 004.1.
+Latest bundle: `kurvenrausch-006.1-brakes-crash-map-fuel-fc65858.bundle`, tip
+is the "Document brake lights, crashes, the mini map and fuel" commit on
+`master`. 004.1 added the rear-view mirror on top of 003.1 (`fe8e0df`); 005.1
+horn, close-pass wave and boost, and nitro; 006.1 brake lights, the crash
+animation, the mini map, fuel and gas stations.
 
 History: 001.1 was built on `d66c91a`; upstream then added a rename and its own
 rendering fix, so the work was rebased onto `fc65858` (002.1). 003.1 adds the
@@ -19,6 +20,62 @@ Upstream master has since been fast-forwarded to `64fda32`, the tip of 002.1, so
 from `fc65858` regardless, as the rules require.
 The rebase notes: upstream's rename is kept, its rendering fix is superseded by
 the road/framebuffer rewrite, `Color::to_u32()` became `Color::argb()`.
+
+## Round 5 (006.1): brake lights, crash animation, mini map, gas stations, done
+
+Requested: working brake lights; a crash animation when going off course at
+high speed; a mini map; a gas station.
+
+Design decisions:
+
+- Brake lights: lit variants of every rear car sprite (white-hot lamps, light
+  spilling onto the bodywork, a third brake light; unlit lamps darker so the
+  difference shows even on the red car). The player's light up with the brake
+  pedal. Traffic now really brakes: behind something slower in its lane that
+  it can't pass (another car, or the player) it follows (`follow_speed`,
+  tested) instead of driving through it, and its brake lights show when it
+  slows by more than 2% of top speed (no flicker while following steadily).
+- Crash: hitting solid scenery off the road at 40% of top speed or more
+  starts it (slower is the old knock). `crash_pose(t, side)` (pure, tested)
+  drives it: two rolls through three decaying hops with a slide outwards
+  (1.5 s), at rest (0.5 s), then put back in the outermost lane on that side
+  while blinking (0.8 s). Dust puffs and debris are screen-space particles; a
+  thump on each touchdown. Input is ignored meanwhile, nitro is cut. The car
+  sprite is rotated with the new `Framebuffer::blit_rotated` via
+  `RoadSprite::angle`. The trigger is the collision, as in OutRun: running
+  onto open ground still just slows the car. Ask if leaving the road at speed
+  should crash on its own too.
+- Mini map: `track_map()` (tested). A pseudo-3D track isn't a geometric loop
+  (the bends add up to 0.58 turns here) and taken literally its hard bends
+  turn 170 degrees and cross over. So bends are damped (x0.6), the missing
+  turning is spread evenly so the lap makes one full turn, and the remaining
+  gap is spread along the path. Top right, under the lap times.
+- Fuel: `Fuel` (tested) burns with the engine load, a tank lasts 100 s at
+  full load (about 1.25 laps in practice). Below 3% the engine sputters, empty
+  it dies (no drive, engine sound off, no nitro); standing empty for 3 s the
+  driver pours in a 15% spare can. HUD gauge bottom left, blinking red when
+  low. Not refilled on laps.
+- Gas stations: `TrackBuilder::gas_station()`: a flat straight with a paved
+  forecourt on the right (`Segment::forecourt`, out to 2.3 half-widths,
+  tapering in and out), a sign before it, two pumps and the shop. One per zone
+  (tested), placed off the cliff/rail runs; decor keeps clear. No off-road
+  slowdown or gravel on the forecourt. Below 8% of top speed on the full-width
+  forecourt the tank fills in 4 s, with a pump hum and gurgle and a chime when
+  full. The route is 336 segments longer for it, so zone positions moved.
+- Headless: `--fuel L` starts with L of a tank, `--steer-from N` starts the
+  held steering at step N (for crashes). The autopilot pulls in when below
+  45% with a station within 120 segments.
+
+Verified: builds warning-free; unit tests (follow speed, fuel, crash pose and
+touchdowns, rotated blits, the map's closure and orientation, stations, the
+engine-off, pump and chime sounds); ASan+UBSan on full laps (with refuelling,
+horn, nitro, running dry, crashes in several zones) and the live loop; TSan on
+the live loop and on a harness switching engine/pump and triggering chimes
+from another thread; screenshots of brake lights, a full crash sequence, the
+map, stations in every climate, refuelling and running dry.
+Not verified: interactive feel (crash threshold, fuel range, how easy pulling
+in is: steering is speed-scaled, so it is easier to move over before slowing
+right down), sounds on real speakers.
 
 ## Round 4 (005.1): horn, close-pass wave and boost, nitro, done
 

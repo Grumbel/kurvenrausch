@@ -39,8 +39,9 @@ weather and road markings, fading smoothly into one another:
   scrolling at different rates through bends
 - Road markings per region: dashed white lines in Europe, double yellow centre
   line and white edge lines in the USA
-- AI traffic that changes lanes to pass, blinking its indicators; rear-ending
-  a car slows you down
+- AI traffic that changes lanes to pass, blinking its indicators, or brakes
+  behind slower cars (and you) when it can't; rear-ending a car slows you down
+- Working brake lights, on your car and on the traffic
 - **Horn**: cars ahead in your line signal and pull over to let you through
 - **Close passes**: squeeze past a car and your driver (or passenger, on the
   right) waves, with a whoosh and a little boost beyond top speed
@@ -49,7 +50,15 @@ weather and road markings, fading smoothly into one another:
 - **Rear-view mirror** at the top of the screen: the road behind, drawn by the
   same renderer looking back, with the fronts of the cars you have passed
 - Arcade handling with analog steering and pedals; centrifugal force, off-road
-  slowdown, crashes into roadside objects
+  slowdown; hit something off the road at speed and the car **tumbles** over
+  in a cloud of dust and debris before it is put back on the road
+- **Fuel and gas stations**: the tank drains with the engine's load (about a
+  lap and a quarter at full throttle); every zone has a gas station with a
+  forecourt to pull onto, where the tank fills up while you stand by the
+  pumps. Run dry and the engine sputters and dies; stranded, the driver pours
+  in a spare can after a few seconds
+- **Mini map** of the lap with your position, the start line and the gas
+  stations
 - **Synthesised sound**: a six-cylinder engine that follows revs and load, with
   gear changes, tyre squeal, gravel, wind, rain, barrier scraping and crashes;
   `M` mutes
@@ -118,10 +127,12 @@ made and how rendering changes are checked without a display:
 ./build/kurvenrausch --screenshot shot.bmp --steer 1     # hold the steering
 ./build/kurvenrausch --screenshot shot.bmp --frames 600 --nitro 540   # nitro at step 540
 ./build/kurvenrausch --screenshot shot.bmp --frames 3600 --horn       # honk all the way
+./build/kurvenrausch --screenshot shot.bmp --frames 2400 --fuel 0.3   # low fuel: pulls in
+./build/kurvenrausch --screenshot shot.bmp --frames 640 --steer -1 --steer-from 600  # crash
 ```
 
-It simulates the given number of 60 Hz steps with a simple autopilot (or a held
-steering angle), renders one frame and writes it as a BMP; `--wav` also writes
+It simulates the given number of 60 Hz steps with a simple autopilot that also
+pulls in at gas stations when low on fuel (or a held steering angle), renders one frame and writes it as a BMP; `--wav` also writes
 the sound of the run. `tools/make_screenshots.py` (needs Pillow) regenerates
 the README images.
 
@@ -146,7 +157,8 @@ include/
   display.hpp      SDL window presentation, BMP export
   input.hpp        keyboard and gamepad input (analog), rumble
   drivetrain.hpp   gears and revs, shared by the HUD and the sound
-  driving.hpp      nitro, overspeed, the pass boost, yielding to the horn
+  driving.hpp      nitro, fuel, overspeed, the pass boost, yielding to the
+                   horn, following traffic, the crash animation
   synth.hpp        sound synthesis (pure DSP, no SDL), WAV export
   audio.hpp        SDL audio device playing the synth
   game.hpp         game loop, physics, traffic, lap timing
