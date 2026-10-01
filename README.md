@@ -1,4 +1,4 @@
-# Bitmap Racer
+# Kurvenrausch
 
 Classic pseudo-3D bitmap racer in the spirit of *OutRun*, *Lotus 1/2/3*, and *Pole Position*.
 
@@ -25,12 +25,12 @@ nix develop
 nix build
 
 # Run
-./result/bin/bitmap_racer
+./result/bin/kurvenrausch
 # or from the shell after cmake:
 mkdir build && cd build
 cmake ..
 make -j
-./bitmap_racer
+./kurvenrausch
 ```
 
 ## Controls

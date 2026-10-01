@@ -1,5 +1,5 @@
 {
-  description = "Classic Bitmap Racer - Pseudo-3D OutRun-style racer in C++/SDL2 with ECS";
+  description = "Classic Kurvenrausch - Pseudo-3D OutRun-style racer in C++/SDL2 with ECS";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -12,7 +12,7 @@
         pkgs = import nixpkgs { inherit system; };
       in {
         packages.default = pkgs.stdenv.mkDerivation {
-          pname = "bitmap-racer";
+          pname = "kurvenrausch";
           version = "1.0.0";
           src = ./.;
 
@@ -23,7 +23,7 @@
 
           installPhase = ''
             mkdir -p $out/bin
-            cp bitmap_racer $out/bin/
+            cp kurvenrausch $out/bin/
           '';
         };
 

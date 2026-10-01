@@ -17,7 +17,7 @@ bool Game::init() {
     }
 
     window_ = SDL_CreateWindow(
-        "Bitmap Racer - Classic Pseudo-3D",
+        "Kurvenrausch - Classic Pseudo-3D",
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
         width_, height_,
         SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE
@@ -51,7 +51,7 @@ bool Game::init() {
 
     projected_.resize(track_.segments.size());
 
-    std::cout << "Bitmap Racer ready.\n"
+    std::cout << "Kurvenrausch ready.\n"
               << "Controls: Arrows / WASD to drive, Esc to quit, R to restart.\n"
               << "Track length: " << track_.total_length << " units, "
               << track_.segments.size() << " segments.\n";
