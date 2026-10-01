@@ -15,6 +15,8 @@ struct InputState {
     float throttle = 0.f; // 0 .. 1
     float brake = 0.f;    // 0 .. 1
     float steer = 0.f;    // -1 (left) .. +1 (right)
+    bool horn = false;    // held
+    bool nitro = false;   // held; a burn starts when it is pressed
 
     // One-shot events since the last poll.
     bool quit = false;
@@ -33,6 +35,10 @@ struct PadState {
     bool dpad_right = false;
     bool a = false;             // accelerate, as an alternative to the trigger
     bool b = false;             // brake, as an alternative to the trigger
+    bool x = false;             // horn
+    bool y = false;             // nitro
+    bool left_shoulder = false; // horn
+    bool right_shoulder = false;// nitro
 };
 
 // Zeroes |v| <= deadzone and rescales the rest to the full -1 .. +1 range, so
@@ -40,7 +46,8 @@ struct PadState {
 float apply_deadzone(float v, float deadzone);
 
 // Combines a controller reading into `in`: steering adds up (clamped), throttle
-// and brake take the larger value, so keyboard and pads can be used together.
+// and brake take the larger value, buttons are or-ed, so keyboard and pads can
+// be used together.
 void merge_pad(InputState& in, const PadState& pad);
 
 class Input {

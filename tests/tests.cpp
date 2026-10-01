@@ -103,6 +103,27 @@ void test_pad_mapping() {
         racer::merge_pad(in, left);
         CHECK_NEAR(in.steer, 0.f, 1e-6f);
     }
+    {   // Horn on X or the left shoulder, nitro on Y or the right shoulder.
+        InputState in;
+        racer::merge_pad(in, PadState{});
+        CHECK(!in.horn && !in.nitro);
+        PadState pad;
+        pad.x = true;
+        pad.right_shoulder = true;
+        racer::merge_pad(in, pad);
+        CHECK(in.horn && in.nitro);
+        InputState in2;
+        PadState pad2;
+        pad2.left_shoulder = true;
+        pad2.y = true;
+        racer::merge_pad(in2, pad2);
+        CHECK(in2.horn && in2.nitro);
+        // A key held on the keyboard is not released by an idle pad.
+        InputState key;
+        key.horn = true;
+        racer::merge_pad(key, PadState{});
+        CHECK(key.horn);
+    }
 }
 
 // A flat 300 segment track with three zones starting at 0, 100 and 200.
