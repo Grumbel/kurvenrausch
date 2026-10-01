@@ -22,6 +22,36 @@ became `Color::argb()`. `flake.nix` builds with CMake and installs the
 `kurvenrausch` target, which matches; the Nix build itself still has not
 been run (no Nix in the sandbox).
 
+## Round 2 plan (003.x): licence, gamepad, biomes, weather, audio
+
+Requested: README screenshot; SPDX headers (`reuse lint` clean, GPL-3.0-or-later,
+"2026 Ingo Ruhnke <grumbel@gmail.com>"); more biomes / weather / countries incl.
+a cliff beside the road; synthesised engine and tyre sound; SDL GameController.
+
+Design decisions (so work can be continued from here):
+
+- Licence: the README said MIT, the owner now asks for GPL-3.0-or-later.
+  Headers in source files, `REUSE.toml` for docs/other files, text in `LICENSES/`.
+- Input: `InputState` becomes analog (throttle, brake, steer in -1..1); keyboard
+  is digital 0/1, pads add analog sticks/triggers, merged by max. The pad mapping
+  is a pure function so it is unit-tested; SDL only feeds it. Hot-plug + rumble.
+- Zones: the track is a list of `Zone`s (country, region, `RoadTheme`, decor rule).
+  `RoadTheme` is a blendable "look" (colours, fog density, rain, snow, grip, ...);
+  per-segment looks are precomputed with smooth transitions between zones, also
+  across the lap seam. Discrete fields (lane count, markings) come from the
+  nearer zone. Background, fog, weather and handling read the look at the player.
+- Roadside edges: per segment `Edge {None, Rail, Cliff}` per side, with a fade at
+  the ends of a run. Drawn as column-filled quads (not sprites) in the far->near
+  pass; the ground beyond is rock (cliff) or sea/valley (rail). Both are solid.
+- Weather: screen-space rain streaks / snowflakes driven by look intensities;
+  fog is the look's density; wet/snow reduce grip (steering authority, more
+  centrifugal push, earlier skidding).
+- Audio: `Synth` is pure DSP (no SDL) so it can be rendered offline and analysed:
+  additive engine fed by rpm/throttle, noise-based road/wind/rain, band-passed
+  skid squeal, gravel crackle, barrier scrape, crash burst. `Audio` wraps the SDL
+  device; parameters cross threads via atomics. `--wav FILE` dumps a headless run.
+- Tools: `tools/make_screenshots.py` renders the README images via headless mode.
+
 ## Done (002.1)
 
 - AGENTS.md / TODO.md / .gitignore.
