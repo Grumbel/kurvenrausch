@@ -13,7 +13,6 @@ namespace racer {
 namespace {
 
 constexpr int traffic_count = 48;
-constexpr float lane_offsets[] = {-2.f / 3.f, 0.f, 2.f / 3.f};
 
 // Do the intervals [c1 - w1/2, c1 + w1/2] and [c2 - w2/2, c2 + w2/2] overlap?
 bool overlap(float c1, float w1, float c2, float w2) {
@@ -51,7 +50,8 @@ void Game::spawn_traffic() {
         const Entity car = world_.create();
         // Keep the start straight clear.
         const float segment = 60.f + rnd() * (n - 80.f);
-        const float lane = lane_offsets[static_cast<int>(rnd() * 3.f) % 3];
+        const int lanes = track_.look(static_cast<int>(segment)).lanes;
+        const float lane = lane_center(lanes, static_cast<int>(rnd() * static_cast<float>(lanes)) % lanes);
         world_.add<Transform>(car, Transform{lane, 0.f, segment * seg_len});
         world_.add<Velocity>(car, Velocity{max_speed * (0.25f + 0.35f * rnd())});
         world_.add<Traffic>(car, Traffic{i % SpriteSheet::traffic_styles, lane});
@@ -281,6 +281,19 @@ void Game::update_traffic(float dt) {
     };
 
     world_.view<Transform, Velocity, Traffic>([&](Entity e, Transform& t, Velocity& v, Traffic& traffic) {
+        // The road may have a different number of lanes here than where the
+        // car was heading: aim for the nearest lane that exists.
+        const int lanes = track_.look_at(t.z).lanes;
+        const float spacing = 2.f / static_cast<float>(lanes);
+        {
+            float best = lane_center(lanes, 0);
+            for (int i = 1; i < lanes; ++i) {
+                const float lane = lane_center(lanes, i);
+                if (std::abs(lane - traffic.target_x) < std::abs(best - traffic.target_x)) best = lane;
+            }
+            traffic.target_x = best;
+        }
+
         // Blocked by something slower ahead in this lane? Pull out if the
         // neighbouring lane is clear.
         bool blocked = false;
@@ -289,8 +302,9 @@ void Game::update_traffic(float dt) {
             if (distance_ahead(t.z, m.z) < look_ahead) { blocked = true; break; }
         }
         if (blocked && std::abs(t.x - traffic.target_x) < 0.05f) {
-            for (float lane : lane_offsets) {
-                if (std::abs(lane - t.x) < 0.1f || std::abs(lane - t.x) > 0.7f) continue;
+            for (int i = 0; i < lanes; ++i) {
+                const float lane = lane_center(lanes, i);
+                if (std::abs(lane - t.x) < 0.15f * spacing || std::abs(lane - t.x) > 1.1f * spacing) continue;
                 if (!lane_busy(e, t.z, lane, look_ahead)) { traffic.target_x = lane; break; }
             }
         }

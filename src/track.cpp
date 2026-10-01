@@ -99,7 +99,7 @@ float barrier_limit(const Segment& seg, int side, float car_half_width) {
 RoadTheme mix_themes(const RoadTheme& a, const RoadTheme& b, float t) {
     // Tripwire: when a field is added to RoadTheme this changes, as a reminder
     // to blend it below and to update the expected size.
-    static_assert(sizeof(RoadTheme) == 164, "RoadTheme changed: update mix_themes()");
+    static_assert(sizeof(RoadTheme) == 176, "RoadTheme changed: update mix_themes()");
 
     RoadTheme r = t < 0.5f ? a : b; // discrete fields come from the nearer theme
     const auto c = [t](Color x, Color y) { return blend(x, y, t); };
@@ -140,6 +140,8 @@ RoadTheme mix_themes(const RoadTheme& a, const RoadTheme& b, float t) {
     r.rain = f(a.rain, b.rain);
     r.snowfall = f(a.snowfall, b.snowfall);
     r.grip = f(a.grip, b.grip);
+    r.center_line = c(a.center_line, b.center_line);
+    // lanes and us_markings are discrete: they stay those of the nearer theme.
     return r;
 }
 

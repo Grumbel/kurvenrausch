@@ -115,7 +115,18 @@ struct RoadTheme {
     float rain = 0.f;                   // 0 .. 1
     float snowfall = 0.f;               // 0 .. 1
     float grip = 1.f;                   // tyre grip: 1 dry road, less when wet or icy
+
+    // Road markings (discrete: the nearer zone wins while blending)
+    int lanes = 3;                      // 2 or 3
+    bool us_markings = false;           // yellow double centre line, white edge lines
+    Color center_line{0xe8, 0xc0, 0x20};
 };
+
+// Lateral centre of lane `index` (0 = leftmost) on a road with `lanes` lanes,
+// in road half-widths: -2/3, 0, 2/3 for three lanes, -1/2, 1/2 for two.
+inline float lane_center(int lanes, int index) {
+    return (2.f * static_cast<float>(index) + 1.f) / static_cast<float>(lanes) - 1.f;
+}
 
 // Blends two looks: colours and numbers interpolate, anything discrete is
 // taken from the nearer one. Used to fade smoothly between zones.
@@ -134,7 +145,6 @@ struct Track {
     std::vector<Segment> segments;
     float segment_length = 200.f;
     float road_width = 2000.f;  // half width in world units
-    int lanes = 3;
     float start_z = 0.f;        // position of the start/finish line
 
     // Zones in track order; zones[0] starts at segment 0 and the last one runs

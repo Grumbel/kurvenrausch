@@ -98,7 +98,7 @@ void RoadRenderer::draw_segment(Framebuffer& fb, const Track& track, const Slice
 
     const ScreenPoint& a = s.p1; // near
     const ScreenPoint& b = s.p2; // far
-    const int lanes = std::max(1, track.lanes);
+    const int lanes = std::max(1, theme.lanes);
 
     // Only draw rows above the nearer road already on screen.
     fb.set_clip(0, 0, fb.width(), clip_row(s.clip));
@@ -144,7 +144,7 @@ void RoadRenderer::draw_segment(Framebuffer& fb, const Track& track, const Slice
                           fogged(theme.road[band]));
 
         // Dashed lane markers on alternating bands.
-        if (seg.alt && lanes > 1) {
+        if (seg.alt && lanes > 1 && !(theme.us_markings && lanes == 2)) {
             const float la = a.w / static_cast<float>(std::max(32, 8 * lanes));
             const float lb = b.w / static_cast<float>(std::max(32, 8 * lanes));
             const Color lane = fogged(theme.lane);
@@ -153,6 +153,26 @@ void RoadRenderer::draw_segment(Framebuffer& fb, const Track& track, const Slice
                 const float xa = a.x - a.w + 2.f * a.w * f;
                 const float xb = b.x - b.w + 2.f * b.w * f;
                 fb.fill_trapezoid(b.y, xb - lb, xb + lb, a.y, xa - la, xa + la, lane);
+            }
+        }
+
+        if (theme.us_markings) {
+            // Solid white edge lines, and on two lane roads a double yellow line.
+            const Color white = fogged(theme.lane);
+            const float e = 0.93f, t = 1.f / 60.f;
+            for (int side = -1; side <= 1; side += 2) {
+                const float sd = static_cast<float>(side);
+                fb.fill_trapezoid(b.y, b.x + sd * e * b.w - b.w * t, b.x + sd * e * b.w + b.w * t,
+                                  a.y, a.x + sd * e * a.w - a.w * t, a.x + sd * e * a.w + a.w * t, white);
+            }
+            if (lanes == 2) {
+                const Color yellow = fogged(theme.center_line);
+                const float gap = 0.035f, th = 1.f / 80.f;
+                for (int side = -1; side <= 1; side += 2) {
+                    const float sd = static_cast<float>(side);
+                    fb.fill_trapezoid(b.y, b.x + sd * gap * b.w - b.w * th, b.x + sd * gap * b.w + b.w * th,
+                                      a.y, a.x + sd * gap * a.w - a.w * th, a.x + sd * gap * a.w + a.w * th, yellow);
+                }
             }
         }
     }

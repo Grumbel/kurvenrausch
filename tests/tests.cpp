@@ -282,6 +282,25 @@ void test_weather() {
     CHECK(changed_pixels(f1, f2) == 0);
 }
 
+void test_lanes() {
+    using racer::lane_center;
+    CHECK_NEAR(lane_center(3, 0), -2.f / 3.f, 1e-6f);
+    CHECK_NEAR(lane_center(3, 1), 0.f, 1e-6f);
+    CHECK_NEAR(lane_center(3, 2), 2.f / 3.f, 1e-6f);
+    CHECK_NEAR(lane_center(2, 0), -0.5f, 1e-6f);
+    CHECK_NEAR(lane_center(2, 1), 0.5f, 1e-6f);
+
+    // Discrete road marking fields come from the nearer theme when mixing.
+    racer::RoadTheme eu, us;
+    eu.lanes = 3;
+    us.lanes = 2;
+    us.us_markings = true;
+    CHECK(racer::mix_themes(eu, us, 0.3f).lanes == 3);
+    CHECK(!racer::mix_themes(eu, us, 0.3f).us_markings);
+    CHECK(racer::mix_themes(eu, us, 0.7f).lanes == 2);
+    CHECK(racer::mix_themes(eu, us, 0.7f).us_markings);
+}
+
 void test_weather_mixing() {
     using namespace racer;
     RoadTheme dry, wet;
@@ -305,6 +324,7 @@ int main() {
     test_edges();
     test_weather();
     test_weather_mixing();
+    test_lanes();
 
     if (failures) {
         std::fprintf(stderr, "%d check(s) failed\n", failures);
