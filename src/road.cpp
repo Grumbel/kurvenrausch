@@ -91,7 +91,7 @@ void RoadRenderer::render(Framebuffer& fb, const Track& track, const RoadView& v
 
 void RoadRenderer::draw_segment(Framebuffer& fb, const Track& track, const Slice& s) const {
     const Segment& seg = track.segment(s.index);
-    const RoadTheme& theme = track.theme;
+    const RoadTheme& theme = track.look(s.index);
     const int band = seg.alt ? 0 : 1;
     const float fog_amount = 1.f - s.fog;
     auto fogged = [&](Color c) { return blend(c, theme.fog, fog_amount); };
@@ -176,7 +176,7 @@ void RoadRenderer::draw_sprites(Framebuffer& fb, const Track& track, const Sprit
             const float height = width * static_cast<float>(bmp.h) / static_cast<float>(bmp.w);
             const bool flip = info.mirrorable && obj.offset < 0.f;
             fb.blit_scaled(bmp, left, s.p1.y - height, width, height, flip,
-                           fog_amount, track.theme.fog);
+                           fog_amount, track.look(s.index).fog);
         }
 
         // Moving objects on this segment, far to near.
@@ -203,7 +203,7 @@ void RoadRenderer::draw_sprites(Framebuffer& fb, const Track& track, const Sprit
             const float height = width * static_cast<float>(bmp.h) / static_cast<float>(bmp.w);
             const float cx = x + o->offset * track.road_width * px_per_unit;
             fb.blit_scaled(bmp, cx - width / 2.f, y - height, width, height, false,
-                           fog_amount, track.theme.fog);
+                           fog_amount, track.look(s.index).fog);
         }
     }
     fb.reset_clip();

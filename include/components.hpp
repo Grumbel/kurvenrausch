@@ -54,7 +54,6 @@ struct Camera {
     float height = 1000.f;      // above the road surface
     float depth = 1.f / std::tan(50.f * 3.14159265f / 180.f); // 100 deg FOV
     int draw_distance = 300;    // segments
-    float fog_density = 5.f;
 
     // Distance from the camera to the player's car.
     float player_z() const { return height * depth; }

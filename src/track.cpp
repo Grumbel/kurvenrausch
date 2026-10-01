@@ -3,6 +3,8 @@
 
 #include "track.hpp"
 
+#include <algorithm>
+#include <cassert>
 #include <cmath>
 #include <cstdint>
 
@@ -43,6 +45,83 @@ float Track::height_at(float z) const {
     const Segment& seg = segment_at(z);
     const float t = std::fmod(z, segment_length) / segment_length;
     return seg.y1 + (seg.y2 - seg.y1) * t;
+}
+
+const RoadTheme& Track::look(int segment) const {
+    const int n = static_cast<int>(looks.size());
+    return looks[static_cast<size_t>(((segment % n) + n) % n)];
+}
+
+int Track::zone_number_at(float z) const {
+    return zone_index[static_cast<size_t>(index_at(z))];
+}
+
+const Zone& Track::zone_at(float z) const {
+    return zones[static_cast<size_t>(zone_number_at(z))];
+}
+
+RoadTheme mix_themes(const RoadTheme& a, const RoadTheme& b, float t) {
+    // Tripwire: when a field is added to RoadTheme this changes, as a reminder
+    // to blend it below and to update the expected size.
+    static_assert(sizeof(RoadTheme) == 84, "RoadTheme changed: update mix_themes()");
+
+    RoadTheme r = t < 0.5f ? a : b; // discrete fields come from the nearer theme
+    const auto c = [t](Color x, Color y) { return blend(x, y, t); };
+    const auto f = [t](float x, float y) { return x + (y - x) * t; };
+
+    r.sky_top = c(a.sky_top, b.sky_top);
+    r.sky_horizon = c(a.sky_horizon, b.sky_horizon);
+    r.fog = c(a.fog, b.fog);
+    for (int i = 0; i < 2; ++i) {
+        r.grass[i] = c(a.grass[i], b.grass[i]);
+        r.road[i] = c(a.road[i], b.road[i]);
+        r.rumble[i] = c(a.rumble[i], b.rumble[i]);
+        r.checker[i] = c(a.checker[i], b.checker[i]);
+    }
+    r.lane = c(a.lane, b.lane);
+    for (int i = 0; i < 3; ++i) r.cloud[i] = c(a.cloud[i], b.cloud[i]);
+    r.mountain_lit = c(a.mountain_lit, b.mountain_lit);
+    r.mountain_shade = c(a.mountain_shade, b.mountain_shade);
+    r.snow = c(a.snow, b.snow);
+    r.hill_lit = c(a.hill_lit, b.hill_lit);
+    r.hill_shade = c(a.hill_shade, b.hill_shade);
+    r.fog_density = f(a.fog_density, b.fog_density);
+    return r;
+}
+
+void Track::finish(int transition_segments) {
+    assert(!zones.empty() && zones.front().first_segment == 0);
+    const int n = static_cast<int>(segments.size());
+    const int zone_count = static_cast<int>(zones.size());
+    const auto zone_end = [&](int k) { return k + 1 < zone_count ? zones[static_cast<size_t>(k) + 1].first_segment : n; };
+
+    zone_index.assign(static_cast<size_t>(n), 0);
+    looks.resize(static_cast<size_t>(n));
+    int shortest = n;
+    for (int k = 0; k < zone_count; ++k) {
+        const int first = zones[static_cast<size_t>(k)].first_segment;
+        shortest = std::min(shortest, zone_end(k) - first);
+        for (int i = first; i < zone_end(k); ++i) {
+            zone_index[static_cast<size_t>(i)] = k;
+            looks[static_cast<size_t>(i)] = zones[static_cast<size_t>(k)].theme;
+        }
+    }
+    if (zone_count < 2) return;
+
+    // Each boundary gets a smooth fade, including the one across the lap seam.
+    const int length = std::max(2, std::min(transition_segments, shortest));
+    const int half = length / 2;
+    for (int k = 0; k < zone_count; ++k) {
+        const RoadTheme& from = zones[static_cast<size_t>(k)].theme;
+        const RoadTheme& to = zones[static_cast<size_t>((k + 1) % zone_count)].theme;
+        const int boundary = zone_end(k); // n for the last zone, i.e. the seam
+        for (int i = 0; i < length; ++i) {
+            const int s = (((boundary - half + i) % n) + n) % n;
+            const float x = (static_cast<float>(i) + 0.5f) / static_cast<float>(length);
+            const float eased = x * x * (3.f - 2.f * x); // smoothstep
+            looks[static_cast<size_t>(s)] = mix_themes(from, to, eased);
+        }
+    }
 }
 
 namespace {
@@ -174,6 +253,8 @@ Track build_demo_track() {
     b.s_curves();
     b.downhill_to_end(200);
 
+    track.zones.push_back(Zone{"FRANCE", "COTE D'AZUR", RoadTheme{}, 0});
+
     // Start/finish line a few segments ahead of the starting grid.
     const int start = 8;
     track.start_z = static_cast<float>(start) * track.segment_length;
@@ -220,6 +301,7 @@ Track build_demo_track() {
         }
     }
 
+    track.finish();
     return track;
 }
 

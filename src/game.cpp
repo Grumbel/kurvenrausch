@@ -306,7 +306,8 @@ void Game::render() {
     const auto& player = world_.get<Player>(player_);
     const auto& cam = world_.get<Camera>(camera_);
 
-    background_.render(fb_, track_.theme);
+    const RoadTheme& look = track_.look_at(tr.z + cam.player_z());
+    background_.render(fb_, look);
 
     RoadView view;
     view.position = tr.z;
@@ -316,7 +317,7 @@ void Game::render() {
     view.camera_depth = cam.depth;
     view.player_z = cam.player_z();
     view.draw_distance = cam.draw_distance;
-    view.fog_density = cam.fog_density;
+    view.fog_density = look.fog_density;
     road_sprites_.clear();
     world_.view<Transform, Traffic>([&](Entity, Transform& t, Traffic& traffic) {
         RoadSprite s;

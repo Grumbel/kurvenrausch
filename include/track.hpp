@@ -5,6 +5,7 @@
 #include "types.hpp"
 
 #include <cstdint>
+#include <string>
 #include <vector>
 
 namespace racer {
@@ -63,6 +64,20 @@ struct RoadTheme {
     Color snow{0xec, 0xf2, 0xfa};
     Color hill_lit{0x5c, 0xa0, 0x5c};
     Color hill_shade{0x48, 0x88, 0x4c};
+    // Atmosphere
+    float fog_density = 5.f;  // exponential fog; larger is thicker
+};
+
+// Blends two looks: colours and numbers interpolate, anything discrete is
+// taken from the nearer one. Used to fade smoothly between zones.
+RoadTheme mix_themes(const RoadTheme& a, const RoadTheme& b, float t);
+
+// A stretch of track with its own country, scenery and atmosphere.
+struct Zone {
+    std::string country;
+    std::string region;
+    RoadTheme theme;
+    int first_segment = 0;  // set by the track builder
 };
 
 // A looping track: a circular array of fixed-length segments.
@@ -72,7 +87,22 @@ struct Track {
     float road_width = 2000.f;  // half width in world units
     int lanes = 3;
     float start_z = 0.f;        // position of the start/finish line
-    RoadTheme theme;
+
+    // Zones in track order; zones[0] starts at segment 0 and the last one runs
+    // into the first across the lap seam. finish() derives the per-segment
+    // data below and must be called once the segments and zones are set up.
+    std::vector<Zone> zones;
+    std::vector<int> zone_index;       // zone of each segment
+    std::vector<RoadTheme> looks;      // blended look of each segment
+
+    // Transitions between zones are spread over this many segments (clamped to
+    // the shortest zone), centred on the boundary.
+    void finish(int transition_segments = 100);
+
+    const RoadTheme& look(int segment) const;
+    const RoadTheme& look_at(float z) const { return look(index_at(z)); }
+    const Zone& zone_at(float z) const;
+    int zone_number_at(float z) const;
 
     float length() const { return static_cast<float>(segments.size()) * segment_length; }
 

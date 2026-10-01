@@ -5,9 +5,11 @@
 // or directly: ./kurvenrausch_tests
 
 #include "input.hpp"
+#include "track.hpp"
 
 #include <cmath>
 #include <cstdio>
+#include <string>
 
 namespace {
 
@@ -94,11 +96,91 @@ void test_pad_mapping() {
     }
 }
 
+// A flat 300 segment track with three zones starting at 0, 100 and 200.
+racer::Track make_zoned_track() {
+    using namespace racer;
+    Track t;
+    t.segments.resize(300);
+    const Color sky[3] = {{10, 20, 30}, {110, 120, 130}, {210, 220, 230}};
+    const float fog[3] = {2.f, 12.f, 22.f};
+    for (int i = 0; i < 3; ++i) {
+        Zone z;
+        z.country = "C" + std::to_string(i);
+        z.theme.sky_top = sky[i];
+        z.theme.fog_density = fog[i];
+        z.first_segment = i * 100;
+        t.zones.push_back(z);
+    }
+    t.finish(40);
+    return t;
+}
+
+void test_zones() {
+    using namespace racer;
+    const Track t = make_zoned_track();
+
+    // Away from the boundaries (100, 200 and the seam at 300 == 0) a segment
+    // has exactly its zone's look.
+    CHECK(t.look(50).sky_top.r == 10);
+    CHECK(t.look(150).sky_top.r == 110);
+    CHECK(t.look(250).sky_top.r == 210);
+    CHECK_NEAR(t.look(150).fog_density, 12.f, 1e-6f);
+
+    // Zone lookup by position follows the zone ranges, not the blend.
+    CHECK(t.zone_number_at(99.f * 200.f) == 0);
+    CHECK(t.zone_number_at(100.f * 200.f) == 1);
+    CHECK(t.zone_number_at(299.f * 200.f) == 2);
+    CHECK(t.zone_at(150.f * 200.f).country == "C1");
+    CHECK(t.zone_number_at(300.f * 200.f) == 0); // wraps around the lap
+
+    // Across a boundary the look changes monotonically and ends up in the
+    // next zone; the middle sits about half way.
+    int previous = t.look(80).sky_top.r;
+    for (int i = 81; i < 120; ++i) {
+        const int r = t.look(i).sky_top.r;
+        CHECK(r >= previous);
+        previous = r;
+    }
+    CHECK(t.look(79).sky_top.r == 10);
+    CHECK(t.look(120).sky_top.r == 110);
+    CHECK(std::abs(t.look(100).sky_top.r - 60) <= 6);
+
+    // The lap seam blends the last zone into the first one without a jump.
+    // The fade is centred on the seam: segments 280..299 and 0..19.
+    CHECK(t.look(279).sky_top.r == 210);
+    CHECK(t.look(280).sky_top.r >= 208);
+    CHECK(std::abs(t.look(299).sky_top.r - 110) < 15); // about half way
+    CHECK(std::abs(t.look(0).sky_top.r - 110) < 15);
+    CHECK(std::abs(t.look(299).sky_top.r - t.look(0).sky_top.r) < 15);
+    CHECK(t.look(19).sky_top.r <= 12);
+    CHECK(t.look(20).sky_top.r == 10);
+    CHECK(t.look(300).sky_top.r == t.look(0).sky_top.r); // look() wraps too
+    CHECK(t.look(-1).sky_top.r == t.look(299).sky_top.r);
+}
+
+void test_theme_mixing() {
+    using namespace racer;
+    RoadTheme a, b;
+    a.sky_top = Color{0, 0, 0};
+    b.sky_top = Color{200, 100, 50};
+    a.fog_density = 4.f;
+    b.fog_density = 8.f;
+    const RoadTheme m0 = mix_themes(a, b, 0.f);
+    const RoadTheme m1 = mix_themes(a, b, 1.f);
+    const RoadTheme mh = mix_themes(a, b, 0.5f);
+    CHECK(m0.sky_top.r == 0 && m1.sky_top.r == 200);
+    CHECK(mh.sky_top.r == 100 && mh.sky_top.g == 50 && mh.sky_top.b == 25);
+    CHECK_NEAR(mh.fog_density, 6.f, 1e-6f);
+    CHECK_NEAR(m1.fog_density, 8.f, 1e-6f);
+}
+
 } // namespace
 
 int main() {
     test_deadzone();
     test_pad_mapping();
+    test_zones();
+    test_theme_mixing();
 
     if (failures) {
         std::fprintf(stderr, "%d check(s) failed\n", failures);
