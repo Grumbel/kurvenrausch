@@ -5,6 +5,7 @@
 // or directly: ./kurvenrausch_tests
 
 #include "drivetrain.hpp"
+#include "driving.hpp"
 #include "input.hpp"
 #include "road.hpp"
 #include "synth.hpp"
@@ -420,6 +421,92 @@ void test_framebuffer_blit() {
     CHECK(n == 4);
 }
 
+void test_nitro() {
+    using namespace racer;
+    Nitro n;
+    CHECK(n.canisters() == Nitro::capacity && !n.burning());
+    CHECK(n.fire());
+    CHECK(n.burning() && n.canisters() == Nitro::capacity - 1);
+    CHECK_NEAR(n.burn_left(), 1.f, 1e-6f);
+    CHECK(!n.fire()); // one burn at a time
+    CHECK(n.canisters() == Nitro::capacity - 1);
+    n.update(Nitro::burn_seconds / 2.f);
+    CHECK_NEAR(n.burn_left(), 0.5f, 1e-5f);
+    CHECK_NEAR(n.intensity(), 1.f, 1e-6f);
+    n.update(Nitro::burn_seconds / 2.f - 0.2f);
+    CHECK(n.intensity() > 0.f && n.intensity() < 1.f); // fading out
+    n.update(0.3f);
+    CHECK(!n.burning() && n.intensity() == 0.f);
+    // Runs dry, refills.
+    CHECK(n.fire());
+    n.update(Nitro::burn_seconds);
+    CHECK(n.fire());
+    n.update(Nitro::burn_seconds);
+    CHECK(n.canisters() == 0 && !n.fire());
+    n.refill();
+    CHECK(n.canisters() == Nitro::capacity);
+    n.fire();
+    n.reset();
+    CHECK(n.canisters() == Nitro::capacity && !n.burning());
+}
+
+void test_speed_rules() {
+    using namespace racer;
+    // Below the top speed, nothing changes.
+    CHECK_NEAR(limit_speed(50.f, 60.f, 100.f, 10.f, 0.1f), 60.f, 1e-6f);
+    // The engine stops at the top speed.
+    CHECK_NEAR(limit_speed(95.f, 105.f, 100.f, 10.f, 0.1f), 100.f, 1e-6f);
+    // Above it the car slows down to it, without overshooting, braking still works.
+    CHECK_NEAR(limit_speed(120.f, 125.f, 100.f, 10.f, 0.1f), 119.f, 1e-5f);
+    CHECK_NEAR(limit_speed(100.5f, 101.f, 100.f, 10.f, 0.1f), 100.f, 1e-6f);
+    CHECK_NEAR(limit_speed(120.f, 110.f, 100.f, 10.f, 0.1f), 109.f, 1e-5f);
+
+    // The pass boost adds a little, but not beyond its limit.
+    CHECK_NEAR(boosted_speed(50.f, 100.f), 50.f + 100.f * pass_boost, 1e-5f);
+    CHECK_NEAR(boosted_speed(100.f, 100.f), 100.f * (1.f + pass_boost), 1e-4f);
+    CHECK_NEAR(boosted_speed(105.f, 100.f), 100.f * pass_boost_limit, 1e-4f);
+    CHECK_NEAR(boosted_speed(125.f, 100.f), 125.f, 1e-6f); // already faster (nitro)
+
+    CHECK_NEAR(signed_gap(100.f, 300.f, 1000.f), 200.f, 1e-4f);
+    CHECK_NEAR(signed_gap(300.f, 100.f, 1000.f), -200.f, 1e-4f);
+    CHECK_NEAR(signed_gap(950.f, 50.f, 1000.f), 100.f, 1e-4f);  // across the seam
+    CHECK_NEAR(signed_gap(50.f, 950.f, 1000.f), -100.f, 1e-4f);
+
+    const float car = 0.3f;
+    CHECK(close_pass(20.f, -5.f, 0.4f, car, 500.f));     // alongside, then behind
+    CHECK(close_pass(20.f, -5.f, -0.5f, car, 500.f));    // on either side
+    CHECK(!close_pass(20.f, -5.f, 0.7f, car, 500.f));    // too far apart
+    CHECK(!close_pass(20.f, 5.f, 0.4f, car, 500.f));     // still ahead
+    CHECK(!close_pass(-5.f, -20.f, 0.4f, car, 500.f));   // was already behind
+    CHECK(!close_pass(-5.f, 20.f, 0.4f, car, 500.f));    // it passed us
+    CHECK(!close_pass(4000.f, -4000.f, 0.f, car, 500.f)); // a jump, not a pass
+}
+
+void test_yield_lane() {
+    using namespace racer;
+    const std::vector<bool> free3(3, false);
+    // In the middle lane with the player behind: the nearest free lane that is
+    // out of the player's line, ties go to the left.
+    CHECK(yield_lane(3, 0.f, 0.f, 0.4f, free3) == 0);
+    // Player on the left: move right, and the other way round.
+    CHECK(yield_lane(3, -2.f / 3.f, -2.f / 3.f, 0.4f, free3) == 1);
+    CHECK(yield_lane(3, 2.f / 3.f, 2.f / 3.f, 0.4f, free3) == 1);
+    // Player between two lanes: both are in the way, the far lane is free.
+    CHECK(yield_lane(3, 0.f, -1.f / 3.f, 0.4f, free3) == 2);
+    // Busy lanes are skipped; nowhere to go gives -1.
+    CHECK(yield_lane(3, 0.f, 0.f, 0.4f, {true, false, false}) == 2);
+    CHECK(yield_lane(3, 0.f, 0.f, 0.4f, {true, false, true}) == -1);
+    CHECK(yield_lane(2, 0.5f, 0.5f, 0.4f, {false, false}) == 0);
+    CHECK(yield_lane(2, 0.5f, 0.5f, 0.4f, {true, false}) == -1);
+    // Off to one side of the player, a car does not cross in front of them.
+    CHECK(yield_lane(3, -0.36f, 0.06f, 0.45f, free3) == 0);
+    CHECK(yield_lane(3, -0.36f, 0.06f, 0.45f, {true, false, false}) == -1);
+    CHECK(yield_lane(3, 0.4f, 0.f, 0.45f, {false, false, true}) == -1);
+    // Nearly in line, it goes to the side it leans to.
+    CHECK(yield_lane(3, 0.f, -0.07f, 0.45f, free3) == 2);
+    CHECK(yield_lane(3, 0.f, 0.07f, 0.45f, free3) == 0);
+}
+
 void test_start_line() {
     using racer::crossed_line_forward;
     const float L = 1000.f, line = 100.f;
@@ -787,6 +874,9 @@ int main() {
     test_weather_mixing();
     test_lanes();
     test_start_line();
+    test_nitro();
+    test_speed_rules();
+    test_yield_lane();
     test_road_mirror();
     test_framebuffer_blit();
     test_demo_track();

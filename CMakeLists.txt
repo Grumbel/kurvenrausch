@@ -16,6 +16,7 @@ add_library(kurvenrausch_core STATIC
     src/background.cpp
     src/bitmap.cpp
     src/display.cpp
+    src/driving.cpp
     src/font.cpp
     src/framebuffer.cpp
     src/game.cpp
