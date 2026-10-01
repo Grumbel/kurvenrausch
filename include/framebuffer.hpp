@@ -33,6 +33,8 @@ public:
     // Horizontal line from x0 (inclusive) to x1 (exclusive).
     void hline(int x0, int x1, int y, Color c);
     void fill_rect(int x, int y, int w, int h, Color c);
+    // Line from (x0, y0) to (x1, y1), both ends included.
+    void line(int x0, int y0, int x1, int y1, Color c);
 
     // Fills a trapezoid with horizontal top and bottom edges. Coordinates are
     // sub-pixel; a pixel is covered if its centre lies inside, so adjacent
@@ -44,6 +46,10 @@ public:
     // transparent pixels and blending the rest towards `fog` by fog_amount.
     void blit_scaled(const Bitmap& bmp, float x, float y, float w, float h,
                      bool flip = false, float fog_amount = 0.f, Color fog = Color{});
+
+    // Draws a bitmap scaled to w x h and rotated by `angle` radians (clockwise)
+    // about its centre (cx, cy), skipping transparent pixels.
+    void blit_rotated(const Bitmap& bmp, float cx, float cy, float w, float h, float angle);
 
     // Copies another framebuffer 1:1 with its top-left corner at (x, y).
     void blit(const Framebuffer& src, int x, int y);

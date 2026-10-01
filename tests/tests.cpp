@@ -404,6 +404,40 @@ void test_road_mirror() {
     CHECK(road_ahead > w / 2.f + 5.f);
 }
 
+void test_blit_rotated() {
+    using namespace racer;
+    // A 4x2 bitmap, left half red, right half blue, with one transparent pixel.
+    Bitmap b(4, 2);
+    const Color red{255, 0, 0}, blue{0, 0, 255};
+    for (int y = 0; y < 2; ++y)
+        for (int x = 0; x < 4; ++x) b.set(x, y, x < 2 ? red : blue);
+    b.px[0] = 0u;
+    Framebuffer fb(10, 10);
+    const uint32_t black = Color{0, 0, 0}.argb();
+    auto at = [&](int x, int y) { return fb.pixels()[y * 10 + x]; };
+    // Unrotated it lands where a plain blit would, transparency kept.
+    fb.clear(Color{0, 0, 0});
+    fb.blit_rotated(b, 5.f, 5.f, 4.f, 2.f, 0.f);
+    CHECK(at(3, 4) == black && at(4, 4) == red.argb() && at(6, 5) == blue.argb());
+    CHECK(at(2, 4) == black && at(7, 4) == black && at(5, 3) == black);
+    // Half a turn swaps the halves; the transparent corner goes bottom right.
+    fb.clear(Color{0, 0, 0});
+    fb.blit_rotated(b, 5.f, 5.f, 4.f, 2.f, PI);
+    CHECK(at(3, 4) == blue.argb() && at(3, 5) == blue.argb() && at(6, 4) == red.argb());
+    CHECK(at(6, 5) == black);
+    // A quarter turn clockwise stands it up: red on top, the transparent
+    // corner top right.
+    fb.clear(Color{0, 0, 0});
+    fb.blit_rotated(b, 5.f, 5.f, 4.f, 2.f, PI / 2.f);
+    CHECK(at(4, 3) == red.argb() && at(4, 4) == red.argb() && at(5, 4) == red.argb());
+    CHECK(at(5, 3) == black);
+    CHECK(at(4, 6) == blue.argb() && at(5, 6) == blue.argb());
+    CHECK(at(3, 5) == black && at(6, 5) == black);
+    // Off screen and degenerate sizes are harmless.
+    fb.blit_rotated(b, -50.f, 300.f, 4.f, 2.f, 1.f);
+    fb.blit_rotated(b, 5.f, 5.f, 0.f, 2.f, 1.f);
+}
+
 void test_framebuffer_blit() {
     using namespace racer;
     Framebuffer src(4, 3), dst(10, 10);
@@ -879,6 +913,7 @@ int main() {
     test_yield_lane();
     test_road_mirror();
     test_framebuffer_blit();
+    test_blit_rotated();
     test_demo_track();
     test_drivetrain();
     test_synth_basics();

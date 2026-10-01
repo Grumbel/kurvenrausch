@@ -61,6 +61,28 @@ void Framebuffer::fill_rect(int x, int y, int w, int h, Color c) {
     for (int j = 0; j < h; ++j) hline(x, x + w, y + j, c);
 }
 
+void Framebuffer::blit_rotated(const Bitmap& bmp, float cx, float cy, float w, float h, float angle) {
+    if (bmp.w <= 0 || bmp.h <= 0 || !(w > 0.f) || !(h > 0.f)) return;
+    const float c = std::cos(angle), s = std::sin(angle);
+    const float r = 0.5f * std::hypot(w, h) + 1.f;
+    const int x0 = std::max(clip_x0_, pixel_edge(cx - r)), x1 = std::min(clip_x1_, pixel_edge(cx + r));
+    const int y0 = std::max(clip_y0_, pixel_edge(cy - r)), y1 = std::min(clip_y1_, pixel_edge(cy + r));
+    const float sx = static_cast<float>(bmp.w) / w, sy = static_cast<float>(bmp.h) / h;
+    for (int y = y0; y < y1; ++y) {
+        for (int x = x0; x < x1; ++x) {
+            // Rotate the pixel centre back into the bitmap's frame.
+            const float dx = static_cast<float>(x) + 0.5f - cx, dy = static_cast<float>(y) + 0.5f - cy;
+            const float u = (c * dx + s * dy) * sx + static_cast<float>(bmp.w) / 2.f;
+            const float v = (-s * dx + c * dy) * sy + static_cast<float>(bmp.h) / 2.f;
+            if (u < 0.f || v < 0.f) continue;
+            const int iu = static_cast<int>(u), iv = static_cast<int>(v);
+            if (iu >= bmp.w || iv >= bmp.h) continue;
+            const uint32_t p = bmp.get(iu, iv);
+            if (p >> 24) pixels_[static_cast<size_t>(y) * w_ + x] = p;
+        }
+    }
+}
+
 void Framebuffer::blit(const Framebuffer& src, int x, int y) {
     const int x0 = std::max(clip_x0_, x), x1 = std::min(clip_x1_, x + src.w_);
     const int y0 = std::max(clip_y0_, y), y1 = std::min(clip_y1_, y + src.h_);
@@ -68,6 +90,15 @@ void Framebuffer::blit(const Framebuffer& src, int x, int y) {
     for (int row = y0; row < y1; ++row) {
         const uint32_t* from = &src.pixels_[static_cast<size_t>(row - y) * src.w_ + (x0 - x)];
         std::copy(from, from + (x1 - x0), &pixels_[static_cast<size_t>(row) * w_ + x0]);
+    }
+}
+
+void Framebuffer::line(int x0, int y0, int x1, int y1, Color c) {
+    const int steps = std::max(std::abs(x1 - x0), std::abs(y1 - y0));
+    for (int i = 0; i <= steps; ++i) {
+        const float t = steps ? static_cast<float>(i) / static_cast<float>(steps) : 0.f;
+        put_pixel(static_cast<int>(std::lround(static_cast<float>(x0) + static_cast<float>(x1 - x0) * t)),
+                  static_cast<int>(std::lround(static_cast<float>(y0) + static_cast<float>(y1 - y0) * t)), c);
     }
 }
 
