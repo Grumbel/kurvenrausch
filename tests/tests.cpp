@@ -6,6 +6,7 @@
 
 #include "drivetrain.hpp"
 #include "input.hpp"
+#include "road.hpp"
 #include "synth.hpp"
 #include "track.hpp"
 #include "weather.hpp"
@@ -285,6 +286,100 @@ void test_weather() {
     a.render(f1);
     fresh.render(f2);
     CHECK(changed_pixels(f1, f2) == 0);
+}
+
+// The road renderer looking back, as the rear-view mirror does.
+void test_road_mirror() {
+    using namespace racer;
+    auto make_track = [](float curve) {
+        Track t;
+        t.segments.resize(400);
+        for (Segment& s : t.segments) s.curve = curve;
+        Zone z;
+        z.country = "C0";
+        t.zones.push_back(z);
+        t.finish(40);
+        return t;
+    };
+    const SpriteSheet sprites;
+    const Color magenta{255, 0, 255};
+    Bitmap marker(8, 8);
+    for (uint32_t& p : marker.px) p = magenta.argb();
+
+    // Renders into a mirror sized framebuffer without fog, so colours are exact.
+    constexpr int w = 112, h = 30;
+    Framebuffer fb(w, h);
+    auto render = [&](const Track& t, float position, int direction, std::vector<RoadSprite> objects) {
+        fb.clear(Color{0, 0, 0});
+        RoadView v;
+        v.position = position;
+        v.camera_height = 700.f;
+        v.camera_depth = 1.2f;
+        v.fog_density = 0.f;
+        v.direction = direction;
+        v.horizon = 13.f;
+        v.y_scale = 42.f;
+        RoadRenderer r;
+        r.render(fb, t, v, sprites, objects);
+    };
+    auto sprite = [&](float z, float offset) {
+        RoadSprite s;
+        s.z = z;
+        s.bitmap = &marker;
+        s.offset = offset;
+        s.world_width = 600.f;
+        return std::vector<RoadSprite>{s};
+    };
+    // Number and mean column of the pixels of colour c.
+    auto find = [&](std::initializer_list<Color> colours, int row0, int row1) {
+        int n = 0;
+        float sum = 0.f;
+        for (int y = row0; y < row1; ++y) {
+            for (int x = 0; x < w; ++x) {
+                for (Color c : colours) {
+                    if (fb.pixels()[y * w + x] == c.argb()) { ++n; sum += static_cast<float>(x); break; }
+                }
+            }
+        }
+        return std::make_pair(n, n ? sum / static_cast<float>(n) : -1.f);
+    };
+
+    const Track straight = make_track(0.f);
+    const float pos = 40100.f;
+    // A car behind on the left shows on the left of the mirror, and not ahead.
+    render(straight, pos, -1, sprite(pos - 3000.f, -0.5f));
+    auto [n_back, x_back] = find({magenta}, 0, h);
+    CHECK(n_back > 0);
+    CHECK(x_back < w / 2.f);
+    render(straight, pos, 1, sprite(pos - 3000.f, -0.5f));
+    CHECK(find({magenta}, 0, h).first == 0);
+    // And one ahead only in the forward view.
+    render(straight, pos, -1, sprite(pos + 3000.f, 0.5f));
+    CHECK(find({magenta}, 0, h).first == 0);
+    render(straight, pos, 1, sprite(pos + 3000.f, 0.5f));
+    auto [n_ahead, x_ahead] = find({magenta}, 0, h);
+    CHECK(n_ahead > 0);
+    CHECK(x_ahead > w / 2.f);
+    // At the same distance, the two look alike: same size, mirrored position.
+    CHECK(std::abs(n_ahead - n_back) <= n_ahead / 5);
+    CHECK_NEAR(x_ahead - w / 2.f, w / 2.f - x_back, 2.f);
+
+    // Looking back across the lap seam.
+    render(straight, 100.f, -1, sprite(straight.length() - 2900.f, 0.f));
+    auto [n_seam, x_seam] = find({magenta}, 0, h);
+    CHECK(n_seam > 0);
+    CHECK_NEAR(x_seam, w / 2.f, 2.f);
+
+    // In a right-hand bend the road curves to the right behind the car as well
+    // as ahead of it: the mirror keeps the sides.
+    const Track bend = make_track(4.f);
+    const RoadTheme& look = bend.look(0);
+    render(bend, pos, -1, {});
+    const float road_back = find({look.road[0], look.road[1]}, 17, 19).second;
+    render(bend, pos, 1, {});
+    const float road_ahead = find({look.road[0], look.road[1]}, 17, 19).second;
+    CHECK(road_back > w / 2.f + 5.f);
+    CHECK(road_ahead > w / 2.f + 5.f);
 }
 
 void test_start_line() {
@@ -624,6 +719,7 @@ int main() {
     test_weather_mixing();
     test_lanes();
     test_start_line();
+    test_road_mirror();
     test_demo_track();
     test_drivetrain();
     test_synth_basics();

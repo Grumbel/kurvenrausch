@@ -10,15 +10,16 @@ namespace racer {
 
 namespace {
 
+// `direction` is +1 looking along the track and -1 looking back; `horizon`
+// is the screen row of eye level and `y_scale` the vertical pixels per unit.
 void project(ScreenPoint& p, float world_x, float world_y, float world_z,
-             float cam_x, float cam_y, float cam_z, float depth,
-             int screen_w, int screen_h, float road_width) {
-    p.cam_z = world_z - cam_z;
+             float cam_x, float cam_y, float cam_z, float depth, int direction,
+             int screen_w, float horizon, float y_scale, float road_width) {
+    p.cam_z = (world_z - cam_z) * static_cast<float>(direction);
     p.scale = depth / p.cam_z;
     const float half_w = static_cast<float>(screen_w) / 2.f;
-    const float half_h = static_cast<float>(screen_h) / 2.f;
     p.x = half_w + p.scale * (world_x - cam_x) * half_w;
-    p.y = half_h - p.scale * (world_y - cam_y) * half_h;
+    p.y = horizon - p.scale * (world_y - cam_y) * y_scale;
     p.w = p.scale * road_width * half_w;
 }
 
@@ -39,33 +40,44 @@ void RoadRenderer::render(Framebuffer& fb, const Track& track, const RoadView& v
     const int base = track.index_at(view.position);
     const float base_percent = std::fmod(track.wrap(view.position), seg_len) / seg_len;
     const float cam_y = view.player_y + view.camera_height;
+    const int dir = view.direction < 0 ? -1 : 1;
+    const float half_h = static_cast<float>(fb.height()) / 2.f;
+    const float horizon = view.horizon > 0.f ? view.horizon : half_h;
+    const float y_scale = view.y_scale > 0.f ? view.y_scale : half_h;
 
     // The camera may sit partway into the base segment, so start the curve
-    // accumulation with the part of the curve already passed.
+    // accumulation with the part of the curve already passed. Looking back,
+    // the bend accumulates the same way: a right-hand bend curves to the
+    // right behind the car as well as ahead of it, and the mirror keeps sides.
     float x = 0.f;
-    float dx = -track.segment(base).curve * base_percent;
+    float dx = -track.segment(base).curve * (dir > 0 ? base_percent : 1.f - base_percent);
     float max_y = static_cast<float>(fb.height());
 
     camera_depth_ = view.camera_depth;
+    direction_ = dir;
     const int count = std::min(view.draw_distance, n_segments);
     slices_.clear();
     slices_.reserve(static_cast<size_t>(count));
 
     for (int n = 0; n < count; ++n) {
-        const int index = (base + n) % n_segments;
+        const int index = ((base + dir * n) % n_segments + n_segments) % n_segments;
         const Segment& seg = track.segment(index);
-        // Segments past the end of the track are seen through the loop.
-        const float loop = index < base ? track_len : 0.f;
+        // Segments past the end of the track (or before its start, looking
+        // back) are seen through the loop.
+        float loop = 0.f;
+        if (dir > 0 && index < base) loop = track_len;
+        if (dir < 0 && index > base) loop = -track_len;
         const float cam_z = view.position - loop;
         const float cam_x = view.player_x * track.road_width;
         const float z1 = static_cast<float>(index) * seg_len;
+        const float z2 = z1 + seg_len;
 
         Slice s;
         s.index = index;
-        project(s.p1, x, seg.y1, z1, cam_x, cam_y, cam_z, view.camera_depth,
-                fb.width(), fb.height(), track.road_width);
-        project(s.p2, x + dx, seg.y2, z1 + seg_len, cam_x, cam_y, cam_z, view.camera_depth,
-                fb.width(), fb.height(), track.road_width);
+        project(s.p1, x, dir > 0 ? seg.y1 : seg.y2, dir > 0 ? z1 : z2, cam_x, cam_y, cam_z,
+                view.camera_depth, dir, fb.width(), horizon, y_scale, track.road_width);
+        project(s.p2, x + dx, dir > 0 ? seg.y2 : seg.y1, dir > 0 ? z2 : z1, cam_x, cam_y, cam_z,
+                view.camera_depth, dir, fb.width(), horizon, y_scale, track.road_width);
         x += dx;
         dx += seg.curve;
 
@@ -215,18 +227,22 @@ void RoadRenderer::draw_edge(Framebuffer& fb, const Track& track, const Slice& s
 
     // Screen position of the base line and the top line at both ends.
     const float xa = a.x + off * a.w, xb = b.x + off * b.w;
-    const float h1 = track.edge_height(s.index, side);
-    const float h2 = track.edge_height(s.index + 1, side);
+    // Boundary index (segment start) and track position at the near end.
+    const int near = direction_ > 0 ? s.index : s.index + 1;
+    const float h1 = track.edge_height(near, side);
+    const float h2 = track.edge_height(near + direction_, side);
     const float ppu_a = a.scale * half_w, ppu_b = b.scale * half_w; // pixels per world unit
     const float ta = a.y - h1 * ppu_a, tb = b.y - h2 * ppu_b;
     if (std::abs(xb - xa) < 0.01f) return; // seen edge-on
 
     const int x0 = std::max(0, pixel_edge(std::min(xa, xb)));
     const int x1 = std::min(fb.width(), pixel_edge(std::max(xa, xb)));
-    const float u0 = static_cast<float>(s.index);
+    const float u0 = static_cast<float>(near);
+    const float du = static_cast<float>(direction_);
 
     for (int x = x0; x < x1; ++x) {
         const float t = std::clamp((static_cast<float>(x) + 0.5f - xa) / (xb - xa), 0.f, 1.f);
+        const float u = u0 + du * t; // position along the track in segments
         const float base = a.y + (b.y - a.y) * t;
         const float top = ta + (tb - ta) * t;
         const float ppu = ppu_a + (ppu_b - ppu_a) * t;
@@ -236,10 +252,10 @@ void RoadRenderer::draw_edge(Framebuffer& fb, const Track& track, const Slice& s
             const float h = (base - (static_cast<float>(y) + 0.5f)) / ppu;
             Color c;
             if (kind == Edge::Cliff) {
-                c = cliff_color(th, h, height, u0 + t, x, y);
+                c = cliff_color(th, h, height, u, x, y);
             } else {
                 // Two horizontal bars on posts; the gaps show the ground behind.
-                const bool post = t < 0.1f;
+                const bool post = (direction_ > 0 ? t : 1.f - t) < 0.1f; // at the segment start
                 const float r = h / rail_height;
                 const bool upper = r > 0.6f && r <= 0.95f;
                 const bool lower = r > 0.2f && r <= 0.42f;
@@ -274,18 +290,19 @@ void RoadRenderer::draw_sprites(Framebuffer& fb, const Track& track, const Sprit
             draw_edge(fb, track, s, -1);
             draw_edge(fb, track, s, +1);
         }
+        const ScreenPoint& p0 = start(s);
         for (const RoadsideObject& obj : seg.scenery) {
             if (!projectable) break;
             const SceneryInfo& info = scenery_info(obj.kind);
-            const float px_per_unit = s.p1.scale * half_w;
+            const float px_per_unit = p0.scale * half_w;
             const float width = info.width * px_per_unit;
-            float left = s.p1.x + obj.offset * track.road_width * px_per_unit;
+            float left = p0.x + obj.offset * track.road_width * px_per_unit;
             if (info.centered) left -= width / 2.f;
             else if (obj.offset < 0.f) left -= width;
-            const Bitmap& bmp = sprites.scenery(obj.kind);
+            const Bitmap& bmp = direction_ > 0 ? sprites.scenery(obj.kind) : sprites.scenery_back(obj.kind);
             const float height = width * static_cast<float>(bmp.h) / static_cast<float>(bmp.w);
             const bool flip = info.mirrorable && obj.offset < 0.f;
-            fb.blit_scaled(bmp, left, s.p1.y - height, width, height, flip,
+            fb.blit_scaled(bmp, left, p0.y - height, width, height, flip,
                            fog_amount, track.look(s.index).fog);
         }
 
@@ -295,25 +312,31 @@ void RoadRenderer::draw_sprites(Framebuffer& fb, const Track& track, const Sprit
                                       [](const RoadSprite& o, float z) { return o.z < z; });
         auto last = std::lower_bound(first, objects.end(), z0 + seg_len,
                                      [](const RoadSprite& o, float z) { return o.z < z; });
-        for (auto o = std::make_reverse_iterator(last); o != std::make_reverse_iterator(first); ++o) {
-            const Bitmap& bmp = *o->bitmap;
-            if (o->fixed) {
+        auto draw_object = [&](const RoadSprite& o) {
+            const Bitmap& bmp = *o.bitmap;
+            if (o.fixed) {
                 fb.reset_clip();
-                fb.blit_scaled(bmp, o->sx, o->sy, o->sw, o->sh);
+                fb.blit_scaled(bmp, o.sx, o.sy, o.sw, o.sh);
                 fb.set_clip(0, 0, fb.width(), clip);
-                continue;
+                return;
             }
-            if (!projectable) continue;
-            const float t = (o->z - z0) / seg_len;
-            const float scale = s.p1.scale + (s.p2.scale - s.p1.scale) * t;
-            const float x = s.p1.x + (s.p2.x - s.p1.x) * t;
-            const float y = s.p1.y + (s.p2.y - s.p1.y) * t;
+            if (!projectable) return;
+            const ScreenPoint& p1 = end(s);
+            const float t = (o.z - z0) / seg_len;
+            const float scale = p0.scale + (p1.scale - p0.scale) * t;
+            const float x = p0.x + (p1.x - p0.x) * t;
+            const float y = p0.y + (p1.y - p0.y) * t;
             const float px_per_unit = scale * half_w;
-            const float width = o->world_width * px_per_unit;
+            const float width = o.world_width * px_per_unit;
             const float height = width * static_cast<float>(bmp.h) / static_cast<float>(bmp.w);
-            const float cx = x + o->offset * track.road_width * px_per_unit;
+            const float cx = x + o.offset * track.road_width * px_per_unit;
             fb.blit_scaled(bmp, cx - width / 2.f, y - height, width, height, false,
                            fog_amount, track.look(s.index).fog);
+        };
+        if (direction_ > 0) {
+            for (auto o = std::make_reverse_iterator(last); o != std::make_reverse_iterator(first); ++o) draw_object(*o);
+        } else {
+            for (auto o = first; o != last; ++o) draw_object(*o);
         }
     }
     fb.reset_clip();

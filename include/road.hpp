@@ -20,6 +20,13 @@ struct RoadView {
     float player_z = 840.f;
     int draw_distance = 300;
     float fog_density = 5.f;
+    // +1 looks along the track. -1 looks back from `position`, as seen in a
+    // rear-view mirror: left stays left, so the image needs no flipping.
+    int direction = 1;
+    // Screen row of eye level and vertical pixels per world unit at scale 1;
+    // 0 means half the framebuffer height for either, as for the main view.
+    float horizon = 0.f;
+    float y_scale = 0.f;
 };
 
 struct ScreenPoint {
@@ -47,14 +54,16 @@ struct RoadSprite {
 // Classic segment based pseudo-3D road renderer.
 class RoadRenderer {
 public:
-    // `objects` may be in any order; it is sorted in place.
+    // `objects` may be in any order; it is sorted in place. Looking back, the
+    // back of signs is drawn (`SpriteSheet::scenery_back`).
     void render(Framebuffer& fb, const Track& track, const RoadView& view,
                 const SpriteSheet& sprites, std::vector<RoadSprite>& objects);
 
 private:
     struct Slice {
         int index;          // segment index
-        ScreenPoint p1, p2; // near and far edge
+        ScreenPoint p1, p2; // near and far edge (the segment's start and end
+                            // looking forward, its end and start looking back)
         float clip;         // occlusion line from nearer road: draw only above
         float fog;          // 1 = clear, 0 = fully fogged
         bool road_visible;
@@ -66,8 +75,13 @@ private:
     void draw_sprites(Framebuffer& fb, const Track& track, const SpriteSheet& sprites,
                       const std::vector<RoadSprite>& objects) const;
 
+    // Screen points of a slice at the segment's start and end along the track.
+    const ScreenPoint& start(const Slice& s) const { return direction_ > 0 ? s.p1 : s.p2; }
+    const ScreenPoint& end(const Slice& s) const { return direction_ > 0 ? s.p2 : s.p1; }
+
     std::vector<Slice> slices_;
     float camera_depth_ = 1.f;
+    int direction_ = 1;
 };
 
 } // namespace racer
