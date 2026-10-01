@@ -109,4 +109,14 @@ src/               implementations
 Inspired by Louis Gorenfeld's "Lou's Pseudo 3D Page" and Jake Gordon's
 JavaScript Racer tutorial. The code itself is original.
 
-MIT License.
+## License
+
+Copyright 2026 Ingo Ruhnke <grumbel@gmail.com>
+
+Kurvenrausch is free software: you can redistribute it and/or modify it under
+the terms of the GNU General Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later
+version. See [`LICENSES/GPL-3.0-or-later.txt`](LICENSES/GPL-3.0-or-later.txt).
+
+The repository follows the [REUSE](https://reuse.software/) specification:
+`reuse lint` passes.

@@ -25,8 +25,13 @@ that is scaled up with nearest-neighbour filtering for chunky pixels.
   trailer `Co-authored-by: Claude <noreply@anthropic.com>`.
 - Small, task-focused commits; every commit must build warning-free with
   `-Wall -Wextra -Wpedantic`.
-- License: the README declares MIT; keep it. (No LICENSE file / SPDX headers
-  exist yet, see TODO.md.)
+<!-- REUSE-IgnoreStart -->
+- Licence: GPL-3.0-or-later (changed from the MIT claimed in the old README, at
+  the owner's request). Every new file needs the SPDX header, exactly:
+  `// SPDX-FileCopyrightText: 2026 Ingo Ruhnke <grumbel@gmail.com>` and
+  `// SPDX-License-Identifier: GPL-3.0-or-later` (`#` comments in CMake/Nix/Python).
+  Files that cannot carry one are listed in `REUSE.toml`. `reuse lint` must pass.
+<!-- REUSE-IgnoreEnd -->
 - Fix root causes; no workarounds. Don't remove features without discussion.
 
 ## Architecture notes

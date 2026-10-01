@@ -95,5 +95,4 @@ display and keyboard.
 
 ## Open questions
 
-- README says MIT but there is no LICENSE file and no SPDX/REUSE headers.
-  Add them with the copyright holder's confirmation.
+None at the moment.
