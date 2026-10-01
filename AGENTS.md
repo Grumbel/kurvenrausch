@@ -5,13 +5,13 @@ this repository.
 
 ## Project
 
-**Kurvenrausch** (binary: `bitmap_racer`) is a classic pseudo-3D bitmap racer
+**Kurvenrausch** (binary: `kurvenrausch`) is a classic pseudo-3D bitmap racer
 in the spirit of *OutRun* and *Lotus Esprit Turbo Challenge*, written in C++17
 with SDL2. All drawing is done in software into a low-resolution framebuffer
 that is scaled up with nearest-neighbour filtering for chunky pixels.
 
 - Build: `cmake -B build && cmake --build build` (or `nix build`).
-- Headless check: `./build/bitmap_racer --screenshot out.bmp --frames 600`
+- Headless check: `./build/kurvenrausch --screenshot out.bmp --frames 600`
   renders a frame without opening a window. Use this to verify rendering
   changes in environments without a display.
 
