@@ -13,6 +13,9 @@ that is scaled up with nearest-neighbour filtering for chunky pixels.
 - Build: `cmake -B build && cmake --build build` (or `nix build`).
 - Tests: `ctest --test-dir build --output-on-failure` (`tests/tests.cpp`, no
   framework). Add a test for new pure logic.
+- Screenshots for the README: `tools/make_screenshots.py` (needs Pillow). Look
+  at renders after any rendering change; `--zone N`, `--print-zones`, `--steer`
+  and `--wav` exist for exactly this.
 - Headless check: `./build/kurvenrausch --screenshot out.bmp --frames 600`
   renders a frame without opening a window. Use this to verify rendering
   changes in environments without a display.
@@ -21,6 +24,9 @@ that is scaled up with nearest-neighbour filtering for chunky pixels.
 
 - Keep `TODO.md` current: tip, open work, handoff notes. Someone must be able
   to continue from `TODO.md` plus the repository alone.
+- Sanitizers: check rendering/physics/audio changes with ASan+UBSan on a full
+  headless lap, and anything touching the audio thread with ThreadSanitizer on
+  the live loop (`SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy`).
 - Deliverables are cumulative `git bundle` files named
   `kurvenrausch-NNN.M-short-slug-<shortRevOfBase>.bundle`; never patches.
 - Commit author: `Ingo Ruhnke <grumbel@gmail.com>`; every commit carries the

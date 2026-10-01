@@ -3,56 +3,71 @@
 ## Current tip
 
 Base: `fc65858 Fix rendering: correct projection, pixel format, colors &
-sprites` (upstream master). Work line: kurvenrausch-002.x, bundles are
+sprites` (upstream master). Work line: kurvenrausch-003.x, bundles are
 cumulative from `fc65858`.
 
-Latest bundle: `kurvenrausch-002.1-classic-racer-fc65858.bundle`, tip is
-the "Update README and TODO" commit on `master`.
+Latest bundle: `kurvenrausch-003.1-biomes-audio-gamepad-fc65858.bundle`, tip is
+the "Update README, TODO and AGENTS" commit on `master`.
 
-History: 001.1 was built on `d66c91a Initial checkin`. Upstream then added
-`cc083f5 Rename project to Kurvenrausch` and `fc65858` (its own rendering
-fix), so the work was rebased onto upstream master and the 001.1 bundle was
-superseded by 002.1.
+History: 001.1 was built on `d66c91a`; upstream then added a rename and its own
+rendering fix, so the work was rebased onto `fc65858` (002.1). 003.1 adds the
+licence change, gamepad, zones/biomes, weather, cliffs, audio and screenshots.
+Upstream master has since been fast-forwarded to `64fda32`, the tip of 002.1, so
+003.1 applies on top of it as a plain fast-forward; the bundles stay cumulative
+from `fc65858` regardless, as the rules require.
+The rebase notes: upstream's rename is kept, its rendering fix is superseded by
+the road/framebuffer rewrite, `Color::to_u32()` became `Color::argb()`.
 
-Rebase notes: upstream's rename (CMake target, flake, window title) is
-kept. Its rendering fix (components/types/renderer/road/game rewrites)
-overlaps with, and is superseded by, the road/framebuffer rewrite here;
-conflicts were resolved in favour of the rewrite. `Color::to_u32()`
-became `Color::argb()`. `flake.nix` builds with CMake and installs the
-`kurvenrausch` target, which matches; the Nix build itself still has not
-been run (no Nix in the sandbox).
+## Round 2 (003.1): done
 
-## Round 2 plan (003.x): licence, gamepad, biomes, weather, audio
-
-Requested: README screenshot; SPDX headers (`reuse lint` clean, GPL-3.0-or-later,
-"2026 Ingo Ruhnke <grumbel@gmail.com>"); more biomes / weather / countries incl.
-a cliff beside the road; synthesised engine and tyre sound; SDL GameController.
+Requested and delivered: README screenshots; SPDX headers with
+`reuse lint` clean (GPL-3.0-or-later, "2026 Ingo Ruhnke <grumbel@gmail.com>");
+biomes, weather, countries and a cliff road; synthesised engine and tyre sound;
+SDL GameController support.
 
 Design decisions (so work can be continued from here):
 
-- Licence: the README said MIT, the owner now asks for GPL-3.0-or-later.
+- Licence: the README used to say MIT; the owner asked for GPL-3.0-or-later.
   Headers in source files, `REUSE.toml` for docs/other files, text in `LICENSES/`.
-- Input: `InputState` becomes analog (throttle, brake, steer in -1..1); keyboard
-  is digital 0/1, pads add analog sticks/triggers, merged by max. The pad mapping
-  is a pure function so it is unit-tested; SDL only feeds it. Hot-plug + rumble.
-- Zones: the track is a list of `Zone`s (country, region, `RoadTheme`, decor rule).
-  `RoadTheme` is a blendable "look" (colours, fog density, rain, snow, grip, ...);
-  per-segment looks are precomputed with smooth transitions between zones, also
-  across the lap seam. Discrete fields (lane count, markings) come from the
-  nearer zone. Background, fog, weather and handling read the look at the player.
-- Roadside edges: per segment `Edge {None, Rail, Cliff}` per side, with a fade at
-  the ends of a run. Drawn as column-filled quads (not sprites) in the far->near
-  pass; the ground beyond is rock (cliff) or sea/valley (rail). Both are solid.
+- Input: `InputState` is analog (throttle, brake, steer in -1..1); keyboard is
+  digital 0/1, pads add analog sticks/triggers, merged by max. The pad mapping
+  is a pure function (`merge_pad`) and unit-tested; SDL only feeds it. Hot-plug
+  and rumble are handled in `Input`.
+- Zones: the track is a list of `Zone`s (country, region, `RoadTheme`, decor
+  rule). `RoadTheme` is a blendable look (colours, fog density, rain, snow,
+  grip, sun, haze, ...); `Track::finish()` precomputes per-segment looks with
+  smooth transitions, also across the lap seam. Discrete fields (lane count,
+  markings) come from the nearer zone. `mix_themes()` must list every field;
+  a `static_assert` on `sizeof(RoadTheme)` reminds you when you add one.
+  Background, fog, weather, handling and sound read the look at the player.
+- Roadside edges: per segment `Edge {None, Rail, Cliff}` per side, with a fade
+  at the ends of a run (`Track::edge_height`). Drawn as column-filled quads in
+  the far->near pass, not as sprites; ground beyond is rock (cliff) or
+  sea/valley (rail). Solid via `barrier_limit()`. Decor never goes on an edge
+  side (checked by a test).
 - Weather: screen-space rain streaks / snowflakes driven by look intensities;
   fog is the look's density; wet/snow reduce grip (steering authority, more
   centrifugal push, earlier skidding).
-- Audio: `Synth` is pure DSP (no SDL) so it can be rendered offline and analysed:
-  additive engine fed by rpm/throttle, noise-based road/wind/rain, band-passed
-  skid squeal, gravel crackle, barrier scrape, crash burst. `Audio` wraps the SDL
-  device; parameters cross threads via atomics. `--wav FILE` dumps a headless run.
-- Tools: `tools/make_screenshots.py` renders the README images via headless mode.
+- Audio: `Synth` is pure DSP (no SDL) so it is rendered offline in the tests and
+  analysed by spectrum; `Audio` wraps the SDL device; parameters cross threads
+  as atomics. `--wav FILE` dumps the sound of a headless run.
+- Lap detection counts only forward crossings of the start line
+  (`crossed_line_forward`); the old check counted any backward step as a lap.
 
-## Done (002.1)
+Verified: every commit builds warning-free (-Wall -Wextra -Wpedantic, GCC 13)
+and passes the unit tests and `reuse lint`; ASan/UBSan clean on full headless
+laps (also with `--wav`) and on the live loop with SDL's dummy drivers;
+ThreadSanitizer clean on the live loop (audio thread vs game thread); gamepad
+path checked with SDL's virtual joystick; screenshots checked for every zone,
+the zone transitions and the cliff/rail stretches; sound checked by spectrum
+(engine pitch tracks the revs, effect bands, levels, no clipping).
+
+Not verified: how the sound actually sounds to a human or on real audio
+hardware; a physical gamepad; the Nix build (no Nix in the sandbox); how the
+game feels to drive interactively. The autopilot laps in about 2'12" (traffic
+included) against about 1'47" at top speed, because it does not dodge cars.
+
+## Done earlier (002.1)
 
 - AGENTS.md / TODO.md / .gitignore.
 - ECS: const access fixed, destroy() removes entities and components.
@@ -81,17 +96,21 @@ display and keyboard.
 
 ## Open work / ideas
 
-- Play-test handling and tune: lap is ~2 min at top speed (6855 segments);
-  centrifugal force, traffic density and speeds may want tuning.
-- Sound (engine pitch by rpm, skid, crash) via SDL audio, synthesised.
-- Uphill / downhill car sprite frames; skid/smoke when off-road.
+- Play-test handling and tune: grip values per zone (rain 0.8, snow 0.7),
+  traffic density and speeds, scrape drag, centrifugal force.
+- Listen to the sound on real hardware and tune the mix (gains are in
+  `Synth::render`; the tests pin the relations, not absolute levels). Ideas:
+  traffic whoosh / Doppler, thunder with lightning in the rain, tunnels with
+  reverb, a radio / music.
+- Real gamepad test; rumble strength tuning; remappable buttons.
+- Night stage with headlights; lightning flashes; tunnels.
+- Uphill / downhill car sprite frames; tyre smoke when skidding.
 - Camera pitch / horizon shift with slope (OutRun style).
-- Multiple themes per track section (beach, desert, night) using
-  RoadTheme blending; branching stages.
-- Load tracks from a data file.
-- Gear shifting (manual/auto) instead of virtual gears in the rev bar.
-- Traffic avoids the player more cleverly; cars on curves could show
-  turning frames.
+- Branching stages, as in OutRun; load tracks from a data file.
+- Manual gearbox instead of the virtual automatic gears.
+- Smarter autopilot (dodge traffic, brake for grip); smarter traffic; turning
+  frames for cars in bends.
+- Country entry signs at the zone borders.
 
 ## Open questions
 
