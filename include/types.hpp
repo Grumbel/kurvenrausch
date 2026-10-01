@@ -33,6 +33,12 @@ constexpr Color blend(Color a, Color b, float t) {
     return Color(mix(a.r, b.r), mix(a.g, b.g), mix(a.b, b.b), a.a);
 }
 
+// 4x4 ordered-dither (Bayer) threshold in [0, 1).
+constexpr float bayer4(int x, int y) {
+    constexpr int m[4][4] = {{0, 8, 2, 10}, {12, 4, 14, 6}, {3, 11, 1, 9}, {15, 7, 13, 5}};
+    return static_cast<float>(m[y & 3][x & 3]) / 16.f;
+}
+
 // Classic palette inspired by OutRun / Lotus
 namespace Palette {
     constexpr Color SkyTop{0x5B, 0x9B, 0xD5};

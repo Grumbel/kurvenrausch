@@ -41,6 +41,7 @@ bool Game::init() {
 void Game::reset() {
     world_.get<Transform>(player_) = Transform{};
     world_.get<Velocity>(player_) = Velocity{};
+    background_.reset();
     race_started_ = false;
     lap_ = 0;
     lap_time_ = last_lap_ = best_lap_ = 0.f;
@@ -115,6 +116,7 @@ void Game::fixed_update(const InputState& input, float dt) {
 
     const float prev_z = tr.z;
     tr.z = track_.wrap(tr.z + dt * vel.speed);
+    background_.update(seg.curve, dt * vel.speed / track_.segment_length, dt);
 
     steer_ = (input.right ? 1 : 0) - (input.left ? 1 : 0);
     tr.x += dx * static_cast<float>(steer_);
@@ -182,7 +184,7 @@ void Game::render() {
     const auto& player = world_.get<Player>(player_);
     const auto& cam = world_.get<Camera>(camera_);
 
-    placeholder::draw_background(fb_, track_.theme);
+    background_.render(fb_, track_.theme);
 
     RoadView view;
     view.position = tr.z;

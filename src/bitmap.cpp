@@ -7,16 +7,6 @@
 
 namespace racer::paint {
 
-namespace {
-
-// 4x4 Bayer matrix, normalised to [0, 1).
-float bayer(int x, int y) {
-    static constexpr int m[4][4] = {{0, 8, 2, 10}, {12, 4, 14, 6}, {3, 11, 1, 9}, {15, 7, 13, 5}};
-    return static_cast<float>(m[y & 3][x & 3]) / 16.f;
-}
-
-} // namespace
-
 void rect(Bitmap& b, int x, int y, int w, int h, Color c) {
     for (int j = y; j < y + h; ++j)
         for (int i = x; i < x + w; ++i) b.set(i, j, c);
@@ -53,7 +43,7 @@ void shaded_ellipse(Bitmap& b, float cx, float cy, float rx, float ry,
             const float r2 = nx * nx + ny * ny;
             if (r2 > 1.f) continue;
             const float nz = std::sqrt(1.f - r2);
-            const float d = nx * lx + ny * ly + nz * lz + (bayer(x, y) - 0.5f) * 0.25f;
+            const float d = nx * lx + ny * ly + nz * lz + (bayer4(x, y) - 0.5f) * 0.25f;
             b.set(x, y, d > 0.72f ? light : d > 0.3f ? mid : dark);
         }
     }

@@ -1,4 +1,5 @@
 #pragma once
+#include "background.hpp"
 #include "components.hpp"
 #include "display.hpp"
 #include "ecs.hpp"
@@ -51,6 +52,7 @@ private:
     Track track_;
     RoadRenderer road_;
     SpriteSheet sprites_;
+    Background background_;
 
     Entity player_ = INVALID_ENTITY;
     Entity camera_ = INVALID_ENTITY;
