@@ -171,10 +171,12 @@ void Game::spawn_traffic() {
         const int lanes = track_.look(static_cast<int>(segment)).lanes;
         const float lane = lane_center(lanes, static_cast<int>(rnd() * static_cast<float>(lanes)) % lanes);
         world_.add<Transform>(car, Transform{lane, 0.f, segment * seg_len});
-        const float speed = max_speed * (0.25f + 0.35f * rnd());
-        world_.add<Velocity>(car, Velocity{speed});
         Traffic traffic;
-        traffic.style = i % SpriteSheet::traffic_styles;
+        traffic.kind = traffic_vehicle(rnd());
+        const VehicleInfo& info = vehicle_info(traffic.kind);
+        const float speed = max_speed * (info.min_speed + (info.max_speed - info.min_speed) * rnd());
+        world_.add<Velocity>(car, Velocity{speed});
+        traffic.style = i % info.styles;
         traffic.target_x = lane;
         traffic.cruise = speed;
         world_.add<Traffic>(car, traffic);
@@ -453,9 +455,10 @@ void Game::fixed_update(const InputState& input, float dt) {
     // Rear-ending traffic: bounce off and drop behind it.
     const int car_segment = track_.index_at(tr.z + player_z);
     const float car_w = player.car_width / track_.road_width;
-    world_.view<Transform, Velocity, Traffic>([&](Entity, Transform& t, Velocity& v, Traffic&) {
+    world_.view<Transform, Velocity, Traffic>([&](Entity, Transform& t, Velocity& v, Traffic& traffic) {
         if (vel.speed <= v.speed || track_.index_at(t.z) != car_segment) return;
-        if (!overlap(tr.x, car_w, t.x, car_w * 0.8f)) return;
+        const float w = vehicle_info(traffic.kind).width / track_.road_width;
+        if (!overlap(tr.x, car_w, t.x, w * 0.8f)) return;
         vel.speed = v.speed * (v.speed / vel.speed);
         tr.z = track_.wrap(t.z - player_z);
         crashed_ = true;
@@ -779,7 +782,11 @@ void Game::update_traffic(float dt) {
         // Following: closing in on something slower in its lane (another car,
         // or the player), a car brakes to keep a gap instead of driving
         // through it, and gets back up to its cruising speed once clear.
-        float wanted = traffic.cruise;
+        // A rival races the player when they come close.
+        float wanted = traffic.kind == Vehicle::Rival
+                           ? rival_speed(traffic.cruise, max_speed,
+                                         signed_gap(t.z, player_world_z, track_.length()) / track_.segment_length)
+                           : traffic.cruise;
         for (const Mover& m : movers) {
             if (m.e == e || std::abs(m.x - t.x) > follow_width) continue;
             const float d = distance_ahead(t.z, m.z);
@@ -851,9 +858,9 @@ void Game::render() {
     world_.view<Transform, Traffic>([&](Entity e, Transform& t, Traffic& traffic) {
         RoadSprite s;
         s.z = t.z;
-        s.bitmap = &sprites_.traffic(traffic.style, indicator(e, t, traffic), traffic.braking);
+        s.bitmap = &sprites_.vehicle(traffic.kind, traffic.style, indicator(e, t, traffic), traffic.braking);
         s.offset = t.x;
-        s.world_width = player.car_width;
+        s.world_width = vehicle_info(traffic.kind).width;
         road_sprites_.push_back(s);
     });
 
@@ -954,7 +961,6 @@ void Game::render() {
 // shows its front and billboards their back.
 void Game::render_mirror() {
     const auto& tr = world_.get<Transform>(player_);
-    const auto& player = world_.get<Player>(player_);
     const auto& cam = world_.get<Camera>(camera_);
     const float car_z = tr.z + cam.player_z();
     const RoadTheme& look = track_.look_at(car_z);
@@ -981,9 +987,9 @@ void Game::render_mirror() {
     world_.view<Transform, Traffic>([&](Entity e, Transform& t, Traffic& traffic) {
         RoadSprite s;
         s.z = t.z;
-        s.bitmap = &sprites_.traffic_front(traffic.style, indicator(e, t, traffic));
+        s.bitmap = &sprites_.vehicle_front(traffic.kind, traffic.style, indicator(e, t, traffic));
         s.offset = t.x;
-        s.world_width = player.car_width;
+        s.world_width = vehicle_info(traffic.kind).width;
         mirror_sprites_.push_back(s);
     });
     mirror_road_.render(mirror_fb_, track_, view, sprites_, mirror_sprites_);

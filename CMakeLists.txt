@@ -35,6 +35,7 @@ add_library(kurvenrausch_core STATIC
     src/sprites.cpp
     src/synth.cpp
     src/track.cpp
+    src/vehicles.cpp
     src/weather.cpp
 )
 target_include_directories(kurvenrausch_core PUBLIC include ${SDL2_INCLUDE_DIRS})

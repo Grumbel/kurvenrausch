@@ -655,6 +655,206 @@ Bitmap make_player_car(const CarStyle& style, int turn, int side, int frame, boo
     return b;
 }
 
+namespace {
+
+// A tail light panel; braking it burns brighter, white-hot in the middle.
+void tail_lamp(Bitmap& b, int x, int y, int w, int h, bool brake) {
+    paint::rect(b, x, y, w, h, brake ? Color{0xff, 0x54, 0x3c} : Color{0x8c, 0x12, 0x12});
+    if (w > 2 && h > 2) {
+        paint::rect(b, x + 1, y + 1, w - 2, std::max(1, h / 4),
+                    brake ? Color{0xff, 0xf0, 0xe0} : Color{0xc8, 0x44, 0x38});
+    }
+}
+
+void indicator(Bitmap& b, int x, int y, int w, int h, bool on) {
+    paint::rect(b, x, y, w, h, on ? Color{0xff, 0xc0, 0x38} : Color{0xa8, 0x5c, 0x18});
+    if (on && w > 2 && h > 2) paint::rect(b, x + 1, y + 1, w - 2, h - 2, Color{0xff, 0xf4, 0xc0});
+}
+
+void headlight(Bitmap& b, int x, int y, int w, int h) {
+    paint::rect(b, x, y, w, h, Color{0xf0, 0xec, 0xc8});
+    paint::rect(b, x + 1, y + 1, std::max(1, w / 2), std::max(1, h / 2), Color{0xff, 0xff, 0xff});
+}
+
+void tyre(Bitmap& b, int x, int y, int w, int h) {
+    paint::rect(b, x, y, w, h, Color{0x18, 0x18, 0x1c});
+    for (int ty = y + 1; ty < y + h - 1; ty += 3) paint::rect(b, x + 2, ty, w - 4, 1, Color{0x3c, 0x3c, 0x42});
+}
+
+void driver(Bitmap& b, float x, float y) {
+    paint::shaded_ellipse(b, x, y, 4.f, 4.f, Color{0x14, 0x14, 0x1c}, Color{0x24, 0x24, 0x30}, Color{0x34, 0x34, 0x40});
+}
+
+} // namespace
+
+// A panel van: tall box body, two rear doors with windows, tall tail lights.
+Bitmap make_van(const CarStyle& st, int signal, bool brake) {
+    Bitmap b(104, 64);
+    paint::ellipse(b, 52.f, 61.f, 50.f, 3.f, Color{0x22, 0x22, 0x22});
+    tyre(b, 6, 48, 15, 16);
+    tyre(b, 83, 48, 15, 16);
+    paint::rect(b, 6, 4, 92, 1, st.body_light);
+    paint::rect(b, 4, 5, 96, 50, st.body);
+    paint::rect(b, 4, 5, 96, 4, st.body_light);
+    paint::rect(b, 4, 46, 96, 9, st.body_dark);
+    paint::rect(b, 51, 9, 2, 37, st.body_dark); // door seam
+    const Color glass{0x2c, 0x3c, 0x54}, shine{0x70, 0x88, 0xa8}, chrome{0x9a, 0x9a, 0xa8};
+    for (int x : {14, 56}) {
+        paint::rect(b, x, 11, 34, 15, glass);
+        paint::stroke(b, static_cast<float>(x) + 4.f, 24.f, static_cast<float>(x) + 10.f, 13.f, 1.f, 1.f, shine);
+    }
+    paint::rect(b, 46, 32, 4, 2, chrome);
+    paint::rect(b, 54, 32, 4, 2, chrome);
+    for (int side = -1; side <= 1; side += 2) {
+        const int x = side < 0 ? 5 : 93;
+        indicator(b, x, 25, 6, 6, signal == side);
+        tail_lamp(b, x, 31, 6, 14, brake);
+    }
+    paint::rect(b, 44, 8, 16, 2, brake ? Color{0xff, 0x54, 0x3c} : Color{0x70, 0x14, 0x12}); // third brake light
+    paint::rect(b, 3, 53, 98, 5, Color{0x4c, 0x4c, 0x54}); // bumper
+    paint::rect(b, 44, 47, 16, 5, Color{0xe8, 0xe8, 0xd8});
+    paint::rect(b, 47, 48, 10, 1, Color{0x30, 0x30, 0x60});
+    paint::outline(b, Outline);
+    return b;
+}
+
+Bitmap make_van_front(const CarStyle& st, int signal) {
+    Bitmap b(104, 64);
+    paint::ellipse(b, 52.f, 61.f, 50.f, 3.f, Color{0x22, 0x22, 0x22});
+    tyre(b, 6, 48, 15, 16);
+    tyre(b, 83, 48, 15, 16);
+    paint::rect(b, 4, 4, 96, 51, st.body);
+    paint::rect(b, 4, 4, 96, 3, st.body_light);
+    paint::rect(b, 10, 8, 84, 22, Color{0x2c, 0x3c, 0x54}); // windscreen
+    driver(b, 30.f, 19.f);
+    paint::rect(b, 25, 23, 10, 6, Color{0x1c, 0x1c, 0x26});
+    paint::stroke(b, 66.f, 27.f, 74.f, 11.f, 1.f, 1.f, Color{0x70, 0x88, 0xa8});
+    paint::rect(b, 4, 30, 96, 3, st.body_dark);
+    headlight(b, 8, 35, 18, 7);
+    headlight(b, 78, 35, 18, 7);
+    for (int side = -1; side <= 1; side += 2) indicator(b, side < 0 ? 8 : 90, 43, 6, 3, signal == side);
+    paint::rect(b, 32, 35, 40, 9, Color{0x14, 0x14, 0x18}); // grille
+    for (int y = 36; y < 44; y += 2) paint::rect(b, 33, y, 38, 1, Color{0x3a, 0x3a, 0x42});
+    paint::rect(b, 3, 49, 98, 6, Color{0x4c, 0x4c, 0x54});
+    paint::rect(b, 44, 49, 16, 4, Color{0xe8, 0xe8, 0xd8});
+    paint::outline(b, Outline);
+    return b;
+}
+
+// A truck from behind: the doors of a ribbed box trailer with lock bars, the
+// company's name, lights low down, an under-run bar, mud flaps, twin tyres.
+Bitmap make_truck(const CarStyle& st, int signal, bool brake) {
+    Bitmap b(112, 104);
+    paint::ellipse(b, 56.f, 101.f, 54.f, 3.f, Color{0x22, 0x22, 0x22});
+    tyre(b, 4, 86, 22, 18);
+    tyre(b, 86, 86, 22, 18);
+    paint::rect(b, 2, 0, 108, 84, st.body);
+    paint::rect(b, 2, 0, 108, 3, st.body_light);
+    for (int x = 8; x < 108; x += 9) paint::rect(b, x, 3, 1, 79, st.body_dark); // ribs
+    paint::rect(b, 55, 3, 2, 79, Color{0x30, 0x30, 0x34}); // door seam
+    const Color chrome{0xb0, 0xb0, 0xbc};
+    for (int x : {30, 46, 64, 80}) {
+        paint::rect(b, x, 6, 2, 74, chrome);
+        paint::rect(b, x - 2, 40, 6, 2, chrome);
+    }
+    paint::rect(b, 2, 82, 108, 4, Color{0x30, 0x30, 0x34});
+    for (int x : {6, 104}) paint::rect(b, x, 1, 2, 2, Color{0xff, 0xa0, 0x30}); // marker lights
+    paint::rect(b, 2, 86, 108, 4, Color{0x26, 0x26, 0x2a}); // chassis
+    for (int x = 28; x < 84; x += 8) paint::rect(b, x, 90, 4, 3, (x / 8) % 2 ? Color{0xe8, 0x20, 0x20} : Color{0xf0, 0xf0, 0xf0});
+    paint::rect(b, 24, 93, 64, 1, Color{0x30, 0x30, 0x34}); // under-run bar
+    for (int side = -1; side <= 1; side += 2) {
+        const int x = side < 0 ? 6 : 88;
+        indicator(b, side < 0 ? x : x + 12, 84, 6, 4, signal == side);
+        tail_lamp(b, side < 0 ? x + 6 : x, 84, 12, 4, brake);
+        paint::rect(b, side < 0 ? 26 : 80, 94, 6, 10, Color{0x14, 0x14, 0x14}); // mud flaps
+    }
+    paint::rect(b, 48, 90, 16, 5, Color{0xe8, 0xe8, 0xd8});
+    paint::outline(b, Outline);
+    return b;
+}
+
+Bitmap make_truck_front(const CarStyle& st, int signal) {
+    Bitmap b(112, 104);
+    paint::ellipse(b, 56.f, 101.f, 54.f, 3.f, Color{0x22, 0x22, 0x22});
+    tyre(b, 8, 84, 18, 20);
+    tyre(b, 86, 84, 18, 20);
+    paint::rect(b, 6, 0, 100, 14, Color{0xc8, 0xc8, 0xd0}); // the trailer above the cab
+    paint::rect(b, 8, 10, 96, 76, st.body);
+    paint::rect(b, 8, 10, 96, 6, st.body_dark); // sun visor
+    paint::rect(b, 12, 17, 88, 28, Color{0x2c, 0x3c, 0x54});
+    paint::rect(b, 55, 17, 2, 28, st.body); // split windscreen
+    driver(b, 32.f, 30.f);
+    paint::rect(b, 26, 35, 12, 9, Color{0x1c, 0x1c, 0x26});
+    paint::stroke(b, 70.f, 42.f, 80.f, 20.f, 1.f, 1.f, Color{0x70, 0x88, 0xa8});
+    const Color chrome{0xb0, 0xb0, 0xbc};
+    paint::rect(b, 30, 50, 52, 26, chrome); // grille
+    for (int y = 52; y < 75; y += 3) paint::rect(b, 32, y, 48, 1, Color{0x50, 0x50, 0x58});
+    headlight(b, 12, 66, 14, 7);
+    headlight(b, 86, 66, 14, 7);
+    for (int side = -1; side <= 1; side += 2) indicator(b, side < 0 ? 12 : 94, 58, 6, 5, signal == side);
+    paint::rect(b, 6, 78, 100, 7, Color{0x3c, 0x3c, 0x44});
+    paint::rect(b, 46, 79, 20, 5, Color{0xe8, 0xe8, 0xd8});
+    paint::outline(b, Outline);
+    return b;
+}
+
+// The rival: a low, wide sports car with a big rear wing, racing stripes,
+// four round tail lights and twin exhausts.
+Bitmap make_rival(const CarStyle& st, int signal, bool brake) {
+    Bitmap b(100, 40);
+    paint::ellipse(b, 50.f, 37.f, 49.f, 3.f, Color{0x22, 0x22, 0x22});
+    tyre(b, 2, 24, 18, 16);
+    tyre(b, 80, 24, 18, 16);
+    paint::ellipse(b, 14.f, 24.f, 11.f, 10.f, st.body);
+    paint::ellipse(b, 86.f, 24.f, 11.f, 10.f, st.body);
+    paint::rect(b, 6, 15, 88, 18, st.body);
+    paint::rect(b, 14, 11, 72, 5, st.body);
+    paint::rect(b, 30, 9, 40, 6, Color{0x1c, 0x1c, 0x26}); // low cabin, tinted
+    paint::rect(b, 24, 5, 2, 7, Color{0x20, 0x20, 0x24}); // wing uprights
+    paint::rect(b, 74, 5, 2, 7, Color{0x20, 0x20, 0x24});
+    paint::rect(b, 8, 2, 84, 4, st.body_dark); // wing
+    for (int x : {42, 54}) {
+        paint::rect(b, x, 2, 4, 4, st.body_light); // stripes over wing and deck
+        paint::rect(b, x, 15, 4, 12, st.body_light);
+    }
+    for (int x : {16, 28, 72, 84}) {
+        const Color lamp = brake ? Color{0xff, 0x54, 0x3c} : Color{0x8c, 0x12, 0x12};
+        paint::ellipse(b, static_cast<float>(x), 21.f, 3.5f, 3.f, lamp);
+        if (brake) paint::rect(b, x - 1, 20, 2, 2, Color{0xff, 0xf0, 0xe0});
+    }
+    indicator(b, 7, 19, 3, 4, signal < 0);
+    indicator(b, 90, 19, 3, 4, signal > 0);
+    paint::rect(b, 20, 30, 60, 5, Color{0x14, 0x14, 0x18}); // diffuser
+    for (int x = 24; x < 78; x += 6) paint::rect(b, x, 30, 1, 5, Color{0x40, 0x40, 0x48});
+    for (float x : {44.f, 56.f}) paint::ellipse(b, x, 31.f, 2.5f, 2.f, Color{0xb0, 0xb0, 0xbc});
+    paint::rect(b, 42, 25, 16, 4, Color{0xe8, 0xe8, 0xd8});
+    paint::outline(b, Outline);
+    return b;
+}
+
+Bitmap make_rival_front(const CarStyle& st, int signal) {
+    Bitmap b(100, 40);
+    paint::ellipse(b, 50.f, 37.f, 49.f, 3.f, Color{0x22, 0x22, 0x22});
+    tyre(b, 2, 24, 18, 16);
+    tyre(b, 80, 24, 18, 16);
+    paint::ellipse(b, 14.f, 25.f, 11.f, 9.f, st.body);
+    paint::ellipse(b, 86.f, 25.f, 11.f, 9.f, st.body);
+    paint::rect(b, 6, 17, 88, 16, st.body);
+    paint::rect(b, 22, 6, 56, 12, st.body);
+    paint::rect(b, 26, 8, 48, 9, Color{0x1c, 0x1c, 0x26});
+    paint::shaded_ellipse(b, 38.f, 12.f, 4.f, 4.f, Color{0xc0, 0x18, 0x18}, Color{0xe8, 0x30, 0x30}, Color{0xff, 0x80, 0x70}); // helmet
+    for (int x : {42, 54}) paint::rect(b, x, 17, 4, 16, st.body_light);
+    headlight(b, 8, 19, 18, 3);
+    headlight(b, 74, 19, 18, 3);
+    indicator(b, 8, 23, 6, 2, signal < 0);
+    indicator(b, 86, 23, 6, 2, signal > 0);
+    paint::rect(b, 14, 27, 20, 6, Color{0x14, 0x14, 0x18}); // intakes
+    paint::rect(b, 66, 27, 20, 6, Color{0x14, 0x14, 0x18});
+    paint::rect(b, 38, 28, 24, 5, Color{0x14, 0x14, 0x18});
+    paint::outline(b, Outline);
+    return b;
+}
+
 SpriteSheet::SpriteSheet() {
     scenery_[static_cast<size_t>(Scenery::Palm)] = make_palm();
     scenery_[static_cast<size_t>(Scenery::Tree)] = make_tree();
@@ -690,19 +890,46 @@ SpriteSheet::SpriteSheet() {
         }
     }
 
-    const CarStyle traffic[traffic_styles] = {
-        {{0x14, 0x2c, 0x80}, {0x24, 0x50, 0xc8}, {0x70, 0x98, 0xf0}, false},
-        {{0xa0, 0x80, 0x10}, {0xe8, 0xc0, 0x20}, {0xf8, 0xe8, 0x80}, false},
-        {{0x98, 0x98, 0xa0}, {0xd8, 0xd8, 0xe0}, {0xf8, 0xf8, 0xff}, false},
-        {{0x14, 0x5c, 0x30}, {0x24, 0x8c, 0x48}, {0x70, 0xc8, 0x88}, false},
+    // Colour schemes per vehicle kind: dark, body, light (stripes on the rival).
+    const std::vector<CarStyle> styles[] = {
+        /* Car */ {{{0x14, 0x2c, 0x80}, {0x24, 0x50, 0xc8}, {0x70, 0x98, 0xf0}, false},
+                   {{0xa0, 0x80, 0x10}, {0xe8, 0xc0, 0x20}, {0xf8, 0xe8, 0x80}, false},
+                   {{0x98, 0x98, 0xa0}, {0xd8, 0xd8, 0xe0}, {0xf8, 0xf8, 0xff}, false},
+                   {{0x14, 0x5c, 0x30}, {0x24, 0x8c, 0x48}, {0x70, 0xc8, 0x88}, false}},
+        /* Van */ {{{0xb8, 0xb8, 0xc0}, {0xf0, 0xf0, 0xf4}, {0xff, 0xff, 0xff}, false},
+                   {{0x7c, 0x50, 0x14}, {0xb8, 0x7c, 0x24}, {0xe0, 0xa8, 0x50}, false},
+                   {{0x1c, 0x4c, 0x6c}, {0x2c, 0x74, 0x9c}, {0x68, 0xa8, 0xcc}, false}},
+        /* Truck */ {{{0xb0, 0xb0, 0xb8}, {0xdc, 0xdc, 0xe0}, {0xf4, 0xf4, 0xf8}, false},
+                     {{0x8c, 0x18, 0x18}, {0xc0, 0x28, 0x24}, {0xe8, 0x60, 0x50}, false},
+                     {{0x20, 0x50, 0x28}, {0x30, 0x78, 0x3c}, {0x68, 0xb0, 0x70}, false}},
+        /* Rival */ {{{0x0c, 0x0c, 0x10}, {0x20, 0x20, 0x26}, {0xf0, 0xc0, 0x30}, false},
+                     {{0x3c, 0x10, 0x58}, {0x64, 0x20, 0x8c}, {0xf0, 0xf0, 0xf8}, false}},
     };
-    for (int i = 0; i < traffic_styles; ++i) {
-        for (int signal = -1; signal <= 1; ++signal) {
-            for (int brake = 0; brake < 2; ++brake) {
-                traffic_[static_cast<size_t>(i)][static_cast<size_t>(signal + 1)][static_cast<size_t>(brake)] =
-                    make_car(traffic[i], 0, signal, brake);
+    static_assert(sizeof(styles) / sizeof(styles[0]) == static_cast<size_t>(Vehicle::Count),
+                  "every vehicle kind needs its colours");
+    for (int k = 0; k < static_cast<int>(Vehicle::Count); ++k) {
+        const auto kind = static_cast<Vehicle>(k);
+        for (const CarStyle& st : styles[k]) {
+            VehicleSprites v;
+            for (int signal = -1; signal <= 1; ++signal) {
+                const auto s = static_cast<size_t>(signal + 1);
+                for (int brake = 0; brake < 2; ++brake) {
+                    Bitmap& rear = v.rear[s][static_cast<size_t>(brake)];
+                    switch (kind) {
+                        case Vehicle::Van: rear = make_van(st, signal, brake); break;
+                        case Vehicle::Truck: rear = make_truck(st, signal, brake); break;
+                        case Vehicle::Rival: rear = make_rival(st, signal, brake); break;
+                        default: rear = make_car(st, 0, signal, brake); break;
+                    }
+                }
+                switch (kind) {
+                    case Vehicle::Van: v.front[s] = make_van_front(st, signal); break;
+                    case Vehicle::Truck: v.front[s] = make_truck_front(st, signal); break;
+                    case Vehicle::Rival: v.front[s] = make_rival_front(st, signal); break;
+                    default: v.front[s] = make_car_front(st, signal); break;
+                }
             }
-            traffic_front_[static_cast<size_t>(i)][static_cast<size_t>(signal + 1)] = make_car_front(traffic[i], signal);
+            vehicles_[static_cast<size_t>(k)].push_back(std::move(v));
         }
     }
     billboard_back_ = make_billboard_back();

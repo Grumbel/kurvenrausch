@@ -10,6 +10,8 @@
 #include "road.hpp"
 #include "synth.hpp"
 #include "track.hpp"
+#include "vehicles.hpp"
+#include "sprites.hpp"
 #include "weather.hpp"
 
 #include <algorithm>
@@ -700,6 +702,39 @@ void test_track_map() {
     CHECK(m[200].x > m[100].x);
 }
 
+void test_vehicles() {
+    using namespace racer;
+    // Shares add up; picking by them gives every kind, rivals rarely.
+    float sum = 0.f;
+    int counts[static_cast<int>(Vehicle::Count)] = {};
+    for (int i = 0; i < static_cast<int>(Vehicle::Count); ++i) sum += vehicle_info(static_cast<Vehicle>(i)).share;
+    CHECK_NEAR(sum, 1.f, 1e-5f);
+    for (int i = 0; i < 1000; ++i) ++counts[static_cast<int>(traffic_vehicle((static_cast<float>(i) + 0.5f) / 1000.f))];
+    for (int n : counts) CHECK(n > 0);
+    CHECK(counts[static_cast<int>(Vehicle::Rival)] < 100);
+    CHECK(counts[static_cast<int>(Vehicle::Car)] > counts[static_cast<int>(Vehicle::Truck)]);
+    // Trucks are slower than rivals; rivals race only when the player is near.
+    CHECK(vehicle_info(Vehicle::Truck).max_speed < vehicle_info(Vehicle::Rival).min_speed);
+    CHECK_NEAR(rival_speed(50.f, 100.f, 10.f), 100.f * rival_race_speed, 1e-4f);
+    CHECK_NEAR(rival_speed(50.f, 100.f, -2.f), 100.f * rival_race_speed, 1e-4f);
+    CHECK_NEAR(rival_speed(50.f, 100.f, 200.f), 50.f, 1e-6f);
+    CHECK_NEAR(rival_speed(50.f, 100.f, -200.f), 50.f, 1e-6f);
+    // Every style of every kind has its sprites, at the shared pixel scale
+    // (6.25 world units per pixel), and the brake lights make a difference.
+    const SpriteSheet sheet;
+    for (int k = 0; k < static_cast<int>(Vehicle::Count); ++k) {
+        const auto kind = static_cast<Vehicle>(k);
+        for (int st = 0; st < vehicle_info(kind).styles; ++st) {
+            const Bitmap& rear = sheet.vehicle(kind, st);
+            CHECK(std::abs(static_cast<float>(rear.w) * 6.25f - vehicle_info(kind).width) < 13.f);
+            CHECK(sheet.vehicle_front(kind, st).w == rear.w);
+            CHECK(sheet.vehicle(kind, st, 0, true).px != rear.px);
+            CHECK(sheet.vehicle(kind, st, -1).px != rear.px);
+        }
+    }
+    CHECK(sheet.vehicle(Vehicle::Truck, 0).h > 2 * sheet.vehicle(Vehicle::Car, 0).h);
+}
+
 void test_start_line() {
     using racer::crossed_line_forward;
     const float L = 1000.f, line = 100.f;
@@ -1095,6 +1130,7 @@ int main() {
     test_weather_mixing();
     test_lanes();
     test_start_line();
+    test_vehicles();
     test_track_map();
     test_gas_stations();
     test_nitro();

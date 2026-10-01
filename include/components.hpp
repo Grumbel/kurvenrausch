@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #pragma once
+#include "vehicles.hpp"
+
 #include <cmath>
 
 namespace racer {
@@ -47,7 +49,8 @@ struct Player {
 // AI traffic: keeps to a lane, changes lanes to pass slower vehicles (or
 // brakes behind them when it can't), and pulls over when the player honks.
 struct Traffic {
-    int style = 0;          // sprite variant
+    Vehicle kind = Vehicle::Car;
+    int style = 0;          // colour scheme
     float target_x = 0.f;   // lateral position of the lane it is heading for
     float cruise = 0.f;     // the speed it drives at when the way is clear
     bool braking = false;   // slowing down this step: brake lights on
