@@ -323,10 +323,7 @@ void Game::update_laps(float prev_z, float z, float dt) {
         if (message_time_ <= 0.f) message_.clear();
     }
 
-    // Distance travelled past the start line; it drops when the line is crossed.
-    const float before = track_.wrap(prev_z - track_.start_z);
-    const float after = track_.wrap(z - track_.start_z);
-    if (after >= before) return;
+    if (!crossed_line_forward(prev_z, z, track_.start_z, track_.length())) return;
 
     if (race_started_) {
         last_lap_ = lap_time_;

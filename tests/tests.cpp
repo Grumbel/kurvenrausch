@@ -282,6 +282,25 @@ void test_weather() {
     CHECK(changed_pixels(f1, f2) == 0);
 }
 
+void test_start_line() {
+    using racer::crossed_line_forward;
+    const float L = 1000.f, line = 100.f;
+    CHECK(crossed_line_forward(95.f, 105.f, line, L));      // plain crossing
+    CHECK(!crossed_line_forward(50.f, 90.f, line, L));      // short of the line
+    CHECK(!crossed_line_forward(150.f, 190.f, line, L));    // already past it
+    // Stepping backwards, e.g. after bumping a car, is not a crossing ...
+    CHECK(!crossed_line_forward(140.f, 99.f, line, L));
+    CHECK(!crossed_line_forward(160.f, 120.f, line, L));
+    // ... nor is crossing the line backwards.
+    CHECK(!crossed_line_forward(110.f, 90.f, line, L));
+    // The line is crossed once even when the position wraps at the seam.
+    CHECK(crossed_line_forward(990.f, 3.f, 0.f, L));
+    CHECK(crossed_line_forward(995.f, 1002.f, 0.f, L));
+    // A step that carries the car over the seam and on past a line just behind it.
+    CHECK(crossed_line_forward(L - 5.f, 105.f, line, L));
+    CHECK(!crossed_line_forward(L - 5.f, 95.f, line, L));
+}
+
 void test_lanes() {
     using racer::lane_center;
     CHECK_NEAR(lane_center(3, 0), -2.f / 3.f, 1e-6f);
@@ -325,6 +344,7 @@ int main() {
     test_weather();
     test_weather_mixing();
     test_lanes();
+    test_start_line();
 
     if (failures) {
         std::fprintf(stderr, "%d check(s) failed\n", failures);

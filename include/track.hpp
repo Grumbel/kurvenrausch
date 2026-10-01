@@ -188,6 +188,12 @@ struct Track {
 // not grown to a worthwhile height yet does not count.
 float barrier_limit(const Segment& seg, int side, float car_half_width);
 
+// Did moving from `prev_z` to `z` (positions along a looping track of the given
+// length, either may have wrapped) carry the car forward over the line at
+// `line_z`? Stepping backwards, as after a collision, never counts, and nor
+// does crossing the line backwards.
+bool crossed_line_forward(float prev_z, float z, float line_z, float length);
+
 Track build_demo_track();
 
 } // namespace racer

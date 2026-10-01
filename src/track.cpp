@@ -89,6 +89,17 @@ float Track::edge_height(int boundary, int side) const {
     return cliff_height * variation * fade;
 }
 
+bool crossed_line_forward(float prev_z, float z, float line_z, float length) {
+    const auto wrap = [length](float v) {
+        v = std::fmod(v, length);
+        return v < 0.f ? v + length : v;
+    };
+    // The signed step along the loop, folded into [-length/2, length/2).
+    const float step = wrap(z - prev_z + length / 2.f) - length / 2.f;
+    const float before = wrap(prev_z - line_z); // distance already past the line
+    return step > 0.f && before + step >= length;
+}
+
 float barrier_limit(const Segment& seg, int side, float car_half_width) {
     const Edge e = side < 0 ? seg.left : seg.right;
     if (e == Edge::Rail) return rail_offset - car_half_width;
