@@ -9,8 +9,7 @@ void RoadSystem::add_segment(Track& t, float curve, float y) {
     s.index = static_cast<int>(t.segments.size());
     s.curve = curve;
     s.y = y;
-    // Alternate colors for classic look
-    bool alt = (s.index / 3) % 2 == 0;
+    bool alt = ((s.index / 3) % 2) == 0;
     s.color_road   = alt ? Palette::RoadLight : Palette::RoadDark;
     s.color_grass  = alt ? Palette::GrassLight : Palette::GrassDark;
     s.color_rumble = alt ? Palette::RumbleLight : Palette::RumbleDark;
@@ -19,189 +18,174 @@ void RoadSystem::add_segment(Track& t, float curve, float y) {
 }
 
 void RoadSystem::add_road(Track& t, int enter, int hold, int leave, float curve, float y) {
-    // Smooth enter / hold / leave for curves and hills
     float y0 = t.segments.empty() ? 0.f : t.segments.back().y;
+    auto ease_in  = [](float a, float b, float p) { return a + (b - a) * p * p; };
+    auto ease_out = [](float a, float b, float p) { return a + (b - a) * (1.f - (1.f - p) * (1.f - p)); };
+    auto ease_inout = [&](float a, float b, float p) {
+        return p < 0.5f ? ease_in(a, (a + b) * 0.5f, p * 2.f)
+                        : ease_out((a + b) * 0.5f, b, p * 2.f - 1.f);
+    };
+
     for (int n = 0; n < enter; ++n) {
-        float t_enter = static_cast<float>(n) / enter;
-        add_segment(t, curve * t_enter, y0 + (y - y0) * t_enter);
+        float p = static_cast<float>(n) / std::max(1, enter);
+        add_segment(t, ease_in(0.f, curve, p), ease_inout(y0, y, p));
     }
-    for (int n = 0; n < hold; ++n) {
+    for (int n = 0; n < hold; ++n)
         add_segment(t, curve, y);
-    }
     for (int n = 0; n < leave; ++n) {
-        float t_leave = 1.f - static_cast<float>(n) / leave;
-        add_segment(t, curve * t_leave, y);
+        float p = static_cast<float>(n) / std::max(1, leave);
+        add_segment(t, ease_out(curve, 0.f, p), y);
     }
 }
 
 void RoadSystem::add_sprite(Track& t, int seg, float offset, int type, float scale) {
     if (seg < 0 || seg >= static_cast<int>(t.segments.size())) return;
-    Segment::Sprite sp;
-    sp.offset = offset;
-    sp.type = type;
-    sp.scale = scale;
-    t.segments[seg].sprites.push_back(sp);
+    t.segments[seg].sprites.push_back({offset, scale, type});
 }
 
 void RoadSystem::build_demo_track(Track& track) {
     track.segments.clear();
     track.segment_length = 200.f;
-    track.road_width = 2000.f;
-    track.rumble_width = 0.08f;
-    track.lanes = 3;
+    track.road_width     = 2000.f;
+    track.rumble_width   = 0.12f;
+    track.lanes          = 3;
 
-    // Build a varied track with hills, valleys, cliffs, S-curves
-    // Straight start
-    add_road(track, 0, 50, 0, 0.f, 0.f);
+    add_road(track, 0, 40, 0, 0.f, 0.f);
+    add_road(track, 15, 30, 15, 3.f, 600.f);
+    add_road(track, 12, 25, 12, 0.f, -300.f);
+    add_road(track, 10, 35, 15, -4.5f, 200.f);
+    add_road(track, 12, 18, 12, 3.5f, 900.f);
+    add_road(track, 12, 18, 12, -3.5f, 1100.f);
+    add_road(track, 8, 50, 8, 0.f, -100.f);
+    add_road(track, 5, 12, 5, 1.5f, -700.f);
+    add_road(track, 8, 30, 8, 0.f, -500.f);
+    add_road(track, 15, 25, 15, -2.5f, 300.f);
+    add_road(track, 12, 30, 12, 2.5f, 0.f);
+    add_road(track, 0, 60, 0, 0.f, 0.f);
 
-    // Gentle right curve over a hill
-    add_road(track, 20, 40, 20, 2.5f, 800.f);
-
-    // Valley dip
-    add_road(track, 15, 30, 15, 0.f, -400.f);
-
-    // Sharp left with cliffside
-    add_road(track, 10, 50, 20, -4.f, 200.f);
-
-    // Climbing S-curve
-    add_road(track, 15, 20, 15, 3.f, 1200.f);
-    add_road(track, 15, 20, 15, -3.f, 1400.f);
-
-    // Long downhill straight with valleys
-    add_road(track, 10, 60, 10, 0.f, -200.f);
-
-    // Cliff drop section (steep negative y change)
-    add_road(track, 5, 10, 5, 1.f, -800.f);
-    add_road(track, 10, 40, 10, 0.f, -600.f);
-
-    // Recovery climb + final curves
-    add_road(track, 20, 30, 20, -2.f, 400.f);
-    add_road(track, 15, 40, 15, 2.5f, 0.f);
-    add_road(track, 0, 80, 0, 0.f, 0.f); // finish straight
-
-    // Sprinkle roadside sprites: trees and cliffs
     for (size_t i = 0; i < track.segments.size(); ++i) {
-        if (i % 7 == 0) {
-            add_sprite(track, static_cast<int>(i), -1.3f, 0, 1.0f + (i % 3) * 0.2f);
+        if (i % 6 == 0)
+            add_sprite(track, static_cast<int>(i), -1.35f, 0, 1.0f + (i % 4) * 0.15f);
+        if (i % 9 == 3)
+            add_sprite(track, static_cast<int>(i),  1.40f, 0, 0.9f + (i % 3) * 0.1f);
+        if (track.segments[i].y < -250.f && i % 4 == 0) {
+            add_sprite(track, static_cast<int>(i), -1.55f, 1, 1.4f);
+            add_sprite(track, static_cast<int>(i),  1.55f, 1, 1.4f);
         }
-        if (i % 11 == 0) {
-            add_sprite(track, static_cast<int>(i), 1.4f, 0, 0.9f);
-        }
-        // Cliffs on steep sections
-        if (track.segments[i].y < -300.f && i % 5 == 0) {
-            add_sprite(track, static_cast<int>(i), -1.6f, 1, 1.5f);
-            add_sprite(track, static_cast<int>(i), 1.6f, 1, 1.5f);
-        }
-        // Occasional billboards
-        if (i % 40 == 20) {
-            add_sprite(track, static_cast<int>(i), 1.8f, 2, 1.2f);
-        }
+        if (i % 35 == 17)
+            add_sprite(track, static_cast<int>(i), 1.7f, 2, 1.1f);
     }
-
-    track.rebuild_lengths();
+    track.rebuild();
 }
 
-void RoadSystem::project_segments(const Track& track, float player_z, float player_x,
-                                  const Camera& cam, int screen_w, int screen_h,
+/*
+ * Classic pseudo-3D projection (Jake Gordon javascript-racer / Lou)
+ *
+ *   camera_space.z = world.z - camera.z
+ *   scale          = cameraDepth / camera_space.z
+ *   screen.x       = width/2  + scale * camera_space.x * width/2
+ *   screen.y       = height/2 - scale * camera_space.y * height/2
+ *   screen.w       = scale * roadWidth * width/2
+ *
+ * Curves: while walking segments, x += dx; dx += segment.curve
+ * Hills:  segment.y feeds into camera_space.y; far→near + maxY clip
+ */
+void RoadSystem::project_segments(const Track& track,
+                                  float player_z, float player_x,
+                                  const Camera& cam,
+                                  int screen_w, int screen_h,
                                   std::vector<Projected>& projected,
                                   float& max_y) {
-    // Classic technique from Jake Gordon / Lou:
-    // Walk segments from near to far, accumulate curve (dx) and height (dy),
-    // project each with perspective scale = depth / z
-    projected.resize(track.segments.size());
+    const int n_seg  = static_cast<int>(track.segments.size());
+    const int draw_n = std::min(n_seg - 1, static_cast<int>(cam.draw_distance));
+    projected.assign(static_cast<size_t>(draw_n + 1), Projected{});
 
-    float base_z = player_z;
-    int base_idx = track.find_segment_index(base_z);
-    float x = 0.f;
-    float dx = 0.f;
+    const int   base_idx     = track.index_from_z(player_z);
+    const float base_percent = player_z / track.segment_length
+                               - std::floor(player_z / track.segment_length);
+
+    const float camera_x     = player_x * track.road_width;
+    const float camera_y     = cam.height;
+    const float camera_z     = player_z;
+    const float camera_depth = cam.depth;   // ~0.84
+
+    float x  = 0.f;
+    float dx = -(base_percent * track.get(base_idx).curve);  // start mid-segment
+
     max_y = static_cast<float>(screen_h);
 
-    // Camera is slightly behind the player for classic feel
-    float camera_height = cam.height;
-    float camera_depth = cam.depth;
-
-    for (int n = 0; n < static_cast<int>(track.segments.size()); ++n) {
-        int idx = (base_idx + n) % static_cast<int>(track.segments.size());
+    for (int n = 0; n <= draw_n; ++n) {
+        const int idx = (base_idx + n) % n_seg;
         const Segment& seg = track.get(idx);
 
-        // World Z of this segment relative to player
-        float seg_z = (idx * track.segment_length) - base_z;
-        if (seg_z < 0) seg_z += track.total_length; // wrap for looping track feel
+        // World Z of this segment's near edge
+        float world_z = (static_cast<float>(base_idx + n) - base_percent)
+                        * track.segment_length;
+        // Actually simpler: distance in front of camera
+        float cz = (n - base_percent) * track.segment_length;
+        if (cz < 1.f) cz = 1.f;
 
-        // Only project within draw distance
-        if (seg_z > cam.draw_distance * track.segment_length) {
-            projected[n].scale = 0.f;
-            continue;
-        }
+        float cx = x - camera_x;
+        float cy = seg.y - camera_y;
 
-        // Accumulate curve
-        // The classic "add dx, then add curve to dx"
-        Projected& p = projected[n];
-        float world_x = x - player_x * track.road_width;
-        float world_y = seg.y - camera_height;
-        float world_z = seg_z;
+        // THE classic formula
+        float scale = camera_depth / cz;
 
-        // Perspective projection
-        float scale = camera_depth / std::max(1.f, world_z / track.segment_length + camera_depth);
+        Projected& p = projected[static_cast<size_t>(n)];
         p.scale = scale;
-        p.x = screen_w / 2.f + scale * world_x * screen_w / 2.f;
-        p.y = screen_h / 2.f - scale * world_y * screen_h / 2.f;
-        p.w = scale * track.road_width * screen_w / 2.f;
+        p.x = (screen_w / 2.f) + (scale * cx * screen_w  / 2.f);
+        p.y = (screen_h / 2.f) - (scale * cy * screen_h  / 2.f);
+        p.w = (scale * track.road_width * screen_w / 2.f);
         p.clip = max_y;
 
-        // Update max_y for hill clipping (painter's algorithm)
-        if (p.y < max_y) max_y = p.y;
-
-        // Advance curve accumulator for next segment
-        x += dx;
+        // Accumulate curve for next segment
+        x  += dx;
         dx += seg.curve;
+        (void)world_z;
+        (void)camera_z;
     }
 }
 
 void RoadSystem::render(Renderer& r, const Track& track,
                         const std::vector<Projected>& projected,
-                        float player_z, float player_x, const Camera& cam) {
-    // Draw from far to near (painter's algorithm) for correct overdraw on hills
-    int base_idx = track.find_segment_index(player_z);
+                        float player_z, float /*player_x*/,
+                        const Camera& cam) {
+    const int n_seg    = static_cast<int>(track.segments.size());
+    const int base_idx = track.index_from_z(player_z);
+    const int draw_n   = static_cast<int>(projected.size()) - 1;
+    if (draw_n < 1) return;
+
     float max_y = static_cast<float>(r.height());
 
-    // First pass: find far segments still visible
-    int draw_count = 0;
-    for (size_t n = 0; n < projected.size(); ++n) {
-        if (projected[n].scale > 0.001f) draw_count = static_cast<int>(n) + 1;
-    }
+    for (int n = draw_n - 1; n >= 0; --n) {
+        const Projected& p1 = projected[static_cast<size_t>(n)];
+        const Projected& p2 = projected[static_cast<size_t>(n + 1)];
 
-    for (int n = draw_count - 1; n >= 0; --n) {
-        int idx = (base_idx + n) % static_cast<int>(track.segments.size());
-        const Segment& seg = track.get(idx);
-        const Projected& p1 = projected[n];
-        // Next segment for trapezoid (or same if last)
-        int n2 = std::min(n + 1, static_cast<int>(projected.size()) - 1);
-        const Projected& p2 = projected[n2];
-
-        if (p1.scale < 0.001f || p2.scale < 0.001f) continue;
-        // Clip against previous max_y (hills hide far road)
+        if (p1.scale <= 0.f || p2.scale <= 0.f) continue;
         if (p1.y >= max_y && p2.y >= max_y) continue;
 
-        r.draw_segment(p1, p2, seg.color_road, seg.color_grass,
+        // Don't draw segments that are above the screen or inverted
+        if (p1.y < 0.f && p2.y < 0.f) continue;
+
+        const int idx = (base_idx + n) % n_seg;
+        const Segment& seg = track.get(idx);
+
+        r.draw_segment(p1, p2,
+                       seg.color_road, seg.color_grass,
                        seg.color_rumble, seg.color_lane,
                        track.lanes, track.rumble_width);
 
-        // Sprites on this segment (billboards / trees / cliffs)
         for (const auto& sp : seg.sprites) {
-            float sprite_x = p1.x + p1.w * sp.offset;
-            float sprite_y = p1.y;
-            float sprite_scale = p1.scale * sp.scale * 0.3f;
-            // Only draw if not clipped by hill
-            if (sprite_y < max_y + 20.f) {
-                r.draw_sprite(sprite_x, sprite_y, sprite_scale, sp.type, sp.offset < 0);
-            }
+            float sx = p1.x + p1.w * sp.offset;
+            float sy = p1.y;
+            float sc = p1.scale * sp.scale * 300.f;  // sprite size tune
+            if (sy < max_y + 50.f && sc > 0.5f)
+                r.draw_sprite(sx, sy, sc, sp.type, sp.offset < 0.f);
         }
 
-        if (p1.y < max_y) max_y = p1.y;
+        if (p1.y < max_y)
+            max_y = p1.y;
     }
-
-    (void)player_x;
     (void)cam;
 }
 
