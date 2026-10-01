@@ -15,6 +15,7 @@ void usage(const char* argv0) {
               << "  --screenshot FILE   render headless and save a BMP, then exit\n"
               << "  --frames N          simulation steps (60/s) before the screenshot (default 0)\n"
               << "  --position Z        start distance along the track for the screenshot\n"
+              << "  --wav FILE          also write the sound of the simulated run (needs --screenshot)\n"
               << "  --zone N            start the screenshot inside zone N (see --print-zones)\n"
               << "  --print-zones       list the zones of the track and exit\n"
               << "  --steer S           hold steering at S (-1 .. 1) instead of the autopilot\n"
@@ -35,6 +36,8 @@ int main(int argc, char* argv[]) {
             shot.frames = std::atoi(argv[++i]);
         } else if (arg == "--position" && i + 1 < argc) {
             shot.position = static_cast<float>(std::atof(argv[++i]));
+        } else if (arg == "--wav" && i + 1 < argc) {
+            shot.wav_path = argv[++i];
         } else if (arg == "--zone" && i + 1 < argc) {
             shot.zone = std::atoi(argv[++i]);
         } else if (arg == "--print-zones") {
@@ -50,6 +53,11 @@ int main(int argc, char* argv[]) {
             usage(argv[0]);
             return 1;
         }
+    }
+
+    if (!shot.wav_path.empty() && shot.path.empty()) {
+        std::cerr << "--wav needs --screenshot: the sound is recorded while the headless run simulates\n";
+        return 1;
     }
 
     racer::Game game;

@@ -3,6 +3,8 @@
 
 #include "game.hpp"
 
+#include "drivetrain.hpp"
+
 #include <SDL2/SDL.h>
 #include <algorithm>
 #include <cmath>
@@ -64,11 +66,12 @@ bool Game::init() {
     if (!display_->init("Kurvenrausch", width, height, window_scale)) return false;
 
     input_.init(); // not fatal: the keyboard always works
+    audio_.init(synth_); // nor is a missing audio device
 
     std::cout << "Kurvenrausch: " << track_.segments.size() << " segments, "
               << track_.length() << " units.\n"
               << "Controls: Arrows / WASD or gamepad to drive, R / Start to restart,\n"
-              << "          F11 fullscreen, Esc to quit.\n";
+              << "          M mute, F11 fullscreen, Esc to quit.\n";
     return true;
 }
 
@@ -120,6 +123,7 @@ void Game::run() {
         if (input.quit) break;
         if (input.restart) reset();
         if (input.toggle_fullscreen) display_->toggle_fullscreen();
+        if (input.toggle_mute) muted_ = !muted_;
 
         accumulator += dt;
         crashed_ = false;
@@ -157,10 +161,20 @@ bool Game::screenshot(const ScreenshotOptions& opts) {
     const float start = opts.zone >= 0 ? zone_start_position(opts.zone) : opts.position;
     world_.get<Transform>(player_).z = track_.wrap(start);
     zone_ = -1;
+    std::vector<int16_t> sound;
+    constexpr int samples_per_step = Synth::sample_rate / 60; // 735, exactly
     for (int i = 0; i < opts.frames; ++i) {
         InputState in = autopilot();
         if (opts.force_steer) in.steer = opts.steer;
         fixed_update(in, fixed_dt_);
+        if (!opts.wav_path.empty()) {
+            sound.resize(sound.size() + samples_per_step);
+            synth_.render(sound.data() + sound.size() - samples_per_step, samples_per_step);
+        }
+    }
+    if (!opts.wav_path.empty() && !write_wav(opts.wav_path, sound, Synth::sample_rate)) {
+        std::cerr << "Writing " << opts.wav_path << " failed\n";
+        return false;
     }
     render();
     return save_bmp(opts.path, fb_.pixels(), width, height);
@@ -233,6 +247,7 @@ void Game::fixed_update(const InputState& input, float dt) {
             if (overlap(tr.x, car_w, center, w)) {
                 vel.speed = player.max_speed / 5.f;
                 crashed_ = true;
+                synth_.trigger_crash(0.55f + 0.45f * speed_pct);
                 // Put the car back to the start of the segment it hit.
                 const float seg_start = static_cast<float>(track_.index_at(tr.z + player_z)) *
                                         track_.segment_length;
@@ -264,6 +279,7 @@ void Game::fixed_update(const InputState& input, float dt) {
         vel.speed = v.speed * (v.speed / vel.speed);
         tr.z = track_.wrap(t.z - player_z);
         crashed_ = true;
+        synth_.trigger_crash(0.4f + 0.4f * speed_pct);
     });
 
     tr.x = std::clamp(tr.x, -3.f, 3.f);
@@ -278,6 +294,46 @@ void Game::fixed_update(const InputState& input, float dt) {
 
     update_laps(prev_z + player_z, tr.z + player_z, dt);
     update_traffic(dt);
+    update_audio(input, dt);
+}
+
+// Derives the engine and tyre sounds from the state of the car.
+void Game::update_audio(const InputState& input, float dt) {
+    const auto& tr = world_.get<Transform>(player_);
+    const auto& vel = world_.get<Velocity>(player_);
+    const auto& player = world_.get<Player>(player_);
+    const float player_z = world_.get<Camera>(camera_).player_z();
+    const Segment& seg = track_.segment_at(tr.z + player_z);
+    const RoadTheme& look = track_.look_at(tr.z + player_z);
+    const float speed_pct = vel.speed / player.max_speed;
+
+    // The automatic gearbox lifts the throttle briefly on every upshift.
+    const int gear = drivetrain::gear(speed_pct);
+    if (gear > gear_) shift_cut_ = 0.12f;
+    gear_ = gear;
+    if (shift_cut_ > 0.f) shift_cut_ -= dt;
+
+    SynthParams p;
+    p.rpm = drivetrain::rpm(speed_pct);
+    p.throttle = shift_cut_ > 0.f ? 0.f : input.throttle * (1.f - input.brake);
+    p.speed = speed_pct;
+
+    // The tyres squeal when the lateral demand (steering plus the push of the
+    // bend) gets close to what the road's grip allows, and under hard braking.
+    const float grip = std::max(look.grip, 0.2f);
+    const float slip = (std::abs(input.steer) * speed_pct +
+                        std::abs(seg.curve) * player.centrifugal * speed_pct * speed_pct / grip) /
+                       (grip * 1.6f);
+    float skid = std::clamp((slip - 0.6f) / 0.4f, 0.f, 1.f);
+    skid = std::max(skid, 0.7f * std::clamp((input.brake * speed_pct - 0.6f) / 0.4f, 0.f, 1.f));
+    const bool off_road = std::abs(tr.x) > 1.f;
+    p.skid = skid * std::clamp(speed_pct * 5.f, 0.f, 1.f) * (off_road ? 0.3f : 1.f);
+
+    p.gravel = off_road && speed_pct > 0.01f ? std::clamp((std::abs(tr.x) - 1.f) * 8.f, 0.f, 1.f) : 0.f;
+    p.scrape = scraping_ && vel.speed > 0.f ? 1.f : 0.f;
+    p.rain = look.rain;
+    p.volume = muted_ ? 0.f : 1.f;
+    synth_.set_params(p);
 }
 
 void Game::update_traffic(float dt) {
@@ -439,6 +495,7 @@ void Game::render() {
     hud.best_lap = best_lap_;
     hud.message = message_;
     hud.message_visible = std::fmod(clock_, 0.5f) < 0.35f;
+    hud.muted = muted_;
     if (banner_time_ > 0.f && zone_ >= 0) {
         hud.banner = track_.zones[static_cast<size_t>(zone_)].country;
         hud.banner_sub = track_.zones[static_cast<size_t>(zone_)].region;

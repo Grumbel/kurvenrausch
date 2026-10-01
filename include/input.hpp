@@ -20,6 +20,7 @@ struct InputState {
     bool quit = false;
     bool restart = false;
     bool toggle_fullscreen = false;
+    bool toggle_mute = false;
 };
 
 // A normalised reading of one game controller (SDL's standard layout, which

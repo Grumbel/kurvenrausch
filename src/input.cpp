@@ -89,6 +89,7 @@ void Input::poll(InputState& state) {
     state.quit = false;
     state.restart = false;
     state.toggle_fullscreen = false;
+    state.toggle_mute = false;
 
     SDL_Event e;
     while (SDL_PollEvent(&e)) {
@@ -102,6 +103,7 @@ void Input::poll(InputState& state) {
                     case SDLK_ESCAPE: state.quit = true; break;
                     case SDLK_r: state.restart = true; break;
                     case SDLK_F11: state.toggle_fullscreen = true; break;
+                    case SDLK_m: state.toggle_mute = true; break;
                     case SDLK_RETURN:
                         if (e.key.keysym.mod & KMOD_ALT) state.toggle_fullscreen = true;
                         break;

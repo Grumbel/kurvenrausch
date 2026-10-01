@@ -4,14 +4,19 @@
 // Minimal self-contained unit tests; no framework needed. Run with `ctest`
 // or directly: ./kurvenrausch_tests
 
+#include "drivetrain.hpp"
 #include "input.hpp"
+#include "synth.hpp"
 #include "track.hpp"
 #include "weather.hpp"
 
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <cstdint>
 #include <cstdio>
+#include <cstdlib>
+#include <vector>
 #include <string>
 
 namespace {
@@ -356,6 +361,225 @@ void test_demo_track() {
     CHECK(t.zone_number_at(t.start_z) == 0);
 }
 
+// ---- Audio -----------------------------------------------------------------
+
+using Samples = std::vector<int16_t>;
+
+// Renders `seconds` of sound with constant parameters; optionally a crash after
+// `crash_at` seconds.
+Samples render_sound(const racer::SynthParams& p, double seconds, double crash_at = -1.0) {
+    racer::Synth synth;
+    synth.set_params(p);
+    Samples out(static_cast<size_t>(seconds * racer::Synth::sample_rate));
+    const size_t crash_sample = crash_at < 0 ? out.size() : static_cast<size_t>(crash_at * racer::Synth::sample_rate);
+    size_t done = 0;
+    while (done < out.size()) {
+        const size_t block = std::min<size_t>(735, out.size() - done);
+        if (crash_sample >= done && crash_sample < done + block) synth.trigger_crash(1.f);
+        synth.render(out.data() + done, static_cast<int>(block));
+        done += block;
+    }
+    return out;
+}
+
+// Signal power at one frequency (Goertzel).
+double power_at(const Samples& x, size_t from, size_t n, double hz) {
+    const double w = 2.0 * 3.14159265358979 * hz / racer::Synth::sample_rate;
+    const double coeff = 2.0 * std::cos(w);
+    double s1 = 0, s2 = 0;
+    for (size_t i = from; i < from + n; ++i) {
+        const double hann = 0.5 - 0.5 * std::cos(2.0 * 3.14159265358979 * static_cast<double>(i - from) / static_cast<double>(n));
+        const double s0 = hann * x[i] + coeff * s1 - s2;
+        s2 = s1;
+        s1 = s0;
+    }
+    return s1 * s1 + s2 * s2 - coeff * s1 * s2;
+}
+
+// Power summed over a band, after skipping the first half second (settling).
+double band_power(const Samples& x, double lo, double hi) {
+    const size_t from = racer::Synth::sample_rate / 2;
+    const size_t n = std::min<size_t>(x.size() - from, 32768);
+    double sum = 0;
+    for (double hz = lo; hz < hi; hz += 25.0) sum += power_at(x, from, n, hz);
+    return sum;
+}
+
+double rms(const Samples& x, size_t from, size_t to) {
+    double sum = 0;
+    for (size_t i = from; i < to; ++i) sum += static_cast<double>(x[i]) * x[i];
+    return std::sqrt(sum / static_cast<double>(to - from)) / 32768.0;
+}
+
+int peak(const Samples& x) {
+    int m = 0;
+    for (int16_t v : x) m = std::max(m, std::abs(static_cast<int>(v)));
+    return m;
+}
+
+racer::SynthParams driving() {
+    racer::SynthParams p;
+    p.rpm = 0.4f;
+    p.throttle = 0.5f;
+    p.speed = 0.5f;
+    return p;
+}
+
+void test_drivetrain() {
+    using namespace racer::drivetrain;
+    CHECK(gear(0.f) == 1 && gear(0.19f) == 1 && gear(0.21f) == 2);
+    CHECK(gear(1.f) == gears && gear(2.f) == gears && gear(-1.f) == 1);
+    CHECK_NEAR(rpm(0.f), 0.f, 1e-6f);
+    CHECK_NEAR(rpm(1.f), 1.f, 1e-6f);
+    CHECK(rpm(0.19f) > 0.9f && rpm(0.21f) < 0.35f); // revs drop on the upshift
+    CHECK(rpm(0.05f) < rpm(0.1f) && rpm(0.1f) < rpm(0.15f)); // and climb within a gear
+}
+
+void test_synth_basics() {
+    using namespace racer;
+    // Muted means silent.
+    SynthParams muted = driving();
+    muted.volume = 0.f;
+    CHECK(peak(render_sound(muted, 0.5)) <= 1);
+
+    // Deterministic, and independent of how the rendering is chunked.
+    const Samples a = render_sound(driving(), 0.3);
+    CHECK(a == render_sound(driving(), 0.3));
+    Synth chunked;
+    chunked.set_params(driving());
+    Samples b(a.size());
+    for (size_t i = 0; i < b.size();) {
+        const size_t block = std::min<size_t>(1 + (i % 97), b.size() - i);
+        chunked.render(b.data() + i, static_cast<int>(block));
+        i += block;
+    }
+    CHECK(a == b);
+
+    // Everything at once stays inside the 16-bit range without clipping hard.
+    SynthParams all;
+    all.rpm = all.throttle = all.speed = all.skid = all.gravel = all.scrape = all.rain = 1.f;
+    const Samples loud = render_sound(all, 2.0, 0.5);
+    CHECK(peak(loud) < 31000);
+    size_t clipped = 0;
+    for (int16_t v : loud) clipped += std::abs(static_cast<int>(v)) >= 29990;
+    CHECK(clipped * 200 < loud.size()); // under half a percent
+    CHECK(rms(loud, 0, loud.size()) > 0.1); // and clearly audible
+}
+
+void test_synth_engine() {
+    using namespace racer;
+    // The engine's energy sits on harmonics of the firing frequency, which is
+    // rpm / 60 * 3 for the six cylinder, and follows the revs.
+    const auto fire = [](float rpm01) { return (1000.0 + static_cast<double>(rpm01) * 6500.0) / 60.0 * 3.0; };
+    for (float rpm01 : {0.25f, 0.5f, 0.75f}) {
+        SynthParams p;
+        p.rpm = rpm01;
+        p.throttle = 1.f;
+        const Samples s = render_sound(p, 1.5);
+        const size_t from = Synth::sample_rate / 2, n = 16384;
+        const double f = fire(rpm01);
+        double on = 0, off = 0;
+        for (int k = 1; k <= 3; ++k) {
+            on += power_at(s, from, n, k * f);
+            off += power_at(s, from, n, (k + 0.5) * f);
+        }
+        CHECK(on > 8.0 * off);
+    }
+    {   // Each rev setting has its energy at its own frequency, not at the other's.
+        SynthParams lo, hi;
+        lo.rpm = 0.25f; hi.rpm = 0.75f; lo.throttle = hi.throttle = 1.f;
+        const Samples sl = render_sound(lo, 1.5), sh = render_sound(hi, 1.5);
+        const size_t from = Synth::sample_rate / 2, n = 16384;
+        CHECK(power_at(sl, from, n, fire(0.25f)) > 5.0 * power_at(sh, from, n, fire(0.25f)));
+        CHECK(power_at(sh, from, n, fire(0.75f)) > 5.0 * power_at(sl, from, n, fire(0.75f)));
+    }
+    {   // Open throttle is brighter than a closed one at the same revs.
+        SynthParams on, off;
+        on.rpm = off.rpm = 0.5f;
+        on.throttle = 1.f;
+        off.throttle = 0.f;
+        CHECK(band_power(render_sound(on, 1.5), 1500, 5000) > 1.5 * band_power(render_sound(off, 1.5), 1500, 5000));
+    }
+    {   // It idles when standing, rather than falling silent.
+        const Samples idle = render_sound(SynthParams{}, 1.0);
+        CHECK(rms(idle, 22050, 44100) > 0.03);
+        const size_t from = Synth::sample_rate / 2, n = 16384;
+        CHECK(power_at(idle, from, n, fire(0.f)) > 8.0 * power_at(idle, from, n, 1.5 * fire(0.f)));
+    }
+}
+
+void test_synth_effects() {
+    using namespace racer;
+    const Samples base = render_sound(driving(), 1.5);
+
+    {   // Tyre squeal: a narrow whistle around 1.2 kHz.
+        SynthParams p = driving();
+        p.speed = 0.8f;
+        const Samples plain = render_sound(p, 1.5);
+        p.skid = 1.f;
+        const Samples skid = render_sound(p, 1.5);
+        CHECK(band_power(skid, 800, 1700) > 4.0 * band_power(plain, 800, 1700));
+        CHECK(band_power(skid, 900, 1500) > 0.5 * band_power(skid, 300, 3000));
+    }
+    {   // Gravel crackles in the highs.
+        SynthParams p = driving();
+        p.gravel = 1.f;
+        CHECK(band_power(render_sound(p, 1.5), 1500, 6000) > 3.0 * band_power(base, 1500, 6000));
+    }
+    {   // Scraping metal is bright and loud.
+        SynthParams p = driving();
+        p.scrape = 1.f;
+        const Samples scrape = render_sound(p, 1.5);
+        CHECK(band_power(scrape, 500, 3000) > 2.0 * band_power(base, 500, 3000));
+        CHECK(band_power(scrape, 3000, 10000) > 5.0 * band_power(base, 3000, 10000));
+    }
+    {   // Rain hisses in the top end.
+        SynthParams p = driving();
+        p.rain = 1.f;
+        CHECK(band_power(render_sound(p, 1.5), 4000, 10000) > 2.0 * band_power(base, 4000, 10000));
+    }
+    {   // Speed adds road roar (lows) and wind (highs) on top of the same engine.
+        SynthParams slow = driving(), fast = driving();
+        slow.speed = 0.f;
+        fast.speed = 1.f;
+        const Samples a = render_sound(slow, 1.5), b = render_sound(fast, 1.5);
+        CHECK(band_power(b, 100, 500) > 4.0 * band_power(a, 100, 500));
+        CHECK(band_power(b, 2000, 8000) > 8.0 * band_power(a, 2000, 8000));
+        CHECK(rms(b, 22050, 66150) > 1.1 * rms(a, 22050, 66150));
+    }
+    {   // A crash is a loud burst that dies away within a couple of seconds.
+        const Samples crash = render_sound(driving(), 3.0, 1.0);
+        const size_t sr = Synth::sample_rate;
+        const double before = rms(crash, sr * 3 / 4, sr);
+        const double burst = rms(crash, sr, sr + sr * 3 / 20);
+        const double later = rms(crash, sr * 5 / 2, sr * 3);
+        CHECK(burst > 2.2 * before);
+        CHECK(later < 1.3 * before);
+    }
+}
+
+void test_wav() {
+    const std::string path = "kurvenrausch_test.wav";
+    const Samples data = {0, 1000, -1000, 32767, -32768};
+    CHECK(racer::write_wav(path, data, 44100));
+    std::FILE* f = std::fopen(path.c_str(), "rb");
+    CHECK(f != nullptr);
+    if (f) {
+        unsigned char h[44];
+        CHECK(std::fread(h, 1, 44, f) == 44);
+        CHECK(std::string(reinterpret_cast<char*>(h), 4) == "RIFF" && std::string(reinterpret_cast<char*>(h) + 8, 4) == "WAVE");
+        CHECK(h[22] == 1);                                // mono
+        CHECK(h[24] == 0x44 && h[25] == 0xAC);            // 44100 Hz
+        CHECK(h[34] == 16);                               // bits per sample
+        CHECK(h[40] == 10 && h[41] == 0);                 // data bytes
+        int16_t back[5];
+        CHECK(std::fread(back, 2, 5, f) == 5);
+        CHECK(back[1] == 1000 && back[3] == 32767 && back[4] == -32768);
+        std::fclose(f);
+        std::remove(path.c_str());
+    }
+}
+
 void test_lanes() {
     using racer::lane_center;
     CHECK_NEAR(lane_center(3, 0), -2.f / 3.f, 1e-6f);
@@ -401,6 +625,11 @@ int main() {
     test_lanes();
     test_start_line();
     test_demo_track();
+    test_drivetrain();
+    test_synth_basics();
+    test_synth_engine();
+    test_synth_effects();
+    test_wav();
 
     if (failures) {
         std::fprintf(stderr, "%d check(s) failed\n", failures);

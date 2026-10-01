@@ -3,6 +3,7 @@
 
 #pragma once
 #include "background.hpp"
+#include "audio.hpp"
 #include "components.hpp"
 #include "display.hpp"
 #include "ecs.hpp"
@@ -11,6 +12,7 @@
 #include "input.hpp"
 #include "road.hpp"
 #include "sprites.hpp"
+#include "synth.hpp"
 #include "weather.hpp"
 #include "track.hpp"
 
@@ -26,6 +28,7 @@ struct ScreenshotOptions {
     int frames = 0;          // simulation steps at 60 Hz
     float position = 0.f;    // start distance along the track
     int zone = -1;           // if >= 0, start inside this zone instead
+    std::string wav_path;    // if set, also write the sound of the run as a WAV
     bool force_steer = false; // replace the autopilot's steering by a constant
     float steer = 0.f;
 };
@@ -62,6 +65,7 @@ private:
     void update_laps(float prev_z, float z, float dt);
     void show_message(std::string text, float seconds);
     void update_rumble();
+    void update_audio(const InputState& input, float dt);
     InputState autopilot() const;
     void render();
 
@@ -75,6 +79,11 @@ private:
     SpriteSheet sprites_;
     Background background_;
     Weather weather_;
+    Synth synth_;   // declared before audio_, which must be destroyed first
+    Audio audio_;
+    bool muted_ = false;
+    int gear_ = 1;
+    float shift_cut_ = 0.f; // seconds left of the throttle lift during an upshift
 
     Entity player_ = INVALID_ENTITY;
     Entity camera_ = INVALID_ENTITY;

@@ -12,6 +12,7 @@ find_package(SDL2 REQUIRED)
 
 # Everything except main() lives in a library so the tests can link it too.
 add_library(kurvenrausch_core STATIC
+    src/audio.cpp
     src/background.cpp
     src/bitmap.cpp
     src/display.cpp
@@ -22,6 +23,7 @@ add_library(kurvenrausch_core STATIC
     src/input.cpp
     src/road.cpp
     src/sprites.cpp
+    src/synth.cpp
     src/track.cpp
     src/weather.cpp
 )

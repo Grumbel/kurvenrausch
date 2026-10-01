@@ -3,6 +3,7 @@
 
 #include "hud.hpp"
 
+#include "drivetrain.hpp"
 #include "font.hpp"
 
 #include <algorithm>
@@ -18,7 +19,6 @@ constexpr Color Value{0xf8, 0xf8, 0xf8};
 constexpr Color Shadow{0x10, 0x10, 0x20};
 
 constexpr float top_speed_kmh = 293.f;
-constexpr int gears = 5;
 
 void text(Framebuffer& fb, int x, int y, std::string_view s, Color c, int scale = 1) {
     fb.draw_text(x + 1, y + 1, s, Shadow, scale);
@@ -36,9 +36,7 @@ void text_center(Framebuffer& fb, int y, std::string_view s, Color c, int scale 
 // Segmented rev counter. Speed is split into virtual gears; the needle
 // climbs through each gear and drops back on the shift.
 void draw_tacho(Framebuffer& fb, int x, int y, float speed_fraction) {
-    const float g = std::clamp(speed_fraction, 0.f, 1.f) * gears;
-    const float in_gear = speed_fraction >= 1.f ? 1.f : g - std::floor(g);
-    const float rpm = speed_fraction <= 0.f ? 0.f : 0.25f + 0.75f * in_gear;
+    const float rpm = drivetrain::rpm(speed_fraction);
 
     constexpr int segments = 20;
     fb.fill_rect(x - 1, y - 1, segments * 4 + 1, 8, Shadow);
@@ -83,6 +81,8 @@ void draw_hud(Framebuffer& fb, const HudState& hud) {
     text_right(fb, 52, h - 28, std::to_string(kmh), Value, 3);
     text(fb, 56, h - 14, "KM/H", Label);
     draw_tacho(fb, 6, h - 37, hud.speed_fraction);
+
+    if (hud.muted) text_right(fb, w - 6, h - 12, "MUTE", Label);
 
     if (!hud.banner.empty()) {
         text_center(fb, 40, hud.banner, Value, 2);
