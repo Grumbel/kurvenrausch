@@ -151,6 +151,24 @@ Bitmap make_billboard(std::string_view line1, std::string_view line2,
     return b;
 }
 
+// The back of a billboard: a bare grey panel with bracing on the same posts.
+Bitmap make_billboard_back() {
+    Bitmap b(96, 64);
+    const Color post{0x6a, 0x6a, 0x70}, post_dark{0x44, 0x44, 0x4a};
+    const Color panel{0x8c, 0x8c, 0x94}, panel_dark{0x6c, 0x6c, 0x74}, brace{0x52, 0x52, 0x5a};
+    paint::rect(b, 14, 40, 6, 24, post);
+    paint::rect(b, 14, 40, 2, 24, post_dark);
+    paint::rect(b, 76, 40, 6, 24, post);
+    paint::rect(b, 76, 40, 2, 24, post_dark);
+
+    paint::rect(b, 0, 0, 96, 42, panel_dark);
+    paint::rect(b, 2, 2, 92, 38, panel);
+    for (int y : {10, 20, 30}) paint::rect(b, 2, y, 92, 2, brace);
+    for (int x : {16, 78}) paint::rect(b, x, 2, 2, 38, brace);
+    paint::outline(b, Outline);
+    return b;
+}
+
 Bitmap make_gantry() {
     Bitmap b(208, 80);
     const Color red{0xc8, 0x18, 0x18}, white{0xf4, 0xf4, 0xf4}, black{0x18, 0x18, 0x18};
@@ -450,6 +468,63 @@ Bitmap make_car(const CarStyle& style, int turn) {
     return b;
 }
 
+Bitmap make_car_front(const CarStyle& style) {
+    Bitmap b(96, 44);
+    const Color tire{0x18, 0x18, 0x1c}, tread{0x3c, 0x3c, 0x42};
+    const Color chrome{0x9a, 0x9a, 0xa8}, grille{0x14, 0x14, 0x18}, slat{0x3a, 0x3a, 0x42};
+    const Color lamp{0xf0, 0xec, 0xc8}, lamp_hi{0xff, 0xff, 0xff}, indicator{0xf0, 0x98, 0x20};
+    const Color glass{0x2c, 0x3c, 0x54}, shine{0x70, 0x88, 0xa8};
+
+    paint::ellipse(b, 48.f, 41.f, 46.f, 3.f, Color{0x22, 0x22, 0x22});
+    for (int side = 0; side < 2; ++side) {
+        const int x = side ? 78 : 4;
+        paint::rect(b, x, 27, 14, 15, tire);
+        for (int y = 28; y < 41; y += 3) paint::rect(b, x + 2, y, 10, 1, tread);
+    }
+
+    // Body and bonnet, with the bumper and air intake below the lamps.
+    paint::ellipse(b, 15.f, 27.f, 9.f, 9.f, style.body);
+    paint::ellipse(b, 81.f, 27.f, 9.f, 9.f, style.body);
+    paint::rect(b, 8, 19, 80, 18, style.body);
+    paint::rect(b, 10, 15, 76, 5, style.body_light);
+    paint::rect(b, 12, 14, 72, 1, style.body_light);
+    paint::rect(b, 9, 31, 78, 6, style.body_dark);
+    paint::rect(b, 30, 33, 36, 4, grille);
+
+    // Headlights and indicators.
+    paint::rect(b, 11, 21, 21, 6, lamp);
+    paint::rect(b, 64, 21, 21, 6, lamp);
+    paint::rect(b, 12, 22, 8, 2, lamp_hi);
+    paint::rect(b, 65, 22, 8, 2, lamp_hi);
+    paint::rect(b, 11, 28, 6, 2, indicator);
+    paint::rect(b, 79, 28, 6, 2, indicator);
+
+    // Grille with chrome surround, number plate below.
+    paint::rect(b, 36, 21, 24, 9, chrome);
+    paint::rect(b, 37, 22, 22, 7, grille);
+    for (int y = 23; y < 29; y += 2) paint::rect(b, 38, y, 20, 1, slat);
+    paint::rect(b, 41, 31, 14, 3, Color{0xe8, 0xe8, 0xd8});
+
+    // Windscreen with the driver behind it. Seen from the front the driver of
+    // a left-hand drive car sits on the right; the mirror puts them back left.
+    if (style.convertible) {
+        paint::stroke(b, 24.f, 14.f, 28.f, 6.f, 1.5f, 1.5f, chrome);
+        paint::stroke(b, 72.f, 14.f, 68.f, 6.f, 1.5f, 1.5f, chrome);
+        paint::stroke(b, 28.f, 6.f, 68.f, 6.f, 1.f, 1.f, chrome);
+    } else {
+        paint::rect(b, 20, 3, 56, 12, style.body);
+        paint::rect(b, 22, 2, 52, 1, style.body_light);
+        paint::rect(b, 23, 5, 50, 9, glass);
+        paint::shaded_ellipse(b, 37.f, 9.f, 4.f, 4.f, Color{0x14, 0x14, 0x1c}, Color{0x24, 0x24, 0x30},
+                              Color{0x34, 0x34, 0x40});
+        paint::rect(b, 32, 12, 10, 2, Color{0x1c, 0x1c, 0x26});
+        paint::stroke(b, 59.f, 13.f, 65.f, 6.f, 1.f, 1.f, shine);
+    }
+
+    paint::outline(b, Outline);
+    return b;
+}
+
 SpriteSheet::SpriteSheet() {
     scenery_[static_cast<size_t>(Scenery::Palm)] = make_palm();
     scenery_[static_cast<size_t>(Scenery::Tree)] = make_tree();
@@ -485,7 +560,9 @@ SpriteSheet::SpriteSheet() {
     };
     for (int i = 0; i < traffic_styles; ++i) {
         traffic_[static_cast<size_t>(i)] = make_car(traffic[i], 0);
+        traffic_front_[static_cast<size_t>(i)] = make_car_front(traffic[i]);
     }
+    billboard_back_ = make_billboard_back();
 }
 
 } // namespace racer
