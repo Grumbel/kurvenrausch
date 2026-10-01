@@ -150,6 +150,12 @@ void Game::fixed_update(const InputState& input, float dt) {
     vel.speed = std::clamp(vel.speed, 0.f, player.max_speed);
     tr.y = track_.height_at(tr.z + player_z);
 
+    // Engine and road shake; rougher off the road. Whole pixels only, the
+    // car is pixel art.
+    rng_ = rng_ * 1664525u + 1013904223u;
+    const float shake = (std::abs(tr.x) > 1.f ? 2.f : 1.f) * vel.speed / player.max_speed;
+    bounce_ = (rng_ >> 31) && shake > 0.25f ? -std::round(shake) : 0.f;
+
     update_laps(prev_z + player_z, tr.z + player_z, dt);
 }
 
@@ -187,9 +193,16 @@ void Game::render() {
     view.player_z = cam.player_z();
     view.draw_distance = cam.draw_distance;
     view.fog_density = cam.fog_density;
-    road_.render(fb_, track_, view);
+    road_.render(fb_, track_, view, sprites_);
 
-    placeholder::draw_car(fb_, width / 2.f, static_cast<float>(height), steer_);
+    // The car sits centred, its tyres on the bottom screen row. It is drawn at
+    // the projection scale of player_z, which maps car_width to the sprite's
+    // native size, so the pixel art is shown 1:1.
+    const Bitmap& car = sprites_.player(steer_);
+    const float scale = cam.depth / cam.player_z() * (width / 2.f);
+    const float car_w = player.car_width * scale;
+    const float car_h = car_w * static_cast<float>(car.h) / static_cast<float>(car.w);
+    fb_.blit_scaled(car, (width - car_w) / 2.f, height - car_h - 1.f + bounce_, car_w, car_h);
     placeholder::draw_hud(fb_, vel.speed / player.max_speed, lap_);
 }
 

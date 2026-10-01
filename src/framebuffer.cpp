@@ -63,4 +63,41 @@ void Framebuffer::fill_trapezoid(float y_top, float xl_top, float xr_top,
     }
 }
 
+void Framebuffer::blit_scaled(const Bitmap& bmp, float x, float y, float w, float h,
+                              bool flip, float fog_amount, Color fog) {
+    if (bmp.w == 0 || bmp.h == 0 || !(w > 0.f) || !(h > 0.f)) return;
+    const int x0 = std::max(clip_x0_, pixel_edge(x));
+    const int x1 = std::min(clip_x1_, pixel_edge(x + w));
+    const int y0 = std::max(clip_y0_, pixel_edge(y));
+    const int y1 = std::min(clip_y1_, pixel_edge(y + h));
+    if (x0 >= x1 || y0 >= y1) return;
+
+    const float sx = static_cast<float>(bmp.w) / w;
+    const float sy = static_cast<float>(bmp.h) / h;
+    columns_.resize(static_cast<size_t>(x1 - x0));
+    for (int dx = x0; dx < x1; ++dx) {
+        int u = static_cast<int>((static_cast<float>(dx) + 0.5f - x) * sx);
+        u = std::clamp(u, 0, bmp.w - 1);
+        columns_[static_cast<size_t>(dx - x0)] = flip ? bmp.w - 1 - u : u;
+    }
+
+    const bool fogged = fog_amount > 0.004f;
+    for (int dy = y0; dy < y1; ++dy) {
+        const int v = std::clamp(static_cast<int>((static_cast<float>(dy) + 0.5f - y) * sy), 0, bmp.h - 1);
+        const uint32_t* src = &bmp.px[static_cast<size_t>(v) * bmp.w];
+        uint32_t* dst = &pixels_[static_cast<size_t>(dy) * w_];
+        for (int dx = x0; dx < x1; ++dx) {
+            const uint32_t p = src[columns_[static_cast<size_t>(dx - x0)]];
+            if ((p >> 24) == 0) continue;
+            if (fogged) {
+                const Color c(static_cast<uint8_t>(p >> 16), static_cast<uint8_t>(p >> 8),
+                              static_cast<uint8_t>(p));
+                dst[dx] = blend(c, fog, fog_amount).argb();
+            } else {
+                dst[dx] = p;
+            }
+        }
+    }
+}
+
 } // namespace racer

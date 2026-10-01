@@ -1,4 +1,5 @@
 #pragma once
+#include "bitmap.hpp"
 #include "types.hpp"
 
 #include <cstdint>
@@ -33,8 +34,14 @@ public:
     void fill_trapezoid(float y_top, float xl_top, float xr_top,
                         float y_bot, float xl_bot, float xr_bot, Color c);
 
+    // Draws a bitmap scaled to the given sub-pixel rectangle, skipping
+    // transparent pixels and blending the rest towards `fog` by fog_amount.
+    void blit_scaled(const Bitmap& bmp, float x, float y, float w, float h,
+                     bool flip = false, float fog_amount = 0.f, Color fog = Color{});
+
 private:
     int w_, h_;
+    std::vector<int> columns_; // scratch: source column per destination column
     int clip_x0_ = 0, clip_y0_ = 0, clip_x1_ = 0, clip_y1_ = 0;
     std::vector<uint32_t> pixels_;
 };

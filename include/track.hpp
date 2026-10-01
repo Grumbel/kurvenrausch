@@ -21,6 +21,7 @@ struct SceneryInfo {
     float width;    // world units; the bitmap's aspect ratio gives the height
     bool solid;     // the player crashes into it
     bool centered;  // centred on its offset instead of aligned by its inner edge
+    bool mirrorable;// may be drawn mirrored on the left side for variety
 };
 
 const SceneryInfo& scenery_info(Scenery kind);

@@ -1,7 +1,5 @@
 #include "road.hpp"
 
-#include "placeholder.hpp"
-
 #include <algorithm>
 #include <cmath>
 
@@ -29,7 +27,8 @@ int clip_row(float clip_y) { return pixel_edge(clip_y); }
 
 } // namespace
 
-void RoadRenderer::render(Framebuffer& fb, const Track& track, const RoadView& view) {
+void RoadRenderer::render(Framebuffer& fb, const Track& track, const RoadView& view,
+                          const SpriteSheet& sprites) {
     const int n_segments = static_cast<int>(track.segments.size());
     const float seg_len = track.segment_length;
     const float track_len = track.length();
@@ -81,7 +80,7 @@ void RoadRenderer::render(Framebuffer& fb, const Track& track, const RoadView& v
         slices_.push_back(s);
     }
 
-    draw_scenery(fb, track);
+    draw_scenery(fb, track, sprites);
 }
 
 void RoadRenderer::draw_segment(Framebuffer& fb, const Track& track, const Slice& s) const {
@@ -141,7 +140,8 @@ void RoadRenderer::draw_segment(Framebuffer& fb, const Track& track, const Slice
     fb.reset_clip();
 }
 
-void RoadRenderer::draw_scenery(Framebuffer& fb, const Track& track) const {
+void RoadRenderer::draw_scenery(Framebuffer& fb, const Track& track,
+                                const SpriteSheet& sprites) const {
     const float half_w = static_cast<float>(fb.width()) / 2.f;
 
     // Far to near so nearer objects overdraw farther ones. Each object is
@@ -161,7 +161,11 @@ void RoadRenderer::draw_scenery(Framebuffer& fb, const Track& track) const {
             float left = s.p1.x + obj.offset * track.road_width * px_per_unit;
             if (info.centered) left -= width / 2.f;
             else if (obj.offset < 0.f) left -= width;
-            placeholder::draw_scenery(fb, obj.kind, left, s.p1.y, width, s.fog);
+            const Bitmap& bmp = sprites.scenery(obj.kind);
+            const float height = width * static_cast<float>(bmp.h) / static_cast<float>(bmp.w);
+            const bool flip = info.mirrorable && obj.offset < 0.f;
+            fb.blit_scaled(bmp, left, s.p1.y - height, width, height, flip,
+                           1.f - s.fog, track.theme.fog);
         }
     }
     fb.reset_clip();

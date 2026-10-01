@@ -5,8 +5,10 @@
 #include "framebuffer.hpp"
 #include "input.hpp"
 #include "road.hpp"
+#include "sprites.hpp"
 #include "track.hpp"
 
+#include <cstdint>
 #include <memory>
 #include <string>
 
@@ -48,10 +50,13 @@ private:
     World world_;
     Track track_;
     RoadRenderer road_;
+    SpriteSheet sprites_;
 
     Entity player_ = INVALID_ENTITY;
     Entity camera_ = INVALID_ENTITY;
-    int steer_ = 0;   // -1, 0, +1, for the car sprite
+    int steer_ = 0;     // -1, 0, +1, for the car sprite
+    float bounce_ = 0.f; // vertical shake of the car in pixels
+    uint32_t rng_ = 0x2545f491u;
 
     // Lap timing: the clock starts when the start line is first crossed.
     bool race_started_ = false;

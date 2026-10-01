@@ -7,12 +7,13 @@ namespace racer {
 
 const SceneryInfo& scenery_info(Scenery kind) {
     static const SceneryInfo infos[] = {
-        /* Palm      */ {1400.f, true,  false},
-        /* Tree      */ {1600.f, true,  false},
-        /* Bush      */ { 900.f, false, false},
-        /* Boulder   */ {1000.f, true,  false},
-        /* Billboard */ {2200.f, true,  false},
-        /* Gantry    */ {5200.f, false, true},
+        //                width   solid  centered mirrorable
+        /* Palm      */ {2000.f, true,  false, true},
+        /* Tree      */ {1700.f, true,  false, true},
+        /* Bush      */ { 900.f, false, false, true},
+        /* Boulder   */ {1000.f, true,  false, true},
+        /* Billboard */ {2200.f, true,  false, false},
+        /* Gantry    */ {5200.f, false, true,  false},
     };
     return infos[static_cast<int>(kind)];
 }

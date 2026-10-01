@@ -1,5 +1,6 @@
 #pragma once
 #include "framebuffer.hpp"
+#include "sprites.hpp"
 #include "track.hpp"
 
 #include <vector>
@@ -29,7 +30,8 @@ struct ScreenPoint {
 // Classic segment based pseudo-3D road renderer.
 class RoadRenderer {
 public:
-    void render(Framebuffer& fb, const Track& track, const RoadView& view);
+    void render(Framebuffer& fb, const Track& track, const RoadView& view,
+                const SpriteSheet& sprites);
 
 private:
     struct Slice {
@@ -41,7 +43,7 @@ private:
     };
 
     void draw_segment(Framebuffer& fb, const Track& track, const Slice& s) const;
-    void draw_scenery(Framebuffer& fb, const Track& track) const;
+    void draw_scenery(Framebuffer& fb, const Track& track, const SpriteSheet& sprites) const;
 
     std::vector<Slice> slices_;
     float camera_depth_ = 1.f;
