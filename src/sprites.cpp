@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <string_view>
 
 namespace racer {
@@ -411,7 +412,7 @@ Bitmap make_dry_shrub() {
 
 } // namespace
 
-Bitmap make_car(const CarStyle& style, int turn) {
+Bitmap make_car(const CarStyle& style, int turn, int signal) {
     Bitmap b(96, 44);
     const Color tire{0x18, 0x18, 0x1c}, tread{0x3c, 0x3c, 0x42};
     const Color chrome{0x9a, 0x9a, 0xa8}, grille{0x14, 0x14, 0x18}, slat{0x3a, 0x3a, 0x42};
@@ -438,6 +439,13 @@ Bitmap make_car(const CarStyle& style, int turn) {
     paint::rect(b, 64 + s, 22, 20, 6, lamp);
     paint::rect(b, 13 + s, 23, 18, 1, lamp_hi);
     paint::rect(b, 65 + s, 23, 18, 1, lamp_hi);
+    // Indicators at the outer ends of the tail lights.
+    for (int side = -1; side <= 1; side += 2) {
+        const int x = (side < 0 ? 12 : 80) + s;
+        const bool on = signal == side;
+        paint::rect(b, x, 22, 4, 6, on ? Color{0xff, 0xc0, 0x38} : Color{0xa8, 0x5c, 0x18});
+        if (on) paint::rect(b, x + 1, 23, 2, 2, Color{0xff, 0xf4, 0xc0});
+    }
     paint::rect(b, 34 + s, 22, 28, 9, grille);
     for (int y = 23; y < 31; y += 2) paint::rect(b, 35 + s, y, 26, 1, slat);
     paint::rect(b, 40 + s, 31, 16, 4, Color{0xe8, 0xe8, 0xd8});
@@ -468,11 +476,11 @@ Bitmap make_car(const CarStyle& style, int turn) {
     return b;
 }
 
-Bitmap make_car_front(const CarStyle& style) {
+Bitmap make_car_front(const CarStyle& style, int signal) {
     Bitmap b(96, 44);
     const Color tire{0x18, 0x18, 0x1c}, tread{0x3c, 0x3c, 0x42};
     const Color chrome{0x9a, 0x9a, 0xa8}, grille{0x14, 0x14, 0x18}, slat{0x3a, 0x3a, 0x42};
-    const Color lamp{0xf0, 0xec, 0xc8}, lamp_hi{0xff, 0xff, 0xff}, indicator{0xf0, 0x98, 0x20};
+    const Color lamp{0xf0, 0xec, 0xc8}, lamp_hi{0xff, 0xff, 0xff};
     const Color glass{0x2c, 0x3c, 0x54}, shine{0x70, 0x88, 0xa8};
 
     paint::ellipse(b, 48.f, 41.f, 46.f, 3.f, Color{0x22, 0x22, 0x22});
@@ -496,8 +504,15 @@ Bitmap make_car_front(const CarStyle& style) {
     paint::rect(b, 64, 21, 21, 6, lamp);
     paint::rect(b, 12, 22, 8, 2, lamp_hi);
     paint::rect(b, 65, 22, 8, 2, lamp_hi);
-    paint::rect(b, 11, 28, 6, 2, indicator);
-    paint::rect(b, 79, 28, 6, 2, indicator);
+    for (int side = -1; side <= 1; side += 2) {
+        const int x = side < 0 ? 11 : 79;
+        if (signal == side) {
+            paint::rect(b, x, 27, 6, 3, Color{0xff, 0xc0, 0x38});
+            paint::rect(b, x + 2, 28, 2, 1, Color{0xff, 0xf4, 0xc0});
+        } else {
+            paint::rect(b, x, 28, 6, 2, Color{0xb8, 0x6c, 0x1c});
+        }
+    }
 
     // Grille with chrome surround, number plate below.
     paint::rect(b, 36, 21, 24, 9, chrome);
@@ -525,6 +540,32 @@ Bitmap make_car_front(const CarStyle& style) {
     return b;
 }
 
+Bitmap make_player_car(const CarStyle& style, int turn, int side, int frame, int headroom) {
+    const Bitmap car = make_car(style, turn);
+    Bitmap b(car.w, car.h + headroom);
+    std::copy(car.px.begin(), car.px.end(), b.px.begin() + static_cast<std::ptrdiff_t>(headroom) * car.w);
+    if (side == 0) return b;
+
+    // A raised arm and open hand, waving: outlined on its own, then laid over
+    // the car so the car's outline does not run through it.
+    const Color skin{0xf0, 0xbc, 0x8c}, skin_dark{0xc4, 0x88, 0x5c};
+    const float u = static_cast<float>(2 * turn); // the cabin leans like in make_car
+    const float h = static_cast<float>(headroom);
+    const float sx = (side < 0 ? 30.f : 66.f) + u, sy = h + 11.f;   // shoulder
+    const float out = static_cast<float>(side) * (frame ? 4.f : 8.f); // lean of the wave
+    const float hx = sx + out, hy = h - 7.f + (frame ? 0.f : 1.f);   // hand
+    Bitmap arm(b.w, b.h);
+    paint::stroke(arm, sx, sy, hx, hy + 3.f, 2.6f, 2.f, skin);
+    paint::stroke(arm, sx + 1.f, sy, hx + 1.f, hy + 3.f, 1.f, 1.f, skin_dark);
+    paint::ellipse(arm, hx, hy, 2.5f, 3.f, skin);
+    paint::rect(arm, static_cast<int>(hx) - (side < 0 ? 4 : -3), static_cast<int>(hy), 2, 1, skin); // thumb
+    paint::outline(arm, Outline);
+    for (size_t i = 0; i < arm.px.size(); ++i) {
+        if (arm.px[i] >> 24) b.px[i] = arm.px[i];
+    }
+    return b;
+}
+
 SpriteSheet::SpriteSheet() {
     scenery_[static_cast<size_t>(Scenery::Palm)] = make_palm();
     scenery_[static_cast<size_t>(Scenery::Tree)] = make_tree();
@@ -549,7 +590,12 @@ SpriteSheet::SpriteSheet() {
 
     const CarStyle player{{0x88, 0x08, 0x10}, {0xd0, 0x18, 0x1c}, {0xf0, 0x60, 0x50}, true};
     for (int turn = -1; turn <= 1; ++turn) {
-        player_[static_cast<size_t>(turn + 1)] = make_car(player, turn);
+        auto& poses = player_[static_cast<size_t>(turn + 1)];
+        poses[0] = make_player_car(player, turn, 0, 0, player_headroom);
+        for (int frame = 0; frame < 2; ++frame) {
+            poses[static_cast<size_t>(1 + frame)] = make_player_car(player, turn, -1, frame, player_headroom);
+            poses[static_cast<size_t>(3 + frame)] = make_player_car(player, turn, 1, frame, player_headroom);
+        }
     }
 
     const CarStyle traffic[traffic_styles] = {
@@ -559,8 +605,10 @@ SpriteSheet::SpriteSheet() {
         {{0x14, 0x5c, 0x30}, {0x24, 0x8c, 0x48}, {0x70, 0xc8, 0x88}, false},
     };
     for (int i = 0; i < traffic_styles; ++i) {
-        traffic_[static_cast<size_t>(i)] = make_car(traffic[i], 0);
-        traffic_front_[static_cast<size_t>(i)] = make_car_front(traffic[i]);
+        for (int signal = -1; signal <= 1; ++signal) {
+            traffic_[static_cast<size_t>(i)][static_cast<size_t>(signal + 1)] = make_car(traffic[i], 0, signal);
+            traffic_front_[static_cast<size_t>(i)][static_cast<size_t>(signal + 1)] = make_car_front(traffic[i], signal);
+        }
     }
     billboard_back_ = make_billboard_back();
 }
