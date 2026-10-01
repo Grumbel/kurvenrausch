@@ -7,6 +7,7 @@
 #include <cassert>
 #include <cmath>
 #include <cstdint>
+#include <limits>
 
 namespace racer {
 
@@ -72,10 +73,33 @@ const Zone& Track::zone_at(float z) const {
     return zones[static_cast<size_t>(zone_number_at(z))];
 }
 
+float Track::edge_height(int boundary, int side) const {
+    const Segment& cur = segment(boundary);
+    const Segment& prev = segment(boundary - 1);
+    const Edge e_cur = side < 0 ? cur.left : cur.right;
+    const Edge e_prev = side < 0 ? prev.left : prev.right;
+    if (e_cur == Edge::Rail || e_prev == Edge::Rail) return rail_height;
+    if (e_cur != Edge::Cliff && e_prev != Edge::Cliff) return 0.f;
+
+    // Cliff: smooth variation along the road, zero where a run begins or ends.
+    const float fade = std::min(e_cur == Edge::Cliff ? cur.edge_fade : 0.f,
+                                e_prev == Edge::Cliff ? prev.edge_fade : 0.f);
+    const float i = static_cast<float>(boundary);
+    const float variation = 0.78f + 0.2f * std::sin(i * 0.13f) + 0.1f * std::sin(i * 0.37f + 1.3f);
+    return cliff_height * variation * fade;
+}
+
+float barrier_limit(const Segment& seg, int side, float car_half_width) {
+    const Edge e = side < 0 ? seg.left : seg.right;
+    if (e == Edge::Rail) return rail_offset - car_half_width;
+    if (e == Edge::Cliff && seg.edge_fade > 0.35f) return cliff_offset - car_half_width;
+    return std::numeric_limits<float>::infinity();
+}
+
 RoadTheme mix_themes(const RoadTheme& a, const RoadTheme& b, float t) {
     // Tripwire: when a field is added to RoadTheme this changes, as a reminder
     // to blend it below and to update the expected size.
-    static_assert(sizeof(RoadTheme) == 84, "RoadTheme changed: update mix_themes()");
+    static_assert(sizeof(RoadTheme) == 120, "RoadTheme changed: update mix_themes()");
 
     RoadTheme r = t < 0.5f ? a : b; // discrete fields come from the nearer theme
     const auto c = [t](Color x, Color y) { return blend(x, y, t); };
@@ -98,6 +122,13 @@ RoadTheme mix_themes(const RoadTheme& a, const RoadTheme& b, float t) {
     r.hill_lit = c(a.hill_lit, b.hill_lit);
     r.hill_shade = c(a.hill_shade, b.hill_shade);
     r.fog_density = f(a.fog_density, b.fog_density);
+    for (int i = 0; i < 3; ++i) r.rock[i] = c(a.rock[i], b.rock[i]);
+    r.cap = c(a.cap, b.cap);
+    r.cap_amount = f(a.cap_amount, b.cap_amount);
+    for (int i = 0; i < 2; ++i) {
+        r.rail[i] = c(a.rail[i], b.rail[i]);
+        r.beyond[i] = c(a.beyond[i], b.beyond[i]);
+    }
     return r;
 }
 
@@ -218,6 +249,21 @@ public:
         road(len, len, len, -Bend::Easy, -last_y() / t_.segment_length);
     }
 
+    int size() const { return static_cast<int>(t_.segments.size()); }
+
+    // Puts edge features along segments [from, to). Cliffs fade in and out over
+    // the first and last few segments of the run.
+    void mark(int from, int to, Edge left, Edge right) {
+        constexpr float ramp = 12.f;
+        for (int i = from; i < to && i < size(); ++i) {
+            Segment& seg = t_.segments[static_cast<size_t>(i)];
+            seg.left = left;
+            seg.right = right;
+            seg.edge_fade = std::clamp(std::min(static_cast<float>(i - from + 1), static_cast<float>(to - i)) / ramp,
+                                       0.f, 1.f);
+        }
+    }
+
     void scenery(int index, Scenery kind, float offset) {
         if (index < 0 || index >= static_cast<int>(t_.segments.size())) return;
         t_.segments[static_cast<size_t>(index)].scenery.push_back({kind, offset});
@@ -247,7 +293,9 @@ Track build_demo_track() {
 
     b.straight(Len::Short);
     b.low_rolling_hills();
+    const int corniche = b.size();
     b.s_curves();
+    b.mark(corniche, b.size(), Edge::Cliff, Edge::Rail);
     b.curve(Len::Medium, Bend::Medium, Hill::Low);
     b.bumps();
     b.low_rolling_hills();

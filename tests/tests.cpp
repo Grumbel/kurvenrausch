@@ -7,7 +7,9 @@
 #include "input.hpp"
 #include "track.hpp"
 
+#include <algorithm>
 #include <cmath>
+#include <limits>
 #include <cstdio>
 #include <string>
 
@@ -174,6 +176,39 @@ void test_theme_mixing() {
     CHECK_NEAR(m1.fog_density, 8.f, 1e-6f);
 }
 
+void test_edges() {
+    using namespace racer;
+    Track t;
+    t.segments.resize(100);
+    // Mimics TrackBuilder::mark(): a cliff run on the left, a rail on the right.
+    for (int i = 20; i < 60; ++i) {
+        Segment& s = t.segments[static_cast<size_t>(i)];
+        s.left = Edge::Cliff;
+        s.right = Edge::Rail;
+        s.edge_fade = std::clamp(std::min(static_cast<float>(i - 20 + 1), static_cast<float>(60 - i)) / 12.f, 0.f, 1.f);
+    }
+    // Cliffs taper to nothing at both ends of a run and are tall in the middle.
+    CHECK_NEAR(t.edge_height(20, -1), 0.f, 1e-3f);
+    CHECK_NEAR(t.edge_height(60, -1), 0.f, 1e-3f);
+    CHECK(t.edge_height(21, -1) < t.edge_height(25, -1));
+    CHECK(t.edge_height(40, -1) > 0.5f * cliff_height);
+    CHECK(t.edge_height(40, -1) < 1.2f * cliff_height);
+    CHECK_NEAR(t.edge_height(10, -1), 0.f, 1e-6f); // nothing outside the run
+    // Rails keep a constant height, including at the ends.
+    CHECK_NEAR(t.edge_height(20, 1), rail_height, 1e-3f);
+    CHECK_NEAR(t.edge_height(40, 1), rail_height, 1e-3f);
+    CHECK_NEAR(t.edge_height(60, 1), rail_height, 1e-3f);
+
+    // Barrier limits for a car 0.15 road half-widths wide on each side.
+    const float inf = std::numeric_limits<float>::infinity();
+    CHECK_NEAR(barrier_limit(t.segments[40], 1, 0.15f), rail_offset - 0.15f, 1e-6f);
+    CHECK_NEAR(barrier_limit(t.segments[40], -1, 0.15f), cliff_offset - 0.15f, 1e-6f);
+    CHECK(barrier_limit(t.segments[10], 1, 0.15f) == inf);
+    CHECK(barrier_limit(t.segments[20], -1, 0.15f) == inf); // the cliff has not grown yet
+    CHECK(barrier_limit(t.segments[22], -1, 0.15f) == inf);
+    CHECK(barrier_limit(t.segments[25], -1, 0.15f) < inf);
+}
+
 } // namespace
 
 int main() {
@@ -181,6 +216,7 @@ int main() {
     test_pad_mapping();
     test_zones();
     test_theme_mixing();
+    test_edges();
 
     if (failures) {
         std::fprintf(stderr, "%d check(s) failed\n", failures);

@@ -61,6 +61,8 @@ private:
     };
 
     void draw_segment(Framebuffer& fb, const Track& track, const Slice& s) const;
+    // Guard rail or cliff along one side (-1 left, +1 right) of a segment.
+    void draw_edge(Framebuffer& fb, const Track& track, const Slice& s, int side) const;
     void draw_sprites(Framebuffer& fb, const Track& track, const SpriteSheet& sprites,
                       const std::vector<RoadSprite>& objects) const;
 

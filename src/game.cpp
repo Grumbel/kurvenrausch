@@ -89,6 +89,8 @@ void Game::update_rumble() {
     const float speed_pct = vel.speed / world_.get<Player>(player_).max_speed;
     if (crashed_) {
         input_.rumble(1.f, 0.8f, 250);
+    } else if (scraping_ && speed_pct > 0.05f) {
+        input_.rumble(0.6f, 0.6f, 60);
     } else if (std::abs(tr.x) > 1.f && speed_pct > 0.05f) {
         input_.rumble(0.35f * speed_pct, 0.1f, 60); // rattling along the verge
     }
@@ -132,7 +134,11 @@ void Game::run() {
 
 bool Game::screenshot(const ScreenshotOptions& opts) {
     world_.get<Transform>(player_).z = track_.wrap(opts.position);
-    for (int i = 0; i < opts.frames; ++i) fixed_update(autopilot(), fixed_dt_);
+    for (int i = 0; i < opts.frames; ++i) {
+        InputState in = autopilot();
+        if (opts.force_steer) in.steer = opts.steer;
+        fixed_update(in, fixed_dt_);
+    }
     render();
     return save_bmp(opts.path, fb_.pixels(), width, height);
 }
@@ -205,6 +211,19 @@ void Game::fixed_update(const InputState& input, float dt) {
             }
         }
     }
+
+    // Rails and cliffs stop the car; leaning on them scrapes the speed away.
+    scraping_ = false;
+    const float car_half = player.car_width / track_.road_width / 2.f;
+    for (int side = -1; side <= 1; side += 2) {
+        const float limit = barrier_limit(seg, side, car_half);
+        if (static_cast<float>(side) * tr.x > limit) {
+            tr.x = static_cast<float>(side) * limit;
+            scraping_ = true;
+            scrape_side_ = side;
+        }
+    }
+    if (scraping_) vel.speed -= player.max_speed * 0.5f * dt;
 
     // Rear-ending traffic: bounce off and drop behind it.
     const int car_segment = track_.index_at(tr.z + player_z);
@@ -344,6 +363,22 @@ void Game::render() {
     road_sprites_.push_back(me);
 
     road_.render(fb_, track_, view, sprites_, road_sprites_);
+
+    if (scraping_ && vel.speed > 0.f) {
+        // Sparks flying off the side of the car that scrapes the barrier.
+        const float x = static_cast<float>(width) / 2.f + static_cast<float>(scrape_side_) * me.sw / 2.f;
+        for (int i = 0; i < 16; ++i) {
+            rng_ = rng_ * 1664525u + 1013904223u;
+            const int dx = static_cast<int>((rng_ >> 8) % 11) - 5 + scrape_side_ * 2;
+            const int dy = static_cast<int>((rng_ >> 16) % 16);
+            const bool bright = (rng_ >> 28) & 1;
+            const int px = static_cast<int>(x) + dx, py = height - 4 - dy + static_cast<int>(bounce_);
+            // A short streak trailing away from the barrier, hot end first.
+            fb_.put_pixel(px, py, bright ? Color{255, 240, 120} : Color{255, 170, 50});
+            fb_.put_pixel(px - scrape_side_, py + 1, Color{255, 130, 30});
+            if (i % 2 == 0) fb_.put_pixel(px - 2 * scrape_side_, py + 2, Color{200, 80, 25});
+        }
+    }
     HudState hud;
     hud.speed_fraction = vel.speed / player.max_speed;
     hud.lap = lap_;

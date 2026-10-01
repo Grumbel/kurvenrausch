@@ -42,6 +42,15 @@ constexpr float bayer4(int x, int y) {
     return static_cast<float>(m[y & 3][x & 3]) / 16.f;
 }
 
+// Cheap deterministic hash in [0, 1), for texture noise that must depend on
+// nothing but its arguments (so renders are reproducible).
+inline float hash01(int a, int b = 0) {
+    uint32_t h = static_cast<uint32_t>(a) * 374761393u + static_cast<uint32_t>(b) * 668265263u + 0x9e3779b9u;
+    h = (h ^ (h >> 13)) * 1274126177u;
+    h ^= h >> 16;
+    return static_cast<float>(h & 0xffffu) / 65536.f;
+}
+
 // Classic palette inspired by OutRun / Lotus
 namespace Palette {
     constexpr Color SkyTop{0x5B, 0x9B, 0xD5};

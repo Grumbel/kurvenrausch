@@ -174,15 +174,6 @@ Bitmap make_gantry() {
 }
 
 
-// Cheap deterministic hash in [0, 1), for texture noise that must not depend on
-// anything but the pixel position.
-float hash01(int a, int b = 0) {
-    uint32_t h = static_cast<uint32_t>(a) * 374761393u + static_cast<uint32_t>(b) * 668265263u + 0x9e3779b9u;
-    h = (h ^ (h >> 13)) * 1274126177u;
-    h ^= h >> 16;
-    return static_cast<float>(h & 0xffffu) / 65536.f;
-}
-
 // Shades the left edge of every opaque run lighter and the right edge darker,
 // which turns flat silhouettes into rounded forms lit from the left.
 void edge_shade(Bitmap& b, Color light, Color dark, int width = 1) {

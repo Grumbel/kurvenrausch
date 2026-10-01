@@ -107,6 +107,20 @@ void RoadRenderer::draw_segment(Framebuffer& fb, const Track& track, const Slice
     fb.fill_trapezoid(b.y, 0.f, static_cast<float>(fb.width()),
                       a.y, 0.f, static_cast<float>(fb.width()), fogged(theme.grass[band]));
 
+    // Ground beyond a rail or cliff: sea or valley, or rock. It is mostly hidden
+    // behind the edge feature itself, which is drawn later with the sprites.
+    const float wf = static_cast<float>(fb.width());
+    for (int side = -1; side <= 1; side += 2) {
+        const Edge kind = side < 0 ? seg.left : seg.right;
+        if (kind == Edge::None) continue;
+        const float off = kind == Edge::Rail ? rail_offset : cliff_offset;
+        const Color c = kind == Edge::Rail ? fogged(theme.beyond[band]) : fogged(theme.rock[0]);
+        const float xa = a.x + static_cast<float>(side) * off * a.w;
+        const float xb = b.x + static_cast<float>(side) * off * b.w;
+        if (side < 0) fb.fill_trapezoid(b.y, 0.f, xb, a.y, 0.f, xa, c);
+        else fb.fill_trapezoid(b.y, xb, wf, a.y, xa, wf, c);
+    }
+
     // Rumble strips.
     const float ra = a.w / static_cast<float>(std::max(6, 2 * lanes));
     const float rb = b.w / static_cast<float>(std::max(6, 2 * lanes));
@@ -146,6 +160,78 @@ void RoadRenderer::draw_segment(Framebuffer& fb, const Track& track, const Slice
     fb.reset_clip();
 }
 
+namespace {
+
+// Colour of the rock face at height h above the ground. `top` is the wall's
+// height at this column and u its position along the track, so the strata
+// and cracks stay attached to the rock as the camera moves.
+Color cliff_color(const RoadTheme& th, float h, float top, float u, int x, int y) {
+    const float dither = bayer4(x, y) - 0.5f;
+    const float strata = h / 260.f + 0.5f * hash01(static_cast<int>(std::floor(u * 1.5f)), 3) + 0.3f * dither;
+    const int band = static_cast<int>(std::floor(strata));
+    Color c = th.rock[((band % 3) + 3) % 3];
+    const float frac = strata - std::floor(strata);
+    if (frac < 0.14f) c = blend(c, th.rock[0], 0.65f);                    // crevice between layers
+    if (hash01(static_cast<int>(std::floor(u * 4.f)), 9) > 0.86f) c = blend(c, th.rock[0], 0.5f); // crack
+    // Darker where the wall meets the ground, catching more light higher up.
+    c = blend(th.rock[0], c, 0.55f + 0.45f * std::clamp(h / 1100.f, 0.f, 1.f));
+    if (th.cap_amount > 0.01f && h > top - 700.f * th.cap_amount + 220.f * dither) c = th.cap;
+    return c;
+}
+
+} // namespace
+
+void RoadRenderer::draw_edge(Framebuffer& fb, const Track& track, const Slice& s, int side) const {
+    const Segment& seg = track.segment(s.index);
+    const Edge kind = side < 0 ? seg.left : seg.right;
+    if (kind == Edge::None) return;
+
+    const RoadTheme& th = track.look(s.index);
+    const float half_w = static_cast<float>(fb.width()) / 2.f;
+    const float off = (kind == Edge::Rail ? rail_offset : cliff_offset) * static_cast<float>(side);
+    const float fog_amount = 1.f - s.fog;
+    const ScreenPoint& a = s.p1;
+    const ScreenPoint& b = s.p2;
+
+    // Screen position of the base line and the top line at both ends.
+    const float xa = a.x + off * a.w, xb = b.x + off * b.w;
+    const float h1 = track.edge_height(s.index, side);
+    const float h2 = track.edge_height(s.index + 1, side);
+    const float ppu_a = a.scale * half_w, ppu_b = b.scale * half_w; // pixels per world unit
+    const float ta = a.y - h1 * ppu_a, tb = b.y - h2 * ppu_b;
+    if (std::abs(xb - xa) < 0.01f) return; // seen edge-on
+
+    const int x0 = std::max(0, pixel_edge(std::min(xa, xb)));
+    const int x1 = std::min(fb.width(), pixel_edge(std::max(xa, xb)));
+    const float u0 = static_cast<float>(s.index);
+
+    for (int x = x0; x < x1; ++x) {
+        const float t = std::clamp((static_cast<float>(x) + 0.5f - xa) / (xb - xa), 0.f, 1.f);
+        const float base = a.y + (b.y - a.y) * t;
+        const float top = ta + (tb - ta) * t;
+        const float ppu = ppu_a + (ppu_b - ppu_a) * t;
+        const float height = (base - top) / ppu; // world units at this column
+        const int y0 = pixel_edge(top), y1 = pixel_edge(base);
+        for (int y = y0; y < y1; ++y) {
+            const float h = (base - (static_cast<float>(y) + 0.5f)) / ppu;
+            Color c;
+            if (kind == Edge::Cliff) {
+                c = cliff_color(th, h, height, u0 + t, x, y);
+            } else {
+                // Two horizontal bars on posts; the gaps show the ground behind.
+                const bool post = t < 0.1f;
+                const float r = h / rail_height;
+                const bool upper = r > 0.6f && r <= 0.95f;
+                const bool lower = r > 0.2f && r <= 0.42f;
+                if (!post && !upper && !lower) continue;
+                c = post ? th.rail[1] : th.rail[0];
+                if (upper && r > 0.88f) c = blend(c, Color{255, 255, 255}, 0.4f); // highlight
+            }
+            fb.put_pixel(x, y, blend(c, th.fog, fog_amount));
+        }
+    }
+}
+
 void RoadRenderer::draw_sprites(Framebuffer& fb, const Track& track, const SpriteSheet& sprites,
                                 const std::vector<RoadSprite>& objects) const {
     const float half_w = static_cast<float>(fb.width()) / 2.f;
@@ -164,6 +250,10 @@ void RoadRenderer::draw_sprites(Framebuffer& fb, const Track& track, const Sprit
         const float fog_amount = 1.f - s.fog;
 
         fb.set_clip(0, 0, fb.width(), clip);
+        if (projectable) {
+            draw_edge(fb, track, s, -1);
+            draw_edge(fb, track, s, +1);
+        }
         for (const RoadsideObject& obj : seg.scenery) {
             if (!projectable) break;
             const SceneryInfo& info = scenery_info(obj.kind);

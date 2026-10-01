@@ -24,6 +24,8 @@ struct ScreenshotOptions {
     std::string path;
     int frames = 0;          // simulation steps at 60 Hz
     float position = 0.f;    // start distance along the track
+    bool force_steer = false; // replace the autopilot's steering by a constant
+    float steer = 0.f;
 };
 
 class Game {
@@ -66,6 +68,8 @@ private:
 
     Entity player_ = INVALID_ENTITY;
     Entity camera_ = INVALID_ENTITY;
+    bool scraping_ = false; // leaning on a rail or cliff
+    int scrape_side_ = 1;
     bool crashed_ = false; // a collision happened since the last frame
     int steer_ = 0;     // -1, 0, +1, for the car sprite
     float bounce_ = 0.f; // vertical shake of the car in pixels

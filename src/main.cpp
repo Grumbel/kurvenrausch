@@ -15,6 +15,7 @@ void usage(const char* argv0) {
               << "  --screenshot FILE   render headless and save a BMP, then exit\n"
               << "  --frames N          simulation steps (60/s) before the screenshot (default 0)\n"
               << "  --position Z        start distance along the track for the screenshot\n"
+              << "  --steer S           hold steering at S (-1 .. 1) instead of the autopilot\n"
               << "  --help              show this help\n";
 }
 
@@ -31,6 +32,9 @@ int main(int argc, char* argv[]) {
             shot.frames = std::atoi(argv[++i]);
         } else if (arg == "--position" && i + 1 < argc) {
             shot.position = static_cast<float>(std::atof(argv[++i]));
+        } else if (arg == "--steer" && i + 1 < argc) {
+            shot.force_steer = true;
+            shot.steer = static_cast<float>(std::atof(argv[++i]));
         } else if (arg == "--help" || arg == "-h") {
             usage(argv[0]);
             return 0;

@@ -41,6 +41,19 @@ struct SceneryInfo {
 
 const SceneryInfo& scenery_info(Scenery kind);
 
+// A continuous roadside feature along one side of a segment.
+enum class Edge : uint8_t {
+    None,
+    Rail,   // guard rail; beyond it the ground drops away (sea, valley)
+    Cliff,  // rock wall rising beside the road
+};
+
+// Lateral position of the edge features, in road half-widths, and their size.
+constexpr float rail_offset = 1.22f;
+constexpr float cliff_offset = 1.40f;
+constexpr float rail_height = 330.f;    // world units
+constexpr float cliff_height = 3600.f;  // typical; varies along the road
+
 struct RoadsideObject {
     Scenery kind;
     // Lateral position in road half-widths: 0 is the centre line, +-1 the road
@@ -55,6 +68,9 @@ struct Segment {
     float y2 = 0.f;        // world height at the far edge
     bool alt = false;      // alternating colour band (rumble / grass stripes)
     bool checker = false;  // start/finish line
+    Edge left = Edge::None;
+    Edge right = Edge::None;
+    float edge_fade = 1.f; // 0..1, cliffs grow and shrink at the ends of a run
     std::vector<RoadsideObject> scenery;
 };
 
@@ -77,6 +93,13 @@ struct RoadTheme {
     Color hill_shade{0x48, 0x88, 0x4c};
     // Atmosphere
     float fog_density = 5.f;  // exponential fog; larger is thicker
+
+    // Roadside edges
+    Color rock[3] = {{0x6a, 0x50, 0x3c}, {0x9a, 0x7a, 0x58}, {0xc4, 0xa0, 0x78}}; // dark, mid, light
+    Color cap{0xf0, 0xf4, 0xfa};      // top layer of cliffs (snow, grass)
+    float cap_amount = 0.f;           // 0 = bare rock .. 1 = thick cap
+    Color rail[2] = {{0xd8, 0xdc, 0xe0}, {0x70, 0x74, 0x7c}}; // bars, posts
+    Color beyond[2] = {{0x28, 0x78, 0xc0}, {0x30, 0x84, 0xcc}}; // ground past a rail: sea
 };
 
 // Blends two looks: colours and numbers interpolate, anything discrete is
@@ -110,6 +133,12 @@ struct Track {
     // the shortest zone), centred on the boundary.
     void finish(int transition_segments = 100);
 
+    // World height of the edge feature on `side` (-1 left, +1 right) at the
+    // boundary in front of segment `boundary`, i.e. between segments boundary-1
+    // and boundary. Cliffs vary along the road and taper to nothing at the ends
+    // of a run, so the wall never starts or stops abruptly.
+    float edge_height(int boundary, int side) const;
+
     const RoadTheme& look(int segment) const;
     const RoadTheme& look_at(float z) const { return look(index_at(z)); }
     const Zone& zone_at(float z) const;
@@ -127,6 +156,12 @@ struct Track {
     // Road surface height at z, interpolated within the segment.
     float height_at(float z) const;
 };
+
+// How far from the centre line (in road half-widths) a car of the given half
+// width may get on `side` (-1 left, +1 right) before it touches a rail or
+// cliff on this segment; infinity if there is nothing there. A cliff that has
+// not grown to a worthwhile height yet does not count.
+float barrier_limit(const Segment& seg, int side, float car_half_width);
 
 Track build_demo_track();
 
