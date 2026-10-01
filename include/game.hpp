@@ -1,31 +1,38 @@
 #pragma once
-#include "ecs.hpp"
 #include "components.hpp"
+#include "display.hpp"
+#include "ecs.hpp"
+#include "input.hpp"
 #include "renderer.hpp"
 #include "road.hpp"
-#include "input.hpp"
+
 #include <memory>
+#include <string>
 
 namespace racer {
 
 class Game {
 public:
-    Game(int width = 1024, int height = 768);
-    ~Game();
+    Game(int width, int height);
 
+    // Interactive mode: opens a window.
     bool init();
     void run();
-    void shutdown();
+
+    // Headless mode: simulates `frames` fixed steps with the throttle held,
+    // renders one frame and writes it to `path`. No window is opened.
+    bool screenshot(const std::string& path, int frames);
 
 private:
-    void update(float dt);
+    void setup_world();
+    void reset();
+    void fixed_update(const InputState& input, float dt);
     void render();
-    void fixed_update(float dt);
 
     int width_, height_;
-    SDL_Window* window_ = nullptr;
-    std::unique_ptr<Renderer> renderer_;
-    std::unique_ptr<Input> input_;
+    std::unique_ptr<Display> display_;
+    Renderer renderer_;
+    Input input_;
     World world_;
     Track track_;
     RoadSystem road_;
@@ -34,10 +41,7 @@ private:
     Entity player_ = INVALID_ENTITY;
     Entity camera_ = INVALID_ENTITY;
 
-    float time_ = 0.f;
-    float accumulator_ = 0.f;
     const float fixed_dt_ = 1.f / 60.f;
-    bool running_ = true;
     int lap_ = 1;
 };
 

@@ -7,6 +7,7 @@ namespace racer {
 
 using Entity = uint32_t;
 constexpr Entity INVALID_ENTITY = UINT32_MAX;
+constexpr float PI = 3.14159265358979323846f;
 
 struct Color {
     uint8_t r = 0, g = 0, b = 0, a = 255;
@@ -15,9 +16,8 @@ struct Color {
     constexpr Color(uint8_t r_, uint8_t g_, uint8_t b_, uint8_t a_ = 255)
         : r(r_), g(g_), b(b_), a(a_) {}
 
-    // Pack for SDL_PIXELFORMAT_ARGB8888 (common on little-endian Linux)
-    // Memory layout: A R G B in the 32-bit word as 0xAARRGGBB
-    constexpr uint32_t to_u32() const {
+    // Packed as ARGB8888 (0xAARRGGBB), matching SDL_PIXELFORMAT_ARGB8888.
+    constexpr uint32_t argb() const {
         return (static_cast<uint32_t>(a) << 24) |
                (static_cast<uint32_t>(r) << 16) |
                (static_cast<uint32_t>(g) << 8)  |
@@ -41,6 +41,7 @@ namespace Palette {
     constexpr Color TreeDark{0x18, 0x68, 0x18};
     constexpr Color TreeTrunk{0x68, 0x48, 0x28};
     constexpr Color CarBody{0xD0, 0x20, 0x20};
+    constexpr Color CarRed = CarBody;
     constexpr Color CarDark{0x90, 0x10, 0x10};
     constexpr Color CarGlass{0x40, 0x60, 0x90};
     constexpr Color White{0xFF, 0xFF, 0xFF};

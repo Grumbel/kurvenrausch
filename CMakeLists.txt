@@ -10,6 +10,7 @@ find_package(SDL2 REQUIRED)
 add_executable(kurvenrausch
     src/main.cpp
     src/renderer.cpp
+    src/display.cpp
     src/road.cpp
     src/game.cpp
     src/input.cpp

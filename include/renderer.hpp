@@ -1,7 +1,7 @@
 #pragma once
 #include "types.hpp"
 #include "components.hpp"
-#include <SDL2/SDL.h>
+#include <cstdint>
 #include <vector>
 #include <cmath>
 
@@ -10,11 +10,9 @@ namespace racer {
 class Renderer {
 public:
     Renderer(int width, int height);
-    ~Renderer();
 
-    bool init(SDL_Window* window);
     void begin_frame();
-    void end_frame();
+    const uint32_t* pixels() const { return pixels_.data(); }
 
     // Classic scanline / polygon road drawing
     void draw_background(float sky_offset, float hill_offset);
@@ -37,14 +35,7 @@ public:
 
 private:
     int w_, h_;
-    SDL_Renderer* sdl_renderer_ = nullptr;
-    SDL_Texture* texture_ = nullptr;
     std::vector<uint32_t> pixels_;
-    SDL_PixelFormat* format_ = nullptr;
-
-    void project(float world_x, float world_y, float world_z,
-                 float cam_x, float cam_y, float cam_z, float cam_depth,
-                 Projected& out) const;
 };
 
 } // namespace racer
