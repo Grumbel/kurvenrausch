@@ -1,19 +1,19 @@
 #pragma once
 #include "types.hpp"
-#include <unordered_map>
-#include <unordered_set>
-#include <vector>
-#include <functional>
-#include <typeindex>
-#include <memory>
+
+#include <algorithm>
 #include <cassert>
+#include <memory>
+#include <typeindex>
+#include <unordered_map>
+#include <vector>
 
 namespace racer {
 
-// Minimal, clean, data-oriented ECS.
-// Entities are IDs. Components are plain structs stored in contiguous arrays.
-// Systems are free functions or functors operating on component views.
-
+// Minimal Entity-Component-System.
+// Entities are IDs. Each component type lives in its own hash map keyed by
+// entity. This is not cache-optimal, but the game only has a handful of
+// entities, so clarity wins.
 class World {
 public:
     Entity create() {
@@ -23,51 +23,54 @@ public:
     }
 
     void destroy(Entity e) {
-        // Lazy: mark dead, systems skip. For demo simplicity.
-        dead_.insert(e);
+        auto it = std::find(alive_.begin(), alive_.end(), e);
+        if (it == alive_.end()) return;
+        alive_.erase(it);
+        for (auto& [type, store] : stores_) {
+            (void)type;
+            store->erase(e);
+        }
     }
 
     bool alive(Entity e) const {
-        return dead_.find(e) == dead_.end() && e < next_;
+        return std::find(alive_.begin(), alive_.end(), e) != alive_.end();
     }
 
     template <typename T>
     T& add(Entity e, T component = T{}) {
-        auto& store = get_store<T>();
-        store[e] = std::move(component);
-        return store[e];
+        auto& map = store<T>().map;
+        map[e] = std::move(component);
+        return map[e];
     }
 
     template <typename T>
     bool has(Entity e) const {
-        auto it = stores_.find(std::type_index(typeid(T)));
-        if (it == stores_.end()) return false;
-        auto* map = static_cast<std::unordered_map<Entity, T>*>(it->second.get());
-        return map->count(e) > 0;
+        const Store<T>* s = find_store<T>();
+        return s && s->map.count(e) > 0;
     }
 
     template <typename T>
     T& get(Entity e) {
-        return get_store<T>()[e];
+        return store<T>().map.at(e);
     }
 
     template <typename T>
     const T& get(Entity e) const {
-        return get_store<T>()[e];
+        const Store<T>* s = find_store<T>();
+        assert(s && "component type was never added");
+        return s->map.at(e);
     }
 
     template <typename T>
     void remove(Entity e) {
-        get_store<T>().erase(e);
+        store<T>().map.erase(e);
     }
 
-    // Iterate all entities that have the given components.
+    // Iterate all entities that have all of the given components.
     // Usage: world.view<Pos, Vel>([](Entity e, Pos& p, Vel& v){ ... });
     template <typename... Cs, typename Fn>
     void view(Fn&& fn) {
-        // Simple: iterate all alive, check has all.
         for (Entity e : alive_) {
-            if (!alive(e)) continue;
             if ((has<Cs>(e) && ...)) {
                 fn(e, get<Cs>(e)...);
             }
@@ -77,31 +80,34 @@ public:
     const std::vector<Entity>& entities() const { return alive_; }
 
 private:
+    struct StoreBase {
+        virtual ~StoreBase() = default;
+        virtual void erase(Entity e) = 0;
+    };
+
     template <typename T>
-    std::unordered_map<Entity, T>& get_store() {
-        auto key = std::type_index(typeid(T));
-        auto it = stores_.find(key);
-        if (it == stores_.end()) {
-            auto ptr = std::make_shared<std::unordered_map<Entity, T>>();
-            stores_[key] = ptr;
-            return *ptr;
-        }
-        return *static_cast<std::unordered_map<Entity, T>*>(it->second.get());
+    struct Store final : StoreBase {
+        std::unordered_map<Entity, T> map;
+        void erase(Entity e) override { map.erase(e); }
+    };
+
+    template <typename T>
+    Store<T>& store() {
+        auto& slot = stores_[std::type_index(typeid(T))];
+        if (!slot) slot = std::make_unique<Store<T>>();
+        return static_cast<Store<T>&>(*slot);
     }
 
     template <typename T>
-    const std::unordered_map<Entity, T>& get_store() const {
-        auto key = std::type_index(typeid(T));
-        auto it = stores_.find(key);
-        assert(it != stores_.end());
-        return *static_cast<const std::unordered_map<Entity, T>*>(it->second.get());
+    const Store<T>* find_store() const {
+        auto it = stores_.find(std::type_index(typeid(T)));
+        if (it == stores_.end()) return nullptr;
+        return static_cast<const Store<T>*>(it->second.get());
     }
 
     Entity next_ = 0;
     std::vector<Entity> alive_;
-    std::unordered_set<Entity> dead_;
-    // type-erased stores
-    std::unordered_map<std::type_index, std::shared_ptr<void>> stores_;
+    std::unordered_map<std::type_index, std::unique_ptr<StoreBase>> stores_;
 };
 
 } // namespace racer
