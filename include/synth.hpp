@@ -21,6 +21,8 @@ struct SynthParams {
     float rain = 0.f;      // rain hiss
     float horn = 0.f;      // the player's horn, on or off
     float nitro = 0.f;     // the roar of a nitro burn
+    float engine = 1.f;    // 1 running, 0 off (out of fuel); in between it sputters
+    float pump = 0.f;      // a fuel pump running beside the car
     float volume = 1.f;    // master volume, 0 mutes
 };
 
@@ -41,6 +43,8 @@ public:
     void trigger_crash(float intensity);
     // A car rushing past close by: a short noise sweep falling in pitch.
     void trigger_whoosh(float intensity);
+    // A two-note chime, as when the tank is full.
+    void trigger_ding();
 
     // Renders mono 16-bit samples. For constant parameters the output depends
     // only on the number of samples rendered so far, not on how the calls are
@@ -53,15 +57,15 @@ private:
     // Parameters (written by the game thread, read by render()).
     std::atomic<float> rpm_{0.f}, throttle_{0.f}, speed_{0.f}, skid_{0.f};
     std::atomic<float> gravel_{0.f}, scrape_{0.f}, rain_{0.f}, volume_{1.f};
-    std::atomic<float> horn_{0.f}, nitro_{0.f};
+    std::atomic<float> horn_{0.f}, nitro_{0.f}, engine_{1.f}, pump_{0.f};
     std::atomic<float> crash_intensity_{0.f}, whoosh_intensity_{0.f};
-    std::atomic<int> crash_events_{0}, whoosh_events_{0};
+    std::atomic<int> crash_events_{0}, whoosh_events_{0}, ding_events_{0};
 
     // Smoothed parameters and DSP state (audio thread only).
     bool primed_ = false;
     float s_rpm_ = 0.f, s_throttle_ = 0.f, s_speed_ = 0.f, s_skid_ = 0.f;
     float s_gravel_ = 0.f, s_scrape_ = 0.f, s_rain_ = 0.f, s_volume_ = 1.f;
-    float s_horn_ = 0.f, s_nitro_ = 0.f;
+    float s_horn_ = 0.f, s_nitro_ = 0.f, s_engine_ = 1.f, s_pump_ = 0.f;
     uint32_t rng_ = 0x2545f491u;
     double crank_ = 0.0;          // crank phase, 0 .. 1 per revolution
     float jitter_ = 0.f;
@@ -81,6 +85,11 @@ private:
     int whoosh_seen_ = 0;
     float whoosh_env_ = 0.f, whoosh_age_ = 0.f;
     float whoosh_low_ = 0.f, whoosh_band_ = 0.f;
+    double pump_phase_ = 0.0;
+    float pump_lp_ = 0.f;
+    int ding_seen_ = 0;
+    float ding_age_ = 10.f;
+    double ding_phase_[2] = {0.0, 0.0};
 };
 
 // Writes mono 16-bit PCM as a WAV file.

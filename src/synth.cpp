@@ -39,6 +39,12 @@ void Synth::set_params(const SynthParams& p) {
     volume_.store(p.volume, std::memory_order_relaxed);
     horn_.store(p.horn, std::memory_order_relaxed);
     nitro_.store(p.nitro, std::memory_order_relaxed);
+    engine_.store(p.engine, std::memory_order_relaxed);
+    pump_.store(p.pump, std::memory_order_relaxed);
+}
+
+void Synth::trigger_ding() {
+    ding_events_.fetch_add(1, std::memory_order_release);
 }
 
 void Synth::trigger_crash(float intensity) {
@@ -64,12 +70,12 @@ void Synth::render(int16_t* out, int frames) {
     const float t_rpm = load(rpm_), t_throttle = load(throttle_), t_speed = load(speed_);
     const float t_skid = load(skid_), t_gravel = load(gravel_), t_scrape = load(scrape_);
     const float t_rain = load(rain_), t_volume = load(volume_);
-    const float t_horn = load(horn_), t_nitro = load(nitro_);
+    const float t_horn = load(horn_), t_nitro = load(nitro_), t_engine = load(engine_), t_pump = load(pump_);
 
     if (!primed_) { // start from the current state instead of fading in from silence
         s_rpm_ = t_rpm; s_throttle_ = t_throttle; s_speed_ = t_speed; s_skid_ = t_skid;
         s_gravel_ = t_gravel; s_scrape_ = t_scrape; s_rain_ = t_rain; s_volume_ = t_volume;
-        s_horn_ = t_horn; s_nitro_ = t_nitro;
+        s_horn_ = t_horn; s_nitro_ = t_nitro; s_engine_ = t_engine; s_pump_ = t_pump;
         primed_ = true;
     }
 
@@ -78,6 +84,12 @@ void Synth::render(int16_t* out, int frames) {
         crash_seen_ = events;
         crash_env_ = std::max(crash_env_, crash_intensity_.load(std::memory_order_relaxed));
         thump_phase_ = 0.0;
+    }
+    const int dings = ding_events_.load(std::memory_order_acquire);
+    if (dings != ding_seen_) {
+        ding_seen_ = dings;
+        ding_age_ = 0.f;
+        ding_phase_[0] = ding_phase_[1] = 0.0;
     }
     const int whooshes = whoosh_events_.load(std::memory_order_acquire);
     if (whooshes != whoosh_seen_) {
@@ -114,6 +126,8 @@ void Synth::render(int16_t* out, int frames) {
         s_volume_ += (t_volume - s_volume_) * a_vol;
         s_horn_ += (t_horn - s_horn_) * a_horn;
         s_nitro_ += (t_nitro - s_nitro_) * a_nitro;
+        s_engine_ += (t_engine - s_engine_) * a_load;
+        s_pump_ += (t_pump - s_pump_) * a_vol;
 
         // ---- Engine ------------------------------------------------------
         const float rpm = idle_rpm + s_rpm_ * rpm_range;
@@ -135,7 +149,7 @@ void Synth::render(int16_t* out, int frames) {
 
         intake_ += (noise() - intake_) * lowpass_coeff(500.f + 2500.f * s_rpm_);
         const float intake = intake_ * (0.08f + 0.5f * s_throttle_ * (0.4f + s_rpm_));
-        const float engine = (e * (0.5f + 0.5f * s_throttle_) + intake) * 0.42f;
+        const float engine = (e * (0.5f + 0.5f * s_throttle_) + intake) * 0.42f * s_engine_;
 
         // ---- Road, wind, gravel, rain ----------------------------------------
         const float n = noise();
@@ -233,7 +247,31 @@ void Synth::render(int16_t* out, int frames) {
             whoosh_env_ *= whoosh_decay;
         }
 
-        const float mix = engine + roar + wind + gravel + rain + skid + scrape + crash + horn + nitro + whoosh;
+        // ---- Fuel pump: a motor hum with the gurgle of the fuel ----------
+        float pump = 0.f;
+        if (s_pump_ > 1e-4f) {
+            pump_phase_ += 100.0 / sample_rate;
+            pump_phase_ -= std::floor(pump_phase_);
+            pump_lp_ += (n - pump_lp_) * lowpass_coeff(350.f);
+            const float hum = static_cast<float>(std::sin(two_pi * pump_phase_) + 0.4 * std::sin(two_pi * 2.0 * pump_phase_));
+            const float gurgle = pump_lp_ * (0.6f + 0.4f * static_cast<float>(std::sin(two_pi * lfo_ * 3.0)));
+            pump = (hum * 0.2f + gurgle * 0.8f) * s_pump_;
+        }
+
+        // ---- Chime: two bell notes, the second a little later ------------
+        float ding = 0.f;
+        if (ding_age_ < 2.f) {
+            ding_age_ += 1.f / sr;
+            const double notes[2] = {1318.5, 1046.5}; // E6, C6
+            for (int k = 0; k < 2; ++k) {
+                const float age = ding_age_ - 0.18f * static_cast<float>(k);
+                if (age < 0.f) continue;
+                ding_phase_[k] += notes[k] / sample_rate;
+                ding += static_cast<float>(std::sin(two_pi * ding_phase_[k])) * 0.25f * std::exp(-age * 5.f);
+            }
+        }
+
+        const float mix = engine + roar + wind + gravel + rain + skid + scrape + crash + horn + nitro + whoosh + pump + ding;
         const float x = std::tanh(mix * s_volume_ * 1.1f);
         out[i] = static_cast<int16_t>(std::lround(x * 30000.f));
     }

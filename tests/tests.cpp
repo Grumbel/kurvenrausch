@@ -789,7 +789,7 @@ void test_synth_basics() {
     // Everything at once stays inside the 16-bit range without clipping hard.
     SynthParams all;
     all.rpm = all.throttle = all.speed = all.skid = all.gravel = all.scrape = all.rain = 1.f;
-    all.horn = all.nitro = 1.f;
+    all.horn = all.nitro = all.pump = 1.f;
     const Samples loud = render_sound(all, 2.0, 0.5);
     CHECK(peak(loud) < 31000);
     size_t clipped = 0;
@@ -900,6 +900,34 @@ void test_synth_effects() {
         SynthParams p = driving();
         p.nitro = 1.f;
         CHECK(band_power(render_sound(p, 1.5), 40, 700) > 2.0 * band_power(base, 40, 700));
+    }
+    {   // The engine falls silent when it is switched off (out of fuel).
+        SynthParams on, off;
+        on.rpm = off.rpm = 0.5f;
+        on.throttle = off.throttle = 1.f;
+        off.engine = 0.f;
+        const size_t from = Synth::sample_rate / 2, n = 16384;
+        const double f = (1000.0 + 0.5 * 6500.0) / 60.0 * 3.0;
+        CHECK(power_at(render_sound(on, 1.5), from, n, f) > 100.0 * power_at(render_sound(off, 1.5), from, n, f));
+    }
+    {   // The fuel pump hums and gurgles in the lows.
+        SynthParams p = driving();
+        p.pump = 1.f;
+        const Samples pump = render_sound(p, 1.5);
+        const size_t from = Synth::sample_rate / 2, n = 16384;
+        CHECK(power_at(pump, from, n, 100.0) > 10.0 * power_at(base, from, n, 100.0));
+    }
+    {   // The chime rings at its two notes and dies away.
+        Synth s;
+        s.set_params(SynthParams{});
+        Samples quiet(Synth::sample_rate), chime(Synth::sample_rate);
+        Synth s2;
+        s2.set_params(SynthParams{});
+        s.render(quiet.data(), static_cast<int>(quiet.size()));
+        s2.trigger_ding();
+        s2.render(chime.data(), static_cast<int>(chime.size()));
+        for (double f : {1318.5, 1046.5}) CHECK(power_at(chime, 0, 16384, f) > 20.0 * power_at(quiet, 0, 16384, f));
+        CHECK(rms(chime, chime.size() - 4410, chime.size()) < 1.2 * rms(quiet, quiet.size() - 4410, quiet.size()));
     }
     {   // A whoosh is a short burst that is gone within a second.
         const Samples w = render_sound(driving(), 3.0, 1.0, true);
