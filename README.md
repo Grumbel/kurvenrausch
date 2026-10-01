@@ -39,7 +39,13 @@ weather and road markings, fading smoothly into one another:
   scrolling at different rates through bends
 - Road markings per region: dashed white lines in Europe, double yellow centre
   line and white edge lines in the USA
-- AI traffic that changes lanes to pass; rear-ending a car slows you down
+- AI traffic that changes lanes to pass, blinking its indicators; rear-ending
+  a car slows you down
+- **Horn**: cars ahead in your line signal and pull over to let you through
+- **Close passes**: squeeze past a car and your driver (or passenger, on the
+  right) waves, with a whoosh and a little boost beyond top speed
+- **Nitro**: three canisters per lap, each a three second burn with flames
+  from the exhausts, more thrust and a higher top speed
 - **Rear-view mirror** at the top of the screen: the road behind, drawn by the
   same renderer looking back, with the fronts of the cars you have passed
 - Arcade handling with analog steering and pedals; centrifugal force, off-road
@@ -74,6 +80,8 @@ cmake --build build
 | ↑ / W            | Right trigger, A         | Accelerate         |
 | ↓ / S            | Left trigger, B          | Brake              |
 | ← → / A D        | Left stick, D-pad        | Steer              |
+| H                | X, left shoulder         | Horn               |
+| Space            | Y, right shoulder        | Nitro              |
 | R                | Start                    | Restart            |
 | M                |                          | Mute sound         |
 | F11 / Alt+Enter  |                          | Toggle fullscreen  |
@@ -81,8 +89,8 @@ cmake --build build
 
 Any controller SDL knows (Xbox, PlayStation, Switch Pro, most generic pads) works
 and can be plugged in at any time; analog sticks and triggers steer and
-accelerate proportionally, and the pad rumbles on crashes, scraping and when you
-leave the road. Additional mappings can be supplied through SDL's
+accelerate proportionally, and the pad rumbles on crashes, scraping, close
+passes, nitro and when you leave the road. Additional mappings can be supplied through SDL's
 `SDL_GAMECONTROLLERCONFIG` environment variable. Keyboard and gamepad can be
 used together.
 
@@ -108,6 +116,8 @@ made and how rendering changes are checked without a display:
 ./build/kurvenrausch --screenshot shot.bmp --position 240000 --frames 600
 ./build/kurvenrausch --screenshot shot.bmp --frames 9000 --wav lap.wav
 ./build/kurvenrausch --screenshot shot.bmp --steer 1     # hold the steering
+./build/kurvenrausch --screenshot shot.bmp --frames 600 --nitro 540   # nitro at step 540
+./build/kurvenrausch --screenshot shot.bmp --frames 3600 --horn       # honk all the way
 ```
 
 It simulates the given number of 60 Hz steps with a simple autopilot (or a held
@@ -136,6 +146,7 @@ include/
   display.hpp      SDL window presentation, BMP export
   input.hpp        keyboard and gamepad input (analog), rumble
   drivetrain.hpp   gears and revs, shared by the HUD and the sound
+  driving.hpp      nitro, overspeed, the pass boost, yielding to the horn
   synth.hpp        sound synthesis (pure DSP, no SDL), WAV export
   audio.hpp        SDL audio device playing the synth
   game.hpp         game loop, physics, traffic, lap timing

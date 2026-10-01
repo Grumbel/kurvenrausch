@@ -6,9 +6,10 @@ Base: `fc65858 Fix rendering: correct projection, pixel format, colors &
 sprites` (upstream master). Work line: kurvenrausch-003.x, bundles are
 cumulative from `fc65858`.
 
-Latest bundle: `kurvenrausch-004.1-rear-view-mirror-fc65858.bundle`, tip is
-the "Show the mirror in the README screenshots, update TODO" commit on `master`.
-004.1 builds on 003.1 (`fe8e0df`) and adds the rear-view mirror.
+Latest bundle: `kurvenrausch-005.1-horn-wave-nitro-fc65858.bundle`, tip is
+the "Document horn, close passes and nitro" commit on `master`. 004.1 added
+the rear-view mirror on top of 003.1 (`fe8e0df`); 005.1 adds horn, close-pass
+wave and boost, and nitro on top of 004.1.
 
 History: 001.1 was built on `d66c91a`; upstream then added a rename and its own
 rendering fix, so the work was rebased onto `fc65858` (002.1). 003.1 adds the
@@ -18,6 +19,58 @@ Upstream master has since been fast-forwarded to `64fda32`, the tip of 002.1, so
 from `fc65858` regardless, as the rules require.
 The rebase notes: upstream's rename is kept, its rendering fix is superseded by
 the road/framebuffer rewrite, `Color::to_u32()` became `Color::argb()`.
+
+## Round 4 (005.1): horn, close-pass wave and boost, nitro, done
+
+Requested: a horn on a button that the other drivers react to; a hand
+gesture and a little boost whenever passing near another car; nitro on a
+button.
+
+Design decisions:
+
+- Buttons: horn H / pad X or left shoulder (held), nitro Space / pad Y or
+  right shoulder (a burn starts on the press). `InputState::horn/nitro`,
+  mapped in the pure `merge_pad` (tested).
+- Rules live in `driving.hpp` (pure, tested): `Nitro` (3 canisters, refilled
+  on every lap, 3 s burns: +150% thrust, top speed x1.3, fading over the last
+  0.4 s), `limit_speed` (throttle can't pass the top speed; above it the car
+  slows by 15% of top speed per second), `boosted_speed` (+8% of top speed,
+  not beyond x1.1), `close_pass` (gap to the car goes from ahead to behind,
+  centres within two car widths), `yield_lane`.
+- Horn reaction: cars up to 60 segments ahead within 0.45 half-widths of the
+  player's line pull over to the nearest free lane out of the line, faster
+  than a normal lane change ("startled" for 1.5 s). They never cut across the
+  player's line unless dead ahead in it, and then go to the side they lean to.
+  The honk is checked every step while held, so cars entering the range react.
+- Indicators: every lane change (passing or yielding) blinks the indicator of
+  that side; derived from `target_x` vs `x`, no extra state. Rear sprites and
+  the mirror's front sprites have signal variants.
+- Close pass: per-car `Traffic::gap` remembers the signed distance to the
+  player's car; the step it flips from ahead to behind with the cars close
+  sideways is a pass: whoosh (`Synth::trigger_whoosh`), boost, a pad pulse and
+  a 1.2 s wave. Passed on the left the driver waves out of the left side, on
+  the right the passenger out of the right. The player sprites have 12 rows
+  of headroom for the arm (`SpriteSheet::player_headroom`).
+- Nitro visuals: a white-hot burst with flickering tongues flaring outwards
+  and up from each exhaust (the pipes are too close to the bottom of the
+  screen for a flame streaming at the camera); HUD canisters bottom right,
+  the burning one draining. Sound: a deep roar plus hiss, engine at full load.
+- Horn sound: 415 + 523 Hz (a major third), soft-clipped and filtered.
+- Headless: `--horn` holds the horn, `--nitro N` presses nitro at step N.
+
+Verified: builds warning-free; unit tests (input mapping, nitro, speed rules,
+pass detection, yielding, horn/nitro/whoosh spectra); ASan+UBSan on full laps
+with horn and nitro and in several zones, and on the live loop; TSan on the
+live loop and on a harness setting horn/nitro and triggering whooshes and
+crashes from one thread while another renders; `reuse lint`; screenshots of
+the flames, the HUD, the wave on both sides, and a honked car blinking and
+pulling over before being passed with a wave.
+Not verified: how it plays and sounds interactively (horn and whoosh levels,
+whether the boost and nitro feel right); a real pad's button layout.
+
+Ideas: traffic honking back or flashing; a nitro FOV kick or speed lines;
+refill nitro by close passes as well; a rude gesture variant for being cut
+off.
 
 ## Round 3 (004.1): rear-view mirror, done
 
