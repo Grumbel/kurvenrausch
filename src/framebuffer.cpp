@@ -1,5 +1,7 @@
 #include "framebuffer.hpp"
 
+#include "font.hpp"
+
 #include <algorithm>
 #include <cmath>
 
@@ -61,6 +63,10 @@ void Framebuffer::fill_trapezoid(float y_top, float xl_top, float xr_top,
         const float xr = xr_top + (xr_bot - xr_top) * t;
         hline(pixel_edge(xl), pixel_edge(xr), y, c);
     }
+}
+
+void Framebuffer::draw_text(int x, int y, std::string_view s, Color c, int scale) {
+    font::render(x, y, s, scale, [&](int px, int py) { put_pixel(px, py, c); });
 }
 
 void Framebuffer::blit_scaled(const Bitmap& bmp, float x, float y, float w, float h,

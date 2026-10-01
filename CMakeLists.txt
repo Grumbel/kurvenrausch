@@ -15,8 +15,8 @@ add_executable(kurvenrausch
     src/font.cpp
     src/framebuffer.cpp
     src/game.cpp
+    src/hud.cpp
     src/input.cpp
-    src/placeholder.cpp
     src/road.cpp
     src/sprites.cpp
     src/track.cpp

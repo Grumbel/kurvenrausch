@@ -3,6 +3,7 @@
 #include "types.hpp"
 
 #include <cstdint>
+#include <string_view>
 #include <vector>
 
 namespace racer {
@@ -38,6 +39,9 @@ public:
     // transparent pixels and blending the rest towards `fog` by fog_amount.
     void blit_scaled(const Bitmap& bmp, float x, float y, float w, float h,
                      bool flip = false, float fog_amount = 0.f, Color fog = Color{});
+
+    // Text in the 5x7 bitmap font, top-left at (x, y).
+    void draw_text(int x, int y, std::string_view s, Color c, int scale = 1);
 
 private:
     int w_, h_;

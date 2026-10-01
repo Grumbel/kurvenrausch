@@ -1,7 +1,5 @@
 #include "game.hpp"
 
-#include "placeholder.hpp"
-
 #include <SDL2/SDL.h>
 #include <algorithm>
 #include <cmath>
@@ -45,6 +43,13 @@ void Game::reset() {
     race_started_ = false;
     lap_ = 0;
     lap_time_ = last_lap_ = best_lap_ = 0.f;
+    message_.clear();
+    message_time_ = 0.f;
+}
+
+void Game::show_message(std::string text, float seconds) {
+    message_ = std::move(text);
+    message_time_ = seconds;
 }
 
 void Game::run() {
@@ -162,7 +167,12 @@ void Game::fixed_update(const InputState& input, float dt) {
 }
 
 void Game::update_laps(float prev_z, float z, float dt) {
+    clock_ += dt;
     if (race_started_) lap_time_ += dt;
+    if (message_time_ > 0.f) {
+        message_time_ -= dt;
+        if (message_time_ <= 0.f) message_.clear();
+    }
 
     // Distance travelled past the start line; it drops when the line is crossed.
     const float before = track_.wrap(prev_z - track_.start_z);
@@ -171,7 +181,11 @@ void Game::update_laps(float prev_z, float z, float dt) {
 
     if (race_started_) {
         last_lap_ = lap_time_;
-        if (best_lap_ == 0.f || lap_time_ < best_lap_) best_lap_ = lap_time_;
+        const bool record = best_lap_ == 0.f || lap_time_ < best_lap_;
+        if (record) best_lap_ = lap_time_;
+        show_message(record && lap_ > 1 ? "NEW RECORD" : "LAP " + std::to_string(lap_ + 1), 2.5f);
+    } else {
+        show_message("GO!", 1.5f);
     }
     race_started_ = true;
     lap_time_ = 0.f;
@@ -205,7 +219,15 @@ void Game::render() {
     const float car_w = player.car_width * scale;
     const float car_h = car_w * static_cast<float>(car.h) / static_cast<float>(car.w);
     fb_.blit_scaled(car, (width - car_w) / 2.f, height - car_h - 1.f + bounce_, car_w, car_h);
-    placeholder::draw_hud(fb_, vel.speed / player.max_speed, lap_);
+    HudState hud;
+    hud.speed_fraction = vel.speed / player.max_speed;
+    hud.lap = lap_;
+    hud.lap_time = lap_time_;
+    hud.last_lap = last_lap_;
+    hud.best_lap = best_lap_;
+    hud.message = message_;
+    hud.message_visible = std::fmod(clock_, 0.5f) < 0.35f;
+    draw_hud(fb_, hud);
 }
 
 } // namespace racer
