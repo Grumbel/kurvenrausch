@@ -33,7 +33,7 @@ public:
     static constexpr int traffic_styles = 4;
 
 private:
-    std::array<Bitmap, 6> scenery_;
+    std::array<Bitmap, static_cast<size_t>(Scenery::Count)> scenery_;
     std::array<Bitmap, 3> player_;
     std::array<Bitmap, traffic_styles> traffic_;
 };

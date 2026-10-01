@@ -19,7 +19,19 @@ const SceneryInfo& scenery_info(Scenery kind) {
         /* Boulder   */ {1000.f, true,  false, true},
         /* Billboard */ {2200.f, true,  false, false},
         /* Gantry    */ {5200.f, false, true,  false},
+        /* Fir       */ {1500.f, true,  false, true},
+        /* SnowFir   */ {1500.f, true,  false, true},
+        /* Cactus    */ { 800.f, true,  false, true},
+        /* Mesa      */ {9000.f, true,  false, true},
+        /* Cypress   */ { 700.f, true,  false, true},
+        /* Chalet    */ {2600.f, true,  false, true},
+        /* RedRock   */ {1100.f, true,  false, true},
+        /* Pole      */ { 300.f, true,  false, false},
+        /* DryShrub  */ { 700.f, false, false, true},
+        /* BillboardUs*/{2200.f, true,  false, false},
     };
+    static_assert(sizeof(infos) / sizeof(infos[0]) == static_cast<size_t>(Scenery::Count),
+                  "scenery_info() needs an entry for every Scenery kind");
     return infos[static_cast<int>(kind)];
 }
 

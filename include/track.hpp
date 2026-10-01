@@ -19,6 +19,17 @@ enum class Scenery : uint8_t {
     Boulder,
     Billboard,
     Gantry,   // start/finish banner spanning the road
+    Fir,
+    SnowFir,
+    Cactus,
+    Mesa,         // large sandstone butte, a landmark far from the road
+    Cypress,
+    Chalet,
+    RedRock,
+    Pole,         // telephone pole
+    DryShrub,
+    BillboardUs,
+    Count
 };
 
 struct SceneryInfo {
