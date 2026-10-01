@@ -23,6 +23,7 @@ add_library(kurvenrausch_core STATIC
     src/road.cpp
     src/sprites.cpp
     src/track.cpp
+    src/weather.cpp
 )
 target_include_directories(kurvenrausch_core PUBLIC include ${SDL2_INCLUDE_DIRS})
 target_link_libraries(kurvenrausch_core PUBLIC ${SDL2_LIBRARIES})

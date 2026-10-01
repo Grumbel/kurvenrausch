@@ -100,6 +100,21 @@ struct RoadTheme {
     float cap_amount = 0.f;           // 0 = bare rock .. 1 = thick cap
     Color rail[2] = {{0xd8, 0xdc, 0xe0}, {0x70, 0x74, 0x7c}}; // bars, posts
     Color beyond[2] = {{0x28, 0x78, 0xc0}, {0x30, 0x84, 0xcc}}; // ground past a rail: sea
+
+    // Sky and backdrop
+    Color cloud_tint{0x60, 0x68, 0x78}; // clouds are shaded towards this ...
+    float cloud_tint_amount = 0.f;      // ... by this much (storm, sunset)
+    Color sun{0xff, 0xf2, 0xc0};
+    float sun_amount = 0.f;             // 0 = no visible sun
+    float haze = 0.f;                   // extra haze on mountains and hills, 0 .. 1
+    float mountain_scale = 1.f;         // height of the far mountains
+    float hill_scale = 1.f;             // height of the near hills
+    float snow_line = 40.f;             // mountains are white above this height (pixels)
+
+    // Weather
+    float rain = 0.f;                   // 0 .. 1
+    float snowfall = 0.f;               // 0 .. 1
+    float grip = 1.f;                   // tyre grip: 1 dry road, less when wet or icy
 };
 
 // Blends two looks: colours and numbers interpolate, anything discrete is

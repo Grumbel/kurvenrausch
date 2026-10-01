@@ -28,6 +28,8 @@ public:
 
     void clear(Color c);
     void put_pixel(int x, int y, Color c);
+    // Blends c over the existing pixel; alpha 0 leaves it, 1 replaces it.
+    void blend_pixel(int x, int y, Color c, float alpha);
     // Horizontal line from x0 (inclusive) to x1 (exclusive).
     void hline(int x0, int x1, int y, Color c);
     void fill_rect(int x, int y, int w, int h, Color c);

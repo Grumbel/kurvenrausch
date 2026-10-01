@@ -22,7 +22,7 @@ bool overlap(float c1, float w1, float c2, float w2) {
 
 } // namespace
 
-Game::Game() : fb_(width, height), track_(build_demo_track()) {
+Game::Game() : fb_(width, height), track_(build_demo_track()), weather_(width, height) {
     player_ = world_.create();
     world_.add<Transform>(player_);
     world_.add<Velocity>(player_);
@@ -75,6 +75,7 @@ void Game::reset() {
     world_.get<Transform>(player_) = Transform{};
     world_.get<Velocity>(player_) = Velocity{};
     background_.reset();
+    weather_.reset();
     spawn_traffic();
     race_started_ = false;
     lap_ = 0;
@@ -152,7 +153,8 @@ InputState Game::autopilot() const {
     const Segment& seg = track_.segment_at(tr.z + cam.player_z());
     const float pct = vel.speed / player.max_speed;
     // Lateral push the curve will apply this tick, relative to one steering tick.
-    const float drift = -pct * seg.curve * player.centrifugal;
+    const float grip = std::max(track_.look_at(tr.z + cam.player_z()).grip, 0.2f);
+    const float drift = -pct * seg.curve * player.centrifugal / grip;
     const float wanted = -tr.x * 4.f - drift;
 
     InputState in;
@@ -178,9 +180,15 @@ void Game::fixed_update(const InputState& input, float dt) {
     tr.z = track_.wrap(tr.z + dt * vel.speed);
     background_.update(seg.curve, dt * vel.speed / track_.segment_length, dt);
 
+    // Wet or icy roads give the tyres less to bite on: steering has less
+    // effect and the car is pushed further out of curves.
+    const RoadTheme& look = track_.look_at(tr.z + player_z);
+    const float grip = std::max(look.grip, 0.2f);
     steer_ = input.steer > 0.3f ? 1 : input.steer < -0.3f ? -1 : 0;
-    tr.x += dx * input.steer;
-    tr.x -= dx * speed_pct * seg.curve * player.centrifugal;
+    tr.x += dx * input.steer * (0.5f + 0.5f * grip);
+    tr.x -= dx * speed_pct * seg.curve * player.centrifugal / grip;
+
+    weather_.update(look.rain, look.snowfall, -seg.curve * 25.f * speed_pct, dt);
 
     // Braking overrides the throttle; without either the car coasts down.
     const float drive = input.throttle * (1.f - input.brake);
@@ -379,6 +387,8 @@ void Game::render() {
             if (i % 2 == 0) fb_.put_pixel(px - 2 * scrape_side_, py + 2, Color{200, 80, 25});
         }
     }
+    weather_.render(fb_);
+
     HudState hud;
     hud.speed_fraction = vel.speed / player.max_speed;
     hud.lap = lap_;

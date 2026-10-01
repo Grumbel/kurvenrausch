@@ -99,13 +99,35 @@ void Background::render(Framebuffer& fb, const RoadTheme& theme) const {
     }
     fb.fill_rect(0, horizon, w, fb.height() - horizon, theme.fog);
 
+    // The sun sits in the sky layer, wrapping so it is seen most of the time.
+    if (theme.sun_amount > 0.02f) {
+        const float period = static_cast<float>(w) + 100.f;
+        const float sx = wrap(215.f - sky_offset_, period) - 30.f;
+        const float sy = static_cast<float>(horizon) - 30.f;
+        const float radius = 7.f + 8.f * theme.sun_amount;
+        for (int y = static_cast<int>(sy - radius * 2.f); y <= static_cast<int>(sy + radius * 2.f); ++y) {
+            if (y >= horizon) break;
+            for (int x = static_cast<int>(sx - radius * 2.f); x <= static_cast<int>(sx + radius * 2.f); ++x) {
+                const float d = std::hypot(static_cast<float>(x) - sx, static_cast<float>(y) - sy);
+                if (d <= radius) {
+                    fb.put_pixel(x, y, blend(theme.sun, Color{255, 255, 255}, 0.25f * (1.f - d / radius)));
+                } else if (d < radius * 2.f) {
+                    // Dithered glow fading out into the sky.
+                    const float glow = (1.f - (d - radius) / radius) * 0.55f * theme.sun_amount;
+                    if (bayer4(x, y) < glow) fb.put_pixel(x, y, blend(theme.sky_horizon, theme.sun, 0.6f));
+                }
+            }
+        }
+    }
+
     for (const Cloud& c : clouds_) {
         const Bitmap& bmp = cloud_bitmaps_[static_cast<size_t>(c.bitmap)];
         const float x = wrap(c.x - sky_offset_ - drift_, sky_period);
         for (float rep : {x, x - sky_period}) {
             if (rep + static_cast<float>(bmp.w) > 0.f && rep < static_cast<float>(w)) {
                 fb.blit_scaled(bmp, std::floor(rep), static_cast<float>(c.y),
-                               static_cast<float>(bmp.w), static_cast<float>(bmp.h));
+                               static_cast<float>(bmp.w), static_cast<float>(bmp.h), false,
+                               theme.cloud_tint_amount, theme.cloud_tint);
             }
         }
     }
@@ -114,26 +136,31 @@ void Background::render(Framebuffer& fb, const RoadTheme& theme) const {
     // with a dithered transition between lit and shaded faces. Towards the
     // horizon they fade into the haze that also swallows the far road.
     auto ridge = [&](const std::vector<float>& h, float offset, Color lit, Color shade,
-                     float snow_line) {
+                     float snow_line, float scale) {
         const int period = static_cast<int>(h.size());
         for (int x = 0; x < w; ++x) {
             const int i = static_cast<int>(wrap(static_cast<float>(x) + offset, static_cast<float>(period)));
             const float here = h[static_cast<size_t>(i)];
-            const float slope = h[static_cast<size_t>((i + 2) % period)] -
-                                h[static_cast<size_t>((i + period - 2) % period)];
-            const float light = std::clamp(0.5f - slope * 0.6f, 0.f, 1.f);
-            const int top = horizon - static_cast<int>(std::lround(here));
+            // Slope over a wide window, so the lighting follows the broad shape of
+            // the ridge instead of its fine wiggles.
+            const float slope = h[static_cast<size_t>((i + 6) % period)] -
+                                h[static_cast<size_t>((i + period - 6) % period)];
+            const float light = std::clamp(0.5f - slope * 0.08f, 0.f, 1.f);
+            const int top = horizon - static_cast<int>(std::lround(here * scale));
             for (int y = top; y < horizon; ++y) {
                 const float alt = static_cast<float>(horizon - y);
                 Color c = bayer4(x, y) < light ? lit : shade;
-                if (alt > snow_line + 3.f * bayer4(x + 1, y)) c = theme.snow;
-                const float haze = std::clamp(1.f - alt / 14.f, 0.f, 1.f) * 0.75f;
+                if (alt > snow_line + 3.f * bayer4(x + 1, y)) {
+                    // Snow keeps the modelling of the slope underneath.
+                    c = bayer4(x, y) < light ? theme.snow : blend(theme.snow, theme.mountain_shade, 0.5f);
+                }
+                const float haze = std::max(std::clamp(1.f - alt / 14.f, 0.f, 1.f) * 0.75f, theme.haze);
                 fb.put_pixel(x, y, blend(c, theme.fog, haze));
             }
         }
     };
-    ridge(mountains_, mountain_offset_, theme.mountain_lit, theme.mountain_shade, 40.f);
-    ridge(hills_, hill_offset_, theme.hill_lit, theme.hill_shade, 1.0e9f);
+    ridge(mountains_, mountain_offset_, theme.mountain_lit, theme.mountain_shade, theme.snow_line, theme.mountain_scale);
+    ridge(hills_, hill_offset_, theme.hill_lit, theme.hill_shade, 1.0e9f, theme.hill_scale);
 }
 
 } // namespace racer

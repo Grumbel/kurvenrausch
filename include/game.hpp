@@ -11,6 +11,7 @@
 #include "input.hpp"
 #include "road.hpp"
 #include "sprites.hpp"
+#include "weather.hpp"
 #include "track.hpp"
 
 #include <cstdint>
@@ -65,6 +66,7 @@ private:
     std::vector<RoadSprite> road_sprites_;
     SpriteSheet sprites_;
     Background background_;
+    Weather weather_;
 
     Entity player_ = INVALID_ENTITY;
     Entity camera_ = INVALID_ENTITY;

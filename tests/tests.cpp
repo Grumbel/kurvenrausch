@@ -6,6 +6,7 @@
 
 #include "input.hpp"
 #include "track.hpp"
+#include "weather.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -209,6 +210,91 @@ void test_edges() {
     CHECK(barrier_limit(t.segments[25], -1, 0.15f) < inf);
 }
 
+int changed_pixels(const racer::Framebuffer& a, const racer::Framebuffer& b) {
+    int n = 0;
+    for (int i = 0; i < a.width() * a.height(); ++i) n += a.pixels()[i] != b.pixels()[i];
+    return n;
+}
+
+void test_weather() {
+    using namespace racer;
+    const racer::Color grey{90, 90, 90};
+    Framebuffer clear(320, 240), fb(320, 240);
+    clear.clear(grey);
+
+    // Nothing falls in fair weather.
+    Weather w(320, 240);
+    fb.clear(grey);
+    w.update(0.f, 0.f, 0.f, 1.f / 60.f);
+    w.render(fb);
+    CHECK(w.rain_count() == 0 && w.snow_count() == 0);
+    CHECK(changed_pixels(clear, fb) == 0);
+
+    // Rain and snow draw something, more of it when heavier.
+    int previous = 0;
+    for (float level : {0.2f, 0.6f, 1.f}) {
+        Weather rain(320, 240);
+        rain.update(level, 0.f, 0.f, 1.f / 60.f);
+        fb.clear(grey);
+        rain.render(fb);
+        const int n = changed_pixels(clear, fb);
+        CHECK(n > previous);
+        previous = n;
+    }
+    {
+        Weather snow(320, 240);
+        snow.update(0.f, 1.f, 0.f, 1.f / 60.f);
+        fb.clear(grey);
+        snow.render(fb);
+        CHECK(snow.snow_count() == Weather::max_snow);
+        CHECK(changed_pixels(clear, fb) > 100);
+        // Snow is lighter than the background, never darker.
+        bool darker = false;
+        for (int i = 0; i < 320 * 240; ++i) darker = darker || (fb.pixels()[i] & 0xff) < 90;
+        CHECK(!darker);
+    }
+
+    // Particles stay inside their area however long it runs, and the whole
+    // thing is deterministic.
+    Weather a(320, 240), b(320, 240);
+    for (int i = 0; i < 3000; ++i) {
+        const float wind = 30.f * std::sin(static_cast<float>(i) * 0.01f);
+        a.update(1.f, 1.f, wind, 1.f / 60.f);
+        b.update(1.f, 1.f, wind, 1.f / 60.f);
+    }
+    Framebuffer fa(320, 240), fb2(320, 240);
+    fa.clear(grey);
+    fb2.clear(grey);
+    a.render(fa);
+    b.render(fb2);
+    CHECK(changed_pixels(fa, fb2) == 0);
+    CHECK(changed_pixels(clear, fa) > 100);
+
+    // reset() restores the initial state.
+    a.reset();
+    Weather fresh(320, 240);
+    Framebuffer f1(320, 240), f2(320, 240);
+    f1.clear(grey); f2.clear(grey);
+    a.update(1.f, 0.f, 0.f, 0.f);
+    fresh.update(1.f, 0.f, 0.f, 0.f);
+    a.render(f1);
+    fresh.render(f2);
+    CHECK(changed_pixels(f1, f2) == 0);
+}
+
+void test_weather_mixing() {
+    using namespace racer;
+    RoadTheme dry, wet;
+    wet.rain = 1.f;
+    wet.grip = 0.8f;
+    wet.sun_amount = 0.f;
+    dry.sun_amount = 1.f;
+    const RoadTheme mid = mix_themes(dry, wet, 0.5f);
+    CHECK_NEAR(mid.rain, 0.5f, 1e-6f);
+    CHECK_NEAR(mid.grip, 0.9f, 1e-6f);
+    CHECK_NEAR(mid.sun_amount, 0.5f, 1e-6f);
+}
+
 } // namespace
 
 int main() {
@@ -217,6 +303,8 @@ int main() {
     test_zones();
     test_theme_mixing();
     test_edges();
+    test_weather();
+    test_weather_mixing();
 
     if (failures) {
         std::fprintf(stderr, "%d check(s) failed\n", failures);

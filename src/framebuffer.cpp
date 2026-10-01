@@ -41,6 +41,13 @@ void Framebuffer::put_pixel(int x, int y, Color c) {
     pixels_[static_cast<size_t>(y) * w_ + x] = c.argb();
 }
 
+void Framebuffer::blend_pixel(int x, int y, Color c, float alpha) {
+    if (x < clip_x0_ || x >= clip_x1_ || y < clip_y0_ || y >= clip_y1_) return;
+    uint32_t& dst = pixels_[static_cast<size_t>(y) * w_ + x];
+    const Color under(static_cast<uint8_t>(dst >> 16), static_cast<uint8_t>(dst >> 8), static_cast<uint8_t>(dst));
+    dst = blend(under, c, std::clamp(alpha, 0.f, 1.f)).argb();
+}
+
 void Framebuffer::hline(int x0, int x1, int y, Color c) {
     if (y < clip_y0_ || y >= clip_y1_) return;
     x0 = std::max(x0, clip_x0_);
