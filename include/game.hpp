@@ -40,6 +40,12 @@ public:
     static constexpr int height = 240;
     static constexpr int window_scale = 3;
 
+    // Rear-view mirror: the glass, centred at the top of the screen.
+    static constexpr int mirror_width = 112;
+    static constexpr int mirror_height = 30;
+    static constexpr int mirror_x = (width - mirror_width) / 2;
+    static constexpr int mirror_y = 6;
+
     Game();
 
     // Interactive mode: opens a window.
@@ -68,6 +74,7 @@ private:
     void update_audio(const InputState& input, float dt);
     InputState autopilot() const;
     void render();
+    void render_mirror();
 
     std::unique_ptr<Display> display_;
     Framebuffer fb_;
@@ -76,6 +83,9 @@ private:
     Track track_;
     RoadRenderer road_;
     std::vector<RoadSprite> road_sprites_;
+    Framebuffer mirror_fb_;
+    RoadRenderer mirror_road_;
+    std::vector<RoadSprite> mirror_sprites_;
     SpriteSheet sprites_;
     Background background_;
     Weather weather_;

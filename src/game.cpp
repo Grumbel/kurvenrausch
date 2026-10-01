@@ -17,6 +17,45 @@ namespace {
 
 constexpr int traffic_count = 48;
 
+// The mirror's camera sits in the car, lower than the chase camera, and sees
+// a narrower field than the main view.
+constexpr float mirror_camera_height = 700.f;
+constexpr float mirror_depth = 1.2f;
+constexpr float mirror_horizon = 13.f; // screen row in the mirror
+
+// Housing around the mirror glass, with the stem holding it from the roof.
+void draw_mirror_frame(Framebuffer& fb, int x, int y, int w, int h) {
+    const Color dark{0x16, 0x16, 0x1a}, body{0x2e, 0x2e, 0x34}, light{0x50, 0x50, 0x58};
+    fb.fill_rect(x + w / 2 - 4, 0, 8, y, dark);
+    fb.fill_rect(x + w / 2 - 3, 0, 6, y, body);
+    fb.fill_rect(x + w / 2 - 2, 0, 1, y, light);
+    // Rounded corners: each ring is inset by one pixel on its first and last row.
+    auto ring = [&](int inset, Color c) {
+        const int x0 = x - inset, y0 = y - inset, x1 = x + w + inset, y1 = y + h + inset;
+        fb.hline(x0 + 2, x1 - 2, y0, c);
+        fb.hline(x0 + 1, x1 - 1, y0 + 1, c);
+        fb.fill_rect(x0, y0 + 2, x1 - x0, y1 - y0 - 4, c);
+        fb.hline(x0 + 1, x1 - 1, y1 - 2, c);
+        fb.hline(x0 + 2, x1 - 2, y1 - 1, c);
+    };
+    ring(4, dark);
+    ring(3, body);
+    fb.hline(x - 1, x + w + 1, y - 3, light); // lit top edge
+}
+
+// Faint diagonal reflections across the glass.
+void draw_mirror_sheen(Framebuffer& fb, int x, int y, int w, int h) {
+    constexpr int streaks[][2] = {{0, 6}, {9, 2}}; // first column at the bottom, width
+    for (int row = 0; row < h; ++row) {
+        for (const auto& streak : streaks) {
+            for (int i = 0; i < streak[1]; ++i) {
+                const int col = w / 5 + streak[0] + i + (h - 1 - row);
+                if (col < w) fb.blend_pixel(x + col, y + row, Color{255, 255, 255}, 0.12f);
+            }
+        }
+    }
+}
+
 // Do the intervals [c1 - w1/2, c1 + w1/2] and [c2 - w2/2, c2 + w2/2] overlap?
 bool overlap(float c1, float w1, float c2, float w2) {
     return std::abs(c1 - c2) * 2.f < w1 + w2;
@@ -24,7 +63,9 @@ bool overlap(float c1, float w1, float c2, float w2) {
 
 } // namespace
 
-Game::Game() : fb_(width, height), track_(build_demo_track()), weather_(width, height) {
+Game::Game()
+    : fb_(width, height), track_(build_demo_track()), mirror_fb_(mirror_width, mirror_height),
+      weather_(width, height) {
     player_ = world_.create();
     world_.add<Transform>(player_);
     world_.add<Velocity>(player_);
@@ -486,6 +527,7 @@ void Game::render() {
         }
     }
     weather_.render(fb_);
+    render_mirror();
 
     HudState hud;
     hud.speed_fraction = vel.speed / player.max_speed;
@@ -501,6 +543,51 @@ void Game::render() {
         hud.banner_sub = track_.zones[static_cast<size_t>(zone_)].region;
     }
     draw_hud(fb_, hud);
+}
+
+// The road behind the car, drawn into its own small framebuffer and set into
+// the mirror housing at the top of the screen. The road renderer looks back
+// from the car with sides kept, which is what a mirror shows; the traffic
+// shows its front and billboards their back.
+void Game::render_mirror() {
+    const auto& tr = world_.get<Transform>(player_);
+    const auto& player = world_.get<Player>(player_);
+    const auto& cam = world_.get<Camera>(camera_);
+    const float car_z = tr.z + cam.player_z();
+    const RoadTheme& look = track_.look_at(car_z);
+
+    // Keep the proportions of the main view, which maps a world unit to
+    // width/2 pixels across and height/2 pixels up at scale 1.
+    const float half_w = static_cast<float>(mirror_width) / 2.f;
+    const float y_scale = half_w * static_cast<float>(height) / static_cast<float>(width);
+    const float zoom = mirror_depth * half_w / (cam.depth * static_cast<float>(width) / 2.f);
+    background_.render(mirror_fb_, look, BackdropView{mirror_horizon, zoom, true});
+
+    RoadView view;
+    view.position = car_z;
+    view.player_x = tr.x;
+    view.player_y = tr.y;
+    view.camera_height = mirror_camera_height;
+    view.camera_depth = mirror_depth;
+    view.draw_distance = cam.draw_distance;
+    view.fog_density = look.fog_density;
+    view.direction = -1;
+    view.horizon = mirror_horizon;
+    view.y_scale = y_scale;
+    mirror_sprites_.clear();
+    world_.view<Transform, Traffic>([&](Entity, Transform& t, Traffic& traffic) {
+        RoadSprite s;
+        s.z = t.z;
+        s.bitmap = &sprites_.traffic_front(traffic.style);
+        s.offset = t.x;
+        s.world_width = player.car_width;
+        mirror_sprites_.push_back(s);
+    });
+    mirror_road_.render(mirror_fb_, track_, view, sprites_, mirror_sprites_);
+
+    draw_mirror_frame(fb_, mirror_x, mirror_y, mirror_width, mirror_height);
+    fb_.blit(mirror_fb_, mirror_x, mirror_y);
+    draw_mirror_sheen(fb_, mirror_x, mirror_y, mirror_width, mirror_height);
 }
 
 } // namespace racer

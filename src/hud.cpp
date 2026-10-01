@@ -66,9 +66,9 @@ void draw_hud(Framebuffer& fb, const HudState& hud) {
     text(fb, 6, 5, "TIME", Label);
     text(fb, 6, 14, format_lap_time(hud.lap_time), Value, 2);
 
-    // Top centre: lap counter.
-    text_center(fb, 5, "LAP", Label);
-    text_center(fb, 14, hud.lap > 0 ? std::to_string(hud.lap) : "-", Value, 2);
+    // Below it the lap counter; the top centre holds the rear-view mirror.
+    text(fb, 6, 33, "LAP", Label);
+    text(fb, 6, 42, hud.lap > 0 ? std::to_string(hud.lap) : "-", Value, 2);
 
     // Top right: last and best laps.
     text_right(fb, w - 6, 5, "BEST", Label);
@@ -85,12 +85,12 @@ void draw_hud(Framebuffer& fb, const HudState& hud) {
     if (hud.muted) text_right(fb, w - 6, h - 12, "MUTE", Label);
 
     if (!hud.banner.empty()) {
-        text_center(fb, 40, hud.banner, Value, 2);
-        text_center(fb, 57, hud.banner_sub, Label);
+        text_center(fb, 48, hud.banner, Value, 2);
+        text_center(fb, 65, hud.banner_sub, Label);
     }
 
     if (!hud.message.empty() && hud.message_visible) {
-        text_center(fb, h / 2 - 50, hud.message, Label, 3);
+        text_center(fb, h / 2 - 42, hud.message, Label, 3);
     }
 }
 
