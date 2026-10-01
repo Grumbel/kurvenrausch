@@ -614,6 +614,92 @@ void test_yield_lane() {
     CHECK(yield_lane(3, 0.f, 0.07f, 0.45f, free3) == 0);
 }
 
+void test_gas_stations() {
+    using namespace racer;
+    const Track t = build_demo_track();
+    const std::vector<int> stations = t.gas_stations();
+    // One in every zone.
+    CHECK(stations.size() == t.zones.size());
+    std::vector<int> per_zone(t.zones.size(), 0);
+    for (int s : stations) ++per_zone[static_cast<size_t>(t.zone_index[static_cast<size_t>(s)])];
+    for (int n : per_zone) CHECK(n == 1);
+
+    for (int s : stations) {
+        // The forecourt tapers in, is flat and straight at full width, tapers out.
+        CHECK(t.segment(s - 1).forecourt > 1.f && t.segment(s - 1).forecourt < forecourt_width);
+        int len = 0;
+        while (t.segment(s + len).forecourt >= forecourt_width) {
+            const Segment& seg = t.segment(s + len);
+            CHECK(seg.curve == 0.f && seg.y1 == seg.y2);
+            CHECK(seg.right == Edge::None);
+            ++len;
+        }
+        CHECK(len > 30);
+        CHECK(t.forecourt_at(s) <= t.segment(s).forecourt); // the boundary takes the narrower side
+        // On the forecourt counts as such; beyond it, or on the road, not.
+        const float z = (static_cast<float>(s) + 0.5f) * t.segment_length;
+        CHECK(t.on_forecourt(z, 1.5f));
+        CHECK(!t.on_forecourt(z, 0.5f) && !t.on_forecourt(z, forecourt_width + 0.1f) && !t.on_forecourt(z, -1.5f));
+
+        // Nothing solid in the way of a car (0.15 half-widths each side) pulling in
+        // at 1.45 along the forecourt and its tapers, except the pumps and the
+        // shop where they belong; the sign stands before it.
+        int pumps = 0, shops = 0, signs = 0;
+        for (int i = s - 12; i < s; ++i) {
+            for (const RoadsideObject& o : t.segment(i).scenery) {
+                if (o.kind != Scenery::FuelSign) continue;
+                ++signs;
+                CHECK(t.segment(i).forecourt == 0.f);
+            }
+        }
+        CHECK(signs == 1);
+        for (int i = s - 5; i < s + len + 5; ++i) {
+            for (const RoadsideObject& o : t.segment(i).scenery) {
+                if (o.offset <= 0.f) continue;
+                pumps += o.kind == Scenery::FuelPump;
+                shops += o.kind == Scenery::GasStation;
+                CHECK(o.kind == Scenery::FuelPump || o.kind == Scenery::GasStation);
+                CHECK(!scenery_info(o.kind).centered && o.offset >= 1.6f);
+            }
+        }
+        CHECK(pumps == 2 && shops == 1);
+    }
+}
+
+void test_track_map() {
+    using namespace racer;
+    auto check_map = [](const Track& t) {
+        const std::vector<MapPoint> m = track_map(t);
+        CHECK(m.size() == t.segments.size());
+        float max_step = 0.f, min_x = 1.f, max_x = 0.f, min_y = 1.f, max_y = 0.f;
+        for (size_t i = 0; i < m.size(); ++i) {
+            const MapPoint& a = m[i];
+            const MapPoint& b = m[(i + 1) % m.size()]; // including the seam: it is a loop
+            max_step = std::max(max_step, std::hypot(b.x - a.x, b.y - a.y));
+            min_x = std::min(min_x, a.x); max_x = std::max(max_x, a.x);
+            min_y = std::min(min_y, a.y); max_y = std::max(max_y, a.y);
+        }
+        // Inside the unit square, filling it in one direction, centred in the other.
+        CHECK(min_x >= 0.f && min_y >= 0.f && max_x <= 1.f + 1e-5f && max_y <= 1.f + 1e-5f);
+        CHECK(std::max(max_x - min_x, max_y - min_y) > 0.999f);
+        CHECK_NEAR(min_x, 1.f - max_x, 1e-4f);
+        CHECK_NEAR(min_y, 1.f - max_y, 1e-4f);
+        // No jumps anywhere, so it closes smoothly.
+        CHECK(max_step < 20.f / static_cast<float>(m.size()));
+    };
+    // A plain oval of straights and right-hand bends, and the real route.
+    Track oval;
+    oval.segments.resize(400);
+    for (int i = 0; i < 400; ++i) oval.segments[static_cast<size_t>(i)].curve = (i / 100) % 2 ? 3.f : 0.f;
+    check_map(oval);
+    check_map(build_demo_track());
+    // Right-hand bends turn the map clockwise (y is down): the start heads up,
+    // and the next bend swings it to the right.
+    const std::vector<MapPoint> m = track_map(oval);
+    CHECK(m[100].y < m[0].y);
+    CHECK(m[200].x > m[100].x);
+}
+
 void test_start_line() {
     using racer::crossed_line_forward;
     const float L = 1000.f, line = 100.f;
@@ -1009,6 +1095,8 @@ int main() {
     test_weather_mixing();
     test_lanes();
     test_start_line();
+    test_track_map();
+    test_gas_stations();
     test_nitro();
     test_speed_rules();
     test_yield_lane();

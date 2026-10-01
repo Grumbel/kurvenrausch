@@ -30,6 +30,9 @@ const SceneryInfo& scenery_info(Scenery kind) {
         /* Pole      */ { 300.f, true,  false, false},
         /* DryShrub  */ { 700.f, false, false, true},
         /* BillboardUs*/{2200.f, true,  false, false},
+        /* GasStation*/ {4800.f, true,  false, false},
+        /* FuelPump  */ { 360.f, true,  false, false},
+        /* FuelSign  */ { 700.f, true,  false, false},
     };
     static_assert(sizeof(infos) / sizeof(infos[0]) == static_cast<size_t>(Scenery::Count),
                   "scenery_info() needs an entry for every Scenery kind");
@@ -73,6 +76,24 @@ const Zone& Track::zone_at(float z) const {
     return zones[static_cast<size_t>(zone_number_at(z))];
 }
 
+float Track::forecourt_at(int boundary) const {
+    return std::min(segment(boundary).forecourt, segment(boundary - 1).forecourt);
+}
+
+bool Track::on_forecourt(float z, float x) const {
+    const float edge = segment_at(z).forecourt;
+    return edge > 1.f && x > 1.f && x < edge;
+}
+
+std::vector<int> Track::gas_stations() const {
+    std::vector<int> starts;
+    const int n = static_cast<int>(segments.size());
+    for (int i = 0; i < n; ++i) {
+        if (segment(i).forecourt >= forecourt_width && segment(i - 1).forecourt < forecourt_width) starts.push_back(i);
+    }
+    return starts;
+}
+
 float Track::edge_height(int boundary, int side) const {
     const Segment& cur = segment(boundary);
     const Segment& prev = segment(boundary - 1);
@@ -87,6 +108,48 @@ float Track::edge_height(int boundary, int side) const {
     const float i = static_cast<float>(boundary);
     const float variation = 0.78f + 0.2f * std::sin(i * 0.13f) + 0.1f * std::sin(i * 0.37f + 1.3f);
     return cliff_height * variation * fade;
+}
+
+std::vector<MapPoint> track_map(const Track& track, float bend_scale) {
+    const int n = static_cast<int>(track.segments.size());
+    std::vector<MapPoint> pts(static_cast<size_t>(n));
+    if (n == 0) return pts;
+    // Heading change per segment for a bend: the lateral slope changes by
+    // curve / segment_length per segment.
+    const double k = static_cast<double>(bend_scale) / static_cast<double>(track.segment_length);
+    double total = 0.0;
+    for (const Segment& s : track.segments) total += static_cast<double>(s.curve) * k;
+    const double turn = total >= 0.0 ? 2.0 * 3.14159265358979 : -2.0 * 3.14159265358979;
+    const double extra = (turn - total) / n;
+
+    std::vector<double> xs(static_cast<size_t>(n) + 1), ys(static_cast<size_t>(n) + 1);
+    double heading = 0.0, x = 0.0, y = 0.0;
+    for (int i = 0; i <= n; ++i) {
+        xs[static_cast<size_t>(i)] = x;
+        ys[static_cast<size_t>(i)] = y;
+        if (i == n) break;
+        heading += static_cast<double>(track.segments[static_cast<size_t>(i)].curve) * k + extra;
+        x += std::sin(heading);
+        y -= std::cos(heading);
+    }
+    // Close the loop.
+    double min_x = 1e300, max_x = -1e300, min_y = 1e300, max_y = -1e300;
+    for (int i = 0; i < n; ++i) {
+        const double f = static_cast<double>(i) / n;
+        xs[static_cast<size_t>(i)] -= xs[static_cast<size_t>(n)] * f;
+        ys[static_cast<size_t>(i)] -= ys[static_cast<size_t>(n)] * f;
+        min_x = std::min(min_x, xs[static_cast<size_t>(i)]);
+        max_x = std::max(max_x, xs[static_cast<size_t>(i)]);
+        min_y = std::min(min_y, ys[static_cast<size_t>(i)]);
+        max_y = std::max(max_y, ys[static_cast<size_t>(i)]);
+    }
+    const double size = std::max({max_x - min_x, max_y - min_y, 1e-9});
+    const double ox = (size - (max_x - min_x)) / 2.0, oy = (size - (max_y - min_y)) / 2.0;
+    for (int i = 0; i < n; ++i) {
+        pts[static_cast<size_t>(i)] = {static_cast<float>((xs[static_cast<size_t>(i)] - min_x + ox) / size),
+                                       static_cast<float>((ys[static_cast<size_t>(i)] - min_y + oy) / size)};
+    }
+    return pts;
 }
 
 bool crossed_line_forward(float prev_z, float z, float line_z, float length) {
@@ -294,6 +357,23 @@ public:
         }
     }
 
+    // A gas station on the right: a flat straight with the forecourt beside
+    // it, tapering in and out, a sign ahead of it, two pumps and the shop.
+    void gas_station() {
+        const int from = size();
+        road(8, 40, 8, Bend::None, Hill::None);
+        constexpr int start = 6, taper = 4, length = 44;
+        for (int i = 0; i < length; ++i) {
+            const float in = std::min(static_cast<float>(i + 1), static_cast<float>(length - i)) / taper;
+            t_.segments[static_cast<size_t>(from + start + i)].forecourt =
+                1.f + (forecourt_width - 1.f) * std::min(1.f, in);
+        }
+        scenery(from + 1, Scenery::FuelSign, 1.25f);
+        scenery(from + start + 16, Scenery::FuelPump, 1.75f);
+        scenery(from + start + 24, Scenery::FuelPump, 1.75f);
+        scenery(from + start + 30, Scenery::GasStation, forecourt_width + 0.1f);
+    }
+
     void scenery(int index, Scenery kind, float offset) {
         if (index < 0 || index >= static_cast<int>(t_.segments.size())) return;
         t_.segments[static_cast<size_t>(index)].scenery.push_back({kind, offset});
@@ -482,7 +562,12 @@ void decorate(Track& track, TrackBuilder& b) {
     for (int i = 10; i < n; ++i) {
         const Segment& seg = track.segments[static_cast<size_t>(i)];
         const Zone& zone = track.zones[static_cast<size_t>(track.zone_index[static_cast<size_t>(i)])];
-        const auto free_side = [&](int side) { return (side < 0 ? seg.left : seg.right) == Edge::None; };
+        // Nothing grows on a forecourt, nor just before or after one.
+        const bool forecourt = track.segment(i - 8).forecourt > 0.f || seg.forecourt > 0.f ||
+                               track.segment(i + 8).forecourt > 0.f;
+        const auto free_side = [&](int side) {
+            return (side < 0 ? seg.left : seg.right) == Edge::None && !(side > 0 && forecourt);
+        };
         const auto put = [&](Scenery kind, int side, float magnitude) {
             if (free_side(side)) b.scenery(i, kind, static_cast<float>(side) * magnitude);
         };
@@ -574,6 +659,7 @@ Track build_demo_track() {
     b.road(Len::Medium, Len::Medium, Len::Medium, Bend::Easy, -Hill::Medium);
     b.mark(corniche, b.size(), Edge::Cliff, Edge::Rail);
     b.bumps();
+    b.gas_station();
 
     b.begin_zone(zone_germany());
     b.curve(Len::Medium, -Bend::Medium, Hill::Low);
@@ -582,6 +668,7 @@ Track build_demo_track() {
     b.bumps();
     b.curve(Len::Medium, -Bend::Medium, -Hill::Medium);
     b.straight(Len::Medium);
+    b.gas_station();
 
     b.begin_zone(zone_switzerland());
     b.hill(Len::Medium, Hill::High);
@@ -590,6 +677,7 @@ Track build_demo_track() {
     b.curve(Len::Medium, -Bend::Hard, Hill::Medium);
     b.mark(pass, b.size(), Edge::Cliff, Edge::Rail);
     b.curve(Len::Short, Bend::Medium, Hill::None);
+    b.gas_station(); // up on the pass
     const int descent = b.size();
     b.curve(Len::Medium, -Bend::Medium, -Hill::High);
     b.hill(Len::Medium, -Hill::High);
@@ -598,12 +686,14 @@ Track build_demo_track() {
 
     b.begin_zone(zone_italy());
     b.low_rolling_hills();
+    b.gas_station();
     b.curve(Len::Medium, Bend::Medium, Hill::Low);
     b.curve(Len::Medium, -Bend::Medium, -Hill::Low);
     b.curve(Len::Long, Bend::Easy, -Hill::Low);
 
     b.begin_zone(zone_arizona());
     b.hill(Len::Long, Hill::Low);
+    b.gas_station();
     b.curve(Len::Long, Bend::Easy, Hill::None);
     b.hill(Len::Medium, -Hill::Low);
     b.bumps();
@@ -617,6 +707,7 @@ Track build_demo_track() {
     b.curve(Len::Medium, Bend::Hard, -Hill::Low);
     b.mark(pch, b.size(), Edge::Rail, Edge::Cliff);
     b.curve(Len::Medium, -Bend::Easy, Hill::None);
+    b.gas_station();
     b.downhill_to_end(Len::Long);
 
     track.finish();

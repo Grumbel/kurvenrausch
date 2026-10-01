@@ -170,6 +170,76 @@ Bitmap make_billboard_back() {
     return b;
 }
 
+// The gas station: a shop with big windows, and in front of it a canopy on
+// two pillars with the FUEL fascia.
+Bitmap make_gas_station() {
+    Bitmap b(192, 96);
+    const Color wall{0xe8, 0xe0, 0xc8}, wall_dark{0xc4, 0xbc, 0xa4}, roof{0x50, 0x50, 0x58};
+    const Color glass{0x3c, 0x5c, 0x84}, glass_hi{0x8c, 0xb0, 0xd8}, red{0xc8, 0x20, 0x20};
+    const Color white{0xf4, 0xf4, 0xf4}, pillar{0xa8, 0xa8, 0xb0}, pillar_dark{0x80, 0x80, 0x88};
+
+    // Shop.
+    paint::rect(b, 76, 36, 114, 60, wall);
+    paint::rect(b, 76, 36, 114, 4, roof);
+    paint::rect(b, 76, 88, 114, 8, wall_dark);
+    for (int x : {86, 124, 160}) {
+        paint::rect(b, x, 50, 24, 30, glass);
+        paint::stroke(b, static_cast<float>(x) + 4.f, 76.f, static_cast<float>(x) + 14.f, 54.f, 1.5f, 1.5f, glass_hi);
+    }
+    paint::rect(b, 150, 58, 8, 30, Color{0x6c, 0x48, 0x2c}); // door
+    paint::rect(b, 108, 41, 40, 6, red);
+    paint::text(b, 115, 41, "SHOP", white);
+
+    // Canopy over the pumps.
+    for (int x : {14, 100}) {
+        paint::rect(b, x, 28, 7, 68, pillar);
+        paint::rect(b, x + 5, 28, 2, 68, pillar_dark);
+    }
+    paint::rect(b, 0, 8, 122, 22, white);
+    paint::rect(b, 0, 12, 122, 14, red);
+    paint::rect(b, 0, 28, 122, 2, Color{0xff, 0xf4, 0xc0}); // lights underneath
+    const int tx = (122 - font::text_width("FUEL", 2)) / 2;
+    paint::text(b, tx, 13, "FUEL", white, 2);
+
+    paint::outline(b, Outline);
+    return b;
+}
+
+Bitmap make_fuel_pump() {
+    Bitmap b(24, 44);
+    const Color red{0xc8, 0x20, 0x20}, red_dark{0x90, 0x14, 0x14}, white{0xf4, 0xf4, 0xf4};
+    paint::rect(b, 1, 40, 22, 4, Color{0x8c, 0x8c, 0x94}); // island
+    paint::rect(b, 3, 6, 18, 34, red);
+    paint::rect(b, 17, 6, 4, 34, red_dark);
+    paint::rect(b, 3, 1, 18, 6, white);
+    paint::rect(b, 6, 11, 12, 7, Color{0x18, 0x20, 0x18}); // display
+    paint::rect(b, 7, 13, 10, 1, Color{0x60, 0xf0, 0x80});
+    paint::rect(b, 7, 15, 7, 1, Color{0x60, 0xf0, 0x80});
+    paint::rect(b, 5, 22, 6, 8, Color{0x30, 0x30, 0x34}); // nozzle holder
+    paint::stroke(b, 8.f, 30.f, 2.f, 38.f, 1.2f, 1.2f, Color{0x20, 0x20, 0x24}); // hose
+    paint::outline(b, Outline);
+    return b;
+}
+
+// A tall sign on a pole: FUEL, a pump symbol and the price.
+Bitmap make_fuel_sign() {
+    Bitmap b(44, 112);
+    const Color red{0xc8, 0x20, 0x20}, white{0xf4, 0xf4, 0xf4}, ink{0x20, 0x20, 0x28};
+    paint::rect(b, 19, 44, 6, 68, Color{0x9a, 0x9a, 0xa4});
+    paint::rect(b, 23, 44, 2, 68, Color{0x6c, 0x6c, 0x74});
+    paint::rect(b, 0, 0, 44, 46, red);
+    paint::rect(b, 3, 13, 38, 30, white);
+    paint::text(b, (44 - font::text_width("FUEL")) / 2, 3, "FUEL", white);
+    // Pump symbol.
+    paint::rect(b, 15, 16, 10, 14, ink);
+    paint::rect(b, 17, 18, 6, 4, white);
+    paint::stroke(b, 25.f, 19.f, 29.f, 24.f, 1.f, 1.f, ink);
+    paint::stroke(b, 29.f, 24.f, 29.f, 29.f, 1.f, 1.f, ink);
+    paint::text(b, (44 - font::text_width("1.89")) / 2, 33, "1.89", ink);
+    paint::outline(b, Outline);
+    return b;
+}
+
 Bitmap make_gantry() {
     Bitmap b(208, 80);
     const Color red{0xc8, 0x18, 0x18}, white{0xf4, 0xf4, 0xf4}, black{0x18, 0x18, 0x18};
@@ -412,11 +482,14 @@ Bitmap make_dry_shrub() {
 
 } // namespace
 
-Bitmap make_car(const CarStyle& style, int turn, int signal) {
+Bitmap make_car(const CarStyle& style, int turn, int signal, bool brake) {
     Bitmap b(96, 44);
     const Color tire{0x18, 0x18, 0x1c}, tread{0x3c, 0x3c, 0x42};
     const Color chrome{0x9a, 0x9a, 0xa8}, grille{0x14, 0x14, 0x18}, slat{0x3a, 0x3a, 0x42};
-    const Color lamp{0xf0, 0x28, 0x1c}, lamp_hi{0xff, 0x9a, 0x78};
+    // Tail lights glow; brake lights burn, white-hot in the middle.
+    const Color lamp = brake ? Color{0xff, 0x54, 0x3c} : Color{0x8c, 0x12, 0x12};
+    const Color lamp_hi = brake ? Color{0xff, 0xf0, 0xe0} : Color{0xc8, 0x44, 0x38};
+    const Color glow{0xff, 0x30, 0x20};
 
     // Shadow and tyres stay planted while the body shifts into the turn.
     paint::ellipse(b, 48.f, 41.f, 46.f, 3.f, Color{0x22, 0x22, 0x22});
@@ -437,8 +510,21 @@ Bitmap make_car(const CarStyle& style, int turn, int signal) {
 
     paint::rect(b, 12 + s, 22, 20, 6, lamp);
     paint::rect(b, 64 + s, 22, 20, 6, lamp);
-    paint::rect(b, 13 + s, 23, 18, 1, lamp_hi);
-    paint::rect(b, 65 + s, 23, 18, 1, lamp_hi);
+    paint::rect(b, 13 + s, 23, 18, brake ? 2 : 1, lamp_hi);
+    paint::rect(b, 65 + s, 23, 18, brake ? 2 : 1, lamp_hi);
+    if (brake) {
+        // Light spilling onto the bodywork around the lamps.
+        for (int x0 : {12, 64}) {
+            for (int x = x0 - 1; x <= x0 + 20; ++x) {
+                for (int y : {21, 28}) {
+                    if (!b.inside(x + s, y)) continue;
+                    const uint32_t p = b.get(x + s, y);
+                    const Color under{static_cast<uint8_t>(p >> 16), static_cast<uint8_t>(p >> 8), static_cast<uint8_t>(p)};
+                    b.set(x + s, y, blend(under, glow, 0.55f));
+                }
+            }
+        }
+    }
     // Indicators at the outer ends of the tail lights.
     for (int side = -1; side <= 1; side += 2) {
         const int x = (side < 0 ? 12 : 80) + s;
@@ -449,6 +535,9 @@ Bitmap make_car(const CarStyle& style, int turn, int signal) {
     paint::rect(b, 34 + s, 22, 28, 9, grille);
     for (int y = 23; y < 31; y += 2) paint::rect(b, 35 + s, y, 26, 1, slat);
     paint::rect(b, 40 + s, 31, 16, 4, Color{0xe8, 0xe8, 0xd8});
+    // Third brake light on the rear deck.
+    paint::rect(b, 40 + s, 15, 16, 2, brake ? lamp : Color{0x70, 0x14, 0x12});
+    if (brake) paint::rect(b, 42 + s, 15, 12, 1, lamp_hi);
     paint::rect(b, 43 + s, 32, 10, 1, Color{0x30, 0x30, 0x60});
     paint::ellipse(b, 24.f + s, 38.5f, 2.5f, 1.5f, Color{0x30, 0x30, 0x34});
     paint::ellipse(b, 72.f + s, 38.5f, 2.5f, 1.5f, Color{0x30, 0x30, 0x34});
@@ -540,8 +629,8 @@ Bitmap make_car_front(const CarStyle& style, int signal) {
     return b;
 }
 
-Bitmap make_player_car(const CarStyle& style, int turn, int side, int frame, int headroom) {
-    const Bitmap car = make_car(style, turn);
+Bitmap make_player_car(const CarStyle& style, int turn, int side, int frame, bool brake, int headroom) {
+    const Bitmap car = make_car(style, turn, 0, brake);
     Bitmap b(car.w, car.h + headroom);
     std::copy(car.px.begin(), car.px.end(), b.px.begin() + static_cast<std::ptrdiff_t>(headroom) * car.w);
     if (side == 0) return b;
@@ -591,10 +680,13 @@ SpriteSheet::SpriteSheet() {
     const CarStyle player{{0x88, 0x08, 0x10}, {0xd0, 0x18, 0x1c}, {0xf0, 0x60, 0x50}, true};
     for (int turn = -1; turn <= 1; ++turn) {
         auto& poses = player_[static_cast<size_t>(turn + 1)];
-        poses[0] = make_player_car(player, turn, 0, 0, player_headroom);
-        for (int frame = 0; frame < 2; ++frame) {
-            poses[static_cast<size_t>(1 + frame)] = make_player_car(player, turn, -1, frame, player_headroom);
-            poses[static_cast<size_t>(3 + frame)] = make_player_car(player, turn, 1, frame, player_headroom);
+        for (int brake = 0; brake < 2; ++brake) {
+            const auto b = static_cast<size_t>(brake);
+            poses[0][b] = make_player_car(player, turn, 0, 0, brake, player_headroom);
+            for (int frame = 0; frame < 2; ++frame) {
+                poses[static_cast<size_t>(1 + frame)][b] = make_player_car(player, turn, -1, frame, brake, player_headroom);
+                poses[static_cast<size_t>(3 + frame)][b] = make_player_car(player, turn, 1, frame, brake, player_headroom);
+            }
         }
     }
 
@@ -606,11 +698,17 @@ SpriteSheet::SpriteSheet() {
     };
     for (int i = 0; i < traffic_styles; ++i) {
         for (int signal = -1; signal <= 1; ++signal) {
-            traffic_[static_cast<size_t>(i)][static_cast<size_t>(signal + 1)] = make_car(traffic[i], 0, signal);
+            for (int brake = 0; brake < 2; ++brake) {
+                traffic_[static_cast<size_t>(i)][static_cast<size_t>(signal + 1)][static_cast<size_t>(brake)] =
+                    make_car(traffic[i], 0, signal, brake);
+            }
             traffic_front_[static_cast<size_t>(i)][static_cast<size_t>(signal + 1)] = make_car_front(traffic[i], signal);
         }
     }
     billboard_back_ = make_billboard_back();
+    scenery_[static_cast<size_t>(Scenery::GasStation)] = make_gas_station();
+    scenery_[static_cast<size_t>(Scenery::FuelPump)] = make_fuel_pump();
+    scenery_[static_cast<size_t>(Scenery::FuelSign)] = make_fuel_sign();
 }
 
 } // namespace racer

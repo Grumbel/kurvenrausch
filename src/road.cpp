@@ -133,6 +133,18 @@ void RoadRenderer::draw_segment(Framebuffer& fb, const Track& track, const Slice
         else fb.fill_trapezoid(b.y, xb, wf, a.y, xa, wf, c);
     }
 
+    // A gas station's forecourt on the right: paved, with a kerb at its edge.
+    const int near = direction_ > 0 ? s.index : s.index + 1;
+    const float court_a = track.forecourt_at(near), court_b = track.forecourt_at(near + direction_);
+    if (court_a > 1.f || court_b > 1.f) {
+        const float oa = std::max(court_a, 1.f), ob = std::max(court_b, 1.f);
+        const Color paving = fogged(blend(theme.road[band], Color{0xb4, 0xb0, 0xa8}, 0.3f));
+        fb.fill_trapezoid(b.y, b.x + b.w, b.x + ob * b.w, a.y, a.x + a.w, a.x + oa * a.w, paving);
+        const float ka = a.w / 40.f, kb = b.w / 40.f;
+        fb.fill_trapezoid(b.y, b.x + ob * b.w, b.x + ob * b.w + kb, a.y, a.x + oa * a.w, a.x + oa * a.w + ka,
+                          fogged(theme.rumble[0]));
+    }
+
     // Rumble strips.
     const float ra = a.w / static_cast<float>(std::max(6, 2 * lanes));
     const float rb = b.w / static_cast<float>(std::max(6, 2 * lanes));
@@ -316,7 +328,8 @@ void RoadRenderer::draw_sprites(Framebuffer& fb, const Track& track, const Sprit
             const Bitmap& bmp = *o.bitmap;
             if (o.fixed) {
                 fb.reset_clip();
-                fb.blit_scaled(bmp, o.sx, o.sy, o.sw, o.sh);
+                if (o.angle != 0.f) fb.blit_rotated(bmp, o.sx + o.sw / 2.f, o.sy + o.sh / 2.f, o.sw, o.sh, o.angle);
+                else fb.blit_scaled(bmp, o.sx, o.sy, o.sw, o.sh);
                 fb.set_clip(0, 0, fb.width(), clip);
                 return;
             }

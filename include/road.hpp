@@ -49,6 +49,7 @@ struct RoadSprite {
     // (the player's car, which the camera always looks over).
     bool fixed = false;
     float sx = 0.f, sy = 0.f, sw = 0.f, sh = 0.f;
+    float angle = 0.f; // fixed sprites only: rotation about the centre, clockwise
 };
 
 // Classic segment based pseudo-3D road renderer.

@@ -29,6 +29,9 @@ enum class Scenery : uint8_t {
     Pole,         // telephone pole
     DryShrub,
     BillboardUs,
+    GasStation,   // shop under a canopy, beyond the forecourt
+    FuelPump,
+    FuelSign,     // tall sign announcing a gas station
     Count
 };
 
@@ -54,6 +57,10 @@ constexpr float cliff_offset = 1.40f;
 constexpr float rail_height = 330.f;    // world units
 constexpr float cliff_height = 3600.f;  // typical; varies along the road
 
+// A gas station's forecourt: paved ground on the right of the road, out to
+// this offset (road half-widths), where the car can pull in and refuel.
+constexpr float forecourt_width = 2.3f;
+
 struct RoadsideObject {
     Scenery kind;
     // Lateral position in road half-widths: 0 is the centre line, +-1 the road
@@ -71,6 +78,10 @@ struct Segment {
     Edge left = Edge::None;
     Edge right = Edge::None;
     float edge_fade = 1.f; // 0..1, cliffs grow and shrink at the ends of a run
+    // Outer edge of a gas station forecourt on the right, in road half-widths
+    // (up to forecourt_width), or 0 for none. It widens and narrows at the
+    // ends; refuelling works where it is full width.
+    float forecourt = 0.f;
     std::vector<RoadsideObject> scenery;
 };
 
@@ -191,6 +202,18 @@ struct Track {
 
     // Road surface height at z, interpolated within the segment.
     float height_at(float z) const;
+
+    // Outer edge of the forecourt at the boundary in front of segment
+    // `boundary`: the narrower of the segments either side, so it starts and
+    // ends with a taper.
+    float forecourt_at(int boundary) const;
+
+    // Is lateral position x (road half-widths) on the paved forecourt of the
+    // segment at z?
+    bool on_forecourt(float z, float x) const;
+
+    // First segments of each forecourt at full width, in track order.
+    std::vector<int> gas_stations() const;
 };
 
 // How far from the centre line (in road half-widths) a car of the given half
@@ -206,5 +229,17 @@ float barrier_limit(const Segment& seg, int side, float car_half_width);
 bool crossed_line_forward(float prev_z, float z, float line_z, float length);
 
 Track build_demo_track();
+
+// Plan view of a track for the mini map, one point per segment start, inside
+// the unit square (centred, aspect kept, y down). A pseudo-3D track is not a
+// geometric loop: its bends are only lateral offsets, and integrating them as
+// turns gives neither one full turn nor a closed path. So the bends are
+// damped by `bend_scale` (sharp ones would otherwise show as hairpins), the
+// turning missing to a full turn is spread evenly over the lap, and what is
+// left of the gap at the end is spread out along the path.
+struct MapPoint {
+    float x, y;
+};
+std::vector<MapPoint> track_map(const Track& track, float bend_scale = 0.6f);
 
 } // namespace racer
