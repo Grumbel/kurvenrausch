@@ -61,6 +61,16 @@ void Framebuffer::fill_rect(int x, int y, int w, int h, Color c) {
     for (int j = 0; j < h; ++j) hline(x, x + w, y + j, c);
 }
 
+void Framebuffer::blit(const Framebuffer& src, int x, int y) {
+    const int x0 = std::max(clip_x0_, x), x1 = std::min(clip_x1_, x + src.w_);
+    const int y0 = std::max(clip_y0_, y), y1 = std::min(clip_y1_, y + src.h_);
+    if (x1 <= x0) return;
+    for (int row = y0; row < y1; ++row) {
+        const uint32_t* from = &src.pixels_[static_cast<size_t>(row - y) * src.w_ + (x0 - x)];
+        std::copy(from, from + (x1 - x0), &pixels_[static_cast<size_t>(row) * w_ + x0]);
+    }
+}
+
 void Framebuffer::fill_trapezoid(float y_top, float xl_top, float xr_top,
                                  float y_bot, float xl_bot, float xr_bot, Color c) {
     if (!(y_bot > y_top)) return;

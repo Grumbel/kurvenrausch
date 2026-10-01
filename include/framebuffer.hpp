@@ -45,6 +45,9 @@ public:
     void blit_scaled(const Bitmap& bmp, float x, float y, float w, float h,
                      bool flip = false, float fog_amount = 0.f, Color fog = Color{});
 
+    // Copies another framebuffer 1:1 with its top-left corner at (x, y).
+    void blit(const Framebuffer& src, int x, int y);
+
     // Text in the 5x7 bitmap font, top-left at (x, y).
     void draw_text(int x, int y, std::string_view s, Color c, int scale = 1);
 

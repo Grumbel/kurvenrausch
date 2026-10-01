@@ -382,6 +382,23 @@ void test_road_mirror() {
     CHECK(road_ahead > w / 2.f + 5.f);
 }
 
+void test_framebuffer_blit() {
+    using namespace racer;
+    Framebuffer src(4, 3), dst(10, 10);
+    src.clear(Color{255, 0, 0});
+    dst.clear(Color{0, 0, 0});
+    dst.blit(src, 8, -1); // hangs off the right and the top
+    const uint32_t red = Color{255, 0, 0}.argb();
+    int n = 0;
+    for (int i = 0; i < 100; ++i) n += dst.pixels()[i] == red;
+    CHECK(n == 2 * 2);
+    CHECK(dst.pixels()[0 * 10 + 8] == red && dst.pixels()[1 * 10 + 9] == red);
+    dst.blit(src, -10, 0); // entirely outside
+    n = 0;
+    for (int i = 0; i < 100; ++i) n += dst.pixels()[i] == red;
+    CHECK(n == 4);
+}
+
 void test_start_line() {
     using racer::crossed_line_forward;
     const float L = 1000.f, line = 100.f;
@@ -720,6 +737,7 @@ int main() {
     test_lanes();
     test_start_line();
     test_road_mirror();
+    test_framebuffer_blit();
     test_demo_track();
     test_drivetrain();
     test_synth_basics();
