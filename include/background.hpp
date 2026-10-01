@@ -10,6 +10,15 @@
 
 namespace racer {
 
+// How the backdrop is laid out in a view other than the main screen.
+struct BackdropView {
+    float horizon = 120.f; // screen row of eye level
+    float zoom = 1.f;      // size relative to the main view
+    // Looking back in a mirror: the layers show the half of the panorama
+    // behind the car, mirrored, and there is no sun.
+    bool mirror = false;
+};
+
 // Parallax backdrop: banded sky, clouds, far mountains and near hills. The
 // layers sit on the horizon (the projection's eye level) and scroll sideways
 // at different rates when the road bends.
@@ -22,13 +31,15 @@ public:
     void update(float curve, float segments, float dt);
     void reset();
 
+    // The main view: horizon at half the screen height, zoom 1.
     void render(Framebuffer& fb, const RoadTheme& theme) const;
+    void render(Framebuffer& fb, const RoadTheme& theme, const BackdropView& view) const;
 
 private:
     struct Cloud {
         int bitmap;
         float x;
-        int y;
+        float altitude; // of its top edge above the horizon, in main view pixels
     };
 
     float sky_offset_ = 0.f;

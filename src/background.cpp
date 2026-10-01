@@ -15,6 +15,7 @@ namespace {
 constexpr int mountain_period = 1024; // pixels before the profile repeats
 constexpr int hill_period = 768;
 constexpr float sky_period = 1280.f;
+constexpr float sky_height = 120.f; // pixels from the top of the sky gradient down to the horizon
 
 // Scroll rates in pixels per segment travelled per unit of curve.
 constexpr float sky_rate = 0.25f;
@@ -69,7 +70,7 @@ Background::Background() {
     cloud_bitmaps_.push_back(make_cloud(56, 20, {{{14, 13, 10, 7}}, {{28, 9, 13, 9}}, {{42, 13, 11, 7}}}, theme));
     cloud_bitmaps_.push_back(make_cloud(36, 14, {{{11, 9, 8, 5}}, {{23, 7, 10, 6}}}, theme));
     cloud_bitmaps_.push_back(make_cloud(80, 22, {{{14, 15, 11, 6}}, {{32, 10, 15, 10}}, {{52, 12, 14, 8}}, {{68, 15, 10, 6}}}, theme));
-    clouds_ = {{0, 40.f, 22}, {1, 230.f, 52}, {2, 410.f, 14}, {1, 640.f, 38}, {0, 860.f, 60}, {2, 1050.f, 30}};
+    clouds_ = {{0, 40.f, 98.f}, {1, 230.f, 68.f}, {2, 410.f, 106.f}, {1, 640.f, 82.f}, {0, 860.f, 60.f}, {2, 1050.f, 90.f}};
 }
 
 void Background::reset() {
@@ -84,13 +85,26 @@ void Background::update(float curve, float segments, float dt) {
 }
 
 void Background::render(Framebuffer& fb, const RoadTheme& theme) const {
+    render(fb, theme, BackdropView{static_cast<float>(fb.height() / 2), 1.f, false});
+}
+
+void Background::render(Framebuffer& fb, const RoadTheme& theme, const BackdropView& view) const {
     const int w = fb.width();
-    const int horizon = fb.height() / 2;
+    const int horizon = static_cast<int>(std::lround(view.horizon));
+    const float zoom = view.zoom;
+    const float half_w = static_cast<float>(w) / 2.f;
+    // Position in a layer seen at screen column x (a pixel centre), for a
+    // layer scrolled by `offset` that repeats every `period` pixels.
+    auto layer_x = [&](float x, float offset, float period) {
+        return view.mirror ? offset + period / 2.f - (x - half_w) / zoom : offset + x / zoom;
+    };
 
     // Copper-style sky: 16 colour bands, dithered into each other.
     constexpr int bands = 16;
+    const float sky_h = sky_height * zoom;
+    const float sky_top = static_cast<float>(horizon) - sky_h; // above the screen in the mirror
     for (int y = 0; y < horizon; ++y) {
-        const float t = static_cast<float>(y) / static_cast<float>(horizon) * (bands - 1);
+        const float t = std::max(0.f, static_cast<float>(y) - sky_top) / sky_h * (bands - 1);
         const int band = static_cast<int>(t);
         const float frac = t - static_cast<float>(band);
         const Color c0 = blend(theme.sky_top, theme.sky_horizon, static_cast<float>(band) / (bands - 1));
@@ -100,7 +114,8 @@ void Background::render(Framebuffer& fb, const RoadTheme& theme) const {
     fb.fill_rect(0, horizon, w, fb.height() - horizon, theme.fog);
 
     // The sun sits in the sky layer, wrapping so it is seen most of the time.
-    if (theme.sun_amount > 0.02f) {
+    // The sun is ahead, so the mirror never shows it.
+    if (theme.sun_amount > 0.02f && !view.mirror) {
         const float period = static_cast<float>(w) + 100.f;
         const float sx = wrap(215.f - sky_offset_, period) - 30.f;
         const float sy = static_cast<float>(horizon) - 30.f;
@@ -122,11 +137,15 @@ void Background::render(Framebuffer& fb, const RoadTheme& theme) const {
 
     for (const Cloud& c : clouds_) {
         const Bitmap& bmp = cloud_bitmaps_[static_cast<size_t>(c.bitmap)];
-        const float x = wrap(c.x - sky_offset_ - drift_, sky_period);
-        for (float rep : {x, x - sky_period}) {
-            if (rep + static_cast<float>(bmp.w) > 0.f && rep < static_cast<float>(w)) {
-                fb.blit_scaled(bmp, std::floor(rep), static_cast<float>(c.y),
-                               static_cast<float>(bmp.w), static_cast<float>(bmp.h), false,
+        const float bw = static_cast<float>(bmp.w);
+        const float offset = sky_offset_ + drift_;
+        // Left edge on screen, before and after the wrap of the sky layer.
+        const float x = view.mirror ? half_w + (wrap(offset + sky_period / 2.f - c.x - bw, sky_period) - sky_period) * zoom
+                                    : wrap(c.x - offset, sky_period) * zoom;
+        for (float rep : {x, view.mirror ? x + sky_period * zoom : x - sky_period * zoom}) {
+            if (rep + bw * zoom > 0.f && rep < static_cast<float>(w)) {
+                fb.blit_scaled(bmp, std::floor(rep), static_cast<float>(horizon) - c.altitude * zoom,
+                               bw * zoom, static_cast<float>(bmp.h) * zoom, view.mirror,
                                theme.cloud_tint_amount, theme.cloud_tint);
             }
         }
@@ -139,22 +158,23 @@ void Background::render(Framebuffer& fb, const RoadTheme& theme) const {
                      float snow_line, float scale) {
         const int period = static_cast<int>(h.size());
         for (int x = 0; x < w; ++x) {
-            const int i = static_cast<int>(wrap(static_cast<float>(x) + offset, static_cast<float>(period)));
+            const int i = static_cast<int>(wrap(layer_x(static_cast<float>(x), offset, static_cast<float>(period)),
+                                                static_cast<float>(period)));
             const float here = h[static_cast<size_t>(i)];
             // Slope over a wide window, so the lighting follows the broad shape of
             // the ridge instead of its fine wiggles.
             const float slope = h[static_cast<size_t>((i + 6) % period)] -
                                 h[static_cast<size_t>((i + period - 6) % period)];
             const float light = std::clamp(0.5f - slope * 0.08f, 0.f, 1.f);
-            const int top = horizon - static_cast<int>(std::lround(here * scale));
+            const int top = horizon - static_cast<int>(std::lround(here * scale * zoom));
             for (int y = top; y < horizon; ++y) {
                 const float alt = static_cast<float>(horizon - y);
                 Color c = bayer4(x, y) < light ? lit : shade;
-                if (alt > snow_line + 3.f * bayer4(x + 1, y)) {
+                if (alt > (snow_line + 3.f * bayer4(x + 1, y)) * zoom) {
                     // Snow keeps the modelling of the slope underneath.
                     c = bayer4(x, y) < light ? theme.snow : blend(theme.snow, theme.mountain_shade, 0.5f);
                 }
-                const float haze = std::max(std::clamp(1.f - alt / 14.f, 0.f, 1.f) * 0.75f, theme.haze);
+                const float haze = std::max(std::clamp(1.f - alt / (14.f * zoom), 0.f, 1.f) * 0.75f, theme.haze);
                 fb.put_pixel(x, y, blend(c, theme.fog, haze));
             }
         }
