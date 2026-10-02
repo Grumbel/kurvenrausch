@@ -21,6 +21,50 @@ Upstream master has since been fast-forwarded to `64fda32`, the tip of 002.1, so
 The rebase notes: upstream's rename is kept, its rendering fix is superseded by
 the road/framebuffer rewrite, `Color::to_u32()` became `Color::argb()`.
 
+## Round 10: more countries, narrow roads, oil, car dealers, done
+
+Requested: more countries, some with different streets (England with narrow
+roads); rare oil slicks; puddles mostly in the rain regions; a car
+dealership to change cars.
+
+Design decisions:
+
+- Puddles: the fair-weather chance dropped from 0.3% to 0.03% per segment;
+  the rest follows rain and snow. Tested per zone (dry zones at most 3,
+  properly wet ones at least 3, over ten times the density).
+- Road width (`RoadTheme::road_scale`, blended like the rest of a look):
+  `Track::half_width()` per boundary and `half_width_at()` along the track
+  replace the constant wherever half-widths meet world units (projection,
+  camera, scenery and traffic placement, fork offsets, the car against the
+  road). At the standard width renders are pixel-identical to before.
+- Zones (10 now): England (Cotswolds, road 0.62 wide, white edge lines, hedges
+  and dry-stone walls at 1.12, oaks, phone boxes, drizzle) and the Netherlands
+  (Holland: flat, tulips, windmills, a canal behind a rail) between France
+  and Germany; Japan (Fuji: cherry trees, torii, stone lanterns, a big
+  snow-capped mountain, road 0.75 wide) after San Francisco, ending the lap.
+  Each has a gas station. Traffic still all drives one way (no left-hand
+  traffic shown in England or Japan).
+- Patches: wet spots became `Segment::patch` (Water, Oil) with
+  `patch_under()`; rounder (root of a sine). Oil: about four a lap, any zone;
+  above 15% of top speed 8% grip, a twitch, the sprite flicking, squeal.
+- Cars: `CarModel` (Spider, GT Coupe, Hot Hatch, Muscle; top speed,
+  acceleration, grip factors; none dominates). `apply_car()` sets the Player;
+  grip multiplies the road's. Traffic and the speedometer use the standard top
+  speed (`base_max_speed_`), so km/h differ by car; the revs are the car's own.
+- Dealers: `TrackBuilder::car_dealer()` (a forecourt lot like a gas station's,
+  `Segment::dealer`, showroom and sign; refuelling ignores them), in Tuscany
+  and California. Stopped on the forecourt the HUD shows the offer; each push
+  of the steering changes car (with a chime); you leave in the one showing.
+  Headless `--car N` and `--dealer` (the autopilot pulls in and stays).
+
+Verified: builds warning-free; tests (puddles per zone, oil, road width
+blending and drawing, car models, sprites per model, zones by name);
+ASan+UBSan (a full lap in the Muscle car with sound, a dealer visit with a
+switch, an oil slick, steering crashes in England, Holland and Japan, the
+live loop); `reuse lint`; screenshots of the three countries, oil, puddles,
+the dealer and three other cars.
+Not verified: how the cars and the narrow lanes feel in play.
+
 ## Round 9: Linux desktop integration, done
 
 Requested: a man page, a .desktop file, an icon and the rest of the Linux

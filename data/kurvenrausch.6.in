@@ -10,12 +10,14 @@ kurvenrausch \- classic pseudo-3D arcade racer
 .SH DESCRIPTION
 .B kurvenrausch
 is a racer in the spirit of OutRun and Lotus Esprit Turbo Challenge: one lap
-through Europe and the USA, from the Cote d'Azur through the Black Forest, the
-Alps and Tuscany to Arizona, the California coast and San Francisco.
+around the world, from the Cote d'Azur through England, the Netherlands, the
+Black Forest, the Alps and Tuscany to Arizona, the California coast, San
+Francisco and Japan.
 The road forks in places into two routes that join again; keep to the side of
 the road you want to take.
-On the way there is traffic to pass, fuel to buy at gas stations, nitro to
-burn and, in San Francisco, crests to jump.
+On the way there is traffic to pass, fuel to buy at gas stations, other cars
+to choose at car dealers (stop on the forecourt and steer left or right),
+nitro to burn and, in San Francisco, crests to jump.
 .PP
 Without options the game opens a window and starts at the start line; the lap
 clock runs from the first time the car crosses it.

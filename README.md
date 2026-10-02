@@ -12,10 +12,10 @@ Packaged with a **Nix flake**.
 
 ![Kurvenrausch on the Cote d'Azur corniche](docs/screenshot.png)
 
-One lap takes you through seven zones, each with its own country, scenery,
+One lap takes you through ten zones, each with its own country, scenery,
 weather and road markings, fading smoothly into one another:
 
-![The seven zones: France, Germany, Switzerland, Italy, Arizona, California, San Francisco](docs/zones.png)
+![The ten zones: France, England, the Netherlands, Germany, Switzerland, Italy, Arizona, California, San Francisco, Japan](docs/zones.png)
 
 ## Features
 
@@ -23,12 +23,15 @@ weather and road markings, fading smoothly into one another:
   curves by accumulated lateral offset, hills and crests with correct
   occlusion, alternating rumble strips and grass bands, lane markings, a
   chequered start line, and distance fog
-- **Seven zones** with blended looks: the Cote d'Azur (palms, sunny), the Black
-  Forest (firs in the rain), the Alps (snowfall, chalets, a pass), Tuscany
-  (cypress avenues at sunset), Arizona (desert, cacti, mesas, telephone poles)
-  the California coast (sandstone cliff and sea in thick fog) and San
-  Francisco (steep streets between Victorian row houses); a banner
-  announces each country
+- **Ten zones** with blended looks: the Cote d'Azur (palms, sunny), England
+  (narrow lanes between hedgerows and stone walls, drizzle), the Netherlands
+  (dead flat: windmills, tulip fields, a canal), the Black Forest (firs in
+  the rain), the Alps (snowfall, chalets, a pass), Tuscany (cypress avenues at
+  sunset), Arizona (desert, cacti, mesas, telephone poles), the California
+  coast (sandstone cliff and sea in thick fog), San Francisco (steep streets
+  between Victorian row houses) and Japan (cherry blossom, shrine gates, a
+  snow-capped volcano); a banner announces each country. Roads differ in
+  width as well as in markings
 - **Cliffs and guard rails** along the road: strata-textured rock walls that
   rise and fall with the terrain, rails above the sea or a valley; both are
   solid, the car scrapes along them and throws sparks
@@ -36,7 +39,8 @@ weather and road markings, fading smoothly into one another:
   haze; wet and icy roads reduce grip. Driving, the rain and snow stream out
   of the vanishing point in ever longer streaks the faster you go
 - **Wet spots**: puddles on the road in the rainy and snowy zones; hit one
-  fast and the car aquaplanes, throwing up spray
+  fast and the car aquaplanes, throwing up spray. Rarely, an **oil slick**:
+  hardly any grip at all
 - Roadside scenery as scaled, fogged pixel-art sprites; objects behind a crest
   peek over it
 - Parallax backdrop: copper-banded sky, drifting clouds, mountains and hills
@@ -70,8 +74,11 @@ weather and road markings, fading smoothly into one another:
   forecourt to pull onto, where the tank fills up while you stand by the
   pumps. Run dry and the engine sputters and dies; stranded, the driver pours
   in a spare can after a few seconds
-- **Mini map** of the lap with your position, the start line and the gas
-  stations
+- **Car dealers**: stop at one and choose from four cars, the Spider, the GT
+  Coupe, the Hot Hatch and the Muscle car, each with its own top speed,
+  acceleration and grip
+- **Mini map** of the lap with your position, the start line, the gas
+  stations and the car dealers
 - **Synthesised sound**: a six-cylinder engine with exhaust pulses ringing a
   pipe and a body resonance for the bass, building with the revs, surging as
   the throttle opens and crackling on the overrun; gear changes, tyre squeal,
@@ -161,6 +168,8 @@ made and how rendering changes are checked without a display:
 ./build/kurvenrausch --screenshot shot.bmp --frames 3600 --horn       # honk all the way
 ./build/kurvenrausch --screenshot shot.bmp --frames 2400 --fuel 0.3   # low fuel: pulls in
 ./build/kurvenrausch --screenshot shot.bmp --frames 640 --steer -1 --steer-from 600  # crash
+./build/kurvenrausch --screenshot shot.bmp --zone 1 --frames 300 --car 2   # another car
+./build/kurvenrausch --screenshot shot.bmp --zone 5 --frames 2000 --dealer # visit a dealer
 ```
 
 It simulates the given number of 60 Hz steps with a simple autopilot that also
