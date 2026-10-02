@@ -420,7 +420,7 @@ void Game::fixed_update(const InputState& input, float dt) {
     // too: the car barely steers, slides out of bends, twitches and slows.
     const RoadTheme& look = track_.look_at(tr.z + player_z);
     wet_ = !airborne && speed_pct > 0.05f &&
-           track_.on_wet(tr.z + player_z, tr.x, player.car_width / track_.road_width / 2.f);
+           track_.on_wet(tr.z + player_z, tr.x, player.car_width / track_.half_width_at(tr.z + player_z) / 2.f);
     aquaplaning_ = wet_ && speed_pct > aquaplane_speed;
     const float grip = std::max(look.grip, 0.2f) * (aquaplaning_ ? aquaplane_grip : 1.f);
     steer_ = input.steer > 0.3f ? 1 : input.steer < -0.3f ? -1 : 0;
@@ -458,11 +458,11 @@ void Game::fixed_update(const InputState& input, float dt) {
             vel.speed += player.offroad_decel * dt;
 
         // Crash into solid roadside objects on the car's segment.
-        const float car_w = player.car_width / track_.road_width;
+        const float car_w = player.car_width / track_.half_width_at(tr.z + player_z);
         for (const RoadsideObject& obj : seg.scenery) {
             const SceneryInfo& info = scenery_info(obj.kind);
             if (!info.solid) continue;
-            const float w = info.width / track_.road_width;
+            const float w = info.width / track_.half_width_at(tr.z + player_z);
             const float center = info.centered ? obj.offset
                                                : obj.offset + (obj.offset < 0.f ? -w : w) / 2.f;
             if (overlap(tr.x, car_w, center, w)) {
@@ -485,7 +485,7 @@ void Game::fixed_update(const InputState& input, float dt) {
 
     // Rails and cliffs stop the car; leaning on them scrapes the speed away.
     scraping_ = false;
-    const float car_half = player.car_width / track_.road_width / 2.f;
+    const float car_half = player.car_width / track_.half_width_at(tr.z + player_z) / 2.f;
     for (int side = -1; side <= 1; side += 2) {
         const float limit = barrier_limit(seg, side, car_half);
         if (static_cast<float>(side) * tr.x > limit) {
@@ -498,10 +498,10 @@ void Game::fixed_update(const InputState& input, float dt) {
 
     // Rear-ending traffic: bounce off and drop behind it.
     const int car_segment = track_.index_at(tr.z + player_z);
-    const float car_w = player.car_width / track_.road_width;
+    const float car_w = player.car_width / track_.half_width_at(tr.z + player_z);
     world_.view<Transform, Velocity, Traffic>([&](Entity, Transform& t, Velocity& v, Traffic& traffic) {
         if (airborne || vel.speed <= v.speed || track_.index_at(t.z) != car_segment) return;
-        const float w = vehicle_info(traffic.kind).width / track_.road_width;
+        const float w = vehicle_info(traffic.kind).width / track_.half_width_at(tr.z + player_z);
         if (!overlap(tr.x, car_w, t.x, w * 0.8f)) return;
         vel.speed = v.speed * (v.speed / vel.speed);
         tr.z = track_.wrap(t.z - player_z);
@@ -757,7 +757,7 @@ void Game::check_close_passes() {
     auto& vel = world_.get<Velocity>(player_);
     const auto& player = world_.get<Player>(player_);
     const float car_z = tr.z + world_.get<Camera>(camera_).player_z();
-    const float car_w = player.car_width / track_.road_width;
+    const float car_w = player.car_width / track_.half_width_at(car_z);
     const float max_step = 4.f * track_.segment_length;
     world_.view<Transform, Traffic>([&](Entity, Transform& t, Traffic& traffic) {
         const float gap = signed_gap(car_z, t.z, track_.length());
@@ -1121,6 +1121,7 @@ void Game::render_mirror() {
     view.draw_distance = cam.draw_distance;
     view.fog_density = look.fog_density;
     view.direction = -1;
+    view.player_z = 0.f; // the mirror's camera is in the car
     view.horizon = mirror_horizon;
     view.y_scale = y_scale;
     mirror_sprites_.clear();

@@ -83,6 +83,16 @@ const Zone& Track::zone_at(float z) const {
     return zones[static_cast<size_t>(zone_number_at(z))];
 }
 
+float Track::half_width(int boundary) const {
+    return looks.empty() ? road_width : road_width * look(boundary).road_scale;
+}
+
+float Track::half_width_at(float z) const {
+    const int i = index_at(z);
+    const float t = std::fmod(wrap(z), segment_length) / segment_length;
+    return half_width(i) + (half_width(i + 1) - half_width(i)) * t;
+}
+
 float Track::forecourt_at(int boundary) const {
     return std::min(segment(boundary).forecourt, segment(boundary - 1).forecourt);
 }
@@ -122,7 +132,7 @@ void Track::update_branch_offsets() {
         auto walk = [&](int from, int to, float offset) {
             float slope = 0.f;
             for (int i = from; i <= to; ++i) {
-                branch_offsets[static_cast<size_t>(i)] = offset / road_width;
+                branch_offsets[static_cast<size_t>(i)] = offset / half_width(i);
                 if (i == to) break;
                 offset += slope;
                 slope += other[static_cast<size_t>(i - br.fork)].curve - segment(i).curve;
@@ -242,7 +252,7 @@ float barrier_limit(const Segment& seg, int side, float car_half_width) {
 RoadTheme mix_themes(const RoadTheme& a, const RoadTheme& b, float t) {
     // Tripwire: when a field is added to RoadTheme this changes, as a reminder
     // to blend it below and to update the expected size.
-    static_assert(sizeof(RoadTheme) == 176, "RoadTheme changed: update mix_themes()");
+    static_assert(sizeof(RoadTheme) == 180, "RoadTheme changed: update mix_themes()");
 
     RoadTheme r = t < 0.5f ? a : b; // discrete fields come from the nearer theme
     const auto c = [t](Color x, Color y) { return blend(x, y, t); };
@@ -283,6 +293,7 @@ RoadTheme mix_themes(const RoadTheme& a, const RoadTheme& b, float t) {
     r.rain = f(a.rain, b.rain);
     r.snowfall = f(a.snowfall, b.snowfall);
     r.grip = f(a.grip, b.grip);
+    r.road_scale = f(a.road_scale, b.road_scale);
     r.center_line = c(a.center_line, b.center_line);
     // lanes and us_markings are discrete: they stay those of the nearer theme.
     return r;

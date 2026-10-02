@@ -440,6 +440,57 @@ void test_blit_rotated() {
     fb.blit_rotated(b, 5.f, 5.f, 0.f, 2.f, 1.f);
 }
 
+// Road width per zone: it blends between zones, and the road is drawn
+// accordingly.
+void test_road_width() {
+    using namespace racer;
+    Track t;
+    t.segments.resize(300);
+    for (int i = 0; i < 3; ++i) {
+        Zone z;
+        z.country = "C" + std::to_string(i);
+        z.theme.road_scale = i == 1 ? 0.5f : 1.f;
+        z.theme.fog_density = 0.f;
+        z.first_segment = i * 100;
+        t.zones.push_back(z);
+    }
+    t.finish(40);
+    CHECK_NEAR(t.half_width(50), t.road_width, 1e-3f);
+    CHECK_NEAR(t.half_width(150), 0.5f * t.road_width, 1e-3f);
+    float previous = t.half_width(80);
+    for (int i = 81; i < 120; ++i) {
+        CHECK(t.half_width(i) <= previous); // narrows smoothly
+        previous = t.half_width(i);
+    }
+    const float z = 150.5f * t.segment_length;
+    CHECK(t.half_width_at(z) >= std::min(t.half_width(150), t.half_width(151)) - 1e-3f);
+    CHECK(t.half_width_at(z) <= std::max(t.half_width(150), t.half_width(151)) + 1e-3f);
+
+    // Drawn: count the road's pixels across a row where all of it fits.
+    const SpriteSheet sprites;
+    auto road_pixels = [&](float position) {
+        Framebuffer fb(320, 240);
+        fb.clear(Color{0, 0, 0});
+        RoadView v;
+        v.position = position;
+        v.player_z = 840.f;
+        v.fog_density = 0.f;
+        std::vector<RoadSprite> none;
+        RoadRenderer r;
+        r.render(fb, t, v, sprites, none);
+        const RoadTheme& look = t.look(static_cast<int>(position / t.segment_length) + 10);
+        int count = 0;
+        for (int x = 0; x < 320; ++x) {
+            const uint32_t p = fb.pixels()[140 * 320 + x];
+            count += p == look.road[0].argb() || p == look.road[1].argb() || p == look.lane.argb();
+        }
+        return count;
+    };
+    const int wide = road_pixels(40.f * t.segment_length), narrow = road_pixels(140.f * t.segment_length);
+    CHECK(wide > 0 && narrow > 0);
+    CHECK(std::abs(static_cast<float>(narrow) / static_cast<float>(wide) - 0.5f) < 0.1f);
+}
+
 void test_framebuffer_blit() {
     using namespace racer;
     Framebuffer src(4, 3), dst(10, 10);
@@ -1487,6 +1538,7 @@ int main() {
     test_vertical();
     test_road_mirror();
     test_framebuffer_blit();
+    test_road_width();
     test_blit_rotated();
     test_demo_track();
     test_drivetrain();

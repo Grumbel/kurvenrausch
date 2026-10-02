@@ -68,16 +68,18 @@ void RoadRenderer::render(Framebuffer& fb, const Track& track, const RoadView& v
         if (dir > 0 && index < base) loop = track_len;
         if (dir < 0 && index > base) loop = -track_len;
         const float cam_z = view.position - loop;
-        const float cam_x = view.player_x * track.road_width;
+        // The car's lateral position, in half-widths of the road where it is.
+        const float cam_x = view.player_x * track.half_width_at(view.position + view.player_z);
         const float z1 = static_cast<float>(index) * seg_len;
         const float z2 = z1 + seg_len;
 
         Slice s;
         s.index = index;
+        const int near = dir > 0 ? index : index + 1; // boundaries at the near and far end
         project(s.p1, x, dir > 0 ? seg.y1 : seg.y2, dir > 0 ? z1 : z2, cam_x, cam_y, cam_z,
-                view.camera_depth, dir, fb.width(), horizon, y_scale, track.road_width);
+                view.camera_depth, dir, fb.width(), horizon, y_scale, track.half_width(near));
         project(s.p2, x + dx, dir > 0 ? seg.y2 : seg.y1, dir > 0 ? z2 : z1, cam_x, cam_y, cam_z,
-                view.camera_depth, dir, fb.width(), horizon, y_scale, track.road_width);
+                view.camera_depth, dir, fb.width(), horizon, y_scale, track.half_width(near + dir));
         x += dx;
         dx += seg.curve;
 
@@ -350,7 +352,7 @@ void RoadRenderer::draw_sprites(Framebuffer& fb, const Track& track, const Sprit
             const SceneryInfo& info = scenery_info(obj.kind);
             const float px_per_unit = p0.scale * half_w;
             const float width = info.width * px_per_unit;
-            float left = p0.x + obj.offset * track.road_width * px_per_unit;
+            float left = p0.x + obj.offset * track.half_width(s.index) * px_per_unit;
             if (info.centered) left -= width / 2.f;
             else if (obj.offset < 0.f) left -= width;
             const Bitmap& bmp = direction_ > 0 ? sprites.scenery(obj.kind) : sprites.scenery_back(obj.kind);
@@ -384,7 +386,7 @@ void RoadRenderer::draw_sprites(Framebuffer& fb, const Track& track, const Sprit
             const float px_per_unit = scale * half_w;
             const float width = o.world_width * px_per_unit;
             const float height = width * static_cast<float>(bmp.h) / static_cast<float>(bmp.w);
-            const float cx = x + o.offset * track.road_width * px_per_unit;
+            const float cx = x + o.offset * track.half_width_at(o.z) * px_per_unit;
             fb.blit_scaled(bmp, cx - width / 2.f, y - height, width, height, false,
                            fog_amount, track.look(s.index).fog);
         };

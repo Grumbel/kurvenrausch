@@ -139,6 +139,7 @@ struct RoadTheme {
     float rain = 0.f;                   // 0 .. 1
     float snowfall = 0.f;               // 0 .. 1
     float grip = 1.f;                   // tyre grip: 1 dry road, less when wet or icy
+    float road_scale = 1.f;             // road width, of the standard Track::road_width
 
     // Road markings (discrete: the nearer zone wins while blending)
     int lanes = 3;                      // 2 or 3
@@ -194,7 +195,13 @@ struct Branch {
 struct Track {
     std::vector<Segment> segments;
     float segment_length = 200.f;
-    float road_width = 2000.f;  // half width in world units
+    float road_width = 2000.f;  // standard half width in world units; looks scale it
+
+    // Half width of the road in world units at the boundary in front of
+    // segment `boundary`, and anywhere along the track (interpolated). Lateral
+    // positions in road half-widths convert with these.
+    float half_width(int boundary) const;
+    float half_width_at(float z) const;
     float start_z = 0.f;        // position of the start/finish line
 
     // Zones in track order; zones[0] starts at segment 0 and the last one runs
