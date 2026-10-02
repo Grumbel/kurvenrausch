@@ -21,6 +21,34 @@ Upstream master has since been fast-forwarded to `64fda32`, the tip of 002.1, so
 The rebase notes: upstream's rename is kept, its rendering fix is superseded by
 the road/framebuffer rewrite, `Color::to_u32()` became `Color::argb()`.
 
+## Round 9: Linux desktop integration, done
+
+Requested: a man page, a .desktop file, an icon and the rest of the Linux
+desktop integration. (Also: links in the README credits.)
+
+- App ID `io.github.grumbel.kurvenrausch` (the GitHub home, reverse DNS):
+  `data/<id>.desktop` (Game;ArcadeGame;, StartupWMClass = the ID),
+  `data/<id>.metainfo.xml` (AppStream: description, URLs, screenshot from the
+  README image on GitHub, controls, OARS, provides the binary; CC0-1.0 as
+  AppStream demands; no <releases> yet, add one per release),
+  `data/kurvenrausch.6.in` (man page, section 6, version and the last commit's
+  date filled in by CMake; Nix passes the date from `self.lastModifiedDate`).
+- Icon: `make_app_icon()`, 32x32 pixel art drawn by the game (a road into a
+  sunset with the red car); the window icon (`Display::set_icon`) and
+  `--icon FILE`; `tools/make_icons.py` writes hicolor PNGs (16 averaged; 32,
+  64, 128, 256 whole multiples) and a scalable SVG of pixel rectangles. The
+  window's X11 class / Wayland app ID is the app ID so desktops match it.
+- CMake install rules (GNUInstallDirs) for all of it; the flake's package now
+  uses them. Tests: the man page documents every `--help` option; the
+  validators (`desktop-file-validate`, `appstreamcli validate`, `mandoc -T
+  lint`) run when found, the dev shell has them.
+
+Verified: all five tests pass with the validators; `cmake --install` and
+`nix build` produce bin/, applications/, metainfo/, icons/hicolor/ (5 sizes
+and scalable) and man6/; `reuse lint`; ASan on the live loop and `--icon`.
+Not verified: how a real desktop shows it (the icon in a launcher, the window
+matched to the entry under X11 and Wayland).
+
 ## Round 8: rolling tyres, forks, done
 
 Requested: a spinning effect on the tyres (flicker, fitting the style);

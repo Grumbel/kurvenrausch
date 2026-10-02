@@ -96,6 +96,21 @@ cmake --build build
 ./build/kurvenrausch
 ```
 
+### Install
+
+```bash
+cmake -B build -DCMAKE_INSTALL_PREFIX=/usr/local
+cmake --build build
+sudo cmake --install build
+```
+
+This installs the game with its desktop integration: the program, a desktop
+entry and AppStream metadata (`io.github.grumbel.kurvenrausch`), icons in the
+hicolor theme (PNGs from 16 to 256 pixels and an SVG) and the man page,
+`man 6 kurvenrausch`. The Nix package (`nix build`) contains the same. The
+icon is the game's own pixel art, also its window icon;
+`tools/make_icons.py` regenerates the files from it.
+
 ## Controls
 
 | Keyboard         | Gamepad                  | Action             |
@@ -126,7 +141,10 @@ ctest --test-dir build --output-on-failure
 
 The unit tests cover the input mapping, zone blending, the route's invariants,
 cliffs and barriers, weather, lane logic, lap detection and the sound synthesis
-(which is rendered offline and checked by its spectrum).
+(which is rendered offline and checked by its spectrum). Further tests check
+that the man page documents every option, and run `desktop-file-validate`,
+`appstreamcli validate` and `mandoc -T lint` where they are installed (the
+Nix dev shell has them).
 
 ## Headless mode
 
@@ -179,7 +197,8 @@ include/
   game.hpp         game loop, physics, traffic, lap timing
 src/               implementations
 tests/             unit tests (CTest)
-tools/             screenshot generator
+data/              desktop entry, AppStream metadata, man page, icons
+tools/             screenshot and icon generators
 docs/              README images
 LICENSES/          licence text (REUSE)
 ```
@@ -214,6 +233,8 @@ Kurvenrausch is free software: you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
 Foundation, either version 3 of the License, or (at your option) any later
 version. See [`LICENSES/GPL-3.0-or-later.txt`](LICENSES/GPL-3.0-or-later.txt).
+The AppStream metadata file alone is under CC0-1.0, as AppStream requires a
+permissive licence for metadata.
 
 The repository follows the [REUSE](https://reuse.software/) specification:
 `reuse lint` passes.

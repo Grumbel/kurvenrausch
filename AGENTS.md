@@ -16,6 +16,11 @@ that is scaled up with nearest-neighbour filtering for chunky pixels.
 - Screenshots for the README: `tools/make_screenshots.py` (needs Pillow). Look
   at renders after any rendering change; `--zone N`, `--print-zones`, `--steer`
   and `--wav` exist for exactly this.
+- Desktop integration lives in `data/` (desktop entry, AppStream metainfo, man
+  page template, icons) and is installed by CMake. The icons are generated from
+  the game's `make_app_icon()` by `tools/make_icons.py`; rerun it after
+  changing the icon. Keep the man page's options in step with `--help` (a
+  test checks it).
 - Headless check: `./build/kurvenrausch --screenshot out.bmp --frames 600`
   renders a frame without opening a window. Use this to verify rendering
   changes in environments without a display.
@@ -40,6 +45,8 @@ that is scaled up with nearest-neighbour filtering for chunky pixels.
   `// SPDX-FileCopyrightText: 2026 Ingo Ruhnke <grumbel@gmail.com>` and
   `// SPDX-License-Identifier: GPL-3.0-or-later` (`#` comments in CMake/Nix/Python).
   Files that cannot carry one are listed in `REUSE.toml`. `reuse lint` must pass.
+  The one exception: `data/*.metainfo.xml` is CC0-1.0, because AppStream
+  requires a permissive metadata licence.
 <!-- REUSE-IgnoreEnd -->
 - Fix root causes; no workarounds. Don't remove features without discussion.
 
