@@ -593,6 +593,25 @@ void test_fuel() {
     CHECK(f.full());
 }
 
+void test_steer_rate() {
+    using racer::steer_rate;
+    // Nothing when standing, more the faster, as before from half speed up.
+    CHECK(steer_rate(0.f) == 0.f);
+    CHECK_NEAR(steer_rate(0.5f), 1.f, 1e-5f);
+    CHECK_NEAR(steer_rate(1.f), 2.f, 1e-5f);
+    CHECK_NEAR(steer_rate(1.3f), 2.6f, 1e-5f); // nitro
+    float previous = 0.f;
+    for (float s = 0.01f; s <= 1.f; s += 0.01f) {
+        CHECK(steer_rate(s) > previous);
+        previous = steer_rate(s);
+    }
+    // Slow, it manoeuvres much better than in proportion to the speed.
+    CHECK(steer_rate(0.1f) > 2.f * (2.f * 0.1f));
+    CHECK(steer_rate(0.05f) > 3.f * (2.f * 0.05f));
+    // Continuous at the knee.
+    CHECK_NEAR(steer_rate(0.4999f), steer_rate(0.5001f), 1e-3f);
+}
+
 void test_follow_speed() {
     using racer::follow_speed;
     // Far behind it closes in, but no faster than it cruises.
@@ -1586,6 +1605,7 @@ int main() {
     test_speed_rules();
     test_yield_lane();
     test_follow_speed();
+    test_steer_rate();
     test_fuel();
     test_crash_pose();
     test_vertical();

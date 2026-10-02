@@ -418,7 +418,7 @@ void Game::fixed_update(const InputState& input, float dt) {
 
     const Segment& seg = track_.segment_at(tr.z + player_z);
     const float speed_pct = vel.speed / player.max_speed;
-    const float dx = dt * 2.f * speed_pct; // steering is stronger at speed
+    const float dx = dt * steer_rate(speed_pct);
 
     // Horn, nitro and the wave after a close pass.
     horn_ = input.horn;

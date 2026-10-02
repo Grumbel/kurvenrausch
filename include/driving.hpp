@@ -90,6 +90,13 @@ inline bool nearer_other_road(float x, float other) {
     return std::abs(x - other) + fork_switch_margin < std::abs(x);
 }
 
+// How fast the car moves sideways under full steering, in road half-widths
+// per second, at `speed` (a fraction of the top speed). From half speed up
+// it grows with the speed; below that it falls off only like a square root,
+// so the car still manoeuvres when slow (pulling onto a forecourt, say),
+// down to nothing when standing.
+float steer_rate(float speed);
+
 // Speed after one step that changed it from `before` to `after`: the engine
 // cannot push the car beyond `top`, and above it (after a nitro burn or a
 // boost) the car slows back down by `drag` per second.

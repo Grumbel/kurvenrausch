@@ -68,6 +68,13 @@ float step_vertical(Vertical& v, float road_y, float road_vy, float gravity, flo
     return impact;
 }
 
+float steer_rate(float speed) {
+    constexpr float rate = 2.f;  // at full speed
+    constexpr float knee = 0.5f; // below this the square root takes over
+    speed = std::max(0.f, speed);
+    return rate * (speed >= knee ? speed : std::sqrt(speed * knee));
+}
+
 float limit_speed(float before, float after, float top, float drag, float dt) {
     if (after <= top) return after;
     // Braking still works up here; accelerating does not.
