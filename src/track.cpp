@@ -50,6 +50,21 @@ const SceneryInfo& scenery_info(Scenery kind) {
         /* StoneLantern*/{ 320.f, true, false, false},
         /* Showroom  */ {4800.f, true,  false, false},
         /* DealerSign*/ { 700.f, true,  false, false},
+        /* DatePalm  */ {1600.f, true,  false, true},
+        /* Pyramid   */ {14000.f, true, false, false},
+        /* Acacia    */ {2600.f, true,  false, true},
+        /* Giraffe   */ { 900.f, true,  false, true},
+        /* TermiteMound*/{ 500.f, true, false, true},
+        /* Banyan    */ {3000.f, true,  false, true},
+        /* Temple    */ {2600.f, true,  false, false},
+        /* Cow       */ { 800.f, true,  false, true},
+        /* Maple     */ {1700.f, true,  false, true},
+        /* HanokGate */ {1800.f, true,  false, false},
+        /* GumTree   */ {1600.f, true,  false, true},
+        /* KangarooSign*/{ 500.f, true, false, false},
+        /* Uluru     */ {16000.f, true, false, false},
+        /* JungleTree*/ {2200.f, true,  false, true},
+        /* Banana    */ { 900.f, true,  false, true},
     };
     static_assert(sizeof(infos) / sizeof(infos[0]) == static_cast<size_t>(Scenery::Count),
                   "scenery_info() needs an entry for every Scenery kind");
@@ -688,6 +703,135 @@ Zone zone_japan() {
     return z;
 }
 
+// A theme from a few colours; the rest as RoadTheme's defaults.
+RoadTheme make_theme(Color sky_top, Color sky_horizon, Color fog, Color grass0, Color grass1, Color road,
+                     Color mountain_lit, Color mountain_shade, Color hill_lit, Color hill_shade) {
+    RoadTheme t;
+    t.sky_top = sky_top;
+    t.sky_horizon = sky_horizon;
+    t.fog = fog;
+    t.grass[0] = grass0;
+    t.grass[1] = grass1;
+    t.road[0] = road;
+    t.road[1] = blend(road, Color{0, 0, 0}, 0.06f);
+    t.mountain_lit = mountain_lit;
+    t.mountain_shade = mountain_shade;
+    t.hill_lit = hill_lit;
+    t.hill_shade = hill_shade;
+    t.snow_line = 1.0e9f;
+    t.lanes = 2;
+    return t;
+}
+
+Zone zone_egypt() {
+    Zone z{"EGYPT", "NILE", make_theme({0x30, 0x7c, 0xd8}, {0xf4, 0xe4, 0xbc}, {0xf0, 0xe0, 0xb8},
+                                       {0xe4, 0xc0, 0x7c}, {0xd8, 0xb4, 0x70}, {0x78, 0x70, 0x6c},
+                                       {0xd4, 0xa8, 0x68}, {0xb4, 0x88, 0x54}, {0xdc, 0xb4, 0x74},
+                                       {0xc8, 0xa0, 0x64}),
+           0, Decor::Nile};
+    RoadTheme& t = z.theme;
+    t.rumble[0] = Color{0xf0, 0xe8, 0xd8};
+    t.rumble[1] = Color{0x2c, 0x58, 0xa8};
+    t.sun_amount = 0.8f;
+    t.fog_density = 3.f;
+    t.haze = 0.25f;
+    t.mountain_scale = 0.2f;
+    t.hill_scale = 0.4f;
+    t.cloud_tint = Color{0xff, 0xf4, 0xe0};
+    t.cloud_tint_amount = 0.2f;
+    return z;
+}
+
+Zone zone_kenya() {
+    Zone z{"KENYA", "MASAI MARA", make_theme({0x2c, 0x50, 0xa0}, {0xf8, 0xb4, 0x64}, {0xf0, 0xb8, 0x80},
+                                             {0xc8, 0xa8, 0x50}, {0xbc, 0x9c, 0x48}, {0x70, 0x60, 0x58},
+                                             {0x9c, 0x88, 0xb0}, {0x7c, 0x6c, 0x98}, {0xa0, 0x88, 0x48},
+                                             {0x88, 0x74, 0x40}),
+           0, Decor::Savanna};
+    RoadTheme& t = z.theme;
+    t.rumble[0] = Color{0xb4, 0x5c, 0x30}; // red earth verges
+    t.rumble[1] = Color{0x9c, 0x4c, 0x28};
+    t.sun_amount = 1.f;
+    t.fog_density = 3.f;
+    t.haze = 0.2f;
+    t.mountain_scale = 1.3f; // Kilimanjaro on the horizon
+    t.snow_line = 40.f;
+    t.cloud_tint = Color{0xf8, 0x9c, 0x5c};
+    t.cloud_tint_amount = 0.5f;
+    t.road_scale = 0.85f;
+    return z;
+}
+
+Zone zone_india() {
+    Zone z{"INDIA", "RAJASTHAN", make_theme({0x6c, 0x9c, 0xc8}, {0xf0, 0xd8, 0xa8}, {0xe8, 0xd0, 0xa4},
+                                            {0xb8, 0xa8, 0x5c}, {0xac, 0x9c, 0x54}, {0x6c, 0x64, 0x60},
+                                            {0xc0, 0x98, 0x78}, {0xa0, 0x7c, 0x64}, {0x9c, 0x98, 0x50},
+                                            {0x88, 0x84, 0x48}),
+           0, Decor::Rajasthan};
+    RoadTheme& t = z.theme;
+    t.rumble[0] = Color{0xf0, 0xf0, 0xe0};
+    t.rumble[1] = Color{0xe8, 0x9c, 0x20};
+    t.sun_amount = 0.6f;
+    t.fog_density = 6.f;
+    t.haze = 0.5f; // hot and hazy
+    t.mountain_scale = 0.4f;
+    t.road_scale = 0.8f;
+    return z;
+}
+
+Zone zone_korea() {
+    Zone z{"KOREA", "SEORAKSAN", make_theme({0x3c, 0x7c, 0xd4}, {0xd4, 0xe4, 0xf0}, {0xd0, 0xdc, 0xe4},
+                                            {0x9c, 0x8c, 0x4c}, {0x90, 0x80, 0x44}, {0x5c, 0x5c, 0x62},
+                                            {0x88, 0x84, 0x90}, {0x6c, 0x6c, 0x78}, {0xb0, 0x5c, 0x30},
+                                            {0x90, 0x4c, 0x2c}),
+           0, Decor::Autumn};
+    RoadTheme& t = z.theme;
+    t.fog_density = 5.f;
+    t.haze = 0.3f;
+    t.mountain_scale = 1.4f; // rocky peaks
+    t.hill_scale = 1.2f;
+    t.sun_amount = 0.4f;
+    return z;
+}
+
+Zone zone_australia() {
+    Zone z{"AUSTRALIA", "OUTBACK", make_theme({0x24, 0x64, 0xd0}, {0xd8, 0xe4, 0xf0}, {0xe8, 0xc8, 0xa8},
+                                              {0xc0, 0x60, 0x30}, {0xb4, 0x58, 0x2c}, {0x6c, 0x5c, 0x58},
+                                              {0xb4, 0x6c, 0x48}, {0x94, 0x58, 0x3c}, {0xb8, 0x74, 0x44},
+                                              {0xa0, 0x64, 0x3c}),
+           0, Decor::Outback};
+    RoadTheme& t = z.theme;
+    t.rumble[0] = Color{0xf0, 0xf0, 0xe8};
+    t.rumble[1] = Color{0xf0, 0xf0, 0xe8};
+    t.sun_amount = 0.9f;
+    t.fog_density = 2.5f;
+    t.haze = 0.15f;
+    t.mountain_scale = 0.3f;
+    t.hill_scale = 0.3f;
+    t.road_scale = 0.85f;
+    return z;
+}
+
+Zone zone_brazil() {
+    Zone z{"BRAZIL", "AMAZONAS", make_theme({0x50, 0x68, 0x70}, {0xa8, 0xbc, 0xb0}, {0xa0, 0xb8, 0xa8},
+                                            {0x2c, 0x78, 0x2c}, {0x28, 0x6c, 0x28}, {0x58, 0x54, 0x50},
+                                            {0x3c, 0x64, 0x48}, {0x30, 0x54, 0x3c}, {0x30, 0x70, 0x30},
+                                            {0x28, 0x60, 0x2c}),
+           0, Decor::Jungle};
+    RoadTheme& t = z.theme;
+    t.rumble[0] = Color{0xe8, 0xe0, 0x40};
+    t.rumble[1] = Color{0x28, 0x8c, 0x3c};
+    t.cloud_tint = Color{0x70, 0x80, 0x80};
+    t.cloud_tint_amount = 0.7f;
+    t.fog_density = 9.f;
+    t.haze = 0.55f;
+    t.mountain_scale = 0.5f;
+    t.hill_scale = 1.3f;
+    t.rain = 0.9f; // tropical downpour
+    t.grip = 0.82f;
+    return z;
+}
+
 Zone zone_germany() {
     Zone z{"GERMANY", "SCHWARZWALD", RoadTheme{}, 0, Decor::Forest};
     RoadTheme& t = z.theme;
@@ -970,6 +1114,54 @@ void decorate(Track& track, TrackBuilder& b, int from, int to, uint32_t seed) {
                 if (rng.chance(0.03f)) put(Scenery::Tree, random_side(), rng.range(1.3f, 2.f));
                 break;
 
+            case Decor::Nile:
+                if (i % 6 == 0) put(Scenery::DatePalm, +1, rng.range(1.2f, 1.6f));
+                if (rng.chance(0.06f)) put(Scenery::DatePalm, -1, rng.range(1.2f, 3.f));
+                if (i - last_mesa > 120 && rng.chance(0.02f)) {
+                    put(Scenery::Pyramid, -1, rng.range(5.f, 8.f));
+                    last_mesa = i;
+                }
+                if (rng.chance(0.04f)) put(Scenery::DryShrub, random_side(), rng.range(1.2f, 3.f));
+                break;
+
+            case Decor::Savanna:
+                if (rng.chance(0.05f)) put(Scenery::Acacia, random_side(), rng.range(1.4f, 5.f));
+                if (rng.chance(0.012f)) put(Scenery::Giraffe, random_side(), rng.range(1.6f, 3.5f));
+                if (rng.chance(0.03f)) put(Scenery::TermiteMound, random_side(), rng.range(1.2f, 3.f));
+                if (rng.chance(0.04f)) put(Scenery::DryShrub, random_side(), rng.range(1.1f, 3.f));
+                break;
+
+            case Decor::Rajasthan:
+                if (rng.chance(0.05f)) put(Scenery::Banyan, random_side(), rng.range(1.3f, 3.5f));
+                if (i % 7 == 0) put(Scenery::Palm, random_side(), rng.range(1.2f, 2.5f));
+                if (i % 140 == 70) put(Scenery::Temple, i % 280 == 70 ? -1 : 1, 1.6f);
+                if (rng.chance(0.012f)) put(Scenery::Cow, random_side(), 1.15f);
+                break;
+
+            case Decor::Autumn:
+                if (i % 3 == 0) both(Scenery::Maple, 1.15f, 2.8f);
+                if (i % 110 == 55) put(Scenery::HanokGate, i % 220 == 55 ? -1 : 1, 1.3f);
+                if (rng.chance(0.03f)) put(Scenery::Fir, random_side(), rng.range(1.5f, 3.5f));
+                break;
+
+            case Decor::Outback:
+                if (rng.chance(0.04f)) put(Scenery::GumTree, random_side(), rng.range(1.3f, 4.f));
+                if (rng.chance(0.04f)) put(Scenery::TermiteMound, random_side(), rng.range(1.2f, 3.f));
+                if (rng.chance(0.05f)) put(Scenery::DryShrub, random_side(), rng.range(1.1f, 3.f));
+                if (i % 150 == 30) put(Scenery::KangarooSign, +1, 1.2f);
+                if (i - last_mesa > 300 && rng.chance(0.02f)) {
+                    put(Scenery::Uluru, random_side(), rng.range(6.f, 9.f));
+                    last_mesa = i;
+                }
+                break;
+
+            case Decor::Jungle:
+                for (int side = -1; side <= 1; side += 2) {
+                    if (rng.chance(0.55f)) put(Scenery::JungleTree, side, rng.range(1.15f, 3.5f));
+                }
+                if (rng.chance(0.2f)) put(Scenery::Banana, random_side(), rng.range(1.1f, 2.f));
+                break;
+
             case Decor::Sakura:
                 if (i % 4 == 0) both(Scenery::CherryTree, 1.15f, 2.4f);
                 if (i % 90 == 45) put(Scenery::Torii, i % 180 == 45 ? -1 : 1, 1.3f);
@@ -1109,6 +1301,43 @@ Track build_demo_track() {
     b.curve(Len::Medium, -Bend::Medium, -Hill::Low);
     b.curve(Len::Long, Bend::Easy, -Hill::Low);
 
+    b.begin_zone(zone_egypt());
+    // Along the Nile, past the pyramids.
+    b.straight(Len::Medium);
+    b.gas_station();
+    b.curve(Len::Long, -Bend::Easy, Hill::None);
+
+    b.begin_zone(zone_kenya());
+    // Across the savanna towards the mountain.
+    b.hill(Len::Medium, Hill::Low);
+    b.curve(Len::Medium, Bend::Medium, Hill::None);
+    b.gas_station();
+    b.hill(Len::Medium, -Hill::Low);
+
+    b.begin_zone(zone_india());
+    b.curve(Len::Short, -Bend::Medium, Hill::None);
+    b.curve(Len::Short, Bend::Medium, Hill::Low / 2.f);
+    b.gas_station();
+    b.curve(Len::Medium, -Bend::Easy, -Hill::Low / 2.f);
+
+    b.begin_zone(zone_korea());
+    // Up through the autumn forest and down again.
+    b.curve(Len::Medium, Bend::Hard, Hill::Medium);
+    b.gas_station();
+    b.curve(Len::Medium, -Bend::Hard, -Hill::Medium);
+
+    b.begin_zone(zone_japan());
+    // Past the cherry trees towards the mountain.
+    b.curve(Len::Medium, Bend::Medium, Hill::Low);
+    b.gas_station();
+    b.curve(Len::Medium, -Bend::Medium, -Hill::Low);
+
+    b.begin_zone(zone_australia());
+    // Dead straight through the red outback.
+    b.straight(Len::Long);
+    b.gas_station();
+    b.curve(Len::Long, Bend::Easy, Hill::None);
+
     b.begin_zone(zone_arizona());
     b.hill(Len::Long, Hill::Low);
     b.gas_station();
@@ -1169,11 +1398,11 @@ Track build_demo_track() {
     b.slope(30, -0.5f, Bend::Medium);
     b.slope(8, 0.f);
 
-    b.begin_zone(zone_japan());
-    // Past the cherry trees towards the mountain, and down to the start.
+    b.begin_zone(zone_brazil());
+    // Through the rainforest in a downpour, and down to the start.
     b.curve(Len::Medium, Bend::Medium, Hill::Low);
     b.gas_station();
-    b.curve(Len::Medium, -Bend::Medium, Hill::None);
+    b.curve(Len::Medium, -Bend::Hard, Hill::None);
     b.downhill_to_end(Len::Long);
 
     track.finish();

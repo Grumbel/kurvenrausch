@@ -48,6 +48,21 @@ enum class Scenery : uint8_t {
     StoneLantern,
     Showroom,     // a car dealer's showroom, beyond its forecourt
     DealerSign,   // the tall sign announcing it
+    DatePalm,
+    Pyramid,      // a landmark far from the road
+    Acacia,       // flat-topped savanna tree
+    Giraffe,
+    TermiteMound,
+    Banyan,
+    Temple,       // a Hindu temple with its tower
+    Cow,
+    Maple,        // in autumn red
+    HanokGate,    // Korean gate with a curved tiled roof
+    GumTree,      // eucalyptus
+    KangarooSign,
+    Uluru,        // the great red rock, a landmark far from the road
+    JungleTree,
+    Banana,
     Count
 };
 
@@ -191,6 +206,12 @@ enum class Decor : uint8_t {
     Country,   // English lanes: hedgerows, stone walls, oaks, the odd phone box
     Polder,    // Dutch flatland: windmills, tulip fields
     Sakura,    // Japan: cherry trees, shrine gates, stone lanterns
+    Nile,      // Egypt: date palms along the river, pyramids beyond
+    Savanna,   // Kenya: acacias, giraffes, termite mounds
+    Rajasthan, // India: banyans, temples, cows by the road
+    Autumn,    // Korea: red maples, hanok gates
+    Outback,   // Australia: gum trees, kangaroo signs, termite mounds, Uluru
+    Jungle,    // Brazil: dense rainforest, banana plants
 };
 
 // A stretch of track with its own country, scenery and atmosphere.

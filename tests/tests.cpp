@@ -1101,7 +1101,7 @@ void test_demo_track() {
     const Track t = build_demo_track();
     const int n = static_cast<int>(t.segments.size());
 
-    CHECK(t.zones.size() == 10);
+    CHECK(t.zones.size() == 16);
     CHECK(t.zones.front().first_segment == 0);
     CHECK((int)t.zone_index.size() == n && (int)t.looks.size() == n);
     for (size_t k = 1; k < t.zones.size(); ++k) {

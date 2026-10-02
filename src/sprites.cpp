@@ -517,6 +517,250 @@ Bitmap make_dealer_sign() {
     return b;
 }
 
+// A date palm: a tall, ringed trunk under a crown of drooping fronds.
+Bitmap make_date_palm() {
+    Bitmap b(64, 112);
+    const Color trunk{0x8c, 0x6c, 0x44}, ring{0x6c, 0x50, 0x30};
+    const Color dark{0x2c, 0x5c, 0x24}, mid{0x44, 0x80, 0x30}, light{0x6c, 0xa4, 0x40};
+    for (int y = 30; y < 112; ++y) {
+        const int x = 32 + static_cast<int>(std::sin(static_cast<float>(y) * 0.03f) * 3.f);
+        paint::rect(b, x - 3, y, 7, 1, y % 5 ? trunk : ring);
+    }
+    for (int k = 0; k < 9; ++k) {
+        const float a = -2.8f + static_cast<float>(k) * 0.7f;
+        paint::stroke(b, 32.f, 28.f, 32.f + std::cos(a) * 30.f, 28.f + std::sin(a) * 14.f + 14.f, 4.f, 1.f,
+                      k % 3 == 0 ? light : k % 3 == 1 ? mid : dark);
+    }
+    paint::shaded_ellipse(b, 32.f, 28.f, 6.f, 5.f, dark, mid, light);
+    paint::rect(b, 27, 32, 3, 4, Color{0xa0, 0x58, 0x28}); // dates
+    paint::rect(b, 34, 32, 3, 4, Color{0xa0, 0x58, 0x28});
+    paint::outline(b, Outline);
+    return b;
+}
+
+// A pyramid in the distance: a lit face and a shaded one, in courses.
+Bitmap make_pyramid() {
+    Bitmap b(160, 80);
+    const Color lit{0xe4, 0xc8, 0x88}, shade{0xb0, 0x90, 0x5c}, course{0xc8, 0xa8, 0x70};
+    for (int y = 0; y < 80; ++y) {
+        const int half = y;
+        paint::rect(b, 80 - half, y, half, 1, lit);
+        paint::rect(b, 80, y, half, 1, shade);
+        if (y % 6 == 5) paint::rect(b, 80 - half, y, half, 1, course);
+    }
+    paint::outline(b, Outline);
+    return b;
+}
+
+// An acacia: a thin, forked trunk under a wide, flat crown.
+Bitmap make_acacia() {
+    Bitmap b(96, 64);
+    const Color bark{0x5c, 0x40, 0x2c}, dark{0x3c, 0x5c, 0x24}, mid{0x58, 0x7c, 0x30}, light{0x7c, 0x9c, 0x40};
+    paint::stroke(b, 48.f, 63.f, 46.f, 30.f, 4.f, 3.f, bark);
+    paint::stroke(b, 46.f, 34.f, 30.f, 20.f, 2.f, 1.5f, bark);
+    paint::stroke(b, 46.f, 32.f, 64.f, 18.f, 2.f, 1.5f, bark);
+    for (int k = 0; k < 6; ++k) {
+        paint::shaded_ellipse(b, 14.f + static_cast<float>(k) * 13.6f, 14.f + static_cast<float>(k % 2) * 2.f, 12.f, 6.f,
+                              dark, mid, light);
+    }
+    paint::outline(b, Outline);
+    return b;
+}
+
+// A giraffe, side on, with its long neck and patches.
+Bitmap make_giraffe() {
+    Bitmap b(40, 96);
+    const Color coat{0xe0, 0xb4, 0x5c}, patch{0x8c, 0x58, 0x2c}, dark{0x5c, 0x3c, 0x20};
+    for (int x : {10, 14, 26, 30}) paint::rect(b, x, 62, 3, 34, coat);
+    paint::shaded_ellipse(b, 20.f, 58.f, 14.f, 9.f, patch, coat, coat);
+    paint::stroke(b, 28.f, 52.f, 32.f, 12.f, 6.f, 4.f, coat);
+    paint::shaded_ellipse(b, 33.f, 9.f, 5.f, 4.f, coat, coat, coat);
+    paint::rect(b, 31, 3, 1, 3, dark);
+    paint::rect(b, 34, 3, 1, 3, dark);
+    for (int i = 0; i < 12; ++i) paint::rect(b, 10 + (i * 7) % 20, 52 + (i * 5) % 12, 3, 2, patch);
+    for (int y = 18; y < 50; y += 6) paint::rect(b, 29 + (y / 6) % 3, y, 2, 2, patch);
+    paint::rect(b, 6, 56, 2, 12, dark); // the tail
+    paint::outline(b, Outline);
+    return b;
+}
+
+// A termite mound: a tall, knobbly spire of red earth.
+Bitmap make_termite_mound() {
+    Bitmap b(24, 48);
+    const Color dark{0x8c, 0x44, 0x24}, mid{0xb4, 0x5c, 0x30}, light{0xd0, 0x7c, 0x48};
+    paint::shaded_ellipse(b, 12.f, 40.f, 11.f, 8.f, dark, mid, light);
+    paint::shaded_ellipse(b, 11.f, 26.f, 7.f, 14.f, dark, mid, light);
+    paint::shaded_ellipse(b, 13.f, 9.f, 4.f, 8.f, dark, mid, light);
+    paint::outline(b, Outline);
+    return b;
+}
+
+// A banyan: a huge spreading crown with aerial roots hanging down.
+Bitmap make_banyan() {
+    Bitmap b(96, 80);
+    const Color bark{0x6c, 0x58, 0x44}, dark{0x24, 0x54, 0x24}, mid{0x34, 0x78, 0x30}, light{0x58, 0x9c, 0x40};
+    paint::stroke(b, 48.f, 79.f, 48.f, 36.f, 12.f, 9.f, bark);
+    for (int x = 12; x < 88; x += 7) paint::rect(b, x, 30 + (x % 5), 1, 50 - 30 - (x % 5) + 20, bark);
+    paint::shaded_ellipse(b, 48.f, 24.f, 46.f, 20.f, dark, mid, light);
+    paint::shaded_ellipse(b, 24.f, 30.f, 20.f, 12.f, dark, mid, light);
+    paint::shaded_ellipse(b, 72.f, 30.f, 20.f, 12.f, dark, mid, light);
+    paint::outline(b, Outline);
+    return b;
+}
+
+// A Hindu temple: a stepped base, a doorway and a tall curved tower with a
+// saffron flag.
+Bitmap make_temple() {
+    Bitmap b(80, 112);
+    const Color stone{0xe0, 0xc8, 0x98}, shade{0xb8, 0x9c, 0x70}, door{0x4c, 0x30, 0x24}, saffron{0xf0, 0x80, 0x20};
+    paint::rect(b, 4, 96, 72, 16, shade);
+    paint::rect(b, 10, 72, 60, 24, stone);
+    paint::rect(b, 34, 80, 12, 16, door);
+    for (int y = 10; y < 72; ++y) {
+        const float t = static_cast<float>(y - 10) / 62.f;
+        const int half = 6 + static_cast<int>(22.f * std::sqrt(t));
+        paint::rect(b, 40 - half, y, 2 * half, 1, y % 6 < 2 ? shade : stone);
+    }
+    paint::shaded_ellipse(b, 40.f, 9.f, 6.f, 4.f, shade, stone, stone);
+    paint::rect(b, 39, 0, 2, 6, door);
+    paint::rect(b, 41, 0, 8, 4, saffron);
+    paint::outline(b, Outline);
+    return b;
+}
+
+// A white zebu cow with its hump, standing by the road.
+Bitmap make_cow() {
+    Bitmap b(40, 28);
+    const Color white{0xec, 0xe8, 0xe0}, shade{0xc0, 0xb8, 0xac}, dark{0x4c, 0x40, 0x38};
+    for (int x : {8, 12, 26, 30}) paint::rect(b, x, 18, 3, 10, shade);
+    paint::shaded_ellipse(b, 20.f, 14.f, 14.f, 7.f, shade, white, white);
+    paint::shaded_ellipse(b, 17.f, 8.f, 4.f, 3.f, shade, white, white); // hump
+    paint::shaded_ellipse(b, 34.f, 12.f, 4.f, 4.f, shade, white, white);
+    paint::rect(b, 32, 6, 1, 3, dark);
+    paint::rect(b, 36, 6, 1, 3, dark);
+    paint::rect(b, 5, 12, 1, 9, dark);
+    paint::outline(b, Outline);
+    return b;
+}
+
+// A maple in autumn: red, orange and gold.
+Bitmap make_maple() {
+    Bitmap b(64, 80);
+    const Color bark{0x4c, 0x34, 0x28}, dark{0x9c, 0x20, 0x18}, mid{0xd8, 0x44, 0x20}, light{0xf8, 0x9c, 0x30};
+    paint::stroke(b, 32.f, 79.f, 32.f, 40.f, 7.f, 4.f, bark);
+    paint::shaded_ellipse(b, 32.f, 30.f, 26.f, 20.f, dark, mid, light);
+    paint::shaded_ellipse(b, 18.f, 40.f, 12.f, 9.f, dark, mid, light);
+    paint::shaded_ellipse(b, 46.f, 40.f, 12.f, 9.f, dark, mid, light);
+    paint::shaded_ellipse(b, 32.f, 14.f, 14.f, 10.f, dark, mid, light);
+    for (int i = 0; i < 10; ++i) b.set(6 + (i * 23) % 52, 66 + (i * 7) % 13, light); // fallen leaves
+    paint::outline(b, Outline);
+    return b;
+}
+
+// A Korean hanok gate: red pillars under a dark tiled roof whose ends curve up.
+Bitmap make_hanok_gate() {
+    Bitmap b(96, 72);
+    const Color red{0xa8, 0x30, 0x24}, green{0x2c, 0x6c, 0x5c}, roof{0x3c, 0x40, 0x48}, tile{0x58, 0x5c, 0x64};
+    paint::rect(b, 20, 30, 7, 42, red);
+    paint::rect(b, 69, 30, 7, 42, red);
+    paint::rect(b, 20, 26, 56, 6, green); // painted beams
+    paint::rect(b, 24, 28, 48, 1, Color{0xe0, 0xc0, 0x40});
+    for (int y = 6; y < 26; ++y) {
+        const float t = static_cast<float>(y - 6) / 20.f;
+        const int half = 30 + static_cast<int>(18.f * t);
+        paint::rect(b, 48 - half, y, 2 * half, 1, y % 4 == 0 ? tile : roof);
+    }
+    paint::stroke(b, 2.f, 18.f, 0.f, 12.f, 3.f, 2.f, roof); // the upturned ends
+    paint::stroke(b, 94.f, 18.f, 96.f, 12.f, 3.f, 2.f, roof);
+    paint::rect(b, 34, 2, 28, 5, roof);
+    paint::outline(b, Outline);
+    return b;
+}
+
+// A gum tree: a pale, smooth trunk and sparse grey-green foliage.
+Bitmap make_gum_tree() {
+    Bitmap b(56, 96);
+    const Color bark{0xe4, 0xdc, 0xd0}, bark_dark{0xb0, 0xa4, 0x94};
+    const Color dark{0x4c, 0x60, 0x48}, mid{0x6c, 0x84, 0x64}, light{0x94, 0xa8, 0x84};
+    paint::stroke(b, 28.f, 95.f, 26.f, 30.f, 6.f, 3.f, bark);
+    paint::stroke(b, 29.f, 95.f, 28.f, 30.f, 2.f, 1.f, bark_dark);
+    paint::stroke(b, 26.f, 50.f, 12.f, 30.f, 2.f, 1.f, bark);
+    paint::stroke(b, 27.f, 44.f, 42.f, 26.f, 2.f, 1.f, bark);
+    paint::shaded_ellipse(b, 14.f, 24.f, 12.f, 9.f, dark, mid, light);
+    paint::shaded_ellipse(b, 40.f, 20.f, 13.f, 10.f, dark, mid, light);
+    paint::shaded_ellipse(b, 26.f, 12.f, 12.f, 9.f, dark, mid, light);
+    paint::outline(b, Outline);
+    return b;
+}
+
+// The yellow diamond warning of kangaroos.
+Bitmap make_kangaroo_sign() {
+    Bitmap b(32, 56);
+    const Color yellow{0xf8, 0xd0, 0x20}, black{0x18, 0x18, 0x18};
+    paint::rect(b, 15, 28, 3, 28, Color{0x9a, 0x9a, 0xa4});
+    for (int y = 0; y < 30; ++y) {
+        const int half = y < 15 ? y : 29 - y;
+        paint::rect(b, 16 - half, y, 2 * half + 1, 1, black);
+        if (half > 1) paint::rect(b, 17 - half, y, 2 * half - 1, 1, yellow);
+    }
+    // The kangaroo: body, tail, head and ears.
+    paint::shaded_ellipse(b, 15.f, 16.f, 4.f, 5.f, black, black, black);
+    paint::stroke(b, 12.f, 19.f, 6.f, 22.f, 1.5f, 1.f, black);
+    paint::shaded_ellipse(b, 19.f, 9.f, 2.f, 2.f, black, black, black);
+    paint::rect(b, 19, 6, 1, 2, black);
+    paint::stroke(b, 15.f, 21.f, 19.f, 22.f, 1.f, 1.f, black);
+    paint::outline(b, Outline);
+    return b;
+}
+
+// Uluru: a long, flat-topped red rock with steep ends and grooves down its
+// flanks.
+Bitmap make_uluru() {
+    Bitmap b(192, 56);
+    const Color dark{0x8c, 0x30, 0x18}, mid{0xc0, 0x4c, 0x24}, light{0xe0, 0x74, 0x3c};
+    for (int x = 0; x < 192; ++x) {
+        const float t = (static_cast<float>(x) - 96.f) / 96.f;
+        const float t2 = t * t;
+        const int top = 8 + static_cast<int>(48.f * t2 * t2 * t2 + 4.f * t2); // flat-topped, steep at the ends
+        if (top >= 56) continue;
+        for (int y = top; y < 56; ++y) {
+            Color c = x < 70 ? light : x < 130 ? mid : dark;
+            if (x % 13 == 0 && y > top + 4) c = dark; // grooves
+            b.set(x, y, c);
+        }
+    }
+    paint::outline(b, Outline);
+    return b;
+}
+
+// A rainforest giant: a tall trunk with vines under layered dense crowns.
+Bitmap make_jungle_tree() {
+    Bitmap b(80, 112);
+    const Color bark{0x4c, 0x40, 0x30}, vine{0x2c, 0x60, 0x24};
+    const Color dark{0x14, 0x40, 0x18}, mid{0x24, 0x60, 0x24}, light{0x3c, 0x84, 0x30};
+    paint::stroke(b, 40.f, 111.f, 40.f, 30.f, 8.f, 6.f, bark);
+    for (int x : {36, 43}) paint::stroke(b, static_cast<float>(x), 40.f, static_cast<float>(x) + 2.f, 100.f, 1.f, 1.f, vine);
+    paint::shaded_ellipse(b, 40.f, 34.f, 38.f, 16.f, dark, mid, light);
+    paint::shaded_ellipse(b, 26.f, 22.f, 20.f, 13.f, dark, mid, light);
+    paint::shaded_ellipse(b, 54.f, 22.f, 20.f, 13.f, dark, mid, light);
+    paint::shaded_ellipse(b, 40.f, 12.f, 18.f, 11.f, dark, mid, light);
+    paint::outline(b, Outline);
+    return b;
+}
+
+// A banana plant: big, broad, ragged leaves on a short stem.
+Bitmap make_banana() {
+    Bitmap b(40, 56);
+    const Color stem{0x6c, 0x80, 0x3c}, dark{0x2c, 0x70, 0x24}, light{0x5c, 0xa8, 0x38};
+    paint::stroke(b, 20.f, 55.f, 20.f, 28.f, 4.f, 3.f, stem);
+    for (int k = 0; k < 6; ++k) {
+        const float a = -2.9f + static_cast<float>(k) * 0.55f;
+        paint::stroke(b, 20.f, 28.f, 20.f + std::cos(a) * 19.f, 26.f + std::sin(a) * 22.f, 5.f, 2.f, k % 2 ? light : dark);
+    }
+    paint::outline(b, Outline);
+    return b;
+}
+
 // A street lamp: a dark green pole with a lantern.
 Bitmap make_street_lamp() {
     Bitmap b(24, 112);
@@ -1340,6 +1584,21 @@ SpriteSheet::SpriteSheet() {
     scenery_[static_cast<size_t>(Scenery::StoneLantern)] = make_stone_lantern();
     scenery_[static_cast<size_t>(Scenery::Showroom)] = make_showroom();
     scenery_[static_cast<size_t>(Scenery::DealerSign)] = make_dealer_sign();
+    scenery_[static_cast<size_t>(Scenery::DatePalm)] = make_date_palm();
+    scenery_[static_cast<size_t>(Scenery::Pyramid)] = make_pyramid();
+    scenery_[static_cast<size_t>(Scenery::Acacia)] = make_acacia();
+    scenery_[static_cast<size_t>(Scenery::Giraffe)] = make_giraffe();
+    scenery_[static_cast<size_t>(Scenery::TermiteMound)] = make_termite_mound();
+    scenery_[static_cast<size_t>(Scenery::Banyan)] = make_banyan();
+    scenery_[static_cast<size_t>(Scenery::Temple)] = make_temple();
+    scenery_[static_cast<size_t>(Scenery::Cow)] = make_cow();
+    scenery_[static_cast<size_t>(Scenery::Maple)] = make_maple();
+    scenery_[static_cast<size_t>(Scenery::HanokGate)] = make_hanok_gate();
+    scenery_[static_cast<size_t>(Scenery::GumTree)] = make_gum_tree();
+    scenery_[static_cast<size_t>(Scenery::KangarooSign)] = make_kangaroo_sign();
+    scenery_[static_cast<size_t>(Scenery::Uluru)] = make_uluru();
+    scenery_[static_cast<size_t>(Scenery::JungleTree)] = make_jungle_tree();
+    scenery_[static_cast<size_t>(Scenery::Banana)] = make_banana();
 }
 
 } // namespace racer
