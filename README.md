@@ -47,7 +47,8 @@ weather and road markings, fading smoothly into one another:
   races you when you come close; it changes lanes to pass, blinking its
   indicators, or brakes behind slower vehicles (and you) when it can't;
   rear-ending one slows you down
-- Working brake lights, on your car and on the traffic
+- Working brake lights, on your car and on the traffic; tyres that roll and
+  flicker at speed
 - **Horn**: cars ahead in your line signal and pull over to let you through
 - **Close passes**: squeeze past a car and your driver (or passenger, on the
   right) waves, with a whoosh and a little boost beyond top speed
@@ -55,6 +56,10 @@ weather and road markings, fading smoothly into one another:
   from the exhausts, more thrust and a higher top speed
 - **Rear-view mirror** at the top of the screen: the road behind, drawn by the
   same renderer looking back, with the fronts of the cars you have passed
+- **Forks**: the road splits OutRun-style into two routes that join again
+  later, signposted and named on screen: the Autobahn or the Landstrasse in
+  Germany, Route 66 or the Canyon Road in Arizona; keep to the side of the
+  road you want to take
 - **Jumps**: San Francisco's streets climb and drop at up to 55% grade, flat
   at every crossing; take a crest fast and the car flies, landing with a thump
 - Arcade handling with analog steering and pedals; centrifugal force, off-road

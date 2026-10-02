@@ -21,6 +21,48 @@ Upstream master has since been fast-forwarded to `64fda32`, the tip of 002.1, so
 The rebase notes: upstream's rename is kept, its rendering fix is superseded by
 the road/framebuffer rewrite, `Color::to_u32()` became `Color::argb()`.
 
+## Round 8: rolling tyres, forks, done
+
+Requested: a spinning effect on the tyres (flicker, fitting the style);
+branches in the road to different subsections of the track.
+
+Design decisions:
+
+- Tyres: every vehicle sprite (rear, front, the player's car) in three tread
+  frames, the tread rows shifted a pixel each; `SpriteSheet::tyre_frame()`
+  picks one per 25 units driven, so slow they roll, fast they flicker. Traffic
+  uses its position, the player the distance its wheels rolled.
+- Forks (`Branch`, `TrackBuilder::fork()`): two routes of exactly the same
+  length that join again, so every position after the join is the same either
+  way (lap length, zones, start line, traffic need no special handling). Only
+  the active route's segments are in `Track::segments`; `choose_branch()`
+  swaps them. Each route starts with a flat S-bend away from the other (50
+  segments, ending 3.75 half-widths apart either side) and ends with one
+  back; the shorter middle is padded back to the starting height. The other
+  route's road is drawn beside ours (road, rumble strips, lane dashes) from
+  per-boundary offsets (`branch_offset()`, the renderer's curve recurrence on
+  the difference of the routes' curves), only where they part and meet; in
+  between it is out of sight. Scenery keeps off the side facing the other
+  route there (`Segment::facing_branch`). Both routes are decorated and get
+  wet spots. Signs with arrows stand 10 segments before the fork; the HUD
+  names both routes for 200 segments before it.
+- Choosing: while the routes part, the car is on whichever road it is
+  nearer to (`nearer_other_road()`); crossing over switches the active route
+  and re-measures the car's lateral position from it. The choice is announced
+  as the roads separate; the mini map is recomputed for the chosen route.
+  Traffic keeps its positions and so is on whichever route is active.
+- Forks: Germany AUTOBAHN (fast, gentle) / LANDSTRASSE (twisty, hilly), after
+  the gas station; Arizona ROUTE 66 (open desert) / CANYON ROAD (between rock
+  walls). The default (and the autopilot's) is the right route.
+
+Verified: builds warning-free; tests (tread frames, both forks: equal
+length, heights, decor, the offsets at fork/apart/join, swapping, the choice
+rule); ASan+UBSan through both forks taking the left route, a full lap and
+the live loop; screenshots of the approach, both routes parting, both forks.
+Not verified: how choosing feels in play. Known simplification: traffic on
+a fork drives on whichever route is active, so cars near the fork can jump
+across when the player switches while the roads still overlap.
+
 ## Round 7 (008.1): San Francisco, hills, valleys and jumps, done
 
 Requested: a San Francisco biome with huge hills and valleys and jumps.
