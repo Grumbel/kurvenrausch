@@ -32,6 +32,10 @@ enum class Scenery : uint8_t {
     GasStation,   // shop under a canopy, beyond the forecourt
     FuelPump,
     FuelSign,     // tall sign announcing a gas station
+    Victorian,    // San Francisco row houses, in three colours
+    VictorianB,
+    VictorianC,
+    StreetLamp,
     Count
 };
 
@@ -155,6 +159,7 @@ enum class Decor : uint8_t {
     Tuscany,   // cypress avenues, oaks, bushes
     Desert,    // cacti, shrubs, red rocks, mesas, telephone poles
     Coast,     // sparse: shrubs, rocks, poles where the sides are free
+    City,      // rows of Victorian houses along the sidewalks, street lamps
 };
 
 // A stretch of track with its own country, scenery and atmosphere.

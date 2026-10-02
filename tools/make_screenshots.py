@@ -73,7 +73,7 @@ def main():
 
         frames = [capture(binary, tmp, f"zone{index}", "--zone", str(index), "--frames", "150")
                   for index, _country, _region, _position in zone_positions(binary)]
-        columns, scale, gap = 3, 2, 6
+        columns, scale, gap = 4, 2, 6
         w, h = frames[0].size
         rows = (len(frames) + columns - 1) // columns
         sheet = Image.new("RGB", (columns * w * scale + (columns - 1) * gap,

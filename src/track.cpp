@@ -33,6 +33,10 @@ const SceneryInfo& scenery_info(Scenery kind) {
         /* GasStation*/ {4800.f, true,  false, false},
         /* FuelPump  */ { 360.f, true,  false, false},
         /* FuelSign  */ { 700.f, true,  false, false},
+        /* Victorian */ {2600.f, true,  false, true},
+        /* VictorianB*/ {2600.f, true,  false, true},
+        /* VictorianC*/ {2600.f, true,  false, true},
+        /* StreetLamp*/ { 260.f, true,  false, false},
     };
     static_assert(sizeof(infos) / sizeof(infos[0]) == static_cast<size_t>(Scenery::Count),
                   "scenery_info() needs an entry for every Scenery kind");
@@ -344,6 +348,13 @@ public:
         road(10, 10, 10, 0.f, -2.f);
     }
 
+    // A straight constant grade (rise per length), the way San Francisco's
+    // streets run up and down the hills: the grade changes abruptly where it
+    // meets the next one, and a crest taken fast throws the car into the air.
+    void slope(int len, float grade, float curve = Bend::None) {
+        for (int i = 0; i < len; ++i) add(curve, last_y() + grade * t_.segment_length);
+    }
+
     // Brings the height back to zero so the loop closes seamlessly.
     void downhill_to_end(int len) {
         road(len, len, len, -Bend::Easy, -last_y() / t_.segment_length);
@@ -564,6 +575,35 @@ Zone zone_california() {
     return z;
 }
 
+Zone zone_san_francisco() {
+    Zone z{"USA", "SAN FRANCISCO", RoadTheme{}, 0, Decor::City};
+    RoadTheme& t = z.theme;
+    t.sky_top = Color{0x6c, 0x9c, 0xd4};
+    t.sky_horizon = Color{0xd8, 0xe4, 0xec};
+    t.fog = Color{0xd4, 0xdc, 0xe4};
+    t.grass[0] = Color{0xb8, 0xb4, 0xac}; // sidewalks
+    t.grass[1] = Color{0xae, 0xaa, 0xa2};
+    t.road[0] = Color{0x52, 0x52, 0x58};
+    t.road[1] = Color{0x4c, 0x4c, 0x52};
+    t.rumble[0] = Color{0xe8, 0xe8, 0xe0}; // kerbs
+    t.rumble[1] = Color{0x9c, 0x9c, 0x98};
+    t.mountain_lit = Color{0x8c, 0x9c, 0xb4};
+    t.mountain_shade = Color{0x70, 0x80, 0x9c};
+    t.hill_lit = Color{0x84, 0x94, 0x7c};
+    t.hill_shade = Color{0x6c, 0x7c, 0x68};
+    t.cloud_tint = Color{0xf0, 0xf4, 0xf8};
+    t.cloud_tint_amount = 0.3f;
+    t.sun_amount = 0.4f;
+    t.fog_density = 6.f;
+    t.haze = 0.45f;
+    t.mountain_scale = 0.5f;
+    t.hill_scale = 0.8f;
+    t.snow_line = 1.0e9f;
+    t.lanes = 2;
+    t.us_markings = true;
+    return z;
+}
+
 // Plants scenery along the road according to each zone's decor rules. Sides
 // that carry a rail or cliff stay free: nothing grows out of the rock or out
 // of the sea.
@@ -639,6 +679,19 @@ void decorate(Track& track, TrackBuilder& b) {
                 }
                 if (i % 220 == 110) put(Scenery::BillboardUs, i % 440 == 110 ? -1 : 1, 1.3f);
                 break;
+
+            case Decor::City: {
+                // Row houses along both sidewalks, in random colours, with the
+                // odd gap for a tree; street lamps at the kerb.
+                constexpr Scenery houses[] = {Scenery::Victorian, Scenery::VictorianB, Scenery::VictorianC};
+                for (int side = -1; side <= 1; side += 2) {
+                    if ((i + (side > 0 ? 2 : 0)) % 4 != 0) continue;
+                    if (rng.chance(0.12f)) put(Scenery::Tree, side, 1.3f);
+                    else put(houses[static_cast<int>(rng.next() * 3.f) % 3], side, 1.35f);
+                }
+                if (i % 10 == 5) put(Scenery::StreetLamp, i % 20 == 5 ? -1 : 1, 1.12f);
+                break;
+            }
 
             case Decor::Coast:
                 if (i % 6 == 0) put(Scenery::Pole, +1, 1.2f);
@@ -752,6 +805,33 @@ Track build_demo_track() {
     b.mark(pch, b.size(), Edge::Rail, Edge::Cliff);
     b.curve(Len::Medium, -Bend::Easy, Hill::None);
     b.gas_station();
+
+    b.begin_zone(zone_san_francisco());
+    // Up from the waterfront, block after block, each street steeper than the
+    // last and flat at every crossing; down into a valley and over the next
+    // hill. Every crest taken fast is a jump.
+    b.slope(12, 0.f);
+    b.slope(30, 0.35f);
+    b.slope(6, 0.f);
+    b.slope(30, 0.5f);
+    b.slope(6, 0.f);
+    b.slope(30, -0.5f);
+    b.slope(6, 0.f);
+    b.slope(36, -0.55f, Bend::Easy);
+    b.slope(10, 0.f); // the valley floor
+    b.slope(30, 0.55f);
+    b.slope(6, 0.f);
+    b.slope(26, 0.45f, -Bend::Easy);
+    b.slope(6, 0.f);
+    b.slope(30, -0.45f);
+    b.slope(6, 0.f);
+    b.slope(30, -0.45f);
+    b.slope(8, 0.f);
+    b.gas_station();
+    b.slope(30, 0.5f);
+    b.slope(6, 0.f);
+    b.slope(30, -0.5f, Bend::Medium);
+    b.slope(8, 0.f);
     b.downhill_to_end(Len::Long);
 
     track.finish();

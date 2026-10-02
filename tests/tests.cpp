@@ -762,6 +762,56 @@ void test_wet_spots() {
     }
 }
 
+void test_san_francisco() {
+    using namespace racer;
+    const Track t = build_demo_track();
+    int sf = -1;
+    for (size_t k = 0; k < t.zones.size(); ++k)
+        if (t.zones[k].region == "SAN FRANCISCO") sf = static_cast<int>(k);
+    CHECK(sf == static_cast<int>(t.zones.size()) - 1); // the last zone, ending the lap
+    const int first = t.zones[static_cast<size_t>(sf)].first_segment;
+    const int n = static_cast<int>(t.segments.size());
+    // Huge hills: steep grades both ways, and a big difference in height.
+    float steepest_up = 0.f, steepest_down = 0.f, lo = 1e9f, hi = -1e9f;
+    for (int i = first; i < n; ++i) {
+        const Segment& s = t.segment(i);
+        const float grade = (s.y2 - s.y1) / t.segment_length;
+        steepest_up = std::max(steepest_up, grade);
+        steepest_down = std::min(steepest_down, grade);
+        lo = std::min(lo, s.y1);
+        hi = std::max(hi, s.y1);
+    }
+    CHECK(steepest_up >= 0.5f && steepest_down <= -0.5f);
+    CHECK(hi - lo > 15.f * t.segment_length);
+    // Driven at top speed, the crests throw the car into the air several
+    // times; somewhere else on the route they don't.
+    auto jumps = [&](int from, int to) {
+        const float speed = 60.f * t.segment_length, dt = 1.f / 60.f;
+        Vertical v;
+        place_on_road(v, t.height_at(static_cast<float>(from) * t.segment_length));
+        int count = 0;
+        for (float z = static_cast<float>(from) * t.segment_length + speed * dt;
+             z < static_cast<float>(to) * t.segment_length; z += speed * dt) {
+            const Segment& s = t.segment_at(z);
+            const bool was = v.airborne;
+            step_vertical(v, t.height_at(z), (s.y2 - s.y1) / t.segment_length * speed, jump_gravity, dt);
+            count += v.airborne && !was;
+        }
+        return count;
+    };
+    CHECK(jumps(first, n) >= 3);
+    CHECK(jumps(t.zones[1].first_segment, t.zones[2].first_segment) == 0); // the Black Forest
+    // City decor: houses and lamps.
+    int houses = 0, lamps = 0;
+    for (int i = first; i < n; ++i) {
+        for (const RoadsideObject& o : t.segment(i).scenery) {
+            houses += o.kind == Scenery::Victorian || o.kind == Scenery::VictorianB || o.kind == Scenery::VictorianC;
+            lamps += o.kind == Scenery::StreetLamp;
+        }
+    }
+    CHECK(houses > 100 && lamps > 20);
+}
+
 void test_track_map() {
     using namespace racer;
     auto check_map = [](const Track& t) {
@@ -854,7 +904,7 @@ void test_demo_track() {
     const Track t = build_demo_track();
     const int n = static_cast<int>(t.segments.size());
 
-    CHECK(t.zones.size() == 6);
+    CHECK(t.zones.size() == 7);
     CHECK(t.zones.front().first_segment == 0);
     CHECK((int)t.zone_index.size() == n && (int)t.looks.size() == n);
     for (size_t k = 1; k < t.zones.size(); ++k) {
@@ -1332,6 +1382,7 @@ int main() {
     test_track_map();
     test_gas_stations();
     test_wet_spots();
+    test_san_francisco();
     test_nitro();
     test_speed_rules();
     test_yield_lane();

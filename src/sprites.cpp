@@ -240,6 +240,77 @@ Bitmap make_fuel_sign() {
     return b;
 }
 
+// A San Francisco Victorian: a narrow, tall row house with a pointed gable,
+// a bay window, a door up a few steps and white trim.
+Bitmap make_victorian(Color body, Color accent) {
+    Bitmap b(104, 150);
+    const Color trim{0xf4, 0xf0, 0xe4}, shade = blend(body, Color{0x20, 0x20, 0x30}, 0.25f);
+    const Color glass{0x30, 0x40, 0x58}, glass_hi{0x80, 0x98, 0xb8}, roof{0x4c, 0x44, 0x48};
+    const Color step{0x9c, 0x98, 0x90}, step_dark{0x7c, 0x78, 0x70};
+
+    // Gable roof, then the body.
+    for (int y = 4; y < 32; ++y) {
+        const int half = (y - 4) * 50 / 28;
+        paint::rect(b, 52 - half - 2, y, 2 * half + 4, 1, roof);
+        paint::rect(b, 52 - half + 2, y, std::max(0, 2 * half - 4), 1, body);
+    }
+    paint::rect(b, 51, 0, 2, 5, roof); // finial
+    paint::ellipse(b, 52.f, 20.f, 5.f, 5.f, trim); // round attic window
+    paint::ellipse(b, 52.f, 20.f, 3.f, 3.f, glass);
+    paint::rect(b, 4, 30, 96, 104, body);
+    paint::rect(b, 4, 30, 96, 3, trim); // cornice
+    for (int x = 6; x < 98; x += 4) paint::rect(b, x, 33, 2, 2, trim); // dentils
+    paint::rect(b, 4, 86, 96, 3, trim); // between the floors
+    paint::rect(b, 4, 30, 3, 104, trim);
+    paint::rect(b, 97, 30, 3, 104, trim);
+
+    // Bay window on the right, two floors high, shaded on its side.
+    paint::rect(b, 50, 40, 46, 92, shade);
+    paint::rect(b, 54, 40, 42, 92, body);
+    for (int y : {46, 94}) {
+        for (int x : {57, 72, 85}) {
+            paint::rect(b, x - 1, y - 1, 11, 34, trim);
+            paint::rect(b, x, y, 9, 32, glass);
+            paint::rect(b, x + 1, y + 2, 2, 12, glass_hi);
+        }
+        paint::rect(b, 54, y + 33, 42, 2, accent); // sills
+    }
+
+    // Upstairs window and the door on the left, up the steps.
+    paint::rect(b, 13, 44, 26, 36, trim);
+    paint::rect(b, 15, 46, 22, 32, glass);
+    paint::rect(b, 17, 48, 3, 12, glass_hi);
+    paint::rect(b, 11, 40, 30, 4, accent);
+    paint::rect(b, 13, 94, 26, 40, trim);
+    paint::rect(b, 16, 98, 20, 36, Color{0x6c, 0x3c, 0x24}); // door
+    paint::rect(b, 18, 100, 16, 10, glass);
+    paint::rect(b, 32, 116, 2, 2, Color{0xe0, 0xc0, 0x60});
+    paint::rect(b, 11, 90, 30, 4, accent);
+    for (int i = 0; i < 4; ++i) {
+        paint::rect(b, 8 - i * 2, 134 + i * 4, 40 + i * 4, 4, i % 2 ? step_dark : step);
+    }
+    paint::rect(b, 48, 134, 52, 16, Color{0x88, 0x84, 0x7c}); // garage-level wall
+    paint::rect(b, 56, 136, 36, 14, Color{0x5c, 0x58, 0x54});
+    paint::outline(b, Outline);
+    return b;
+}
+
+// A street lamp: a dark green pole with a lantern.
+Bitmap make_street_lamp() {
+    Bitmap b(24, 112);
+    const Color pole{0x24, 0x3c, 0x2c}, pole_hi{0x3c, 0x5c, 0x44};
+    paint::rect(b, 7, 104, 10, 8, pole);
+    paint::rect(b, 10, 22, 4, 84, pole);
+    paint::rect(b, 10, 22, 1, 84, pole_hi);
+    paint::rect(b, 5, 8, 14, 14, pole);
+    paint::rect(b, 7, 10, 10, 10, Color{0xff, 0xec, 0xb0});
+    paint::rect(b, 8, 11, 4, 4, Color{0xff, 0xff, 0xf0});
+    paint::rect(b, 3, 6, 18, 3, pole);
+    paint::rect(b, 11, 2, 2, 4, pole);
+    paint::outline(b, Outline);
+    return b;
+}
+
 Bitmap make_gantry() {
     Bitmap b(208, 80);
     const Color red{0xc8, 0x18, 0x18}, white{0xf4, 0xf4, 0xf4}, black{0x18, 0x18, 0x18};
@@ -936,6 +1007,10 @@ SpriteSheet::SpriteSheet() {
     scenery_[static_cast<size_t>(Scenery::GasStation)] = make_gas_station();
     scenery_[static_cast<size_t>(Scenery::FuelPump)] = make_fuel_pump();
     scenery_[static_cast<size_t>(Scenery::FuelSign)] = make_fuel_sign();
+    scenery_[static_cast<size_t>(Scenery::Victorian)] = make_victorian(Color{0x6c, 0x9c, 0xc8}, Color{0xc8, 0x50, 0x40});
+    scenery_[static_cast<size_t>(Scenery::VictorianB)] = make_victorian(Color{0xe4, 0xc4, 0x6c}, Color{0x3c, 0x6c, 0x5c});
+    scenery_[static_cast<size_t>(Scenery::VictorianC)] = make_victorian(Color{0xd4, 0x8c, 0xa8}, Color{0x5c, 0x3c, 0x7c});
+    scenery_[static_cast<size_t>(Scenery::StreetLamp)] = make_street_lamp();
 }
 
 } // namespace racer
