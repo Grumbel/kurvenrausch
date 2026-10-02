@@ -21,6 +21,48 @@ Upstream master has since been fast-forwarded to `64fda32`, the tip of 002.1, so
 The rebase notes: upstream's rename is kept, its rendering fix is superseded by
 the road/framebuffer rewrite, `Color::to_u32()` became `Color::argb()`.
 
+## Round 12: the owner's list, done
+
+Requested (the owner's untracked `TODO` file in the repo root, which stays
+untracked and uncommitted, plus requests made along the way), each its own
+commit:
+- Handbrake (Ctrl, left shoulder): the rear slides, sharper turns, smoke.
+- Reverse: brake to a stop, let go, press again (`reverse_armed`).
+- Faster steering at low speed (`steer_rate`); smoother fork entry
+  (`fork_bend_push`, fixed draw order of the two roads).
+- Driver and passenger as a layer (`make_occupants`), seen through the rear
+  window of closed cars, the player's and the traffic's.
+- Pause menu on Start / P: resume, restart, start in a chosen country, quit.
+- Dirt (puddles, crashes, oil; rain rinses it slowly) and car washes.
+- Lots generalised (`Lot`, `Track::lots`, one offer panel, `--visit KIND`):
+  car washes, motels (passenger), hospitals (driver; a crash leaves a
+  bandage until a hospital), truck stops (the Big Rig, `truck_model`).
+  Changing car gives a clean car with a full tank.
+- State in `$XDG_STATE_HOME/kurvenrausch/` (`state.hpp`): `choices` (car,
+  driver, passenger, view, radio) written atomically, `laps.tsv` appended;
+  the fastest lap there is BEST. Headless runs never touch it.
+- Camera views (C / Back): chase, far, bumper, cockpit (`views.hpp`; only
+  the picture changes, the physics keep the chase camera as reference).
+- Dynamic weather (`climate.hpp`): a drifting front, per-zone `showers`,
+  storms darken and thicken the fog and cut grip, lightning and thunder.
+- Radio (`music.hpp`): three sequenced songs, N / right stick flick.
+- Police chases (`police.hpp`): the police car is a `Traffic` entity of
+  kind `Police` moved by `Game::update_police`, never closer than
+  `police_min_gap` (7 segments: further would hide it below the mirror's
+  edge, closer it would be drawn over the car).
+
+Handoff notes:
+- Headless options added: `--handbrake`, `--brake`, `--pause`, `--dirt`,
+  `--wash`, `--visit`, `--view`, `--storm`, `--music`, `--police`, `--car 4`
+  (the truck). The autopilot visits lots slowly; start it well before one
+  (`--zone 5 --frames 1600 --dealer` stands at the Italian dealer).
+- Sanitizer builds need SDL3's library on the path (sdl2-compat dlopens it):
+  `LD_LIBRARY_PATH=$(nix-store -qR $(ldd build/kurvenrausch | grep -i libSDL2
+  | awk '{print $3}' | cut -d/ -f1-4) | grep sdl3 | head -1)/lib`.
+- `RoadTheme` has a size tripwire in `mix_themes()`; new fields need blending.
+- Not verified by ear: the thunder, siren and music levels were checked by
+  measurement only (RMS, peaks, band power).
+
 ## Round 11: smooth forks, six more countries, done
 
 Requested: the transitions where the road splits feel rough; even more
@@ -480,11 +522,14 @@ display and keyboard.
 - Play-test handling and tune: grip values per zone (rain 0.8, snow 0.7),
   traffic density and speeds, scrape drag, centrifugal force.
 - Listen to the sound on real hardware and tune the mix (gains are in
-  `Synth::render`; the tests pin the relations, not absolute levels). Ideas:
-  traffic whoosh / Doppler, thunder with lightning in the rain, tunnels with
-  reverb, a radio / music.
+  `Synth::render`; the tests pin the relations, not absolute levels), the
+  radio's songs, thunder and siren included. Ideas: traffic whoosh / Doppler,
+  tunnels with reverb, more songs.
 - Real gamepad test; rumble strength tuning; remappable buttons.
-- Night stage with headlights; lightning flashes; tunnels.
+- Night stage with headlights; tunnels.
+- Police: traffic pulling over for the siren; fines on the lap time instead
+  of only the stop.
+- Lap records per car or per route in `laps.tsv` (all the data is there).
 - Uphill / downhill car sprite frames; tyre smoke when skidding.
 - Camera pitch / horizon shift with slope (OutRun style).
 - Branching stages, as in OutRun; load tracks from a data file.

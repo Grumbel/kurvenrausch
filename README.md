@@ -154,9 +154,10 @@ icon is the game's own pixel art, also its window icon;
 | Keyboard         | Gamepad                  | Action             |
 |------------------|--------------------------|--------------------|
 | ↑ / W            | Right trigger, A         | Accelerate         |
-| ↓ / S            | Left trigger, B          | Brake              |
+| ↓ / S            | Left trigger, B          | Brake; standing, let go and press again: reverse |
 | ← → / A D        | Left stick, D-pad        | Steer              |
-| H                | X, left shoulder         | Horn               |
+| Ctrl             | Left shoulder            | Handbrake          |
+| H                | X                        | Horn               |
 | Space            | Y, right shoulder        | Nitro              |
 | P                | Start                    | Pause menu: resume, restart, start in a chosen country, quit |
 | R                |                          | Restart            |
