@@ -58,6 +58,28 @@ private:
     float level_ = 1.f;
 };
 
+// The car's height over crests: it follows the road unless the road falls
+// away faster than gravity can pull it down, then it flies until it lands.
+// World units; `gravity` in units per second squared.
+constexpr float jump_gravity = 40000.f;
+struct Vertical {
+    float y = 0.f;       // height of the car
+    float vy = 0.f;      // its vertical speed, upwards positive
+    bool airborne = false;
+};
+// One step: `road_y` is the road's height under the car now and `road_vy` the
+// rate the car rises with it while driving on it (slope times speed). Returns
+// the impact speed (how much faster the car falls than the road there) on
+// the step it lands, otherwise 0.
+// After a jump in position (a restart, being put back after a crash) put the
+// car on the road with place_on_road() first, or the jump in height would
+// count as a climb.
+float step_vertical(Vertical& v, float road_y, float road_vy, float gravity, float dt);
+inline void place_on_road(Vertical& v, float road_y) { v = Vertical{road_y, 0.f, false}; }
+// It only takes off when it would clear the road by this much, so a sharp
+// change of grade taken slowly is not a hop.
+constexpr float takeoff_clearance = 15.f;
+
 // Speed after one step that changed it from `before` to `after`: the engine
 // cannot push the car beyond `top`, and above it (after a nitro burn or a
 // boost) the car slows back down by `drag` per second.

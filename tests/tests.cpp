@@ -555,6 +555,58 @@ void test_follow_speed() {
     CHECK_NEAR(follow_speed(100.f, 0.f, 100.f, 400.f, 1.5f), 0.f, 1e-4f);
 }
 
+void test_vertical() {
+    using namespace racer;
+    const float dt = 1.f / 60.f, seg = 200.f;
+    // Drives a road made of straight grades (one per segment) at a constant
+    // speed; returns the number of steps in the air and the hardest landing.
+    auto drive = [&](const std::vector<float>& grades, float speed) {
+        Vertical v;
+        v.vy = grades[0] * speed; // already moving with the road
+        int air = 0;
+        float hardest = 0.f;
+        float z = 0.f;
+        auto road = [&](float at, float& slope) {
+            float y = 0.f;
+            size_t i = 0;
+            for (; i < grades.size() && at >= seg; ++i, at -= seg) y += grades[i] * seg;
+            slope = grades[std::min(i, grades.size() - 1)];
+            return y + slope * at;
+        };
+        // Each step moves the car on, then looks at the road where it is now.
+        for (z = speed * dt; z < seg * static_cast<float>(grades.size() - 2); z += speed * dt) {
+            float slope = 0.f;
+            const float y = road(z, slope);
+            hardest = std::max(hardest, step_vertical(v, y, slope * speed, jump_gravity, dt));
+            air += v.airborne;
+            CHECK(v.y >= y - 1e-2f); // never below the road
+        }
+        return std::make_pair(air, hardest);
+    };
+    std::vector<float> flat(60, 0.f);
+    CHECK(drive(flat, 12000.f).first == 0);
+    // A steep climb onto a flat crossing: at speed the car takes off and
+    // lands again, at a crawl it stays on the road.
+    std::vector<float> crest(30, 0.5f);
+    crest.resize(80, 0.f);
+    const auto [air_fast, impact_fast] = drive(crest, 12000.f);
+    CHECK(air_fast > 10 && air_fast < 60);
+    CHECK(impact_fast > 0.f);
+    CHECK(drive(crest, 2000.f).first == 0);
+    // Dropping into a valley and up the other side keeps it on the road.
+    std::vector<float> valley(30, -0.5f);
+    valley.resize(80, 0.5f);
+    CHECK(drive(valley, 12000.f).first <= 1);
+    // Over the crossing and down the next hill it flies further and lands
+    // harder than onto the flat.
+    std::vector<float> over(30, 0.5f);
+    over.resize(36, 0.f);
+    over.resize(100, -0.5f);
+    const auto [air_down, impact_down] = drive(over, 12000.f);
+    CHECK(air_down > air_fast);
+    CHECK(impact_down > impact_fast);
+}
+
 void test_crash_pose() {
     using namespace racer;
     // Starts and ends on the ground, upright and in place.
@@ -1286,6 +1338,7 @@ int main() {
     test_follow_speed();
     test_fuel();
     test_crash_pose();
+    test_vertical();
     test_road_mirror();
     test_framebuffer_blit();
     test_blit_rotated();

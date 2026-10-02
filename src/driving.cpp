@@ -42,6 +42,32 @@ void Fuel::set(float level) {
     level_ = std::clamp(level, 0.f, 1.f);
 }
 
+float step_vertical(Vertical& v, float road_y, float road_vy, float gravity, float dt) {
+    if (!v.airborne) {
+        // Carried on as before, would gravity keep the car on the road?
+        const float flight = v.y + v.vy * dt - 0.5f * gravity * dt * dt;
+        if (flight <= road_y + takeoff_clearance) {
+            // Keep the rate it actually rose at: over a crest that is the
+            // climb it just made, which is what launches it.
+            v.vy = (road_y - v.y) / dt;
+            v.y = road_y;
+            return 0.f;
+        }
+        v.airborne = true;
+        v.y = flight;
+        v.vy -= gravity * dt;
+        return 0.f;
+    }
+    v.vy -= gravity * dt;
+    v.y += v.vy * dt;
+    if (v.y > road_y) return 0.f;
+    const float impact = std::max(0.f, road_vy - v.vy);
+    v.y = road_y;
+    v.vy = road_vy;
+    v.airborne = false;
+    return impact;
+}
+
 float limit_speed(float before, float after, float top, float drag, float dt) {
     if (after <= top) return after;
     // Braking still works up here; accelerating does not.
