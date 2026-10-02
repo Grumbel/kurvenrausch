@@ -15,7 +15,8 @@ namespace racer {
 
 namespace {
 
-constexpr int traffic_count = 48;
+// Traffic density: one vehicle per this many segments of the lap.
+constexpr int segments_per_vehicle = 60;
 
 // Honking: cars this far ahead (in segments) and this close to the player's
 // line (road half-widths) pull over; they swerve faster for a while.
@@ -198,6 +199,7 @@ void Game::spawn_traffic() {
         seed = seed * 1664525u + 1013904223u;
         return static_cast<float>(seed >> 8) / 16777216.f;
     };
+    const int traffic_count = static_cast<int>(track_.segments.size()) / segments_per_vehicle;
     for (int i = 0; i < traffic_count; ++i) {
         const Entity car = world_.create();
         // Keep the start straight clear.
