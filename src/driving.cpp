@@ -75,8 +75,14 @@ float steer_rate(float speed) {
     return rate * (speed >= knee ? speed : std::sqrt(speed * knee));
 }
 
-bool in_reverse(float speed, float throttle, float brake) {
-    return speed < 0.f || (speed <= 0.f && brake > 0.5f && throttle < 0.1f);
+bool reverse_armed(bool armed, float speed, float throttle, float brake) {
+    if (speed > 0.f) return false;                        // moving forwards
+    if (brake < 0.1f && throttle < 0.1f) return true;     // standing (or backing), the brake let go
+    return armed;
+}
+
+bool in_reverse(float speed, float throttle, float brake, bool armed) {
+    return speed < 0.f || (speed <= 0.f && armed && brake > 0.5f && throttle < 0.1f);
 }
 
 float reverse_speed(float speed, float throttle, float brake, float accel, float stop_decel, float max_reverse,

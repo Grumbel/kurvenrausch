@@ -97,12 +97,15 @@ inline bool nearer_other_road(float x, float other) {
 // down to nothing when standing.
 float steer_rate(float speed);
 
-// Reversing. Standing (or already rolling backwards), holding the brake
-// without the throttle drives the car backwards, up to `max_reverse`; the
+// Reversing. Once the car has come to a full stop and the brake has been let
+// go, the reverse gear is ready (`armed`, kept by reverse_armed() step by
+// step; moving forwards again disarms it). Then pressing the brake again,
+// without the throttle, drives the car backwards, up to `max_reverse`; the
 // throttle brakes a car rolling backwards to a stop (`stop_decel`), letting
 // go of both lets it roll to a stop more gently. Speeds are negative
 // backwards; all magnitudes are positive.
-bool in_reverse(float speed, float throttle, float brake);
+bool reverse_armed(bool armed, float speed, float throttle, float brake);
+bool in_reverse(float speed, float throttle, float brake, bool armed);
 float reverse_speed(float speed, float throttle, float brake, float accel, float stop_decel, float max_reverse,
                     float dt);
 

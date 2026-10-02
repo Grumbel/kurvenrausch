@@ -25,7 +25,7 @@ void usage(const char* argv0) {
               << "  --car N             drive car model N (0 Spider, 1 GT Coupe, 2 Hot Hatch, 3 Muscle)\n"
               << "  --dealer            pull in at the next car dealer during the headless run\n"
               << "  --handbrake N       hold the handbrake from step N of the headless run\n"
-              << "  --brake N           hold the brake from step N: stop, then reverse\n"
+              << "  --brake N           brake from step N to a stop, let go, then hold it: reverse\n"
               << "  --nitro N           press nitro at step N of the headless run\n"
               << "  --icon FILE         write the application icon (32x32) as a BMP and exit\n"
               << "  --version           print the version and exit\n"

@@ -596,12 +596,23 @@ void test_fuel() {
 
 void test_reverse() {
     using namespace racer;
-    // Moving forwards, the brake just brakes; standing, it drives backwards.
-    CHECK(!in_reverse(100.f, 0.f, 1.f));
-    CHECK(in_reverse(0.f, 0.f, 1.f));
-    CHECK(!in_reverse(0.f, 1.f, 1.f)); // both pedals: not reverse
-    CHECK(!in_reverse(0.f, 0.f, 0.f));
-    CHECK(in_reverse(-50.f, 1.f, 0.f)); // rolling backwards, whatever the pedals
+    // Braking to a stop does not reverse; letting go arms the reverse gear,
+    // and only pressing the brake again drives backwards.
+    bool armed = false;
+    armed = reverse_armed(armed, 100.f, 0.f, 1.f);
+    CHECK(!armed && !in_reverse(100.f, 0.f, 1.f, armed));
+    armed = reverse_armed(armed, 0.f, 0.f, 1.f); // stopped, brake still held
+    CHECK(!armed && !in_reverse(0.f, 0.f, 1.f, armed));
+    armed = reverse_armed(armed, 0.f, 0.f, 0.f); // let go
+    CHECK(armed && !in_reverse(0.f, 0.f, 0.f, armed));
+    armed = reverse_armed(armed, 0.f, 0.f, 1.f); // pressed again
+    CHECK(armed && in_reverse(0.f, 0.f, 1.f, armed));
+    CHECK(!in_reverse(0.f, 1.f, 1.f, armed)); // not with the throttle too
+    CHECK(in_reverse(-50.f, 1.f, 0.f, false)); // rolling backwards, whatever the pedals
+    CHECK(!reverse_armed(true, 10.f, 1.f, 0.f)); // driving off forwards disarms it
+    // Letting go of the throttle while standing arms it too, but only with
+    // the brake released.
+    CHECK(!reverse_armed(false, 0.f, 0.f, 0.5f));
     const float accel = 1000.f, stop = 4000.f, top = 1800.f, dt = 1.f / 60.f;
     float v = 0.f;
     for (int i = 0; i < 600; ++i) v = reverse_speed(v, 0.f, 1.f, accel, stop, top, dt);

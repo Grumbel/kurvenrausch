@@ -166,6 +166,7 @@ private:
     bool aquaplaning_ = false; // ... fast enough to lose their grip
     bool oily_ = false;       // sliding on an oil slick
     bool handbraking_ = false; // the handbrake pulled at speed: the rear slides
+    bool reverse_armed_ = false; // stopped and the brake let go: pressing it again reverses
     float spin_time_ = 0.f;   // seconds left of the car twitching after an oil slick
 
     // Debris, dust and spray, in screen space.

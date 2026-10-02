@@ -92,9 +92,10 @@ Let the autopilot pull in at the next car dealer during the headless run, and
 stay there.
 .TP
 .BI \-\-brake " N"
-Hold the brake (and not the throttle) from step
+From step
 .I N
-of the headless run on: the car stops, then reverses.
+of the headless run on, brake (and not accelerate) to a stop, let go of the
+brake for a moment, then hold it again: the car reverses.
 .TP
 .BI \-\-handbrake " N"
 Hold the handbrake from step
@@ -116,7 +117,7 @@ Print a summary of the options and exit.
 l l l.
 Keyboard	Gamepad	Action
 \(ua or W	right trigger, A	accelerate
-\(da or S	left trigger, B	brake; when stopped, reverse
+\(da or S	left trigger, B	brake; stopped, let go and press again: reverse
 \(<- \(-> or A D	left stick, D-pad	steer
 Ctrl	left shoulder	handbrake
 H	X	horn

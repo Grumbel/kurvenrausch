@@ -255,7 +255,7 @@ void Game::reset() {
     wave_time_ = 0.f;
     crash_time_ = -1.f;
     particles_.clear();
-    wet_ = aquaplaning_ = oily_ = handbraking_ = false;
+    wet_ = aquaplaning_ = oily_ = handbraking_ = reverse_armed_ = false;
     spin_time_ = 0.f;
     place_on_road(vertical_, track_.height_at(world_.get<Camera>(camera_).player_z()));
     landing_time_ = 0.f;
@@ -358,14 +358,17 @@ bool Game::screenshot(const ScreenshotOptions& opts) {
     autopilot_dealer_ = opts.dealer;
     std::vector<int16_t> sound;
     constexpr int samples_per_step = Synth::sample_rate / 60; // 735, exactly
+    int stopped_at = -1; // --brake: when the car came to a stop
     for (int i = 0; i < opts.frames; ++i) {
         InputState in = autopilot();
         if (opts.force_steer && i >= opts.steer_from) in.steer = opts.steer;
         in.horn = opts.horn;
         in.nitro = i == opts.nitro_frame;
         in.handbrake = opts.handbrake_from >= 0 && i >= opts.handbrake_from;
+        // Brake to a stop, let go a moment, then hold it again: reverse.
         if (opts.brake_from >= 0 && i >= opts.brake_from) {
-            in.brake = 1.f;
+            if (stopped_at < 0 && world_.get<Velocity>(player_).speed <= 0.f) stopped_at = i;
+            in.brake = stopped_at >= 0 && i < stopped_at + 10 ? 0.f : 1.f;
             in.throttle = 0.f;
         }
         fixed_update(in, fixed_dt_);
@@ -514,7 +517,8 @@ void Game::fixed_update(const InputState& input, float dt) {
     update_fuel(input, dt);
     visit_dealer(input);
     const float drive = engine_on_ ? input.throttle * (1.f - input.brake) : 0.f;
-    const bool reversing = !airborne && engine_on_ && in_reverse(vel.speed, input.throttle, input.brake);
+    reverse_armed_ = reverse_armed(reverse_armed_, vel.speed, input.throttle, input.brake);
+    const bool reversing = !airborne && engine_on_ && in_reverse(vel.speed, input.throttle, input.brake, reverse_armed_);
     float accel = 0.f;
     if (!airborne) {
         accel = input.handbrake ? 0.f : player.accel * drive;
@@ -745,7 +749,7 @@ void Game::update_crash(float dt) {
     bounce_ = 0.f;
     steer_ = 0;
     braking_ = false;
-    wet_ = aquaplaning_ = oily_ = handbraking_ = false;
+    wet_ = aquaplaning_ = oily_ = handbraking_ = reverse_armed_ = false;
     spin_time_ = 0.f;
     if (crash_time_ >= crash_seconds) {
         crash_time_ = -1.f;
