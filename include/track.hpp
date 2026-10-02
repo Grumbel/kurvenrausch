@@ -112,9 +112,11 @@ struct Segment {
     Patch patch = Patch::None;
     float patch_x = 0.f;
     float patch_w = 0.f;
-    // Where a route of a fork bends away from or back to the other one: the
-    // side facing it (-1 left, +1 right), which stays clear of scenery.
+    // On a route of a fork, the side facing the other route (-1 left, +1
+    // right): scenery there stays between the two roads. Where the routes
+    // bend apart or together (branch_bend), it stays clear altogether.
     int8_t facing_branch = 0;
+    bool branch_bend = false;
     std::vector<RoadsideObject> scenery;
 };
 
@@ -234,6 +236,7 @@ struct Track {
     std::vector<int> zone_index;       // zone of each segment
     std::vector<RoadTheme> looks;      // blended look of each segment
     std::vector<float> branch_offsets; // per boundary, see branch_offset()
+    std::vector<float> branch_slopes;  // per boundary, see branch_slope()
 
     // Transitions between zones are spread over this many segments (clamped to
     // the shortest zone), centred on the boundary.
@@ -293,11 +296,19 @@ struct Track {
 
     // Lateral position of the other route's road relative to the active one,
     // in road half-widths, at the boundary in front of segment `boundary`;
-    // NaN where it is not to be seen (only where the routes part and meet).
+    // NaN outside forks. Where the routes part and meet it follows both
+    // routes' curves; in between the other road runs alongside, apart.
     float branch_offset(int boundary) const;
+    // How fast that offset changes there: the other road's heading relative
+    // to the active one, in world units sideways per segment.
+    float branch_slope(int boundary) const;
 
     // The branch whose routes contain segment `index`, or -1.
     int branch_at(int index) const;
+
+    // At a fork, the inactive route's segment beside segment `index` of the
+    // active one, or nullptr.
+    const Segment* other_route_segment(int index) const;
 
     // Recomputes the offsets of the inactive routes; finish() and
     // choose_branch() do this.

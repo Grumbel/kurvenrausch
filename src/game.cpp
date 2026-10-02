@@ -45,6 +45,12 @@ constexpr float aquaplane_speed = 0.35f;
 
 // How much of the car's height above the road in a jump the camera follows.
 constexpr float camera_air_share = 0.7f;
+
+// At a fork the roads overlap while their centres are less than this many
+// road half-widths apart; the view turns to a newly taken road's heading
+// with this time constant (seconds).
+constexpr float fork_overlap = 1.5f;
+constexpr float view_turn_seconds = 0.35f;
 constexpr float aquaplane_grip = 0.35f;
 
 // On an oil slick above this fraction of the top speed the tyres keep only
@@ -238,6 +244,7 @@ void Game::reset() {
     spin_time_ = 0.f;
     place_on_road(vertical_, track_.height_at(world_.get<Camera>(camera_).player_z()));
     landing_time_ = 0.f;
+    view_yaw_ = view_shift_ = 0.f;
     fuel_.reset();
     engine_on_ = true;
     refuelling_ = false;
@@ -431,6 +438,8 @@ void Game::fixed_update(const InputState& input, float dt) {
                                         (under.y2 - under.y1) / track_.segment_length * vel.speed, jump_gravity, dt);
     const bool airborne = vertical_.airborne;
     if (landing_time_ > 0.f) landing_time_ -= dt;
+    view_yaw_ *= std::exp(-dt / view_turn_seconds);
+    view_shift_ *= std::exp(-dt / view_turn_seconds);
 
     // Wet or icy roads give the tyres less to bite on: steering has less
     // effect and the car is pushed further out of curves.
@@ -724,8 +733,11 @@ void Game::spawn_dust(float x, float y, int count, float strength) {
 
 // Where a fork's routes part, the car is on whichever road it is nearer to:
 // crossing over makes that route the active one (the car's lateral position
-// is then measured from it). The chosen route is announced as the roads
-// separate.
+// is then measured from it). That is possible only while the roads still
+// overlap; past that the grass is in between. As the camera follows the road
+// it is on, it would snap round to the new road's heading: instead the view
+// keeps the old heading and turns over smoothly (view_yaw_). The chosen
+// route is announced as the roads separate.
 void Game::follow_fork(float prev_car_z) {
     auto& tr = world_.get<Transform>(player_);
     const float car_z = tr.z + world_.get<Camera>(camera_).player_z();
@@ -735,8 +747,22 @@ void Game::follow_fork(float prev_car_z) {
     const Branch& br = track_.branches[static_cast<size_t>(index)];
     if (seg >= br.fork + br.bend) return;
     const float t = std::fmod(car_z, track_.segment_length) / track_.segment_length;
+    // The other road's offset (half-widths) and heading where the camera is,
+    // which the view is measured from; a few segments behind the car.
+    auto at = [&](float z, bool slope) {
+        const int i = track_.index_at(z);
+        const float f = std::fmod(track_.wrap(z), track_.segment_length) / track_.segment_length;
+        const float a = slope ? track_.branch_slope(i) : track_.branch_offset(i);
+        const float b = slope ? track_.branch_slope(i + 1) : track_.branch_offset(i + 1);
+        return std::isnan(a) || std::isnan(b) ? 0.f : a + (b - a) * f;
+    };
     const float other = track_.branch_offset(seg) + (track_.branch_offset(seg + 1) - track_.branch_offset(seg)) * t;
-    if (!std::isnan(other) && nearer_other_road(tr.x, other)) {
+    if (!std::isnan(other) && std::abs(other) < fork_overlap && nearer_other_road(tr.x, other)) {
+        // Keep the camera where it stands and the way it looks, then let it
+        // move over: relative to the new road it stands `other - at camera`
+        // further out than the car's new position says.
+        view_yaw_ += at(tr.z, true);
+        view_shift_ += (other - at(tr.z, false)) * track_.half_width_at(tr.z);
         track_.choose_branch(static_cast<size_t>(index), 1 - br.active);
         tr.x -= other;
         map_ = track_map(track_);
@@ -1031,6 +1057,8 @@ void Game::render() {
     view.position = tr.z;
     view.player_x = tr.x;
     view.player_y = tr.y + camera_air_share * air;
+    view.yaw = view_yaw_;
+    view.shift = view_shift_;
     view.camera_height = cam.height;
     view.camera_depth = cam.depth;
     view.player_z = cam.player_z();

@@ -907,27 +907,45 @@ void test_branches() {
             int planted = 0;
             for (const Segment& s : br.routes[r]) planted += static_cast<int>(s.scenery.size());
             CHECK(planted > 20); // both routes are decorated
-            // Nothing stands on the side facing the other route where they part and meet.
-            for (const Segment& s : br.routes[r]) {
+            // Facing the other route nothing stands where they part and meet,
+            // and elsewhere only what fits between the two roads.
+            for (size_t k = 0; k < br.routes[r].size(); ++k) {
+                const Segment& s = br.routes[r][k];
+                CHECK(s.facing_branch == (r == 0 ? 1 : -1));
                 for (const RoadsideObject& o : s.scenery) {
-                    if (s.facing_branch != 0) CHECK(o.offset * static_cast<float>(s.facing_branch) <= 0.f);
+                    if (o.offset * static_cast<float>(s.facing_branch) <= 0.f) continue;
+                    CHECK(!s.branch_bend);
+                    CHECK(std::abs(o.offset) + scenery_info(o.kind).width / t.half_width(br.fork + static_cast<int>(k)) <= 2.6f + 1e-3f);
                 }
+            }
+            // The S-bends ease in, turn over and ease out: the curvature
+            // starts near zero and never jumps.
+            CHECK(std::abs(br.routes[r].front().curve) < 0.5f);
+            for (size_t k = 1; k < br.routes[r].size(); ++k) {
+                if (br.routes[r][k].branch_bend && br.routes[r][k - 1].branch_bend)
+                    CHECK(std::abs(br.routes[r][k].curve - br.routes[r][k - 1].curve) < 0.5f);
             }
         }
         float diff = 0.f;
         for (int k = 0; k < br.length; ++k) diff += std::abs(br.routes[0][static_cast<size_t>(k)].curve - br.routes[1][static_cast<size_t>(k)].curve);
         CHECK(diff > 100.f);
 
-        // The other road: on top of ours at the fork, well apart where they
-        // have parted (the left one on the left), out of sight in between,
-        // and back together where they meet.
+        // The other road: on top of ours at the fork, parting smoothly (its
+        // heading the same as ours at both ends of the bend), well apart and
+        // alongside in between (the left one on the left), and back together
+        // where they meet.
         CHECK(br.active == 1);
         CHECK_NEAR(t.branch_offset(br.fork), 0.f, 1e-4f);
+        CHECK_NEAR(t.branch_slope(br.fork), 0.f, 1e-4f);
+        CHECK(t.branch_slope(br.fork + br.bend / 2) < -50.f);
+        CHECK(std::abs(t.branch_slope(br.fork + br.bend)) < 1.f);
         CHECK(t.branch_offset(br.fork + br.bend) < -3.f);
-        CHECK(std::isnan(t.branch_offset(br.fork + br.bend + 5)));
-        CHECK(t.branch_offset(br.end() - br.bend) < -3.f);
+        for (int k = br.fork + br.bend; k <= br.end() - br.bend; k += 7) {
+            CHECK_NEAR(t.branch_offset(k), t.branch_offset(br.fork + br.bend), 0.3f);
+        }
         CHECK(std::abs(t.branch_offset(br.end())) < 0.05f);
         CHECK(std::isnan(t.branch_offset(br.fork - 1)));
+        CHECK(std::isnan(t.branch_offset(br.end() + 1)));
 
         // Choosing the other route swaps the segments and mirrors the offsets.
         const Segment middle = t.segment(br.fork + br.length / 2);
@@ -942,8 +960,12 @@ void test_branches() {
     }
     // The car takes the road it is nearer to.
     CHECK(!nearer_other_road(0.f, -0.1f));
-    CHECK(nearer_other_road(-0.2f, -0.3f));
+    CHECK(nearer_other_road(-0.3f, -0.4f));
     CHECK(!nearer_other_road(0.2f, -0.3f));
+    // Where the roads still coincide it does not flip back and forth, nor
+    // when only just nearer the other road.
+    CHECK(!nearer_other_road(-0.01f, -0.02f) && !nearer_other_road(0.01f, 0.f));
+    CHECK(!nearer_other_road(-0.15f, -0.25f));
 }
 
 void test_track_map() {

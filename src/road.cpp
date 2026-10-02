@@ -50,7 +50,7 @@ void RoadRenderer::render(Framebuffer& fb, const Track& track, const RoadView& v
     // the bend accumulates the same way: a right-hand bend curves to the
     // right behind the car as well as ahead of it, and the mirror keeps sides.
     float x = 0.f;
-    float dx = -track.segment(base).curve * (dir > 0 ? base_percent : 1.f - base_percent);
+    float dx = -track.segment(base).curve * (dir > 0 ? base_percent : 1.f - base_percent) + view.yaw;
     float max_y = static_cast<float>(fb.height());
 
     camera_depth_ = view.camera_depth;
@@ -69,7 +69,7 @@ void RoadRenderer::render(Framebuffer& fb, const Track& track, const RoadView& v
         if (dir < 0 && index > base) loop = -track_len;
         const float cam_z = view.position - loop;
         // The car's lateral position, in half-widths of the road where it is.
-        const float cam_x = view.player_x * track.half_width_at(view.position + view.player_z);
+        const float cam_x = view.player_x * track.half_width_at(view.position + view.player_z) + view.shift;
         const float z1 = static_cast<float>(index) * seg_len;
         const float z2 = z1 + seg_len;
 
@@ -357,12 +357,12 @@ void RoadRenderer::draw_sprites(Framebuffer& fb, const Track& track, const Sprit
             draw_edge(fb, track, s, +1);
         }
         const ScreenPoint& p0 = start(s);
-        for (const RoadsideObject& obj : seg.scenery) {
-            if (!projectable) break;
+        // Scenery at `shift` road half-widths from where it belongs.
+        auto plant = [&](const RoadsideObject& obj, float shift) {
             const SceneryInfo& info = scenery_info(obj.kind);
             const float px_per_unit = p0.scale * half_w;
             const float width = info.width * px_per_unit;
-            float left = p0.x + obj.offset * track.half_width(s.index) * px_per_unit;
+            float left = p0.x + (obj.offset + shift) * track.half_width(s.index) * px_per_unit;
             if (info.centered) left -= width / 2.f;
             else if (obj.offset < 0.f) left -= width;
             const Bitmap& bmp = direction_ > 0 ? sprites.scenery(obj.kind) : sprites.scenery_back(obj.kind);
@@ -370,6 +370,15 @@ void RoadRenderer::draw_sprites(Framebuffer& fb, const Track& track, const Sprit
             const bool flip = info.mirrorable && obj.offset < 0.f;
             fb.blit_scaled(bmp, left, p0.y - height, width, height, flip,
                            fog_amount, track.look(s.index).fog);
+        };
+        if (projectable) {
+            // At a fork, the other route's scenery beside its road too, so
+            // that nothing appears or vanishes when the player changes road.
+            const float shift = track.branch_offset(s.index);
+            if (const Segment* other = track.other_route_segment(s.index); other && !std::isnan(shift)) {
+                for (const RoadsideObject& obj : other->scenery) plant(obj, shift);
+            }
+            for (const RoadsideObject& obj : seg.scenery) plant(obj, 0.f);
         }
 
         // Moving objects on this segment, far to near.

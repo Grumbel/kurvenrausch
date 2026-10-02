@@ -137,6 +137,8 @@ private:
     bool at_dealer_ = false;    // standing on a dealer's forecourt: the cars are on offer
     int dealer_steer_ = 0;      // the steering last step, to change cars once per push
     bool autopilot_dealer_ = false; // headless: the autopilot visits the next car dealer
+    float view_yaw_ = 0.f;   // the view turning over to a newly taken road at a fork,
+    float view_shift_ = 0.f; // and moving over to it; see RoadView::yaw and shift
 
     Fuel fuel_;
     std::vector<int> stations_; // first full-width forecourt segment of each gas station

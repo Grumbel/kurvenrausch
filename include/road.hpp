@@ -23,6 +23,12 @@ struct RoadView {
     // +1 looks along the track. -1 looks back from `position`, as seen in a
     // rear-view mirror: left stays left, so the image needs no flipping.
     int direction = 1;
+    // Turns the view away from the road's heading (world units sideways per
+    // segment) and moves the camera sideways (world units): after taking the
+    // other road at a fork the camera still stands and looks where it did on
+    // the old one for a moment, and moves over smoothly.
+    float yaw = 0.f;
+    float shift = 0.f;
     // Screen row of eye level and vertical pixels per world unit at scale 1;
     // 0 means half the framebuffer height for either, as for the main view.
     float horizon = 0.f;

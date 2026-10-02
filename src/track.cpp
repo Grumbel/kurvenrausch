@@ -68,6 +68,15 @@ int Track::index_at(float z) const {
     return idx >= n ? n - 1 : idx; // guards float rounding at the very end
 }
 
+const Segment* Track::other_route_segment(int index) const {
+    const int n = static_cast<int>(segments.size());
+    index = ((index % n) + n) % n;
+    const int b = branch_at(index);
+    if (b < 0) return nullptr;
+    const Branch& br = branches[static_cast<size_t>(b)];
+    return &br.routes[1 - br.active][static_cast<size_t>(index - br.fork)];
+}
+
 const Segment& Track::segment(int index) const {
     const int n = static_cast<int>(segments.size());
     return segments[static_cast<size_t>(((index % n) + n) % n)];
@@ -144,6 +153,7 @@ void Track::choose_branch(size_t index, int route) {
 void Track::update_branch_offsets() {
     const int n = static_cast<int>(segments.size());
     branch_offsets.assign(static_cast<size_t>(n) + 1, std::numeric_limits<float>::quiet_NaN());
+    branch_slopes.assign(static_cast<size_t>(n) + 1, 0.f);
     for (const Branch& br : branches) {
         const std::vector<Segment>& other = br.routes[1 - br.active];
         // The same recurrence as the renderer's curve accumulation, on the
@@ -152,6 +162,7 @@ void Track::update_branch_offsets() {
             float slope = 0.f;
             for (int i = from; i <= to; ++i) {
                 branch_offsets[static_cast<size_t>(i)] = offset / half_width(i);
+                branch_slopes[static_cast<size_t>(i)] = slope;
                 if (i == to) break;
                 offset += slope;
                 slope += other[static_cast<size_t>(i - br.fork)].curve - segment(i).curve;
@@ -159,11 +170,20 @@ void Track::update_branch_offsets() {
             return offset;
         };
         // Where they part, from together to apart; where they meet, from the
-        // same distance apart back together. In between the other route goes
-        // its own way out of sight.
+        // same distance apart back together; in between the other road runs
+        // alongside, that far apart, so it never appears or vanishes.
         const float apart = walk(br.fork, br.fork + br.bend, 0.f);
+        for (int i = br.fork + br.bend; i < br.end() - br.bend; ++i) {
+            branch_offsets[static_cast<size_t>(i)] = apart / half_width(i);
+        }
         walk(br.end() - br.bend, br.end(), apart);
     }
+}
+
+float Track::branch_slope(int boundary) const {
+    if (branch_slopes.empty()) return 0.f;
+    const int n = static_cast<int>(segments.size());
+    return branch_slopes[static_cast<size_t>(((boundary % n) + n) % n)];
 }
 
 float Track::branch_offset(int boundary) const {
@@ -501,19 +521,25 @@ public:
     // and end at the starting height. Signs before the fork point the way.
     void fork(std::string left_name, std::string right_name,
               const std::function<void()>& left, const std::function<void()>& right) {
-        constexpr int half = 25;
-        constexpr float bend = 6.f;
+        // The routes part (and meet) in an S-bend whose curvature follows a
+        // full sine, so it eases in, turns over and eases out without a jolt:
+        // over `bend` segments each route moves apart by `apart` world units.
+        constexpr int bend = 70;
+        constexpr float apart = 3750.f;
+        const float peak = apart * 2.f * PI / static_cast<float>(bend * bend);
         const int start = size();
         const float y0 = last_y();
         scenery(start - 10, Scenery::SignLeft, -1.2f);
         scenery(start - 10, Scenery::SignRight, 1.2f);
 
-        auto part = [&](float side) { // bend away from the other route
-            for (int i = 0; i < 2 * half; ++i) {
-                add((i < half ? 1.f : -1.f) * side * bend, y0);
-                t_.segments.back().facing_branch = static_cast<int8_t>(-side);
+        auto s_bend = [&](float side) { // side: the way this route moves
+            for (int i = 0; i < bend; ++i) {
+                const float phase = 2.f * PI * (static_cast<float>(i) + 0.5f) / static_cast<float>(bend);
+                add(side * peak * std::sin(phase), y0);
+                t_.segments.back().branch_bend = true;
             }
         };
+        auto part = [&](float side) { s_bend(side); };
         std::vector<Segment> routes[2];
         int middle[2] = {0, 0};
         const std::function<void()>* builds[2] = {&left, &right};
@@ -533,16 +559,14 @@ public:
             const int pad = longest - middle[r];
             road(pad / 3, pad - 2 * (pad / 3), pad / 3, Bend::None, (y0 - last_y()) / t_.segment_length);
             const float side = r == 0 ? -1.f : 1.f;
-            for (int i = 0; i < 2 * half; ++i) { // and back towards the other
-                add((i < half ? -1.f : 1.f) * side * bend, y0);
-                t_.segments.back().facing_branch = static_cast<int8_t>(-side);
-            }
+            s_bend(-side); // and back towards the other
+            for (int i = start; i < size(); ++i) t_.segments[static_cast<size_t>(i)].facing_branch = static_cast<int8_t>(-side);
             routes[r].assign(t_.segments.begin() + start, t_.segments.end());
         }
         Branch br;
         br.fork = start;
         br.length = static_cast<int>(routes[0].size());
-        br.bend = 2 * half;
+        br.bend = bend;
         br.names[0] = std::move(left_name);
         br.names[1] = std::move(right_name);
         br.routes[0] = std::move(routes[0]);
@@ -854,9 +878,11 @@ void decorate(Track& track, TrackBuilder& b, int from, int to, uint32_t seed) {
                                track.segment(i + 8).forecourt > 0.f;
         const auto free_side = [&](int side) {
             return (side < 0 ? seg.left : seg.right) == Edge::None && !(side > 0 && forecourt) &&
-                   side != seg.facing_branch;
+                   !(side == seg.facing_branch && seg.branch_bend);
         };
         const auto put = [&](Scenery kind, int side, float magnitude) {
+            // Facing the other route of a fork, only between the two roads.
+            if (side == seg.facing_branch && magnitude + scenery_info(kind).width / track.half_width(i) > 2.6f) return;
             if (free_side(side)) b.scenery(i, kind, static_cast<float>(side) * magnitude);
         };
         const auto both = [&](Scenery kind, float lo, float hi) {
@@ -975,7 +1001,7 @@ void place_patches(Track& track, int from, int to, uint32_t seed) {
             bool clear = true;
             for (int k = -2; k < length + 2; ++k) {
                 const Segment& s = track.segment(i + k);
-                clear = clear && s.forecourt == 0.f && !s.checker && s.facing_branch == 0 && s.patch_w == 0.f &&
+                clear = clear && s.forecourt == 0.f && !s.checker && !s.branch_bend && s.patch_w == 0.f &&
                         i + k < to;
             }
             if (!clear) continue;
