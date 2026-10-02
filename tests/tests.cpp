@@ -10,6 +10,7 @@
 #include "state.hpp"
 #include "views.hpp"
 #include "climate.hpp"
+#include "music.hpp"
 #include "components.hpp"
 #include "road.hpp"
 #include "synth.hpp"
@@ -1698,6 +1699,49 @@ void test_climate() {
     CHECK(band_power(s, 20, 300) > band_power(s, 1000, 8000));
 }
 
+void test_music() {
+    using namespace racer;
+    // The dial: the songs in turn, then off, round again.
+    CHECK(Music::next(0) == 1 && Music::next(Music::tracks - 1) == -1 && Music::next(-1) == 0);
+    CHECK(Music::previous(0) == -1 && Music::previous(-1) == Music::tracks - 1);
+    CHECK(std::string(Music::name(-1)) == "RADIO OFF");
+    // Off is silent; every song plays, each its own, the same every time.
+    const auto play = [](int track, int n) {
+        Music m;
+        m.select(track);
+        std::vector<float> out(static_cast<size_t>(n));
+        for (float& x : out) x = m.sample();
+        return out;
+    };
+    const int n = Synth::sample_rate * 4;
+    for (float x : play(-1, 1000)) CHECK(x == 0.f);
+    std::vector<std::vector<float>> songs;
+    for (int t = 0; t < Music::tracks; ++t) {
+        songs.push_back(play(t, n));
+        double sum = 0, peak = 0;
+        for (float x : songs.back()) {
+            sum += static_cast<double>(x) * x;
+            peak = std::max(peak, static_cast<double>(std::abs(x)));
+        }
+        CHECK(std::sqrt(sum / n) > 0.05 && peak < 1.5);
+        CHECK(play(t, n) == songs.back());
+        CHECK(std::string(Music::name(t)) != "RADIO OFF");
+    }
+    CHECK(songs[0] != songs[1] && songs[1] != songs[2]);
+    // Through the synth: the radio adds to the mix, and off takes it away.
+    SynthParams quiet;
+    quiet.engine = 0.f;
+    Synth synth;
+    synth.set_params(quiet);
+    Samples with(static_cast<size_t>(Synth::sample_rate)), without(with.size());
+    synth.set_music(1);
+    synth.render(with.data(), static_cast<int>(with.size()));
+    synth.set_music(-1);
+    synth.render(without.data(), static_cast<int>(without.size()));
+    CHECK(rms(with, 0, with.size()) > 5.0 * rms(without, 0, without.size()) + 0.01);
+    CHECK(parse_choices(format_choices(Choices{0, 0, 0, 0, 0, -1})).music == -1);
+}
+
 void test_synth_effects() {
     using namespace racer;
     const Samples base = render_sound(driving(), 1.5);
@@ -1939,6 +1983,7 @@ int main() {
     test_steer_rate();
     test_pause_menu();
     test_climate();
+    test_music();
     test_views();
     test_state();
     test_dirt();

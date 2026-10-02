@@ -235,10 +235,13 @@ bool Game::init() {
         driver_ = wrap(c->driver, drivers);
         passenger_ = wrap(c->passenger, passengers);
         view_mode_ = static_cast<ViewMode>(wrap(c->view, view_modes));
+        music_ = c->music >= 0 ? c->music % Music::tracks : -1;
         apply_car();
     }
     record_lap_ = best_lap(store_.load_laps());
     best_lap_ = record_lap_;
+
+    synth_.set_music(music_);
 
     input_.init(); // not fatal: the keyboard always works
     audio_.init(synth_); // nor is a missing audio device
@@ -336,6 +339,12 @@ void Game::run() {
             show_message(view_name(view_mode_), 1.f);
             save_choices();
         }
+        if (input.change_music != 0) {
+            music_ = input.change_music > 0 ? Music::next(music_) : Music::previous(music_);
+            synth_.set_music(music_);
+            show_message(Music::name(music_), 1.5f);
+            save_choices();
+        }
         if (!update_pause(input)) break;
 
         crashed_ = false;
@@ -420,6 +429,7 @@ bool Game::screenshot(const ScreenshotOptions& opts) {
     }
     if (opts.visit >= 0) autopilot_visit_ = static_cast<Lot>(opts.visit);
     if (opts.storm >= 0.f) front_.force(opts.storm);
+    synth_.set_music(opts.music);
     view_mode_ = static_cast<ViewMode>(((opts.view % view_modes) + view_modes) % view_modes);
     if (opts.dirt >= 0.f) dirt_.set(opts.dirt, opts.dirt);
     std::vector<int16_t> sound;
@@ -698,7 +708,7 @@ void Game::fixed_update(const InputState& input, float dt) {
 // The player's car takes its model's top speed and acceleration (grip is
 // applied where the road's grip is).
 void Game::save_choices() const {
-    store_.save_choices({car_model_, car_before_truck_, driver_, passenger_, static_cast<int>(view_mode_)});
+    store_.save_choices({car_model_, car_before_truck_, driver_, passenger_, static_cast<int>(view_mode_), music_});
 }
 
 // Into another car: it comes clean and with a full tank.

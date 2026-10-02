@@ -29,6 +29,7 @@ void usage(const char* argv0) {
               << "  --pause             show the pause menu in the screenshot\n"
               << "  --view N            camera view (0 chase, 1 far, 2 bumper, 3 cockpit)\n"
               << "  --storm L           hold the weather at L (0 clear to 1 storm)\n"
+              << "  --music N           play radio track N (0 to 2) in the --wav recording\n"
               << "  --dirt L            start the headless run this dirty (0 to 1)\n"
               << "  --wash              pull in at the next car wash during the headless run\n"
               << "  --visit KIND        pull in at the next lot of KIND (gas, dealer, wash, motel, hospital, truckstop)\n"
@@ -82,6 +83,8 @@ int main(int argc, char* argv[]) {
                 std::cerr << "Unknown lot for --visit: " << kind << "\n";
                 return 1;
             }
+        } else if (arg == "--music" && i + 1 < argc) {
+            shot.music = std::atoi(argv[++i]);
         } else if (arg == "--storm" && i + 1 < argc) {
             shot.storm = static_cast<float>(std::atof(argv[++i]));
         } else if (arg == "--view" && i + 1 < argc) {

@@ -99,6 +99,8 @@ void Synth::render(int16_t* out, int frames) {
         ding_age_ = 0.f;
         ding_phase_[0] = ding_phase_[1] = 0.0;
     }
+    const int track = music_track_.load(std::memory_order_relaxed);
+    if (track != music_.track()) music_.select(track);
     const int thunders = thunder_events_.load(std::memory_order_acquire);
     if (thunders != thunder_seen_) {
         thunder_seen_ = thunders;
@@ -356,7 +358,7 @@ void Synth::render(int16_t* out, int frames) {
         }
 
         const float mix = engine + roar + wind + gravel + rain + skid + scrape + crash + horn + nitro + whoosh + pump + ding +
-                          splash + thunder;
+                          splash + thunder + 0.55f * music_.sample();
         const float x = std::tanh(mix * s_volume_ * 1.1f);
         out[i] = static_cast<int16_t>(std::lround(x * 30000.f));
     }

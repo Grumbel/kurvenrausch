@@ -49,6 +49,7 @@ struct ScreenshotOptions {
     bool pause = false;      // show the pause menu in the screenshot
     int view = 0;            // the camera view, a ViewMode
     float storm = -1.f;      // if >= 0, hold the weather front at this level (0 clear .. 1 storm)
+    int music = -1;          // the radio's track in the --wav recording, -1 off
     float dirt = -1.f;       // if >= 0, start this dirty (mud and oil, 0 .. 1)
 };
 
@@ -167,6 +168,7 @@ private:
     int car_before_truck_ = 0; // the car left at the truck stop, to take back
     bool bandaged_ = false;
     ViewMode view_mode_ = ViewMode::Chase;
+    int music_ = 0;          // the radio's track (see Music), -1 off
     WeatherFront front_;
     float flash_time_ = 0.f;     // seconds left of a lightning flash
     float thunder_delay_ = -1.f; // seconds until its thunder, < 0 for none

@@ -97,6 +97,7 @@ void Input::poll(InputState& state) {
     state.toggle_fullscreen = false;
     state.toggle_mute = false;
     state.change_view = false;
+    state.change_music = 0;
 
     SDL_Event e;
     while (SDL_PollEvent(&e)) {
@@ -118,6 +119,7 @@ void Input::poll(InputState& state) {
                     case SDLK_F11: state.toggle_fullscreen = true; break;
                     case SDLK_m: state.toggle_mute = true; break;
                     case SDLK_c: state.change_view = true; break;
+                    case SDLK_n: state.change_music = 1; break;
                     case SDLK_RETURN:
                         if (e.key.keysym.mod & KMOD_ALT) state.toggle_fullscreen = true;
                         else state.menu.confirm = true;
@@ -160,6 +162,17 @@ void Input::poll(InputState& state) {
     state.horn = keys[SDL_SCANCODE_H];
     state.nitro = keys[SDL_SCANCODE_SPACE];
     state.handbrake = keys[SDL_SCANCODE_LCTRL] || keys[SDL_SCANCODE_RCTRL];
+
+    // The right stick changes the radio's track: one step per flick, the
+    // stick has to come back to the middle before the next.
+    float right_x = 0.f;
+    for (SDL_GameController* pad : pads_) {
+        const float x = axis(pad, SDL_CONTROLLER_AXIS_RIGHTX);
+        if (std::abs(x) > std::abs(right_x)) right_x = x;
+    }
+    const int flick = right_x > 0.6f ? 1 : right_x < -0.6f ? -1 : 0;
+    if (flick != 0 && music_stick_ == 0) state.change_music = flick;
+    if (flick != 0 || std::abs(right_x) < 0.3f) music_stick_ = flick;
 
     for (SDL_GameController* pad : pads_) {
         PadState p;

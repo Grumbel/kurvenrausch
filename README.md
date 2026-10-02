@@ -102,6 +102,9 @@ weather and road markings, fading smoothly into one another:
   truck stop to take your car back
 - **Mini map** of the lap with your position, the start line, the gas
   stations, the car dealers, car washes, motels, hospitals and truck stops
+- **Radio**: three synthesised songs (Sunset Cruise, Turbo Breeze, Night
+  Drive), each a loop of pads, bass, lead and drums from a step sequencer;
+  flick the right stick or press N to change the track or switch it off
 - **Synthesised sound**: a six-cylinder engine with exhaust pulses ringing a
   pipe and a body resonance for the bass, building with the revs, surging as
   the throttle opens and crackling on the overrun; gear changes, tyre squeal,
@@ -153,6 +156,7 @@ icon is the game's own pixel art, also its window icon;
 | P                | Start                    | Pause menu: resume, restart, start in a chosen country, quit |
 | R                |                          | Restart            |
 | C                | Back                     | Camera view: chase, far, bumper, cockpit |
+| N                | Right stick, flicked     | Radio: next (or previous) track, or off |
 | M                |                          | Mute sound         |
 | F11 / Alt+Enter  |                          | Toggle fullscreen  |
 | Esc              |                          | Quit (in the pause menu: back to the race) |

@@ -30,6 +30,7 @@ struct InputState {
     bool toggle_fullscreen = false;
     bool toggle_mute = false;
     bool change_view = false; // C or Back: the next camera view
+    int change_music = 0;     // N, or the right stick flicked: +1 the next track, -1 the previous
 };
 
 // A normalised reading of one game controller (SDL's standard layout, which
@@ -84,6 +85,7 @@ private:
     void close_controller(SDL_JoystickID instance);
 
     std::vector<SDL_GameController*> pads_;
+    int music_stick_ = 0; // where the right stick was flicked last: -1, 0 or +1
 };
 
 } // namespace racer

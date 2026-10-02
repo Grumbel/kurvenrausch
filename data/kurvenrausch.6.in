@@ -123,6 +123,13 @@ or
 .B \-\-pause
 Show the pause menu in the screenshot.
 .TP
+.BI \-\-music " N"
+Play the radio's track
+.I N
+(0 to 2) in the
+.B \-\-wav
+recording; without, the recording has no music.
+.TP
 .BI \-\-storm " L"
 Hold the weather of the headless run at
 .IR L ,
@@ -161,6 +168,7 @@ Space	Y, right shoulder	nitro
 P	Start	pause menu: resume, restart, start in a country, quit
 R		restart
 C	Back	camera view: chase, far, bumper, cockpit
+N	right stick	radio: the next (or previous) track, or off
 M		mute the sound
 F11, Alt+Enter		toggle fullscreen
 Esc		quit; in the pause menu, back to the race

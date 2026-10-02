@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include "music.hpp"
+
 #include <atomic>
 #include <cstdint>
 #include <string>
@@ -49,6 +51,9 @@ public:
     // Thunder: a crack (the louder the nearer, `intensity` 0 .. 1) and a long,
     // rolling rumble.
     void trigger_thunder(float intensity);
+    // The radio: a Music track, -1 for off. A new track starts from its
+    // beginning.
+    void set_music(int track) { music_track_.store(track, std::memory_order_relaxed); }
 
     // Renders mono 16-bit samples. For constant parameters the output depends
     // only on the number of samples rendered so far, not on how the calls are
@@ -64,6 +69,7 @@ private:
     std::atomic<float> horn_{0.f}, nitro_{0.f}, engine_{1.f}, pump_{0.f}, splash_{0.f};
     std::atomic<float> crash_intensity_{0.f}, whoosh_intensity_{0.f}, thunder_intensity_{0.f};
     std::atomic<int> crash_events_{0}, whoosh_events_{0}, ding_events_{0}, thunder_events_{0};
+    std::atomic<int> music_track_{-1};
 
     // Smoothed parameters and DSP state (audio thread only).
     bool primed_ = false;
@@ -101,6 +107,7 @@ private:
     int ding_seen_ = 0;
     float ding_age_ = 10.f;
     double ding_phase_[2] = {0.0, 0.0};
+    Music music_;
     int thunder_seen_ = 0;
     float thunder_strength_ = 0.f, thunder_age_ = 100.f;
     float thunder_low_[2] = {0.f, 0.f}, thunder_crack_lp_ = 0.f, thunder_roll_ = 0.f;
