@@ -397,7 +397,7 @@ void Game::fixed_update(const InputState& input, float dt) {
     tr.x += dx * input.steer * (0.5f + 0.5f * grip);
     tr.x -= dx * speed_pct * seg.curve * player.centrifugal / grip;
 
-    weather_.update(look.rain, look.snowfall, -seg.curve * 25.f * speed_pct, dt);
+    weather_.update(look.rain, look.snowfall, -seg.curve * 25.f * speed_pct, speed_pct, dt);
 
     // Braking overrides the throttle; without either the car coasts down.
     update_fuel(input, dt);
@@ -570,7 +570,7 @@ void Game::update_crash(float dt) {
     const Segment& seg = track_.segment_at(tr.z + player_z);
     background_.update(seg.curve, dt * vel.speed / track_.segment_length, dt);
     const RoadTheme& look = track_.look_at(tr.z + player_z);
-    weather_.update(look.rain, look.snowfall, 0.f, dt);
+    weather_.update(look.rain, look.snowfall, 0.f, vel.speed / player.max_speed, dt);
     tr.y = track_.height_at(tr.z + player_z);
 
     const CrashPose pose = crash_pose(crash_time_, crash_side_);

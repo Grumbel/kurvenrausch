@@ -255,7 +255,7 @@ void test_weather() {
     // Nothing falls in fair weather.
     Weather w(320, 240);
     fb.clear(grey);
-    w.update(0.f, 0.f, 0.f, 1.f / 60.f);
+    w.update(0.f, 0.f, 0.f, 0.f, 1.f / 60.f);
     w.render(fb);
     CHECK(w.rain_count() == 0 && w.snow_count() == 0);
     CHECK(changed_pixels(clear, fb) == 0);
@@ -264,7 +264,7 @@ void test_weather() {
     int previous = 0;
     for (float level : {0.2f, 0.6f, 1.f}) {
         Weather rain(320, 240);
-        rain.update(level, 0.f, 0.f, 1.f / 60.f);
+        rain.update(level, 0.f, 0.f, 0.f, 1.f / 60.f);
         fb.clear(grey);
         rain.render(fb);
         const int n = changed_pixels(clear, fb);
@@ -273,7 +273,7 @@ void test_weather() {
     }
     {
         Weather snow(320, 240);
-        snow.update(0.f, 1.f, 0.f, 1.f / 60.f);
+        snow.update(0.f, 1.f, 0.f, 0.f, 1.f / 60.f);
         fb.clear(grey);
         snow.render(fb);
         CHECK(snow.snow_count() == Weather::max_snow);
@@ -289,8 +289,8 @@ void test_weather() {
     Weather a(320, 240), b(320, 240);
     for (int i = 0; i < 3000; ++i) {
         const float wind = 30.f * std::sin(static_cast<float>(i) * 0.01f);
-        a.update(1.f, 1.f, wind, 1.f / 60.f);
-        b.update(1.f, 1.f, wind, 1.f / 60.f);
+        a.update(1.f, 1.f, wind, 0.f, 1.f / 60.f);
+        b.update(1.f, 1.f, wind, 0.f, 1.f / 60.f);
     }
     Framebuffer fa(320, 240), fb2(320, 240);
     fa.clear(grey);
@@ -305,8 +305,8 @@ void test_weather() {
     Weather fresh(320, 240);
     Framebuffer f1(320, 240), f2(320, 240);
     f1.clear(grey); f2.clear(grey);
-    a.update(1.f, 0.f, 0.f, 0.f);
-    fresh.update(1.f, 0.f, 0.f, 0.f);
+    a.update(1.f, 0.f, 0.f, 0.f, 0.f);
+    fresh.update(1.f, 0.f, 0.f, 0.f, 0.f);
     a.render(f1);
     fresh.render(f2);
     CHECK(changed_pixels(f1, f2) == 0);
@@ -1151,6 +1151,58 @@ void test_lanes() {
     CHECK(racer::mix_themes(eu, us, 0.7f).us_markings);
 }
 
+void test_weather_vection() {
+    using namespace racer;
+    const racer::Color grey{90, 90, 90};
+    Framebuffer clear(320, 240);
+    clear.clear(grey);
+    auto run = [](Weather& w, float rain, float snow, float speed) {
+        for (int i = 0; i < 300; ++i) w.update(rain, snow, 0.f, speed, 1.f / 60.f);
+    };
+    // Standing, the precipitation just falls: no stream out of the distance.
+    Weather still(320, 240), fast(320, 240);
+    run(still, 1.f, 0.f, 0.f);
+    run(fast, 1.f, 0.f, 1.f);
+    // At speed it streams outwards, faster the faster the car goes.
+    CHECK(fast.mean_outflow() > still.mean_outflow() + 150.f);
+    Weather half(320, 240);
+    run(half, 1.f, 0.f, 0.5f);
+    CHECK(half.mean_outflow() > still.mean_outflow() && half.mean_outflow() < fast.mean_outflow());
+    // The streaks get longer: the same rain covers more of the screen.
+    Framebuffer a(320, 240), b(320, 240);
+    a.clear(grey);
+    b.clear(grey);
+    still.render(a);
+    fast.render(b);
+    CHECK(changed_pixels(clear, b) > changed_pixels(clear, a) * 3 / 2);
+    // Snow streams and smears too.
+    Weather snow_still(320, 240), snow_fast(320, 240);
+    run(snow_still, 0.f, 1.f, 0.f);
+    run(snow_fast, 0.f, 1.f, 1.f);
+    CHECK(snow_fast.mean_outflow() > snow_still.mean_outflow() + 150.f);
+    a.clear(grey);
+    b.clear(grey);
+    snow_still.render(a);
+    snow_fast.render(b);
+    CHECK(changed_pixels(clear, b) > changed_pixels(clear, a));
+    // However long it runs at speed, the screen stays covered: the stream is
+    // fed from the middle rather than draining away.
+    Weather long_run(320, 240);
+    for (int i = 0; i < 3000; ++i) long_run.update(1.f, 0.f, 0.f, 1.2f, 1.f / 60.f);
+    Framebuffer c(320, 240);
+    c.clear(grey);
+    long_run.render(c);
+    int left = 0, right = 0, top = 0, bottom = 0;
+    for (int y = 0; y < 240; ++y) {
+        for (int x = 0; x < 320; ++x) {
+            if (c.pixels()[y * 320 + x] == clear.pixels()[0]) continue;
+            (x < 160 ? left : right)++;
+            (y < 120 ? top : bottom)++;
+        }
+    }
+    CHECK(left > 200 && right > 200 && top > 200 && bottom > 200);
+}
+
 void test_weather_mixing() {
     using namespace racer;
     RoadTheme dry, wet;
@@ -1174,6 +1226,7 @@ int main() {
     test_edges();
     test_weather();
     test_weather_mixing();
+    test_weather_vection();
     test_lanes();
     test_start_line();
     test_vehicles();
