@@ -6,9 +6,9 @@ Base: `fc65858 Fix rendering: correct projection, pixel format, colors &
 sprites` (upstream master). Work line: kurvenrausch-003.x, bundles are
 cumulative from `fc65858`.
 
-Latest bundle: `kurvenrausch-007.1-vehicles-weather-engine-fc65858.bundle`,
-tip is the "Document vehicles, wet spots, vection and the engine" commit on
-`master`. 004.1 added the rear-view mirror on top of 003.1 (`fe8e0df`); 005.1
+Latest bundle: `kurvenrausch-008.1-san-francisco-fc65858.bundle`, tip is the
+"Document San Francisco and the jumps" commit on `master`; 008.1 adds the San
+Francisco zone and jumps on top of 007.1. 004.1 added the rear-view mirror on top of 003.1 (`fe8e0df`); 005.1
 horn, close-pass wave and boost, and nitro; 006.1 brake lights, the crash
 animation, the mini map, fuel and gas stations; 007.1 the VERSION file, new
 vehicles, the engine sound, weather vection and wet spots.
@@ -21,6 +21,41 @@ Upstream master has since been fast-forwarded to `64fda32`, the tip of 002.1, so
 from `fc65858` regardless, as the rules require.
 The rebase notes: upstream's rename is kept, its rendering fix is superseded by
 the road/framebuffer rewrite, `Color::to_u32()` became `Color::argb()`.
+
+## Round 7 (008.1): San Francisco, hills, valleys and jumps, done
+
+Requested: a San Francisco biome with huge hills and valleys and jumps.
+
+Design decisions:
+
+- Zone 7, "USA / SAN FRANCISCO", after the California coast; the lap's final
+  descent (`downhill_to_end`) now ends it. City look: concrete sidewalks for
+  grass, grey kerbs, pale sky with haze, two lanes with US markings.
+  `Decor::City`: Victorian row houses (three colours) every 4 segments on
+  both sides at 1.35, the odd tree, street lamps at the kerb.
+- Streets: `TrackBuilder::slope(len, grade, curve)` adds straight constant
+  grades, so the grade changes abruptly at each crossing (6 flat segments),
+  as on the real hills. Grades 35-55%, a valley floor in the middle, a gas
+  station (every zone has one). The existing hills are eased and never jump.
+- Jumps (`step_vertical`, tested): on the road the car keeps the rate it
+  actually rose at over the last step; if carrying on with that under gravity
+  (40000 units/s^2, arcade-strong so flights last ~0.5 s) would clear the road
+  by more than 15 units, it takes off. A 50% crest launches it above about a
+  third of top speed. In the air: no steering, traction or brakes (nitro
+  still pushes), no collisions with scenery or traffic (you can fly over
+  cars); the camera follows 70% of the height and the car sprite lifts by the
+  rest (capped at 40 px); the revs flare. Landing: thump, dust, a rumble and a
+  short squash, a little speed lost, by impact. Any teleport of the car
+  (restart, crash recovery, knock-backs) calls `place_on_road()` first.
+- The zone sheet in the README is now 4 columns wide for 7 zones.
+
+Verified: builds warning-free, tests (jump physics, the zone's grades,
+heights, jumps at top speed and none in the Black Forest, decor; 7 zones);
+ASan+UBSan through San Francisco (with nitro and a crash), a full lap and the
+live loop; `reuse lint`; screenshots of the streets and a jump from take-off
+to landing. Not verified: how the jumps feel to play; the car's own shadow
+lifts with it in the air (no separate ground shadow, the road under the car
+is below the bottom of the screen).
 
 ## Round 6 (007.1): version, vehicles, engine, vection, wet spots, done
 

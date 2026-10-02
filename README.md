@@ -12,10 +12,10 @@ Packaged with a **Nix flake**.
 
 ![Kurvenrausch on the Cote d'Azur corniche](docs/screenshot.png)
 
-One lap takes you through six zones, each with its own country, scenery,
+One lap takes you through seven zones, each with its own country, scenery,
 weather and road markings, fading smoothly into one another:
 
-![The six zones: France, Germany, Switzerland, Italy, Arizona, California](docs/zones.png)
+![The seven zones: France, Germany, Switzerland, Italy, Arizona, California, San Francisco](docs/zones.png)
 
 ## Features
 
@@ -23,10 +23,11 @@ weather and road markings, fading smoothly into one another:
   curves by accumulated lateral offset, hills and crests with correct
   occlusion, alternating rumble strips and grass bands, lane markings, a
   chequered start line, and distance fog
-- **Six zones** with blended looks: the Cote d'Azur (palms, sunny), the Black
+- **Seven zones** with blended looks: the Cote d'Azur (palms, sunny), the Black
   Forest (firs in the rain), the Alps (snowfall, chalets, a pass), Tuscany
   (cypress avenues at sunset), Arizona (desert, cacti, mesas, telephone poles)
-  and the California coast (sandstone cliff and sea in thick fog); a banner
+  the California coast (sandstone cliff and sea in thick fog) and San
+  Francisco (steep streets between Victorian row houses); a banner
   announces each country
 - **Cliffs and guard rails** along the road: strata-textured rock walls that
   rise and fall with the terrain, rails above the sea or a valley; both are
@@ -54,6 +55,8 @@ weather and road markings, fading smoothly into one another:
   from the exhausts, more thrust and a higher top speed
 - **Rear-view mirror** at the top of the screen: the road behind, drawn by the
   same renderer looking back, with the fronts of the cars you have passed
+- **Jumps**: San Francisco's streets climb and drop at up to 55% grade, flat
+  at every crossing; take a crest fast and the car flies, landing with a thump
 - Arcade handling with analog steering and pedals; centrifugal force, off-road
   slowdown; hit something off the road at speed and the car **tumbles** over
   in a cloud of dust and debris before it is put back on the road
