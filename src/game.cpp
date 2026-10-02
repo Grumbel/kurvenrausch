@@ -42,6 +42,9 @@ constexpr float overspeed_drag = 0.15f;
 // Above this fraction of the top speed the tyres aquaplane in a wet spot and
 // keep only this much of their grip.
 constexpr float aquaplane_speed = 0.35f;
+
+// How much of the car's height above the road in a jump the camera follows.
+constexpr float camera_air_share = 0.7f;
 constexpr float aquaplane_grip = 0.35f;
 
 // Refuelling works on the forecourt below this fraction of the top speed.
@@ -222,6 +225,8 @@ void Game::reset() {
     crash_time_ = -1.f;
     particles_.clear();
     wet_ = aquaplaning_ = false;
+    place_on_road(vertical_, track_.height_at(world_.get<Camera>(camera_).player_z()));
+    landing_time_ = 0.f;
     fuel_.reset();
     engine_on_ = true;
     refuelling_ = false;
@@ -306,6 +311,7 @@ void Game::print_zones() const {
 bool Game::screenshot(const ScreenshotOptions& opts) {
     const float start = opts.zone >= 0 ? zone_start_position(opts.zone) : opts.position;
     world_.get<Transform>(player_).z = track_.wrap(start);
+    place_on_road(vertical_, track_.height_at(start + world_.get<Camera>(camera_).player_z()));
     zone_ = -1;
     if (opts.fuel >= 0.f) fuel_.set(opts.fuel);
     std::vector<int16_t> sound;
@@ -396,18 +402,29 @@ void Game::fixed_update(const InputState& input, float dt) {
     tr.z = track_.wrap(tr.z + dt * vel.speed);
     background_.update(seg.curve, dt * vel.speed / track_.segment_length, dt);
 
+    // Over a crest taken fast the car leaves the road; in the air it can't
+    // steer, drive or brake, and it passes over whatever is below it.
+    const Segment& under = track_.segment_at(tr.z + player_z);
+    const float landing = step_vertical(vertical_, track_.height_at(tr.z + player_z),
+                                        (under.y2 - under.y1) / track_.segment_length * vel.speed, jump_gravity, dt);
+    const bool airborne = vertical_.airborne;
+    if (landing_time_ > 0.f) landing_time_ -= dt;
+
     // Wet or icy roads give the tyres less to bite on: steering has less
     // effect and the car is pushed further out of curves.
     // Ploughing through a wet spot fast, the tyres lose most of their grip
     // too: the car barely steers, slides out of bends, twitches and slows.
     const RoadTheme& look = track_.look_at(tr.z + player_z);
-    wet_ = speed_pct > 0.05f && track_.on_wet(tr.z + player_z, tr.x, player.car_width / track_.road_width / 2.f);
+    wet_ = !airborne && speed_pct > 0.05f &&
+           track_.on_wet(tr.z + player_z, tr.x, player.car_width / track_.road_width / 2.f);
     aquaplaning_ = wet_ && speed_pct > aquaplane_speed;
     const float grip = std::max(look.grip, 0.2f) * (aquaplaning_ ? aquaplane_grip : 1.f);
     steer_ = input.steer > 0.3f ? 1 : input.steer < -0.3f ? -1 : 0;
     braking_ = input.brake > 0.1f;
-    tr.x += dx * input.steer * (0.5f + 0.5f * grip);
-    tr.x -= dx * speed_pct * seg.curve * player.centrifugal / grip;
+    if (!airborne) {
+        tr.x += dx * input.steer * (0.5f + 0.5f * grip);
+        tr.x -= dx * speed_pct * seg.curve * player.centrifugal / grip;
+    }
     if (aquaplaning_) {
         rng_ = rng_ * 1664525u + 1013904223u;
         tr.x += (static_cast<float>(rng_ >> 8) / 16777216.f - 0.5f) * 1.6f * speed_pct * dt;
@@ -420,14 +437,17 @@ void Game::fixed_update(const InputState& input, float dt) {
     // Braking overrides the throttle; without either the car coasts down.
     update_fuel(input, dt);
     const float drive = engine_on_ ? input.throttle * (1.f - input.brake) : 0.f;
-    float accel = player.accel * drive;
-    if (input.brake > 0.01f) accel += player.brake * input.brake;
-    else accel += player.decel * (1.f - drive);
+    float accel = 0.f;
+    if (!airborne) {
+        accel = player.accel * drive;
+        if (input.brake > 0.01f) accel += player.brake * input.brake;
+        else accel += player.decel * (1.f - drive);
+    }
     accel += player.accel * Nitro::thrust * nitro_.intensity();
     const float speed_before = vel.speed;
     vel.speed += accel * dt;
 
-    if (std::abs(tr.x) > 1.f) {
+    if (!airborne && std::abs(tr.x) > 1.f) {
         // The forecourt is paved: no slowing down there.
         if (vel.speed > player.offroad_limit && !track_.on_forecourt(tr.z + player_z, tr.x))
             vel.speed += player.offroad_decel * dt;
@@ -452,6 +472,7 @@ void Game::fixed_update(const InputState& input, float dt) {
                 const float seg_start = static_cast<float>(track_.index_at(tr.z + player_z)) *
                                         track_.segment_length;
                 tr.z = track_.wrap(seg_start - player_z);
+                place_on_road(vertical_, track_.height_at(tr.z + player_z));
                 break;
             }
         }
@@ -474,11 +495,12 @@ void Game::fixed_update(const InputState& input, float dt) {
     const int car_segment = track_.index_at(tr.z + player_z);
     const float car_w = player.car_width / track_.road_width;
     world_.view<Transform, Velocity, Traffic>([&](Entity, Transform& t, Velocity& v, Traffic& traffic) {
-        if (vel.speed <= v.speed || track_.index_at(t.z) != car_segment) return;
+        if (airborne || vel.speed <= v.speed || track_.index_at(t.z) != car_segment) return;
         const float w = vehicle_info(traffic.kind).width / track_.road_width;
         if (!overlap(tr.x, car_w, t.x, w * 0.8f)) return;
         vel.speed = v.speed * (v.speed / vel.speed);
         tr.z = track_.wrap(t.z - player_z);
+        place_on_road(vertical_, track_.height_at(tr.z + player_z));
         crashed_ = true;
         synth_.trigger_crash(0.4f + 0.4f * speed_pct);
     });
@@ -487,12 +509,13 @@ void Game::fixed_update(const InputState& input, float dt) {
     const float top = player.max_speed * (nitro_.burning() ? Nitro::top_speed : 1.f);
     vel.speed = std::max(0.f, limit_speed(speed_before, vel.speed, top, overspeed_drag * player.max_speed, dt));
     tr.y = track_.height_at(tr.z + player_z);
+    if (landing > 0.f) land(landing);
 
     // Engine and road shake; rougher off the road. Whole pixels only, the
     // car is pixel art.
     rng_ = rng_ * 1664525u + 1013904223u;
     const float shake = (std::abs(tr.x) > 1.f ? 2.f : 1.f) * vel.speed / player.max_speed;
-    bounce_ = (rng_ >> 31) && shake > 0.25f ? -std::round(shake) : 0.f;
+    bounce_ = !airborne && (rng_ >> 31) && shake > 0.25f ? -std::round(shake) : 0.f;
 
     update_laps(prev_z + player_z, tr.z + player_z, dt);
     update_traffic(dt);
@@ -590,6 +613,7 @@ void Game::update_crash(float dt) {
     const RoadTheme& look = track_.look_at(tr.z + player_z);
     weather_.update(look.rain, look.snowfall, 0.f, vel.speed / player.max_speed, dt);
     tr.y = track_.height_at(tr.z + player_z);
+    place_on_road(vertical_, tr.y);
 
     const CrashPose pose = crash_pose(crash_time_, crash_side_);
     tr.x = crash_x_ + (crash_target_x_ - crash_x_) * pose.recover;
@@ -630,6 +654,20 @@ void Game::spawn_dust(float x, float y, int count, float strength) {
                               3.f + 3.f * b * strength, blend(dust, Color{0xff, 0xff, 0xff}, 0.3f * b),
                               Particle::Kind::Dust});
     }
+}
+
+// Touching down after a jump: the harder, the bigger the thump, the dust and
+// the loss of speed; a hard one squashes the car down for a moment.
+void Game::land(float impact) {
+    const float strength = std::clamp(impact / 8000.f, 0.f, 1.f);
+    if (strength < 0.1f) return;
+    synth_.trigger_crash(0.2f + 0.5f * strength);
+    spawn_dust(static_cast<float>(width) / 2.f, ground_y, 3 + static_cast<int>(6.f * strength), 0.4f + strength);
+    if (strength > 0.4f) {
+        crashed_ = true; // a strong rumble
+        landing_time_ = 0.2f;
+    }
+    world_.get<Velocity>(player_).speed *= 1.f - 0.08f * strength;
 }
 
 // Water thrown up by the rear tyres: drops fanning out from their outer
@@ -729,6 +767,7 @@ void Game::update_audio(const InputState& input, float dt) {
     p.engine = engine_on_ ? 1.f : 0.f;
     p.pump = refuelling_ ? 1.f : 0.f;
     p.splash = wet_ ? std::clamp(speed_pct * 1.3f, 0.f, 1.f) : 0.f;
+    if (vertical_.airborne) p.rpm = std::min(1.f, p.rpm + 0.25f * input.throttle); // wheels spinning free
     p.speed = speed_pct;
 
     // The tyres squeal when the lateral demand (steering plus the push of the
@@ -896,9 +935,12 @@ void Game::render() {
     background_.render(fb_, look);
 
     RoadView view;
+    // In the air the camera rises with most of the car's height, and the car
+    // lifts on screen by the rest, so the road visibly falls away beneath it.
+    const float air = vertical_.y - tr.y;
     view.position = tr.z;
     view.player_x = tr.x;
-    view.player_y = tr.y;
+    view.player_y = tr.y + camera_air_share * air;
     view.camera_height = cam.height;
     view.camera_depth = cam.depth;
     view.player_z = cam.player_z();
@@ -928,6 +970,8 @@ void Game::render() {
     me.sh = me.sw * static_cast<float>(car.h) / static_cast<float>(car.w);
     me.sx = (width - me.sw) / 2.f;
     me.sy = height - me.sh - 1.f + bounce_;
+    me.sy -= std::min(40.f, (1.f - camera_air_share) * air * cam.depth / cam.player_z() * (height / 2.f));
+    if (landing_time_ > 0.f) me.sy += 3.f; // squashed by a hard landing
     bool car_visible = true;
     if (crash_time_ >= 0.f) {
         const CrashPose pose = crash_pose(crash_time_, crash_side_);
@@ -1033,7 +1077,7 @@ void Game::render_mirror() {
     RoadView view;
     view.position = car_z;
     view.player_x = tr.x;
-    view.player_y = tr.y;
+    view.player_y = tr.y + std::max(0.f, vertical_.y - tr.y); // in a jump, from up in the air
     view.camera_height = mirror_camera_height;
     view.camera_depth = mirror_depth;
     view.draw_distance = cam.draw_distance;
