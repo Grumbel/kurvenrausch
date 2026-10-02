@@ -24,6 +24,7 @@ struct Choices {
     int car_before_truck = 0;
     int driver = 0;
     int passenger = 0;
+    int view = 0; // a ViewMode
 };
 // As "key value" lines; parsing skips unknown keys and malformed lines and
 // keeps the defaults for what is missing.

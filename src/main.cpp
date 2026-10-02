@@ -27,6 +27,7 @@ void usage(const char* argv0) {
               << "  --handbrake N       hold the handbrake from step N of the headless run\n"
               << "  --brake N           brake from step N to a stop, let go, then hold it: reverse\n"
               << "  --pause             show the pause menu in the screenshot\n"
+              << "  --view N            camera view (0 chase, 1 far, 2 bumper, 3 cockpit)\n"
               << "  --dirt L            start the headless run this dirty (0 to 1)\n"
               << "  --wash              pull in at the next car wash during the headless run\n"
               << "  --visit KIND        pull in at the next lot of KIND (gas, dealer, wash, motel, hospital, truckstop)\n"
@@ -80,6 +81,8 @@ int main(int argc, char* argv[]) {
                 std::cerr << "Unknown lot for --visit: " << kind << "\n";
                 return 1;
             }
+        } else if (arg == "--view" && i + 1 < argc) {
+            shot.view = std::atoi(argv[++i]);
         } else if (arg == "--pause") {
             shot.pause = true;
         } else if (arg == "--dealer") {

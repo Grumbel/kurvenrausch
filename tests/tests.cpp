@@ -8,6 +8,8 @@
 #include "driving.hpp"
 #include "input.hpp"
 #include "state.hpp"
+#include "views.hpp"
+#include "components.hpp"
 #include "road.hpp"
 #include "synth.hpp"
 #include "track.hpp"
@@ -765,6 +767,33 @@ void test_state() {
     none.add_lap(lap);
     CHECK(!none.load_choices() && none.load_laps().empty());
     fs::remove_all(root);
+}
+
+void test_views() {
+    using namespace racer;
+    const Camera cam;
+    // The chase view is the Camera itself, its car on the bottom row.
+    const ViewSetup chase = view_setup(ViewMode::Chase, cam.height, cam.depth, false);
+    CHECK(chase.height == cam.height && std::abs(chase.distance - cam.player_z()) < 1e-3f && chase.car);
+    CHECK(std::abs(contact_row(chase, cam.depth, 240) - 240.f) < 1e-3f);
+    // The far view looks from higher and further back: a smaller car, a little up.
+    const ViewSetup far = view_setup(ViewMode::Far, cam.height, cam.depth, false);
+    CHECK(far.height > chase.height && far.distance > chase.distance && far.car);
+    const float row = contact_row(far, cam.depth, 240);
+    CHECK(row > 190.f && row < 235.f);
+    // From inside, no car; only the cockpit has the dashboard, higher in a truck.
+    const ViewSetup bumper = view_setup(ViewMode::Bumper, cam.height, cam.depth, false);
+    const ViewSetup cockpit = view_setup(ViewMode::Cockpit, cam.height, cam.depth, false);
+    CHECK(!bumper.car && !bumper.cockpit && bumper.height < chase.height);
+    CHECK(!cockpit.car && cockpit.cockpit);
+    CHECK(view_setup(ViewMode::Cockpit, cam.height, cam.depth, true).height > cockpit.height);
+    for (int v = 0; v < view_modes; ++v) CHECK(std::string(view_name(static_cast<ViewMode>(v))).size() > 0);
+    CHECK(parse_choices(format_choices(Choices{0, 0, 0, 0, 3})).view == 3);
+    // The cockpit's pictures.
+    const SpriteSheet sheet;
+    CHECK(sheet.dashboard(0).w == 320 && sheet.dashboard(0).h == dashboard_height);
+    CHECK(sheet.dashboard(0).px != sheet.dashboard(1).px); // the cowl in the car's colour
+    CHECK(sheet.wheel(0).w == wheel_size && sheet.wheel(0).px != sheet.wheel(2).px); // the driver's hands
 }
 
 void test_pause_menu() {
@@ -1835,6 +1864,7 @@ int main() {
     test_follow_speed();
     test_steer_rate();
     test_pause_menu();
+    test_views();
     test_state();
     test_dirt();
     test_lots();

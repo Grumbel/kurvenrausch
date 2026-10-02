@@ -18,6 +18,7 @@
 #include "synth.hpp"
 #include "weather.hpp"
 #include "track.hpp"
+#include "views.hpp"
 
 #include <cstdint>
 #include <array>
@@ -45,6 +46,7 @@ struct ScreenshotOptions {
     int handbrake_from = -1; // if >= 0, hold the handbrake from this step on
     int brake_from = -1;     // if >= 0, brake (throttle off) from this step on to a stop, let go, then hold it: reverse
     bool pause = false;      // show the pause menu in the screenshot
+    int view = 0;            // the camera view, a ViewMode
     float dirt = -1.f;       // if >= 0, start this dirty (mud and oil, 0 .. 1)
 };
 
@@ -158,6 +160,8 @@ private:
     int passenger_ = 0;  // see passenger(): the motel changes it
     int car_before_truck_ = 0; // the car left at the truck stop, to take back
     bool bandaged_ = false;
+    ViewMode view_mode_ = ViewMode::Chase;
+    float wheel_angle_ = 0.f; // of the steering wheel in the cockpit, radians
     Store store_;         // what is kept between runs; nothing in headless runs
     float record_lap_ = 0.f; // the fastest lap ever, from the store // the driver after a crash, until a hospital patches them up
     Bitmap player_bitmap_; // the car with its people, put together each frame

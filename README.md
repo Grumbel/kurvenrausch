@@ -89,6 +89,9 @@ weather and road markings, fading smoothly into one another:
   or right to pick up another passenger, among them a granny and a dog; at a
   hospital (Holland, Korea) another driver takes the wheel. A crash leaves
   the driver with a bandage round the head until a hospital patches them up
+- **Camera views**: the classic chase view, a far one from higher up, the
+  bumper, and the cockpit with the dashboard and the wheel turning in the
+  driver's hands (higher up in the truck)
 - **Truck stops** (before the Autobahn, in the outback): swap the car for the
   Big Rig, an orange cab-over tractor, slow but planted; steer again at a
   truck stop to take your car back
@@ -144,6 +147,7 @@ icon is the game's own pixel art, also its window icon;
 | Space            | Y, right shoulder        | Nitro              |
 | P                | Start                    | Pause menu: resume, restart, start in a chosen country, quit |
 | R                |                          | Restart            |
+| C                | Back                     | Camera view: chase, far, bumper, cockpit |
 | M                |                          | Mute sound         |
 | F11 / Alt+Enter  |                          | Toggle fullscreen  |
 | Esc              |                          | Quit (in the pause menu: back to the race) |

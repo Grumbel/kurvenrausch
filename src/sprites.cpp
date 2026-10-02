@@ -1700,6 +1700,77 @@ Bitmap make_player_truck(const CarStyle& style, int turn, bool brake, int tread,
     return b;
 }
 
+Bitmap make_dashboard(const CarStyle& style, int width) {
+    Bitmap b(width, dashboard_height);
+    const Color dash{0x26, 0x24, 0x2a}, dash_light{0x3c, 0x3a, 0x42}, dash_dark{0x16, 0x14, 0x18};
+    const float half = static_cast<float>(width) / 2.f;
+    for (int x = 0; x < width; ++x) {
+        // The dash's top edge sags towards the sides; the instrument hood
+        // rises over the wheel.
+        const float d = (static_cast<float>(x) - half) / half;
+        const float hood = static_cast<float>(x - dashboard_wheel_x) / 42.f;
+        int top = 14 + static_cast<int>(8.f * d * d);
+        if (hood > -1.f && hood < 1.f) top = std::min(top, 2 + static_cast<int>(10.f * hood * hood));
+        // The body-coloured cowl ahead of the dash, the windscreen's base.
+        paint::rect(b, x, std::max(0, top - 3), 1, 3, style.body);
+        paint::rect(b, x, top, 1, dashboard_height - top, dash);
+        paint::rect(b, x, top, 1, 1, dash_light);
+    }
+    // The two dials under the hood.
+    for (int k = 0; k < 2; ++k) {
+        const float cx = static_cast<float>(dashboard_wheel_x - 17 + 34 * k), cy = 18.f;
+        paint::ellipse(b, cx, cy, 11.f, 11.f, dash_dark);
+        paint::ellipse(b, cx, cy, 9.f, 9.f, Color{0x10, 0x10, 0x14});
+        for (int t = 0; t < 7; ++t) {
+            const float a = 2.4f + static_cast<float>(t) * 0.75f;
+            paint::rect(b, static_cast<int>(cx + 7.f * std::cos(a)), static_cast<int>(cy + 7.f * std::sin(a)), 1, 1,
+                        Color{0xe8, 0xe8, 0xe0});
+        }
+        paint::stroke(b, cx, cy, cx - 5.f, cy + 3.f, 1.f, 1.f, Color{0xff, 0x60, 0x30});
+    }
+    // The centre console: vents and the radio.
+    const int cx = static_cast<int>(half) + 24;
+    for (int i = 0; i < 2; ++i) {
+        paint::rect(b, cx + i * 30, 26, 24, 10, dash_dark);
+        for (int y = 28; y < 35; y += 2) paint::rect(b, cx + i * 30 + 1, y, 22, 1, dash_light);
+    }
+    paint::rect(b, cx + 6, 42, 42, 10, Color{0x10, 0x10, 0x14});
+    paint::text(b, cx + 9, 44, "88.5", Color{0x60, 0xf0, 0x90});
+    // The glovebox line on the passenger's side.
+    paint::rect(b, width - 70, 40, 56, 1, dash_dark);
+    return b;
+}
+
+Bitmap make_wheel(const Person& driver) {
+    Bitmap b(wheel_size, wheel_size);
+    const float c = static_cast<float>(wheel_size) / 2.f, r = c - 3.f;
+    const Color rim{0x1c, 0x1a, 0x1e}, rim_light{0x4a, 0x46, 0x50}, spoke{0x5c, 0x5c, 0x66};
+    // The rim: a thick ring, lit along the top.
+    for (int y = 0; y < wheel_size; ++y) {
+        for (int x = 0; x < wheel_size; ++x) {
+            const float dx = static_cast<float>(x) + 0.5f - c, dy = static_cast<float>(y) + 0.5f - c;
+            const float d = std::sqrt(dx * dx + dy * dy);
+            if (d <= r && d >= r - 6.f) b.set(x, y, d > r - 2.f && dy < 0.f ? rim_light : rim);
+        }
+    }
+    // Three spokes and the hub.
+    for (float a : {0.f, 3.14159265f, 1.5707963f}) {
+        paint::stroke(b, c, c, c + std::cos(a) * (r - 4.f), c + std::sin(a) * (r - 4.f), 5.f, 3.f, spoke);
+    }
+    paint::shaded_ellipse(b, c, c, 9.f, 9.f, rim, spoke, rim_light);
+    paint::ellipse(b, c, c, 3.f, 3.f, Color{0xd0, 0x20, 0x20});
+    // The hands at ten to two: knuckles on the rim, a thumb over it.
+    const Color skin = driver.skin, skin_dark = blend(driver.skin, Color{0, 0, 0}, 0.3f);
+    for (float side : {-1.f, 1.f}) {
+        const float a = -1.5707963f + side * 0.95f;
+        const float hx = c + std::cos(a) * (r - 3.f), hy = c + std::sin(a) * (r - 3.f);
+        paint::shaded_ellipse(b, hx, hy, 6.f, 5.f, skin_dark, skin, blend(skin, Color{255, 255, 255}, 0.25f));
+        paint::rect(b, static_cast<int>(hx - side * 4.f) - 1, static_cast<int>(hy) + 2, 3, 2, skin_dark);
+    }
+    paint::outline(b, Outline);
+    return b;
+}
+
 Bitmap make_rival_front(const CarStyle& st, int signal, int tread) {
     Bitmap b(100, 40);
     paint::ellipse(b, 50.f, 37.f, 49.f, 3.f, Color{0x22, 0x22, 0x22});
@@ -1847,6 +1918,7 @@ SpriteSheet::SpriteSheet() {
     };
     for (int model = 0; model < car_models; ++model) {
         player_convertible_[static_cast<size_t>(model)] = player_styles[model].convertible;
+        dashboards_[static_cast<size_t>(model)] = make_dashboard(player_styles[model], 320);
         for (int turn = -1; turn <= 1; ++turn) {
             for (int brake = 0; brake < 2; ++brake) {
                 for (int t = 0; t < tyre_frames; ++t) {
@@ -1858,6 +1930,8 @@ SpriteSheet::SpriteSheet() {
             }
         }
     }
+
+    for (int d = 0; d < drivers; ++d) wheels_[static_cast<size_t>(d)] = make_wheel(driver(d));
 
     // Colour schemes per vehicle kind: dark, body, light (stripes on the rival).
     const std::vector<CarStyle> styles[] = {

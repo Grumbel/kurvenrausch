@@ -123,6 +123,11 @@ or
 .B \-\-pause
 Show the pause menu in the screenshot.
 .TP
+.BI \-\-view " N"
+Render the headless run from camera view
+.IR N :
+0 chase, 1 far, 2 bumper, 3 cockpit.
+.TP
 .BI \-\-handbrake " N"
 Hold the handbrake from step
 .I N
@@ -150,6 +155,7 @@ H	X	horn
 Space	Y, right shoulder	nitro
 P	Start	pause menu: resume, restart, start in a country, quit
 R		restart
+C	Back	camera view: chase, far, bumper, cockpit
 M		mute the sound
 F11, Alt+Enter		toggle fullscreen
 Esc		quit; in the pause menu, back to the race

@@ -26,7 +26,8 @@ std::string format_choices(const Choices& c) {
     out << "car " << c.car << "\n"
         << "car_before_truck " << c.car_before_truck << "\n"
         << "driver " << c.driver << "\n"
-        << "passenger " << c.passenger << "\n";
+        << "passenger " << c.passenger << "\n"
+        << "view " << c.view << "\n";
     return out.str();
 }
 
@@ -43,6 +44,7 @@ Choices parse_choices(std::string_view text) {
         else if (key == "car_before_truck") c.car_before_truck = value;
         else if (key == "driver") c.driver = value;
         else if (key == "passenger") c.passenger = value;
+        else if (key == "view") c.view = value;
     }
     return c;
 }

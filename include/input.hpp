@@ -29,6 +29,7 @@ struct InputState {
     MenuInput menu;       // navigating the pause menu
     bool toggle_fullscreen = false;
     bool toggle_mute = false;
+    bool change_view = false; // C or Back: the next camera view
 };
 
 // A normalised reading of one game controller (SDL's standard layout, which

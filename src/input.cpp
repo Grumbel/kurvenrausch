@@ -96,6 +96,7 @@ void Input::poll(InputState& state) {
     state.menu = MenuInput{};
     state.toggle_fullscreen = false;
     state.toggle_mute = false;
+    state.change_view = false;
 
     SDL_Event e;
     while (SDL_PollEvent(&e)) {
@@ -116,6 +117,7 @@ void Input::poll(InputState& state) {
                     case SDLK_SPACE: state.menu.confirm = true; break;
                     case SDLK_F11: state.toggle_fullscreen = true; break;
                     case SDLK_m: state.toggle_mute = true; break;
+                    case SDLK_c: state.change_view = true; break;
                     case SDLK_RETURN:
                         if (e.key.keysym.mod & KMOD_ALT) state.toggle_fullscreen = true;
                         else state.menu.confirm = true;
@@ -132,6 +134,7 @@ void Input::poll(InputState& state) {
             case SDL_CONTROLLERBUTTONDOWN:
                 switch (e.cbutton.button) {
                     case SDL_CONTROLLER_BUTTON_START: state.pause = true; break;
+                    case SDL_CONTROLLER_BUTTON_BACK: state.change_view = true; break;
                     case SDL_CONTROLLER_BUTTON_DPAD_UP: state.menu.up = true; break;
                     case SDL_CONTROLLER_BUTTON_DPAD_DOWN: state.menu.down = true; break;
                     case SDL_CONTROLLER_BUTTON_DPAD_LEFT: state.menu.left = true; break;

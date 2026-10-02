@@ -55,6 +55,17 @@ Bitmap make_player_car(const CarStyle& style, int turn, bool brake, int tread, i
 // car's is, so make_occupants() fits it as a closed car.
 Bitmap make_player_truck(const CarStyle& style, int turn, bool brake, int tread, int headroom);
 
+// The cockpit view's dashboard, `width` pixels wide and dashboard_height
+// high: the car's colour along the base of the windscreen, the dash with
+// the instruments behind the wheel on the left, the vents in the middle.
+constexpr int dashboard_height = 60;
+constexpr int dashboard_wheel_x = 124; // centre of the steering wheel
+Bitmap make_dashboard(const CarStyle& style, int width);
+// The steering wheel, wheel_size square, with the driver's hands on it at
+// ten to two, to draw rotated.
+constexpr int wheel_size = 92;
+Bitmap make_wheel(const Person& driver);
+
 // The people in the player's car, to draw over make_player_car() (same size):
 // in a convertible their heads above the seats, in a closed car dimly
 // through the rear window. wave: -1 the driver waves out on the left, +1 the
@@ -91,6 +102,13 @@ public:
     }
     bool player_convertible(int model) const {
         return player_convertible_[static_cast<size_t>(((model % car_models) + car_models) % car_models)];
+    }
+    // The cockpit: the dashboard of a model and the wheel in a driver's hands.
+    const Bitmap& dashboard(int model) const {
+        return dashboards_[static_cast<size_t>(((model % car_models) + car_models) % car_models)];
+    }
+    const Bitmap& wheel(int driver_index) const {
+        return wheels_[static_cast<size_t>(((driver_index % drivers) + drivers) % drivers)];
     }
     // The people to draw over it (see make_occupants()), made once and kept.
     const Bitmap& occupants(int driver_index, int passenger_index, int steer, int wave, int frame, int model,
@@ -134,6 +152,8 @@ private:
     // [model][steer][brake][tread]
     std::array<std::array<std::array<std::array<Bitmap, tyre_frames>, 2>, 3>, car_models> player_;
     std::array<bool, car_models> player_convertible_{};
+    std::array<Bitmap, car_models> dashboards_;
+    std::array<Bitmap, drivers> wheels_;
     mutable std::map<uint32_t, Bitmap> occupants_;
     struct VehicleSprites {
         std::array<std::array<std::array<Bitmap, tyre_frames>, 2>, 3> rear; // [signal][brake][tread]

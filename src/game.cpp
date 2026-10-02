@@ -234,6 +234,7 @@ bool Game::init() {
         car_before_truck_ = wrap(c->car_before_truck, dealer_models);
         driver_ = wrap(c->driver, drivers);
         passenger_ = wrap(c->passenger, passengers);
+        view_mode_ = static_cast<ViewMode>(wrap(c->view, view_modes));
         apply_car();
     }
     record_lap_ = best_lap(store_.load_laps());
@@ -327,6 +328,11 @@ void Game::run() {
         if (input.quit) break;
         if (input.toggle_fullscreen) display_->toggle_fullscreen();
         if (input.toggle_mute) muted_ = !muted_;
+        if (input.change_view && !paused_) {
+            view_mode_ = static_cast<ViewMode>((static_cast<int>(view_mode_) + 1) % view_modes);
+            show_message(view_name(view_mode_), 1.f);
+            save_choices();
+        }
         if (!update_pause(input)) break;
 
         crashed_ = false;
@@ -410,6 +416,7 @@ bool Game::screenshot(const ScreenshotOptions& opts) {
         apply_car();
     }
     if (opts.visit >= 0) autopilot_visit_ = static_cast<Lot>(opts.visit);
+    view_mode_ = static_cast<ViewMode>(((opts.view % view_modes) + view_modes) % view_modes);
     if (opts.dirt >= 0.f) dirt_.set(opts.dirt, opts.dirt);
     std::vector<int16_t> sound;
     constexpr int samples_per_step = Synth::sample_rate / 60; // 735, exactly
@@ -550,6 +557,7 @@ void Game::fixed_update(const InputState& input, float dt) {
     const float grip = std::max(look.grip * car_model(car_model_).grip, 0.2f) * (aquaplaning_ ? aquaplane_grip : 1.f) *
                        (oily_ ? oil_grip : 1.f) * (handbraking_ ? handbrake_grip : 1.f);
     steer_ = input.steer > 0.3f ? 1 : input.steer < -0.3f ? -1 : 0;
+    wheel_angle_ += (input.steer * 1.4f - wheel_angle_) * std::min(1.f, dt * 12.f); // the wheel follows the hands
     braking_ = input.brake > 0.1f && vel.speed >= 0.f; // reversing, it's the reverse gear
     if (!airborne) {
         tr.x += dx * input.steer * (0.5f + 0.5f * grip) * (handbraking_ ? handbrake_steer : 1.f);
@@ -683,7 +691,7 @@ void Game::fixed_update(const InputState& input, float dt) {
 // The player's car takes its model's top speed and acceleration (grip is
 // applied where the road's grip is).
 void Game::save_choices() const {
-    store_.save_choices({car_model_, car_before_truck_, driver_, passenger_});
+    store_.save_choices({car_model_, car_before_truck_, driver_, passenger_, static_cast<int>(view_mode_)});
 }
 
 void Game::apply_car() {
@@ -1257,18 +1265,22 @@ void Game::render() {
     const RoadTheme& look = track_.look_at(tr.z + cam.player_z());
     background_.render(fb_, look);
 
+    // The camera of the chosen view, placed relative to the car; the car's
+    // own reference (the chase camera, see Camera) stays where it is.
+    const ViewSetup setup = view_setup(view_mode_, cam.height, cam.depth, car_model_ == truck_model);
     RoadView view;
     // In the air the camera rises with most of the car's height, and the car
-    // lifts on screen by the rest, so the road visibly falls away beneath it.
+    // lifts on screen by the rest, so the road visibly falls away beneath it;
+    // from inside the car the camera rises with all of it.
     const float air = vertical_.y - tr.y;
-    view.position = tr.z;
+    view.position = tr.z + cam.player_z() - setup.distance;
     view.player_x = tr.x;
-    view.player_y = tr.y + camera_air_share * air;
+    view.player_y = tr.y + (setup.car ? camera_air_share : 1.f) * air;
     view.yaw = view_yaw_;
     view.shift = view_shift_;
-    view.camera_height = cam.height;
+    view.camera_height = setup.height;
     view.camera_depth = cam.depth;
-    view.player_z = cam.player_z();
+    view.player_z = setup.distance;
     view.draw_distance = cam.draw_distance;
     view.fog_density = look.fog_density;
     road_sprites_.clear();
@@ -1297,7 +1309,7 @@ void Game::render() {
         if (people.px[i] >> 24) player_bitmap_.px[i] = people.px[i];
     }
     const Bitmap& car = player_bitmap_;
-    const float scale = cam.depth / cam.player_z() * (width / 2.f);
+    const float scale = setup.car ? cam.depth / setup.distance * (width / 2.f) : 1.f;
     RoadSprite me;
     me.z = tr.z + cam.player_z();
     me.bitmap = &car;
@@ -1305,11 +1317,12 @@ void Game::render() {
     me.sw = player.car_width * scale;
     me.sh = me.sw * static_cast<float>(car.h) / static_cast<float>(car.w);
     me.sx = (width - me.sw) / 2.f;
-    me.sy = height - me.sh - 1.f + bounce_;
-    me.sy -= std::min(40.f, (1.f - camera_air_share) * air * cam.depth / cam.player_z() * (height / 2.f));
+    me.sy = (setup.car ? std::min(contact_row(setup, cam.depth, height), static_cast<float>(height)) : height) - me.sh -
+            1.f + bounce_;
+    me.sy -= std::min(40.f, (1.f - camera_air_share) * air * scale * height / width);
     if (landing_time_ > 0.f) me.sy += 3.f; // squashed by a hard landing
-    bool car_visible = true;
-    if (crash_time_ >= 0.f) {
+    bool car_visible = setup.car;
+    if (crash_time_ >= 0.f && setup.car) {
         const CrashPose pose = crash_pose(crash_time_, crash_side_);
         me.angle = pose.angle;
         me.sx += pose.slide;
@@ -1320,7 +1333,7 @@ void Game::render() {
 
     road_.render(fb_, track_, view, sprites_, road_sprites_);
 
-    if (scraping_ && vel.speed > 0.f) {
+    if (scraping_ && vel.speed > 0.f && setup.car) {
         // Sparks flying off the side of the car that scrapes the barrier.
         const float x = static_cast<float>(width) / 2.f + static_cast<float>(scrape_side_) * me.sw / 2.f;
         for (int i = 0; i < 16; ++i) {
@@ -1336,6 +1349,9 @@ void Game::render() {
         }
     }
     for (const Particle& p : particles_) {
+        // From inside the car only the water of a car wash shows, on the
+        // windscreen; the rest is thrown up behind and beside it.
+        if (!setup.car && !washing_) break;
         const float fade = p.life / p.max_life;
         if (p.kind == Particle::Kind::Spray) {
             // A drop: one pixel, or a small cluster for the big ones.
@@ -1359,13 +1375,28 @@ void Game::render() {
             if (fade > 0.5f) fb_.put_pixel(static_cast<int>(p.x) + 1, static_cast<int>(p.y), p.color);
         }
     }
-    if (nitro_.burning()) {
+    if (nitro_.burning() && setup.car) {
         for (int side = -1; side <= 1; side += 2) {
             draw_flame(fb_, me.sx + SpriteSheet::exhaust_x(steer_, side), me.sy + SpriteSheet::exhaust_y,
                        side, nitro_.intensity(), rng_);
         }
     }
     weather_.render(fb_);
+    if (setup.cockpit) {
+        // The dashboard and the wheel, shaking with the car.
+        const Bitmap& dash = sprites_.dashboard(car_model_);
+        const int dash_y = height - dashboard_height + static_cast<int>(bounce_);
+        for (int y = 0; y < dash.h; ++y) {
+            for (int x = 0; x < dash.w; ++x) {
+                const uint32_t p = dash.px[static_cast<size_t>(y) * dash.w + x];
+                if (p >> 24) fb_.put_pixel(x, dash_y + y, Color{static_cast<uint8_t>(p >> 16), static_cast<uint8_t>(p >> 8),
+                                                                static_cast<uint8_t>(p)});
+            }
+        }
+        const float twitch = spin_time_ > 0.f ? (static_cast<int>(clock_ * 16.f) % 2 ? 0.3f : -0.3f) : 0.f;
+        fb_.blit_rotated(sprites_.wheel(driver_), static_cast<float>(dashboard_wheel_x),
+                         static_cast<float>(height) + 6.f + bounce_, wheel_size, wheel_size, wheel_angle_ + twitch);
+    }
     render_mirror();
 
     HudState hud;
