@@ -41,6 +41,7 @@ void Synth::set_params(const SynthParams& p) {
     nitro_.store(p.nitro, std::memory_order_relaxed);
     engine_.store(p.engine, std::memory_order_relaxed);
     pump_.store(p.pump, std::memory_order_relaxed);
+    splash_.store(p.splash, std::memory_order_relaxed);
 }
 
 void Synth::trigger_ding() {
@@ -71,11 +72,12 @@ void Synth::render(int16_t* out, int frames) {
     const float t_skid = load(skid_), t_gravel = load(gravel_), t_scrape = load(scrape_);
     const float t_rain = load(rain_), t_volume = load(volume_);
     const float t_horn = load(horn_), t_nitro = load(nitro_), t_engine = load(engine_), t_pump = load(pump_);
+    const float t_splash = load(splash_);
 
     if (!primed_) { // start from the current state instead of fading in from silence
         s_rpm_ = t_rpm; s_throttle_ = t_throttle; s_speed_ = t_speed; s_skid_ = t_skid;
         s_gravel_ = t_gravel; s_scrape_ = t_scrape; s_rain_ = t_rain; s_volume_ = t_volume;
-        s_horn_ = t_horn; s_nitro_ = t_nitro; s_engine_ = t_engine; s_pump_ = t_pump;
+        s_horn_ = t_horn; s_nitro_ = t_nitro; s_engine_ = t_engine; s_pump_ = t_pump; s_splash_ = t_splash;
         slow_throttle_ = t_throttle;
         primed_ = true;
     }
@@ -132,6 +134,7 @@ void Synth::render(int16_t* out, int frames) {
         s_nitro_ += (t_nitro - s_nitro_) * a_nitro;
         s_engine_ += (t_engine - s_engine_) * a_load;
         s_pump_ += (t_pump - s_pump_) * a_vol;
+        s_splash_ += (t_splash - s_splash_) * a_fast;
 
         // ---- Engine ------------------------------------------------------
         const float rpm = idle_rpm + s_rpm_ * rpm_range;
@@ -302,6 +305,17 @@ void Synth::render(int16_t* out, int frames) {
             pump = (hum * 0.2f + gurgle * 0.8f) * s_pump_;
         }
 
+        // ---- Splash: a broad hiss of spray with a fluttering wash ---------
+        float splash = 0.f;
+        if (s_splash_ > 1e-4f) {
+            const float f = 2.f * std::sin(3.14159265f * 1400.f / sr);
+            splash_low_ += f * splash_band_;
+            const float high = n - splash_low_ - 1.2f * splash_band_;
+            splash_band_ += f * high;
+            splash_flutter_ += (std::abs(noise()) - splash_flutter_) * 0.004f;
+            splash = splash_band_ * (0.6f + 1.4f * splash_flutter_) * 0.9f * s_splash_;
+        }
+
         // ---- Chime: two bell notes, the second a little later ------------
         float ding = 0.f;
         if (ding_age_ < 2.f) {
@@ -315,7 +329,8 @@ void Synth::render(int16_t* out, int frames) {
             }
         }
 
-        const float mix = engine + roar + wind + gravel + rain + skid + scrape + crash + horn + nitro + whoosh + pump + ding;
+        const float mix = engine + roar + wind + gravel + rain + skid + scrape + crash + horn + nitro + whoosh + pump + ding +
+                          splash;
         const float x = std::tanh(mix * s_volume_ * 1.1f);
         out[i] = static_cast<int16_t>(std::lround(x * 30000.f));
     }

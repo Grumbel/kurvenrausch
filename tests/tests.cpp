@@ -668,6 +668,48 @@ void test_gas_stations() {
     }
 }
 
+void test_wet_spots() {
+    using namespace racer;
+    const Track t = build_demo_track();
+    const int n = static_cast<int>(t.segments.size());
+    std::vector<int> wet(t.zones.size(), 0), length(t.zones.size(), 0);
+    for (int i = 0; i < n; ++i) {
+        const auto z = static_cast<size_t>(t.zone_index[static_cast<size_t>(i)]);
+        ++length[z];
+        const Segment& s = t.segment(i);
+        if (s.wet_w <= 0.f) continue;
+        ++wet[z];
+        // On the road, clear of the start and the forecourts.
+        CHECK(std::abs(s.wet_x) + s.wet_w <= 0.95f + 1e-5f);
+        CHECK(i >= 20 && !s.checker && s.forecourt == 0.f);
+    }
+    // None in the desert; more where it rains than in fair weather.
+    for (size_t z = 0; z < t.zones.size(); ++z) {
+        if (t.zones[z].decor == Decor::Desert) CHECK(wet[z] == 0);
+    }
+    auto share = [&](size_t z) { return static_cast<float>(wet[z]) / static_cast<float>(length[z]); };
+    CHECK(wet[1] > 0); // Germany, rainy
+    CHECK(share(1) > 2.f * share(0)); // ... than the Cote d'Azur
+    // Spots come to a point at both ends and are widest in the middle.
+    for (int i = 1; i < n; ++i) {
+        if (t.segment(i).wet_w > 0.f && t.segment(i - 1).wet_w == 0.f) {
+            CHECK(t.wet_width_at(i) == 0.f); // starts at a point
+            int len = 0;
+            while (t.segment(i + len).wet_w > 0.f) ++len;
+            CHECK(len >= 5);
+            CHECK(t.wet_width_at(i + len) == 0.f);
+            CHECK(t.segment(i + len / 2).wet_w > t.segment(i).wet_w);
+            // A car touching it counts, one beside it does not.
+            const Segment& mid = t.segment(i + len / 2);
+            const float z = (static_cast<float>(i + len / 2) + 0.5f) * t.segment_length;
+            CHECK(t.on_wet(z, mid.wet_x, 0.15f));
+            CHECK(t.on_wet(z, mid.wet_x + mid.wet_w + 0.1f, 0.15f));
+            CHECK(!t.on_wet(z, mid.wet_x + mid.wet_w + 0.2f, 0.15f));
+            CHECK(t.wet_center_at(i + len / 2) == mid.wet_x);
+        }
+    }
+}
+
 void test_track_map() {
     using namespace racer;
     auto check_map = [](const Track& t) {
@@ -910,7 +952,7 @@ void test_synth_basics() {
     // Everything at once stays inside the 16-bit range without clipping hard.
     SynthParams all;
     all.rpm = all.throttle = all.speed = all.skid = all.gravel = all.scrape = all.rain = 1.f;
-    all.horn = all.nitro = all.pump = 1.f;
+    all.horn = all.nitro = all.pump = all.splash = 1.f;
     const Samples loud = render_sound(all, 2.0, 0.5);
     CHECK(peak(loud) < 31000);
     size_t clipped = 0;
@@ -1077,6 +1119,11 @@ void test_synth_effects() {
         const double f = (1000.0 + 0.5 * 6500.0) / 60.0 * 3.0;
         CHECK(power_at(render_sound(on, 1.5), from, n, f) > 100.0 * power_at(render_sound(off, 1.5), from, n, f));
     }
+    {   // Water spraying from the tyres hisses in the mids.
+        SynthParams p = driving();
+        p.splash = 1.f;
+        CHECK(band_power(render_sound(p, 1.5), 800, 3000) > 3.0 * band_power(base, 800, 3000));
+    }
     {   // The fuel pump hums and gurgles in the lows.
         SynthParams p = driving();
         p.pump = 1.f;
@@ -1232,6 +1279,7 @@ int main() {
     test_vehicles();
     test_track_map();
     test_gas_stations();
+    test_wet_spots();
     test_nitro();
     test_speed_rules();
     test_yield_lane();

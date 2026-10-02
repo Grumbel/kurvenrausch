@@ -94,6 +94,19 @@ std::vector<int> Track::gas_stations() const {
     return starts;
 }
 
+float Track::wet_width_at(int boundary) const {
+    return std::min(segment(boundary).wet_w, segment(boundary - 1).wet_w);
+}
+
+float Track::wet_center_at(int boundary) const {
+    return segment(boundary).wet_w > 0.f ? segment(boundary).wet_x : segment(boundary - 1).wet_x;
+}
+
+bool Track::on_wet(float z, float x, float half_width) const {
+    const Segment& s = segment_at(z);
+    return s.wet_w > 0.f && std::abs(x - s.wet_x) < s.wet_w + half_width;
+}
+
 float Track::edge_height(int boundary, int side) const {
     const Segment& cur = segment(boundary);
     const Segment& prev = segment(boundary - 1);
@@ -642,6 +655,37 @@ void decorate(Track& track, TrackBuilder& b) {
     }
 }
 
+// Wet spots on the road: plenty where it rains or snows, the odd one in
+// fair weather, none in the desert. Each runs over a few segments, widest in
+// the middle, and keeps clear of the start and the forecourts.
+void place_wet_spots(Track& track) {
+    Rng rng(0x77657473u);
+    const int n = static_cast<int>(track.segments.size());
+    int last_end = -1000;
+    for (int i = 20; i < n - 12; ++i) {
+        const Zone& zone = track.zones[static_cast<size_t>(track.zone_index[static_cast<size_t>(i)])];
+        if (zone.decor == Decor::Desert || i - last_end < 20) continue;
+        const float wetness = std::max(zone.theme.rain, zone.theme.snowfall);
+        if (!rng.chance(0.003f + 0.03f * wetness)) continue;
+        const int length = static_cast<int>(rng.range(5.f, 11.f));
+        bool clear = true;
+        for (int k = -2; k < length + 2; ++k) {
+            const Segment& s = track.segment(i + k);
+            clear = clear && s.forecourt == 0.f && !s.checker;
+        }
+        if (!clear) continue;
+        const float width = rng.range(0.12f, 0.35f);
+        const float centre = rng.range(-0.95f + width, 0.95f - width);
+        for (int k = 0; k < length; ++k) {
+            Segment& s = track.segments[static_cast<size_t>(i + k)];
+            s.wet_x = centre;
+            s.wet_w = width * std::sin(PI * (static_cast<float>(k) + 0.5f) / static_cast<float>(length));
+        }
+        last_end = i + length;
+        i += length;
+    }
+}
+
 Track build_demo_track() {
     Track track;
     TrackBuilder b(track);
@@ -720,6 +764,7 @@ Track build_demo_track() {
     b.scenery(start, Scenery::Gantry, 0.f);
 
     decorate(track, b);
+    place_wet_spots(track);
     return track;
 }
 

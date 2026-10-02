@@ -39,6 +39,11 @@ constexpr float traffic_accel = 0.15f;
 // of the top speed per second until it is back down.
 constexpr float overspeed_drag = 0.15f;
 
+// Above this fraction of the top speed the tyres aquaplane in a wet spot and
+// keep only this much of their grip.
+constexpr float aquaplane_speed = 0.35f;
+constexpr float aquaplane_grip = 0.35f;
+
 // Refuelling works on the forecourt below this fraction of the top speed.
 constexpr float refuel_speed = 0.08f;
 // Stranded with an empty tank this long, the driver pours in a spare can.
@@ -216,6 +221,7 @@ void Game::reset() {
     wave_time_ = 0.f;
     crash_time_ = -1.f;
     particles_.clear();
+    wet_ = aquaplaning_ = false;
     fuel_.reset();
     engine_on_ = true;
     refuelling_ = false;
@@ -230,6 +236,8 @@ void Game::update_rumble() {
         input_.rumble(1.f, 0.8f, 250);
     } else if (passed_) {
         input_.rumble(0.2f, 0.6f, 120);
+    } else if (aquaplaning_) {
+        input_.rumble(0.1f, 0.4f, 60);
     } else if (nitro_.burning()) {
         input_.rumble(0.3f * nitro_.intensity(), 0.5f * nitro_.intensity(), 60);
     } else if (scraping_ && speed_pct > 0.05f) {
@@ -390,12 +398,22 @@ void Game::fixed_update(const InputState& input, float dt) {
 
     // Wet or icy roads give the tyres less to bite on: steering has less
     // effect and the car is pushed further out of curves.
+    // Ploughing through a wet spot fast, the tyres lose most of their grip
+    // too: the car barely steers, slides out of bends, twitches and slows.
     const RoadTheme& look = track_.look_at(tr.z + player_z);
-    const float grip = std::max(look.grip, 0.2f);
+    wet_ = speed_pct > 0.05f && track_.on_wet(tr.z + player_z, tr.x, player.car_width / track_.road_width / 2.f);
+    aquaplaning_ = wet_ && speed_pct > aquaplane_speed;
+    const float grip = std::max(look.grip, 0.2f) * (aquaplaning_ ? aquaplane_grip : 1.f);
     steer_ = input.steer > 0.3f ? 1 : input.steer < -0.3f ? -1 : 0;
     braking_ = input.brake > 0.1f;
     tr.x += dx * input.steer * (0.5f + 0.5f * grip);
     tr.x -= dx * speed_pct * seg.curve * player.centrifugal / grip;
+    if (aquaplaning_) {
+        rng_ = rng_ * 1664525u + 1013904223u;
+        tr.x += (static_cast<float>(rng_ >> 8) / 16777216.f - 0.5f) * 1.6f * speed_pct * dt;
+        vel.speed -= player.max_speed * 0.15f * dt;
+    }
+    if (wet_) spawn_spray(speed_pct);
 
     weather_.update(look.rain, look.snowfall, -seg.curve * 25.f * speed_pct, speed_pct, dt);
 
@@ -550,7 +568,7 @@ void Game::start_crash(float speed_pct) {
         const float b = static_cast<float>(rng_ >> 8) / 16777216.f;
         particles_.push_back({x + (a - 0.5f) * 60.f, ground_y - 20.f * b,
                               (a - 0.5f) * 320.f + static_cast<float>(crash_side_) * 60.f, -80.f - 220.f * b,
-                              0.9f + 0.6f * b, 0.9f + 0.6f * b, 1.f, chips[i % 5], false});
+                              0.9f + 0.6f * b, 0.9f + 0.6f * b, 1.f, chips[i % 5], Particle::Kind::Debris});
     }
     spawn_dust(x, ground_y, 10, 1.f + speed_pct);
 }
@@ -587,6 +605,7 @@ void Game::update_crash(float dt) {
     bounce_ = 0.f;
     steer_ = 0;
     braking_ = false;
+    wet_ = aquaplaning_ = false;
     if (crash_time_ >= crash_seconds) {
         crash_time_ = -1.f;
         vel.speed = 0.f;
@@ -608,7 +627,34 @@ void Game::spawn_dust(float x, float y, int count, float strength) {
         const float b = static_cast<float>(rng_ >> 8) / 16777216.f;
         particles_.push_back({x + (a - 0.5f) * 80.f, y - 4.f * b, (a - 0.5f) * 140.f * strength,
                               -20.f - 40.f * b * strength, 0.7f + 0.5f * b, 0.7f + 0.5f * b,
-                              3.f + 3.f * b * strength, blend(dust, Color{0xff, 0xff, 0xff}, 0.3f * b), true});
+                              3.f + 3.f * b * strength, blend(dust, Color{0xff, 0xff, 0xff}, 0.3f * b),
+                              Particle::Kind::Dust});
+    }
+}
+
+// Water thrown up by the rear tyres: drops fanning out from their outer
+// edges, and a fine mist hanging behind the car.
+void Game::spawn_spray(float speed_pct) {
+    auto random = [this] {
+        rng_ = rng_ * 1664525u + 1013904223u;
+        return static_cast<float>(rng_ >> 8) / 16777216.f;
+    };
+    const Color water{0xc8, 0xd8, 0xe8};
+    for (int side = -1; side <= 1; side += 2) {
+        const float sd = static_cast<float>(side);
+        for (int i = 0; i < 4; ++i) {
+            const float a = random(), b = random();
+            const float x = static_cast<float>(width) / 2.f + sd * (40.f + 6.f * a);
+            particles_.push_back({x, ground_y - 2.f, sd * (40.f + 160.f * a) * speed_pct, -(80.f + 200.f * b) * speed_pct,
+                                  0.3f + 0.3f * b, 0.3f + 0.3f * b, 1.f + b, blend(water, Color{0xff, 0xff, 0xff}, b),
+                                  Particle::Kind::Spray});
+        }
+        if (random() < 0.5f) {
+            const float a = random();
+            particles_.push_back({static_cast<float>(width) / 2.f + sd * (30.f + 14.f * a), ground_y - 4.f,
+                                  sd * 30.f * speed_pct, -25.f * speed_pct, 0.45f, 0.45f, 3.f + 3.f * a,
+                                  blend(water, Color{0xff, 0xff, 0xff}, 0.5f), Particle::Kind::Dust});
+        }
     }
 }
 
@@ -617,7 +663,10 @@ void Game::update_particles(float dt) {
         p.life -= dt;
         p.x += p.vx * dt;
         p.y += p.vy * dt;
-        if (p.dust) {
+        if (p.kind == Particle::Kind::Spray) {
+            p.vy += 500.f * dt;
+            if (p.y > ground_y + 4.f) p.life = 0.f; // back on the road
+        } else if (p.kind == Particle::Kind::Dust) {
             p.vx *= 1.f - 2.f * dt; // dust hangs in the air and spreads
             p.vy *= 1.f - 2.f * dt;
             p.size += 10.f * dt;
@@ -679,6 +728,7 @@ void Game::update_audio(const InputState& input, float dt) {
     p.throttle = shift_cut_ > 0.f || !engine_on_ ? 0.f : input.throttle * (1.f - input.brake);
     p.engine = engine_on_ ? 1.f : 0.f;
     p.pump = refuelling_ ? 1.f : 0.f;
+    p.splash = wet_ ? std::clamp(speed_pct * 1.3f, 0.f, 1.f) : 0.f;
     p.speed = speed_pct;
 
     // The tyres squeal when the lateral demand (steering plus the push of the
@@ -907,7 +957,15 @@ void Game::render() {
     }
     for (const Particle& p : particles_) {
         const float fade = p.life / p.max_life;
-        if (p.dust) {
+        if (p.kind == Particle::Kind::Spray) {
+            // A drop: one pixel, or a small cluster for the big ones.
+            const int x = static_cast<int>(p.x), y = static_cast<int>(p.y);
+            fb_.blend_pixel(x, y, p.color, 0.9f * fade);
+            if (p.size > 1.4f) {
+                fb_.blend_pixel(x + 1, y, p.color, 0.6f * fade);
+                fb_.blend_pixel(x, y + 1, p.color, 0.6f * fade);
+            }
+        } else if (p.kind == Particle::Kind::Dust) {
             const int r = static_cast<int>(p.size);
             for (int dy = -r; dy <= r; ++dy) {
                 for (int dx = -r; dx <= r; ++dx) {

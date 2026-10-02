@@ -23,6 +23,7 @@ struct SynthParams {
     float nitro = 0.f;     // the roar of a nitro burn
     float engine = 1.f;    // 1 running, 0 off (out of fuel); in between it sputters
     float pump = 0.f;      // a fuel pump running beside the car
+    float splash = 0.f;    // tyres ploughing through water
     float volume = 1.f;    // master volume, 0 mutes
 };
 
@@ -57,7 +58,7 @@ private:
     // Parameters (written by the game thread, read by render()).
     std::atomic<float> rpm_{0.f}, throttle_{0.f}, speed_{0.f}, skid_{0.f};
     std::atomic<float> gravel_{0.f}, scrape_{0.f}, rain_{0.f}, volume_{1.f};
-    std::atomic<float> horn_{0.f}, nitro_{0.f}, engine_{1.f}, pump_{0.f};
+    std::atomic<float> horn_{0.f}, nitro_{0.f}, engine_{1.f}, pump_{0.f}, splash_{0.f};
     std::atomic<float> crash_intensity_{0.f}, whoosh_intensity_{0.f};
     std::atomic<int> crash_events_{0}, whoosh_events_{0}, ding_events_{0};
 
@@ -65,7 +66,7 @@ private:
     bool primed_ = false;
     float s_rpm_ = 0.f, s_throttle_ = 0.f, s_speed_ = 0.f, s_skid_ = 0.f;
     float s_gravel_ = 0.f, s_scrape_ = 0.f, s_rain_ = 0.f, s_volume_ = 1.f;
-    float s_horn_ = 0.f, s_nitro_ = 0.f, s_engine_ = 1.f, s_pump_ = 0.f;
+    float s_horn_ = 0.f, s_nitro_ = 0.f, s_engine_ = 1.f, s_pump_ = 0.f, s_splash_ = 0.f;
     uint32_t rng_ = 0x2545f491u;
     double crank_ = 0.0;          // crank phase, 0 .. 1 per revolution
     float jitter_ = 0.f;
@@ -75,6 +76,7 @@ private:
     float slow_throttle_ = 0.f;   // a slow follower of the throttle, for surge and overrun
     float overrun_ = 0.f;         // crackle on the overrun after lifting off at revs
     float pop_ = 0.f, pop_lp_ = 0.f;
+    float splash_low_ = 0.f, splash_band_ = 0.f, splash_flutter_ = 0.f;
     float intake_ = 0.f, road_ = 0.f, gravel_lp_ = 0.f, rain_lp_ = 0.f, crash_lp_ = 0.f;
     float wind_low_ = 0.f, wind_band_ = 0.f;
     float skid_low_ = 0.f, skid_band_ = 0.f;

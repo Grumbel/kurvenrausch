@@ -82,6 +82,10 @@ struct Segment {
     // (up to forecourt_width), or 0 for none. It widens and narrows at the
     // ends; refuelling works where it is full width.
     float forecourt = 0.f;
+    // A wet spot on the road: centre and half width in road half-widths; a
+    // half width of 0 means dry. It swells and shrinks along a few segments.
+    float wet_x = 0.f;
+    float wet_w = 0.f;
     std::vector<RoadsideObject> scenery;
 };
 
@@ -214,6 +218,16 @@ struct Track {
 
     // First segments of each forecourt at full width, in track order.
     std::vector<int> gas_stations() const;
+
+    // Half width of a wet spot at the boundary in front of segment
+    // `boundary` (the narrower side, so spots come to a point at both ends),
+    // and its centre.
+    float wet_width_at(int boundary) const;
+    float wet_center_at(int boundary) const;
+
+    // Does a car at lateral position x with the given half width (both in
+    // road half-widths) touch a wet spot on the segment at z?
+    bool on_wet(float z, float x, float half_width) const;
 };
 
 // How far from the centre line (in road half-widths) a car of the given half

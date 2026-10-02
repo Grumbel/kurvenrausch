@@ -82,6 +82,7 @@ private:
     void update_crash(float dt);
     void update_particles(float dt);
     void spawn_dust(float x, float y, int count, float strength);
+    void spawn_spray(float speed_pct);
     int indicator(Entity e, const Transform& t, const Traffic& traffic) const;
     InputState autopilot() const;
     void update_fuel(const InputState& input, float dt);
@@ -135,13 +136,17 @@ private:
     float crash_x_ = 0.f;      // lateral position at the impact
     float crash_target_x_ = 0.f; // where the car is put back on the road
 
-    // Debris and dust, in screen space.
+    bool wet_ = false;        // the tyres are in a wet spot
+    bool aquaplaning_ = false; // ... fast enough to lose their grip
+
+    // Debris, dust and spray, in screen space.
     struct Particle {
+        enum class Kind : uint8_t { Dust, Debris, Spray };
         float x, y, vx, vy;
         float life, max_life;
         float size;  // radius for dust; debris are single pixels
         Color color;
-        bool dust;
+        Kind kind;
     };
     std::vector<Particle> particles_;
     float bounce_ = 0.f; // vertical shake of the car in pixels
