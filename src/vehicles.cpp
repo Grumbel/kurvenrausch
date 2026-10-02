@@ -30,6 +30,17 @@ Vehicle traffic_vehicle(float roll) {
     return Vehicle::Car; // rounding at the very top
 }
 
+const CarModel& car_model(int index) {
+    static const CarModel models[car_models] = {
+        // name         top    accel  grip
+        {"SPIDER",      1.00f, 1.00f, 1.00f}, // the red convertible: balanced
+        {"GT COUPE",    1.12f, 0.85f, 0.92f}, // fastest flat out, slow to get there
+        {"HOT HATCH",   0.88f, 1.30f, 1.12f}, // quick away and sure-footed
+        {"MUSCLE",      1.06f, 1.22f, 0.78f}, // brute force, little grip
+    };
+    return models[((index % car_models) + car_models) % car_models];
+}
+
 float rival_speed(float cruise, float max_speed, float gap) {
     const bool racing = gap > -rival_race_range / 4.f && gap < rival_race_range;
     return racing ? std::max(cruise, rival_race_speed * max_speed) : cruise;

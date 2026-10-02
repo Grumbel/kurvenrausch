@@ -22,6 +22,8 @@ void usage(const char* argv0) {
               << "  --steer-from N      start holding the steering at step N (default 0)\n"
               << "  --horn              hold the horn during the headless run\n"
               << "  --fuel L            start the headless run with L (0 .. 1) of a tank\n"
+              << "  --car N             drive car model N (0 Spider, 1 GT Coupe, 2 Hot Hatch, 3 Muscle)\n"
+              << "  --dealer            pull in at the next car dealer during the headless run\n"
               << "  --nitro N           press nitro at step N of the headless run\n"
               << "  --icon FILE         write the application icon (32x32) as a BMP and exit\n"
               << "  --version           print the version and exit\n"
@@ -53,6 +55,10 @@ int main(int argc, char* argv[]) {
             shot.steer = static_cast<float>(std::atof(argv[++i]));
         } else if (arg == "--steer-from" && i + 1 < argc) {
             shot.steer_from = std::atoi(argv[++i]);
+        } else if (arg == "--car" && i + 1 < argc) {
+            shot.car = std::atoi(argv[++i]);
+        } else if (arg == "--dealer") {
+            shot.dealer = true;
         } else if (arg == "--fuel" && i + 1 < argc) {
             shot.fuel = static_cast<float>(std::atof(argv[++i]));
         } else if (arg == "--horn") {

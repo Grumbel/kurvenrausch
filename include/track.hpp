@@ -46,6 +46,8 @@ enum class Scenery : uint8_t {
     CherryTree,   // in blossom
     Torii,        // shrine gate
     StoneLantern,
+    Showroom,     // a car dealer's showroom, beyond its forecourt
+    DealerSign,   // the tall sign announcing it
     Count
 };
 
@@ -103,6 +105,7 @@ struct Segment {
     // (up to forecourt_width), or 0 for none. It widens and narrows at the
     // ends; refuelling works where it is full width.
     float forecourt = 0.f;
+    bool dealer = false; // the forecourt is a car dealer's, not a gas station's
     // A patch on the road surface (a puddle or an oil slick): its kind, centre
     // and half width in road half-widths; a half width of 0 means none. It
     // swells and shrinks along a few segments.
@@ -268,8 +271,10 @@ struct Track {
     // segment at z?
     bool on_forecourt(float z, float x) const;
 
-    // First segments of each forecourt at full width, in track order.
+    // First segments of each gas station's or car dealer's forecourt at full
+    // width, in track order.
     std::vector<int> gas_stations() const;
+    std::vector<int> dealerships() const;
 
     // Half width of a patch at the boundary in front of segment `boundary`
     // (the narrower side, so patches come to a point at both ends), and its

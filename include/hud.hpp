@@ -10,7 +10,8 @@
 namespace racer {
 
 struct HudState {
-    float speed_fraction = 0.f;  // 0..1 of top speed
+    float speed_fraction = 0.f;  // 0..1 of the car's top speed: the revs
+    float speed_kmh_fraction = 0.f; // of the standard car's top speed: the speedometer
     int lap = 0;                 // 0 before the start line is crossed
     float lap_time = 0.f;
     float last_lap = 0.f;        // 0 = none yet
@@ -27,6 +28,11 @@ struct HudState {
     int map_player = 0;
     int map_start = 0;
     const std::vector<int>* map_stations = nullptr;
+    const std::vector<int>* map_dealers = nullptr;
+    // At a car dealer: the car on offer and its top speed, acceleration and
+    // grip (factors of the standard car).
+    const char* dealer_car = nullptr;
+    float dealer_stats[3] = {1.f, 1.f, 1.f};
     bool map_blink = false;      // the player's dot blinks
     std::string fork_left;       // a fork ahead: the left route's name
     std::string fork_right;      // ... and the right one's

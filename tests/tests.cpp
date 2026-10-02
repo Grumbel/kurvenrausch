@@ -980,6 +980,25 @@ void test_track_map() {
     CHECK(m[200].x > m[100].x);
 }
 
+void test_car_models() {
+    using namespace racer;
+    // Every model has a name and trades something for its strength: none is
+    // at least as good as another in top speed, acceleration and grip at once.
+    for (int a = 0; a < car_models; ++a) {
+        const CarModel& m = car_model(a);
+        CHECK(m.name != nullptr && m.name[0] != '\0');
+        CHECK(m.top_speed > 0.8f && m.top_speed < 1.2f);
+        for (int b = 0; b < car_models; ++b) {
+            if (a == b) continue;
+            const CarModel& o = car_model(b);
+            CHECK(!(m.top_speed >= o.top_speed && m.acceleration >= o.acceleration && m.grip >= o.grip));
+        }
+    }
+    CHECK(car_model(0).top_speed == 1.f && car_model(0).acceleration == 1.f && car_model(0).grip == 1.f);
+    CHECK(&car_model(car_models) == &car_model(0)); // wraps around
+    CHECK(&car_model(-1) == &car_model(car_models - 1));
+}
+
 void test_vehicles() {
     using namespace racer;
     // Shares add up; picking by them gives every kind, rivals rarely.
@@ -1025,7 +1044,9 @@ void test_vehicles() {
                 if (f0.get(x, y) != f1.get(x, y)) top = std::min(top, y);
         CHECK(top > f0.h / 3);
     }
-    CHECK(sheet.player(0, 0, 0, false, 0).px != sheet.player(0, 0, 0, false, 1).px);
+    CHECK(sheet.player(0, 0, 0, 0, false, 0).px != sheet.player(0, 0, 0, 0, false, 1).px);
+    // Each car model looks different.
+    for (int m = 1; m < car_models; ++m) CHECK(sheet.player(m, 0).px != sheet.player(0, 0).px);
     CHECK(SpriteSheet::tyre_frame(0.f) == 0);
     CHECK(SpriteSheet::tyre_frame(SpriteSheet::tread_step * 1.5f) == 1);
     CHECK(SpriteSheet::tyre_frame(SpriteSheet::tread_step * 2.5f) == 2);
@@ -1533,6 +1554,7 @@ int main() {
     test_lanes();
     test_start_line();
     test_vehicles();
+    test_car_models();
     test_track_map();
     test_gas_stations();
     test_wet_spots();

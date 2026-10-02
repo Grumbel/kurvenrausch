@@ -79,6 +79,15 @@ Start the headless run with
 .I L
 (0 to 1) of a tank.
 .TP
+.BI \-\-car " N"
+Drive car model
+.I N
+in the headless run: 0 Spider, 1 GT Coupe, 2 Hot Hatch, 3 Muscle.
+.TP
+.B \-\-dealer
+Let the autopilot pull in at the next car dealer during the headless run, and
+stay there.
+.TP
 .BI \-\-icon " FILE"
 Write the application icon (32\(mu32 pixels) as a BMP image to
 .IR FILE ,

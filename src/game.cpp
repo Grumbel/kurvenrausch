@@ -152,11 +152,14 @@ Game::Game()
     : fb_(width, height), track_(build_demo_track()), mirror_fb_(mirror_width, mirror_height),
       weather_(width, height) {
     stations_ = track_.gas_stations();
+    dealers_ = track_.dealerships();
     map_ = track_map(track_);
     player_ = world_.create();
     world_.add<Transform>(player_);
     world_.add<Velocity>(player_);
     world_.add<Player>(player_, Player::for_segment_length(track_.segment_length));
+    base_max_speed_ = world_.get<Player>(player_).max_speed;
+    apply_car();
 
     camera_ = world_.create();
     world_.add<Camera>(camera_);
@@ -169,7 +172,7 @@ void Game::spawn_traffic() {
     world_.view<Traffic>([&](Entity e, Traffic&) { old.push_back(e); });
     for (Entity e : old) world_.destroy(e);
 
-    const float max_speed = world_.get<Player>(player_).max_speed;
+    const float max_speed = base_max_speed_;
     const float seg_len = track_.segment_length;
     const float n = static_cast<float>(track_.segments.size());
     uint32_t seed = 0x7a3c9e11u;
@@ -324,6 +327,11 @@ bool Game::screenshot(const ScreenshotOptions& opts) {
     place_on_road(vertical_, track_.height_at(start + world_.get<Camera>(camera_).player_z()));
     zone_ = -1;
     if (opts.fuel >= 0.f) fuel_.set(opts.fuel);
+    if (opts.car >= 0) {
+        car_model_ = opts.car % car_models;
+        apply_car();
+    }
+    autopilot_dealer_ = opts.dealer;
     std::vector<int16_t> sound;
     constexpr int samples_per_step = Synth::sample_rate / 60; // 735, exactly
     for (int i = 0; i < opts.frames; ++i) {
@@ -354,18 +362,20 @@ InputState Game::autopilot() const {
     const Segment& seg = track_.segment_at(tr.z + cam.player_z());
     const float pct = vel.speed / player.max_speed;
     // Lateral push the curve will apply this tick, relative to one steering tick.
-    const float grip = std::max(track_.look_at(tr.z + cam.player_z()).grip, 0.2f);
+    const float grip = std::max(track_.look_at(tr.z + cam.player_z()).grip * car_model(car_model_).grip, 0.2f);
     const float drift = -pct * seg.curve * player.centrifugal / grip;
 
     // Low on fuel with a gas station coming up: move over to the right, slow
     // down, pull onto the forecourt and wait there until the tank is full.
+    // Asked to visit a car dealer (--dealer), it does the same there, and stays.
     float target_x = 0.f;
     float speed_limit = 1.f;
-    if (fuel_.level() < 0.45f || (refuelling_ && !fuel_.full())) {
+    const bool fuel = fuel_.level() < 0.45f || (refuelling_ && !fuel_.full());
+    if (fuel || autopilot_dealer_) {
         const int n = static_cast<int>(track_.segments.size());
         const int here = track_.index_at(tr.z + cam.player_z());
-        const bool on = seg.forecourt >= forecourt_width;
-        for (int start : stations_) {
+        const bool on = seg.forecourt >= forecourt_width && seg.dealer == !fuel;
+        for (int start : fuel ? stations_ : dealers_) {
             const int ahead = ((start - here) % n + n) % n;
             if (!on && ahead > 120) continue;
             target_x = on || seg.forecourt > 1.3f ? 1.45f : 0.6f;
@@ -437,7 +447,8 @@ void Game::fixed_update(const InputState& input, float dt) {
     oily_ = surface == Patch::Oil && speed_pct > oil_speed;
     if (oily_) spin_time_ = 0.6f;
     else if (spin_time_ > 0.f) spin_time_ -= dt;
-    const float grip = std::max(look.grip, 0.2f) * (aquaplaning_ ? aquaplane_grip : 1.f) * (oily_ ? oil_grip : 1.f);
+    const float grip = std::max(look.grip * car_model(car_model_).grip, 0.2f) * (aquaplaning_ ? aquaplane_grip : 1.f) *
+                       (oily_ ? oil_grip : 1.f);
     steer_ = input.steer > 0.3f ? 1 : input.steer < -0.3f ? -1 : 0;
     braking_ = input.brake > 0.1f;
     if (!airborne) {
@@ -460,6 +471,7 @@ void Game::fixed_update(const InputState& input, float dt) {
 
     // Braking overrides the throttle; without either the car coasts down.
     update_fuel(input, dt);
+    visit_dealer(input);
     const float drive = engine_on_ ? input.throttle * (1.f - input.brake) : 0.f;
     float accel = 0.f;
     if (!airborne) {
@@ -547,6 +559,35 @@ void Game::fixed_update(const InputState& input, float dt) {
     update_audio(input, dt);
 }
 
+// The player's car takes its model's top speed and acceleration (grip is
+// applied where the road's grip is).
+void Game::apply_car() {
+    const CarModel& m = car_model(car_model_);
+    const Player standard = Player::for_segment_length(track_.segment_length);
+    Player& p = world_.get<Player>(player_);
+    p.max_speed = standard.max_speed * m.top_speed;
+    p.accel = standard.accel * m.acceleration;
+}
+
+// Standing on a car dealer's forecourt, the cars are on offer: each push of
+// the steering to a side shows the next one that way, and the player drives
+// off in whichever is showing.
+void Game::visit_dealer(const InputState& input) {
+    const auto& tr = world_.get<Transform>(player_);
+    const float car_z = tr.z + world_.get<Camera>(camera_).player_z();
+    const Segment& seg = track_.segment_at(car_z);
+    const float speed_pct = world_.get<Velocity>(player_).speed / world_.get<Player>(player_).max_speed;
+    at_dealer_ = seg.dealer && seg.forecourt >= forecourt_width && track_.on_forecourt(car_z, tr.x) &&
+                 speed_pct < refuel_speed;
+    const int push = input.steer > 0.5f ? 1 : input.steer < -0.5f ? -1 : 0;
+    if (at_dealer_ && push != 0 && dealer_steer_ == 0) {
+        car_model_ = (car_model_ + push + car_models) % car_models;
+        apply_car();
+        synth_.trigger_ding();
+    }
+    dealer_steer_ = push;
+}
+
 // Burns fuel with the engine's load, refuels on a forecourt, sputters when
 // nearly empty and dies when empty; stranded, the driver uses a spare can.
 void Game::update_fuel(const InputState& input, float dt) {
@@ -556,7 +597,7 @@ void Game::update_fuel(const InputState& input, float dt) {
     const float car_z = tr.z + world_.get<Camera>(camera_).player_z();
     const float speed_pct = vel.speed / player.max_speed;
 
-    const bool at_pump = track_.segment_at(car_z).forecourt >= forecourt_width &&
+    const bool at_pump = track_.segment_at(car_z).forecourt >= forecourt_width && !track_.segment_at(car_z).dealer &&
                          track_.on_forecourt(car_z, tr.x) && speed_pct < refuel_speed;
     const bool was_refuelling = refuelling_;
     refuelling_ = at_pump && !fuel_.full();
@@ -820,7 +861,7 @@ void Game::update_audio(const InputState& input, float dt) {
 
     // The tyres squeal when the lateral demand (steering plus the push of the
     // bend) gets close to what the road's grip allows, and under hard braking.
-    const float grip = std::max(look.grip, 0.2f);
+    const float grip = std::max(look.grip * car_model(car_model_).grip, 0.2f);
     const float slip = (std::abs(input.steer) * speed_pct +
                         std::abs(seg.curve) * player.centrifugal * speed_pct * speed_pct / grip) /
                        (grip * 1.6f);
@@ -870,7 +911,7 @@ void Game::update_traffic(float dt) {
         return false;
     };
 
-    const float max_speed = world_.get<Player>(player_).max_speed;
+    const float max_speed = base_max_speed_; // traffic goes by the standard car, whatever the player drives
     world_.view<Transform, Velocity, Traffic>([&](Entity e, Transform& t, Velocity& v, Traffic& traffic) {
         // The road may have a different number of lanes here than where the
         // car was heading: aim for the nearest lane that exists.
@@ -1011,7 +1052,7 @@ void Game::render() {
     // the sprite's native size, so the pixel art is shown 1:1.
     // Twitching after an oil slick, the car flicks from one side to the other.
     const int shown_steer = spin_time_ > 0.f ? (static_cast<int>(clock_ * 16.f) % 2 ? 1 : -1) : steer_;
-    const Bitmap& car = sprites_.player(shown_steer, wave_time_ > 0.f ? wave_side_ : 0,
+    const Bitmap& car = sprites_.player(car_model_, shown_steer, wave_time_ > 0.f ? wave_side_ : 0,
                                         static_cast<int>(clock_ / 0.15f) & 1, braking_,
                                         SpriteSheet::tyre_frame(wheel_distance_));
     const float scale = cam.depth / cam.player_z() * (width / 2.f);
@@ -1087,6 +1128,14 @@ void Game::render() {
 
     HudState hud;
     hud.speed_fraction = vel.speed / player.max_speed;
+    hud.speed_kmh_fraction = vel.speed / base_max_speed_;
+    if (at_dealer_) {
+        const CarModel& m = car_model(car_model_);
+        hud.dealer_car = m.name;
+        hud.dealer_stats[0] = m.top_speed;
+        hud.dealer_stats[1] = m.acceleration;
+        hud.dealer_stats[2] = m.grip;
+    }
     hud.lap = lap_;
     hud.lap_time = lap_time_;
     hud.last_lap = last_lap_;
@@ -1108,6 +1157,7 @@ void Game::render() {
     hud.map_player = track_.index_at(tr.z + cam.player_z());
     hud.map_start = track_.index_at(track_.start_z);
     hud.map_stations = &stations_;
+    hud.map_dealers = &dealers_;
     hud.map_blink = std::fmod(clock_, 0.4f) < 0.2f;
     hud.fuel_warning = fuel_.level() < Fuel::low && std::fmod(clock_, 0.5f) < 0.3f;
     hud.nitro_burn = nitro_.burn_left();

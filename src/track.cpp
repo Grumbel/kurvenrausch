@@ -48,6 +48,8 @@ const SceneryInfo& scenery_info(Scenery kind) {
         /* CherryTree*/ {1700.f, true,  false, true},
         /* Torii     */ {1500.f, true,  false, false},
         /* StoneLantern*/{ 320.f, true, false, false},
+        /* Showroom  */ {4800.f, true,  false, false},
+        /* DealerSign*/ { 700.f, true,  false, false},
     };
     static_assert(sizeof(infos) / sizeof(infos[0]) == static_cast<size_t>(Scenery::Count),
                   "scenery_info() needs an entry for every Scenery kind");
@@ -110,14 +112,23 @@ bool Track::on_forecourt(float z, float x) const {
     return edge > 1.f && x > 1.f && x < edge;
 }
 
-std::vector<int> Track::gas_stations() const {
+namespace {
+
+std::vector<int> forecourt_starts(const Track& t, bool dealer) {
     std::vector<int> starts;
-    const int n = static_cast<int>(segments.size());
+    const int n = static_cast<int>(t.segments.size());
     for (int i = 0; i < n; ++i) {
-        if (segment(i).forecourt >= forecourt_width && segment(i - 1).forecourt < forecourt_width) starts.push_back(i);
+        const Segment& s = t.segment(i);
+        if (s.dealer == dealer && s.forecourt >= forecourt_width && t.segment(i - 1).forecourt < forecourt_width)
+            starts.push_back(i);
     }
     return starts;
 }
+
+} // namespace
+
+std::vector<int> Track::gas_stations() const { return forecourt_starts(*this, false); }
+std::vector<int> Track::dealerships() const { return forecourt_starts(*this, true); }
 
 void Track::choose_branch(size_t index, int route) {
     Branch& br = branches.at(index);
@@ -456,14 +467,26 @@ public:
 
     // A gas station on the right: a flat straight with the forecourt beside
     // it, tapering in and out, a sign ahead of it, two pumps and the shop.
-    void gas_station() {
+    void gas_station() { forecourt_lot(false); }
+
+    // A car dealer, laid out like a gas station: a showroom beyond the
+    // forecourt, a sign ahead of it.
+    void car_dealer() { forecourt_lot(true); }
+
+    void forecourt_lot(bool dealer) {
         const int from = size();
         road(8, 40, 8, Bend::None, Hill::None);
         constexpr int start = 6, taper = 4, length = 44;
         for (int i = 0; i < length; ++i) {
             const float in = std::min(static_cast<float>(i + 1), static_cast<float>(length - i)) / taper;
-            t_.segments[static_cast<size_t>(from + start + i)].forecourt =
-                1.f + (forecourt_width - 1.f) * std::min(1.f, in);
+            Segment& seg = t_.segments[static_cast<size_t>(from + start + i)];
+            seg.forecourt = 1.f + (forecourt_width - 1.f) * std::min(1.f, in);
+            seg.dealer = dealer;
+        }
+        if (dealer) {
+            scenery(from + 1, Scenery::DealerSign, 1.25f);
+            scenery(from + start + 26, Scenery::Showroom, forecourt_width + 0.1f);
+            return;
         }
         scenery(from + 1, Scenery::FuelSign, 1.25f);
         scenery(from + start + 16, Scenery::FuelPump, 1.75f);
@@ -1056,6 +1079,7 @@ Track build_demo_track() {
     b.low_rolling_hills();
     b.gas_station();
     b.curve(Len::Medium, Bend::Medium, Hill::Low);
+    b.car_dealer();
     b.curve(Len::Medium, -Bend::Medium, -Hill::Low);
     b.curve(Len::Long, Bend::Easy, -Hill::Low);
 
@@ -1089,6 +1113,8 @@ Track build_demo_track() {
     b.mark(pch, b.size(), Edge::Rail, Edge::Cliff);
     b.curve(Len::Medium, -Bend::Easy, Hill::None);
     b.gas_station();
+    b.straight(Len::Short);
+    b.car_dealer();
 
     b.begin_zone(zone_san_francisco());
     // Up from the waterfront, block after block, each street steeper than the

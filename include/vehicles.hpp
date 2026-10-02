@@ -37,4 +37,15 @@ constexpr float rival_race_speed = 0.97f;
 constexpr float rival_race_range = 30.f;
 float rival_speed(float cruise, float max_speed, float gap);
 
+// The cars the player can drive, from the dealerships. The factors are of
+// the standard car, the Spider: top speed, acceleration and grip.
+struct CarModel {
+    const char* name;
+    float top_speed;
+    float acceleration;
+    float grip;
+};
+constexpr int car_models = 4;
+const CarModel& car_model(int index);
+
 } // namespace racer

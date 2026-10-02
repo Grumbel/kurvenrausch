@@ -96,6 +96,9 @@ void draw_minimap(Framebuffer& fb, int x, int y, int size, const HudState& hud) 
     if (hud.map_stations) {
         for (int s : *hud.map_stations) dot(s, Color{0x30, 0x90, 0xf0}, Color{0xb0, 0xe0, 0xff});
     }
+    if (hud.map_dealers) {
+        for (int s : *hud.map_dealers) dot(s, Color{0xf8, 0xd0, 0x20}, Color{0xff, 0xf4, 0xc0});
+    }
     const Color car{0xf0, 0x30, 0x20};
     dot(hud.map_player, car, hud.map_blink ? Value : car);
 }
@@ -164,6 +167,23 @@ void draw_hud(Framebuffer& fb, const HudState& hud) {
     // Below them, the mini map.
     if (hud.map) draw_minimap(fb, w - 6 - 58, 46, 58, hud);
 
+    // At a car dealer: the car on offer, with bars for its strengths.
+    if (hud.dealer_car) {
+        const int px = 70, py = 68, pw = w - 140, ph = 70;
+        for (int y = py; y < py + ph; ++y)
+            for (int x = px; x < px + pw; ++x) fb.blend_pixel(x, y, Shadow, 0.7f);
+        text_center(fb, py + 5, "CAR DEALER", Label);
+        text_center(fb, py + 16, std::string("< ") + hud.dealer_car + " >", Value, 2);
+        const char* labels[3] = {"SPEED", "ACCEL", "GRIP"};
+        for (int i = 0; i < 3; ++i) {
+            const int y = py + 36 + i * 10;
+            text(fb, px + 8, y, labels[i], Label);
+            const int bar = static_cast<int>(std::lround(std::clamp((hud.dealer_stats[i] - 0.6f) / 0.75f, 0.f, 1.f) * 90.f));
+            fb.fill_rect(px + 50, y, 90, 7, Color{0x30, 0x30, 0x40});
+            fb.fill_rect(px + 50, y, bar, 7, Color{0x30, 0xe0, 0x40});
+        }
+    }
+
     // A fork ahead: which way goes where.
     if (!hud.fork_left.empty()) {
         text(fb, 6, 112, "< " + hud.fork_left, Value);
@@ -171,7 +191,7 @@ void draw_hud(Framebuffer& fb, const HudState& hud) {
     }
 
     // Bottom left: speed and revs.
-    const int kmh = static_cast<int>(std::lround(hud.speed_fraction * top_speed_kmh));
+    const int kmh = static_cast<int>(std::lround(hud.speed_kmh_fraction * top_speed_kmh));
     text_right(fb, 52, h - 28, std::to_string(kmh), Value, 3);
     text(fb, 56, h - 14, "KM/H", Label);
     draw_tacho(fb, 6, h - 37, hud.speed_fraction);

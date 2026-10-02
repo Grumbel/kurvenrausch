@@ -62,12 +62,13 @@ public:
     const Bitmap& scenery_back(Scenery kind) const {
         return is_billboard(kind) ? billboard_back_ : scenery(kind);
     }
-    // steer: -1 left, 0 straight, +1 right. wave: -1 the driver waves on the
+    // The player's car: model (see car_model()); steer: -1 left, 0 straight, +1 right. wave: -1 the driver waves on the
     // left, +1 the passenger on the right, 0 nobody; frame 0 or 1. brake
     // lights the brake lights.
-    const Bitmap& player(int steer, int wave = 0, int frame = 0, bool brake = false, int tread = 0) const {
+    const Bitmap& player(int model, int steer, int wave = 0, int frame = 0, bool brake = false, int tread = 0) const {
         const int pose = wave == 0 ? 0 : 1 + (wave > 0 ? 2 : 0) + (frame & 1);
-        return player_[static_cast<size_t>(steer + 1)][static_cast<size_t>(pose)][brake ? 1 : 0][tread_index(tread)];
+        const auto m = static_cast<size_t>(((model % car_models) + car_models) % car_models);
+        return player_[m][static_cast<size_t>(steer + 1)][static_cast<size_t>(pose)][brake ? 1 : 0][tread_index(tread)];
     }
     // A vehicle in the traffic from behind; style picks the colours (modulo
     // vehicle_info(kind).styles), signal the indicator blinking towards -1
@@ -105,7 +106,8 @@ private:
     std::array<Bitmap, static_cast<size_t>(Scenery::Count)> scenery_;
     static size_t tread_index(int tread) { return static_cast<size_t>(((tread % tyre_frames) + tyre_frames) % tyre_frames); }
 
-    std::array<std::array<std::array<std::array<Bitmap, tyre_frames>, 2>, 5>, 3> player_; // [steer][pose][brake][tread]
+    // [model][steer][pose][brake][tread]
+    std::array<std::array<std::array<std::array<std::array<Bitmap, tyre_frames>, 2>, 5>, 3>, car_models> player_;
     struct VehicleSprites {
         std::array<std::array<std::array<Bitmap, tyre_frames>, 2>, 3> rear; // [signal][brake][tread]
         std::array<std::array<Bitmap, tyre_frames>, 3> front;               // [signal][tread]

@@ -36,6 +36,8 @@ struct ScreenshotOptions {
     bool horn = false;       // hold the horn all the way
     int nitro_frame = -1;    // if >= 0, press nitro at this step
     float fuel = -1.f;       // if >= 0, start with this much fuel (0 .. 1)
+    int car = -1;            // if >= 0, drive car model `car` (see car_model())
+    bool dealer = false;     // the autopilot pulls in at the next car dealer and stays
 };
 
 class Game {
@@ -84,6 +86,8 @@ private:
     void spawn_dust(float x, float y, int count, float strength);
     void spawn_spray(float speed_pct);
     void land(float impact);
+    void apply_car();
+    void visit_dealer(const InputState& input);
     void follow_fork(float prev_car_z);
     int indicator(Entity e, const Transform& t, const Traffic& traffic) const;
     InputState autopilot() const;
@@ -124,6 +128,15 @@ private:
     int steer_ = 0;     // -1, 0, +1, for the car sprite
     bool braking_ = false; // brake lights
     float wheel_distance_ = 0.f; // distance the tyres have rolled, for their tread frames
+
+    // The player's car (car_model()); the standard top speed, which traffic
+    // and the speedometer are measured against whatever the car.
+    int car_model_ = 0;
+    float base_max_speed_ = 0.f;
+    std::vector<int> dealers_;  // first full-width forecourt segment of each car dealer
+    bool at_dealer_ = false;    // standing on a dealer's forecourt: the cars are on offer
+    int dealer_steer_ = 0;      // the steering last step, to change cars once per push
+    bool autopilot_dealer_ = false; // headless: the autopilot visits the next car dealer
 
     Fuel fuel_;
     std::vector<int> stations_; // first full-width forecourt segment of each gas station
