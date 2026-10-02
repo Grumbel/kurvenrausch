@@ -376,6 +376,8 @@ InputState Game::autopilot() const {
 
 void Game::fixed_update(const InputState& input, float dt) {
     update_particles(dt);
+    wheel_distance_ = std::fmod(wheel_distance_ + world_.get<Velocity>(player_).speed * dt,
+                                SpriteSheet::tread_step * SpriteSheet::tyre_frames * 1000.f);
     if (crash_time_ >= 0.f) {
         update_crash(dt);
         return;
@@ -950,7 +952,8 @@ void Game::render() {
     world_.view<Transform, Traffic>([&](Entity e, Transform& t, Traffic& traffic) {
         RoadSprite s;
         s.z = t.z;
-        s.bitmap = &sprites_.vehicle(traffic.kind, traffic.style, indicator(e, t, traffic), traffic.braking);
+        s.bitmap = &sprites_.vehicle(traffic.kind, traffic.style, indicator(e, t, traffic), traffic.braking,
+                                     SpriteSheet::tyre_frame(t.z));
         s.offset = t.x;
         s.world_width = vehicle_info(traffic.kind).width;
         road_sprites_.push_back(s);
@@ -960,7 +963,8 @@ void Game::render() {
     // is drawn at the projection scale of player_z, which maps car_width to
     // the sprite's native size, so the pixel art is shown 1:1.
     const Bitmap& car = sprites_.player(steer_, wave_time_ > 0.f ? wave_side_ : 0,
-                                        static_cast<int>(clock_ / 0.15f) & 1, braking_);
+                                        static_cast<int>(clock_ / 0.15f) & 1, braking_,
+                                        SpriteSheet::tyre_frame(wheel_distance_));
     const float scale = cam.depth / cam.player_z() * (width / 2.f);
     RoadSprite me;
     me.z = tr.z + cam.player_z();
@@ -1089,7 +1093,8 @@ void Game::render_mirror() {
     world_.view<Transform, Traffic>([&](Entity e, Transform& t, Traffic& traffic) {
         RoadSprite s;
         s.z = t.z;
-        s.bitmap = &sprites_.vehicle_front(traffic.kind, traffic.style, indicator(e, t, traffic));
+        s.bitmap = &sprites_.vehicle_front(traffic.kind, traffic.style, indicator(e, t, traffic),
+                                           SpriteSheet::tyre_frame(t.z));
         s.offset = t.x;
         s.world_width = vehicle_info(traffic.kind).width;
         mirror_sprites_.push_back(s);

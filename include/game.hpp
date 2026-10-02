@@ -122,6 +122,7 @@ private:
     bool crashed_ = false; // a collision happened since the last frame
     int steer_ = 0;     // -1, 0, +1, for the car sprite
     bool braking_ = false; // brake lights
+    float wheel_distance_ = 0.f; // distance the tyres have rolled, for their tread frames
 
     Fuel fuel_;
     std::vector<int> stations_; // first full-width forecourt segment of each gas station

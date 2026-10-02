@@ -877,6 +877,26 @@ void test_vehicles() {
         }
     }
     CHECK(sheet.vehicle(Vehicle::Truck, 0).h > 2 * sheet.vehicle(Vehicle::Car, 0).h);
+    // Tyre tread frames: they differ from each other, only in the tyres (the
+    // bottom of the sprite), and cycle with the distance driven.
+    for (int k = 0; k < static_cast<int>(Vehicle::Count); ++k) {
+        const auto kind = static_cast<Vehicle>(k);
+        const Bitmap& f0 = sheet.vehicle(kind, 0, 0, false, 0);
+        const Bitmap& f1 = sheet.vehicle(kind, 0, 0, false, 1);
+        CHECK(f0.px != f1.px && f1.px != sheet.vehicle(kind, 0, 0, false, 2).px);
+        CHECK(sheet.vehicle_front(kind, 0, 0, 0).px != sheet.vehicle_front(kind, 0, 0, 1).px);
+        int top = f0.h;
+        for (int y = 0; y < f0.h; ++y)
+            for (int x = 0; x < f0.w; ++x)
+                if (f0.get(x, y) != f1.get(x, y)) top = std::min(top, y);
+        CHECK(top > f0.h / 3);
+    }
+    CHECK(sheet.player(0, 0, 0, false, 0).px != sheet.player(0, 0, 0, false, 1).px);
+    CHECK(SpriteSheet::tyre_frame(0.f) == 0);
+    CHECK(SpriteSheet::tyre_frame(SpriteSheet::tread_step * 1.5f) == 1);
+    CHECK(SpriteSheet::tyre_frame(SpriteSheet::tread_step * 2.5f) == 2);
+    CHECK(SpriteSheet::tyre_frame(SpriteSheet::tread_step * 3.5f) == 0);
+    CHECK(SpriteSheet::tyre_frame(-SpriteSheet::tread_step * 0.5f) == 2);
 }
 
 void test_start_line() {
