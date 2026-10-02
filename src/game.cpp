@@ -701,6 +701,13 @@ void Game::save_choices() const {
     store_.save_choices({car_model_, car_before_truck_, driver_, passenger_, static_cast<int>(view_mode_)});
 }
 
+// Into another car: it comes clean and with a full tank.
+void Game::change_car() {
+    apply_car();
+    fuel_.reset();
+    dirt_.reset();
+}
+
 void Game::apply_car() {
     const CarModel& m = car_model(car_model_);
     const Player standard = Player::for_segment_length(track_.segment_length);
@@ -731,7 +738,7 @@ void Game::visit_lot(const InputState& input) {
                 // Driving up in the truck, the cars start from the one left behind.
                 const int from = car_model_ == truck_model ? car_before_truck_ : car_model_;
                 car_model_ = (from + push + dealer_models) % dealer_models;
-                apply_car();
+                change_car();
                 break;
             }
             case Lot::Truckstop:
@@ -742,7 +749,7 @@ void Game::visit_lot(const InputState& input) {
                     car_before_truck_ = car_model_;
                     car_model_ = truck_model;
                 }
-                apply_car();
+                change_car();
                 break;
             case Lot::Motel:
                 passenger_ = (passenger_ + push + passengers) % passengers;

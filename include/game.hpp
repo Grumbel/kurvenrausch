@@ -104,6 +104,7 @@ private:
     void spawn_smoke(float speed_pct);
     void land(float impact);
     void apply_car();
+    void change_car();
     // Remembers the car, driver and passenger for the next run.
     void save_choices() const;
     void visit_lot(const InputState& input);
