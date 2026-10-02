@@ -295,6 +295,26 @@ Bitmap make_victorian(Color body, Color accent) {
     return b;
 }
 
+// A motorway-green sign before a fork with a big arrow: dir -1 points to
+// the left, +1 to the right.
+Bitmap make_fork_sign(int dir) {
+    Bitmap b(64, 80);
+    const Color green{0x1c, 0x6c, 0x3c}, white{0xf4, 0xf4, 0xf4}, post{0x8c, 0x8c, 0x94};
+    paint::rect(b, 12, 40, 5, 40, post);
+    paint::rect(b, 47, 40, 5, 40, post);
+    paint::rect(b, 0, 0, 64, 46, white);
+    paint::rect(b, 2, 2, 60, 42, green);
+    // The arrow: a shaft and a head, pointing up and to the side.
+    const float d = static_cast<float>(dir);
+    paint::stroke(b, 32.f - 10.f * d, 38.f, 32.f + 6.f * d, 16.f, 4.f, 4.f, white);
+    for (int i = 0; i < 12; ++i) {
+        const int x = 32 + static_cast<int>(10.f * d) - (dir < 0 ? -i : i);
+        paint::rect(b, x, 10 + i / 2, 1, 14 - i, white);
+    }
+    paint::outline(b, Outline);
+    return b;
+}
+
 // A street lamp: a dark green pole with a lantern.
 Bitmap make_street_lamp() {
     Bitmap b(24, 112);
@@ -1019,6 +1039,8 @@ SpriteSheet::SpriteSheet() {
     scenery_[static_cast<size_t>(Scenery::VictorianB)] = make_victorian(Color{0xe4, 0xc4, 0x6c}, Color{0x3c, 0x6c, 0x5c});
     scenery_[static_cast<size_t>(Scenery::VictorianC)] = make_victorian(Color{0xd4, 0x8c, 0xa8}, Color{0x5c, 0x3c, 0x7c});
     scenery_[static_cast<size_t>(Scenery::StreetLamp)] = make_street_lamp();
+    scenery_[static_cast<size_t>(Scenery::SignLeft)] = make_fork_sign(-1);
+    scenery_[static_cast<size_t>(Scenery::SignRight)] = make_fork_sign(1);
 }
 
 } // namespace racer

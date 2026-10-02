@@ -812,6 +812,63 @@ void test_san_francisco() {
     CHECK(houses > 100 && lamps > 20);
 }
 
+void test_branches() {
+    using namespace racer;
+    Track t = build_demo_track();
+    CHECK(t.branches.size() == 2);
+    const float lap = t.length();
+    const size_t n = t.segments.size();
+    for (size_t i = 0; i < t.branches.size(); ++i) {
+        const Branch& br = t.branches[i];
+        CHECK(!br.names[0].empty() && !br.names[1].empty());
+        // Equally long, starting and ending at the height of the road around
+        // them, and different courses.
+        CHECK(br.routes[0].size() == static_cast<size_t>(br.length) && br.routes[1].size() == br.routes[0].size());
+        for (int r = 0; r < 2; ++r) {
+            CHECK_NEAR(br.routes[r].front().y1, t.segment(br.fork - 1).y2, 1e-2f);
+            CHECK_NEAR(br.routes[r].back().y2, t.segment(br.end()).y1, 1e-2f);
+            int planted = 0;
+            for (const Segment& s : br.routes[r]) planted += static_cast<int>(s.scenery.size());
+            CHECK(planted > 20); // both routes are decorated
+            // Nothing stands on the side facing the other route where they part and meet.
+            for (const Segment& s : br.routes[r]) {
+                for (const RoadsideObject& o : s.scenery) {
+                    if (s.facing_branch != 0) CHECK(o.offset * static_cast<float>(s.facing_branch) <= 0.f);
+                }
+            }
+        }
+        float diff = 0.f;
+        for (int k = 0; k < br.length; ++k) diff += std::abs(br.routes[0][static_cast<size_t>(k)].curve - br.routes[1][static_cast<size_t>(k)].curve);
+        CHECK(diff > 100.f);
+
+        // The other road: on top of ours at the fork, well apart where they
+        // have parted (the left one on the left), out of sight in between,
+        // and back together where they meet.
+        CHECK(br.active == 1);
+        CHECK_NEAR(t.branch_offset(br.fork), 0.f, 1e-4f);
+        CHECK(t.branch_offset(br.fork + br.bend) < -3.f);
+        CHECK(std::isnan(t.branch_offset(br.fork + br.bend + 5)));
+        CHECK(t.branch_offset(br.end() - br.bend) < -3.f);
+        CHECK(std::abs(t.branch_offset(br.end())) < 0.05f);
+        CHECK(std::isnan(t.branch_offset(br.fork - 1)));
+
+        // Choosing the other route swaps the segments and mirrors the offsets.
+        const Segment middle = t.segment(br.fork + br.length / 2);
+        t.choose_branch(i, 0);
+        CHECK(t.branches[i].active == 0);
+        CHECK(t.segment(br.fork + br.bend / 4).curve < 0.f); // the left route bends left
+        CHECK(t.branch_offset(br.fork + br.bend) > 3.f);
+        CHECK(t.segments.size() == n && t.length() == lap);
+        t.choose_branch(i, 1);
+        CHECK(t.segment(br.fork + br.length / 2).curve == middle.curve);
+        CHECK(t.segment(br.fork + br.length / 2).scenery.size() == middle.scenery.size());
+    }
+    // The car takes the road it is nearer to.
+    CHECK(!nearer_other_road(0.f, -0.1f));
+    CHECK(nearer_other_road(-0.2f, -0.3f));
+    CHECK(!nearer_other_road(0.2f, -0.3f));
+}
+
 void test_track_map() {
     using namespace racer;
     auto check_map = [](const Track& t) {
@@ -1403,6 +1460,7 @@ int main() {
     test_gas_stations();
     test_wet_spots();
     test_san_francisco();
+    test_branches();
     test_nitro();
     test_speed_rules();
     test_yield_lane();

@@ -36,6 +36,8 @@ enum class Scenery : uint8_t {
     VictorianB,
     VictorianC,
     StreetLamp,
+    SignLeft,     // a fork ahead: this way to the left route
+    SignRight,    // ... and to the right one
     Count
 };
 
@@ -90,6 +92,9 @@ struct Segment {
     // half width of 0 means dry. It swells and shrinks along a few segments.
     float wet_x = 0.f;
     float wet_w = 0.f;
+    // Where a route of a fork bends away from or back to the other one: the
+    // side facing it (-1 left, +1 right), which stays clear of scenery.
+    int8_t facing_branch = 0;
     std::vector<RoadsideObject> scenery;
 };
 
@@ -171,6 +176,20 @@ struct Zone {
     Decor decor = Decor::Riviera;
 };
 
+// A fork: the road splits into two routes of the same length that join again
+// further on. Only the chosen route's segments are in Track::segments;
+// choose_branch() swaps them. As both are equally long, every position after
+// the join is the same whichever way the car went.
+struct Branch {
+    int fork = 0;                   // first segment of the routes
+    int length = 0;                 // segments in each route
+    int bend = 0;                   // segments at each end where the routes part and meet
+    std::string names[2];           // the left and the right route
+    std::vector<Segment> routes[2]; // both routes; the active one is also in Track::segments
+    int active = 1;
+    int end() const { return fork + length; }
+};
+
 // A looping track: a circular array of fixed-length segments.
 struct Track {
     std::vector<Segment> segments;
@@ -184,6 +203,7 @@ struct Track {
     std::vector<Zone> zones;
     std::vector<int> zone_index;       // zone of each segment
     std::vector<RoadTheme> looks;      // blended look of each segment
+    std::vector<float> branch_offsets; // per boundary, see branch_offset()
 
     // Transitions between zones are spread over this many segments (clamped to
     // the shortest zone), centred on the boundary.
@@ -233,6 +253,23 @@ struct Track {
     // Does a car at lateral position x with the given half width (both in
     // road half-widths) touch a wet spot on the segment at z?
     bool on_wet(float z, float x, float half_width) const;
+
+    std::vector<Branch> branches;
+
+    // Makes route `route` (0 left, 1 right) of branch `index` the active one.
+    void choose_branch(size_t index, int route);
+
+    // Lateral position of the other route's road relative to the active one,
+    // in road half-widths, at the boundary in front of segment `boundary`;
+    // NaN where it is not to be seen (only where the routes part and meet).
+    float branch_offset(int boundary) const;
+
+    // The branch whose routes contain segment `index`, or -1.
+    int branch_at(int index) const;
+
+    // Recomputes the offsets of the inactive routes; finish() and
+    // choose_branch() do this.
+    void update_branch_offsets();
 };
 
 // How far from the centre line (in road half-widths) a car of the given half

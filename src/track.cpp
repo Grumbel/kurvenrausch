@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <functional>
 #include <cmath>
 #include <cstdint>
 #include <limits>
@@ -37,6 +38,8 @@ const SceneryInfo& scenery_info(Scenery kind) {
         /* VictorianB*/ {2600.f, true,  false, true},
         /* VictorianC*/ {2600.f, true,  false, true},
         /* StreetLamp*/ { 260.f, true,  false, false},
+        /* SignLeft  */ { 900.f, true,  false, false},
+        /* SignRight */ { 900.f, true,  false, false},
     };
     static_assert(sizeof(infos) / sizeof(infos[0]) == static_cast<size_t>(Scenery::Count),
                   "scenery_info() needs an entry for every Scenery kind");
@@ -96,6 +99,55 @@ std::vector<int> Track::gas_stations() const {
         if (segment(i).forecourt >= forecourt_width && segment(i - 1).forecourt < forecourt_width) starts.push_back(i);
     }
     return starts;
+}
+
+void Track::choose_branch(size_t index, int route) {
+    Branch& br = branches.at(index);
+    if (route == br.active) return;
+    // Keep the active route's segments, which may have been changed since
+    // (scenery is planted after building), then put the other one in.
+    std::copy(segments.begin() + br.fork, segments.begin() + br.end(), br.routes[br.active].begin());
+    std::copy(br.routes[route].begin(), br.routes[route].end(), segments.begin() + br.fork);
+    br.active = route;
+    update_branch_offsets();
+}
+
+void Track::update_branch_offsets() {
+    const int n = static_cast<int>(segments.size());
+    branch_offsets.assign(static_cast<size_t>(n) + 1, std::numeric_limits<float>::quiet_NaN());
+    for (const Branch& br : branches) {
+        const std::vector<Segment>& other = br.routes[1 - br.active];
+        // The same recurrence as the renderer's curve accumulation, on the
+        // difference of the two routes' curves: offset and its slope.
+        auto walk = [&](int from, int to, float offset) {
+            float slope = 0.f;
+            for (int i = from; i <= to; ++i) {
+                branch_offsets[static_cast<size_t>(i)] = offset / road_width;
+                if (i == to) break;
+                offset += slope;
+                slope += other[static_cast<size_t>(i - br.fork)].curve - segment(i).curve;
+            }
+            return offset;
+        };
+        // Where they part, from together to apart; where they meet, from the
+        // same distance apart back together. In between the other route goes
+        // its own way out of sight.
+        const float apart = walk(br.fork, br.fork + br.bend, 0.f);
+        walk(br.end() - br.bend, br.end(), apart);
+    }
+}
+
+float Track::branch_offset(int boundary) const {
+    if (branch_offsets.empty()) return std::numeric_limits<float>::quiet_NaN();
+    const int n = static_cast<int>(segments.size());
+    return branch_offsets[static_cast<size_t>(((boundary % n) + n) % n)];
+}
+
+int Track::branch_at(int index) const {
+    for (size_t i = 0; i < branches.size(); ++i) {
+        if (index >= branches[i].fork && index < branches[i].end()) return static_cast<int>(i);
+    }
+    return -1;
 }
 
 float Track::wet_width_at(int boundary) const {
@@ -238,6 +290,7 @@ RoadTheme mix_themes(const RoadTheme& a, const RoadTheme& b, float t) {
 
 void Track::finish(int transition_segments) {
     assert(!zones.empty() && zones.front().first_segment == 0);
+    update_branch_offsets();
     const int n = static_cast<int>(segments.size());
     const int zone_count = static_cast<int>(zones.size());
     const auto zone_end = [&](int k) { return k + 1 < zone_count ? zones[static_cast<size_t>(k) + 1].first_segment : n; };
@@ -396,6 +449,63 @@ public:
         scenery(from + start + 16, Scenery::FuelPump, 1.75f);
         scenery(from + start + 24, Scenery::FuelPump, 1.75f);
         scenery(from + start + 30, Scenery::GasStation, forecourt_width + 0.1f);
+    }
+
+    // A fork: two routes, `left` and `right` building their middle parts.
+    // Each first bends away from the other (an S-bend, flat, which leaves
+    // them side by side, apart), then follows its own course, then bends
+    // back to meet the other. The shorter is padded so both are equally long
+    // and end at the starting height. Signs before the fork point the way.
+    void fork(std::string left_name, std::string right_name,
+              const std::function<void()>& left, const std::function<void()>& right) {
+        constexpr int half = 25;
+        constexpr float bend = 6.f;
+        const int start = size();
+        const float y0 = last_y();
+        scenery(start - 10, Scenery::SignLeft, -1.2f);
+        scenery(start - 10, Scenery::SignRight, 1.2f);
+
+        auto part = [&](float side) { // bend away from the other route
+            for (int i = 0; i < 2 * half; ++i) {
+                add((i < half ? 1.f : -1.f) * side * bend, y0);
+                t_.segments.back().facing_branch = static_cast<int8_t>(-side);
+            }
+        };
+        std::vector<Segment> routes[2];
+        int middle[2] = {0, 0};
+        const std::function<void()>* builds[2] = {&left, &right};
+        for (int r = 0; r < 2; ++r) {
+            t_.segments.resize(static_cast<size_t>(start));
+            part(r == 0 ? -1.f : 1.f);
+            const int before = size();
+            (*builds[r])();
+            middle[r] = size() - before;
+            routes[r].assign(t_.segments.begin() + start, t_.segments.end());
+        }
+        const int longest = std::max(middle[0], middle[1]) + 30;
+        for (int r = 0; r < 2; ++r) {
+            t_.segments.resize(static_cast<size_t>(start));
+            t_.segments.insert(t_.segments.end(), routes[r].begin(), routes[r].end());
+            // Pad to the same length, easing back to the starting height.
+            const int pad = longest - middle[r];
+            road(pad / 3, pad - 2 * (pad / 3), pad / 3, Bend::None, (y0 - last_y()) / t_.segment_length);
+            const float side = r == 0 ? -1.f : 1.f;
+            for (int i = 0; i < 2 * half; ++i) { // and back towards the other
+                add((i < half ? -1.f : 1.f) * side * bend, y0);
+                t_.segments.back().facing_branch = static_cast<int8_t>(-side);
+            }
+            routes[r].assign(t_.segments.begin() + start, t_.segments.end());
+        }
+        Branch br;
+        br.fork = start;
+        br.length = static_cast<int>(routes[0].size());
+        br.bend = 2 * half;
+        br.names[0] = std::move(left_name);
+        br.names[1] = std::move(right_name);
+        br.routes[0] = std::move(routes[0]);
+        br.routes[1] = std::move(routes[1]);
+        br.active = 1; // the right route is in the track now
+        t_.branches.push_back(std::move(br));
     }
 
     void scenery(int index, Scenery kind, float offset) {
@@ -607,19 +717,19 @@ Zone zone_san_francisco() {
 // Plants scenery along the road according to each zone's decor rules. Sides
 // that carry a rail or cliff stay free: nothing grows out of the rock or out
 // of the sea.
-void decorate(Track& track, TrackBuilder& b) {
-    Rng rng(0x6b75727au);
-    const int n = static_cast<int>(track.segments.size());
+void decorate(Track& track, TrackBuilder& b, int from, int to, uint32_t seed) {
+    Rng rng(seed);
     int last_mesa = -1000;
 
-    for (int i = 10; i < n; ++i) {
+    for (int i = std::max(from, 10); i < to; ++i) {
         const Segment& seg = track.segments[static_cast<size_t>(i)];
         const Zone& zone = track.zones[static_cast<size_t>(track.zone_index[static_cast<size_t>(i)])];
         // Nothing grows on a forecourt, nor just before or after one.
         const bool forecourt = track.segment(i - 8).forecourt > 0.f || seg.forecourt > 0.f ||
                                track.segment(i + 8).forecourt > 0.f;
         const auto free_side = [&](int side) {
-            return (side < 0 ? seg.left : seg.right) == Edge::None && !(side > 0 && forecourt);
+            return (side < 0 ? seg.left : seg.right) == Edge::None && !(side > 0 && forecourt) &&
+                   side != seg.facing_branch;
         };
         const auto put = [&](Scenery kind, int side, float magnitude) {
             if (free_side(side)) b.scenery(i, kind, static_cast<float>(side) * magnitude);
@@ -701,21 +811,15 @@ void decorate(Track& track, TrackBuilder& b) {
                 break;
         }
     }
-
-    // Billboards greeting the driver along the start straight.
-    for (int i = 20; i < 160; i += 20) {
-        b.scenery(i, Scenery::Billboard, (i / 20) % 2 ? -1.15f : 1.15f);
-    }
 }
 
 // Wet spots on the road: plenty where it rains or snows, the odd one in
 // fair weather, none in the desert. Each runs over a few segments, widest in
 // the middle, and keeps clear of the start and the forecourts.
-void place_wet_spots(Track& track) {
-    Rng rng(0x77657473u);
-    const int n = static_cast<int>(track.segments.size());
+void place_wet_spots(Track& track, int from, int to, uint32_t seed) {
+    Rng rng(seed);
     int last_end = -1000;
-    for (int i = 20; i < n - 12; ++i) {
+    for (int i = std::max(from, 20); i < to - 12; ++i) {
         const Zone& zone = track.zones[static_cast<size_t>(track.zone_index[static_cast<size_t>(i)])];
         if (zone.decor == Decor::Desert || i - last_end < 20) continue;
         const float wetness = std::max(zone.theme.rain, zone.theme.snowfall);
@@ -724,7 +828,7 @@ void place_wet_spots(Track& track) {
         bool clear = true;
         for (int k = -2; k < length + 2; ++k) {
             const Segment& s = track.segment(i + k);
-            clear = clear && s.forecourt == 0.f && !s.checker;
+            clear = clear && s.forecourt == 0.f && !s.checker && s.facing_branch == 0 && i + k < to;
         }
         if (!clear) continue;
         const float width = rng.range(0.12f, 0.35f);
@@ -766,6 +870,21 @@ Track build_demo_track() {
     b.curve(Len::Medium, -Bend::Medium, -Hill::Medium);
     b.straight(Len::Medium);
     b.gas_station();
+    b.straight(Len::Short);
+    // The fast way or the scenic one.
+    b.fork("AUTOBAHN", "LANDSTRASSE",
+           [&] {
+               b.straight(Len::Medium);
+               b.curve(Len::Long, -Bend::Easy, Hill::Low);
+               b.curve(Len::Long, Bend::Easy, -Hill::Low);
+           },
+           [&] {
+               b.curve(Len::Short, Bend::Hard, Hill::Low);
+               b.curve(Len::Short, -Bend::Hard, Hill::Medium);
+               b.bumps();
+               b.curve(Len::Short, Bend::Medium, -Hill::Medium);
+               b.curve(Len::Short, -Bend::Hard, -Hill::Low);
+           });
 
     b.begin_zone(zone_switzerland());
     b.hill(Len::Medium, Hill::High);
@@ -792,8 +911,21 @@ Track build_demo_track() {
     b.hill(Len::Long, Hill::Low);
     b.gas_station();
     b.curve(Len::Long, Bend::Easy, Hill::None);
-    b.hill(Len::Medium, -Hill::Low);
-    b.bumps();
+    // The old highway across the open desert, or through the canyon.
+    b.fork("ROUTE 66", "CANYON ROAD",
+           [&] {
+               b.straight(Len::Long);
+               b.hill(Len::Medium, -Hill::Low);
+               b.bumps();
+           },
+           [&] {
+               b.straight(Len::Short);
+               const int canyon = b.size();
+               b.curve(Len::Medium, Bend::Medium, Hill::None);
+               b.curve(Len::Medium, -Bend::Hard, -Hill::Low);
+               b.curve(Len::Short, Bend::Medium, Hill::None);
+               b.mark(canyon, b.size(), Edge::Cliff, Edge::Cliff);
+           });
     b.curve(Len::Medium, -Bend::Medium, Hill::Low);
     b.straight(Len::Medium);
 
@@ -843,8 +975,23 @@ Track build_demo_track() {
     track.segments[start + 1].checker = true;
     b.scenery(start, Scenery::Gantry, 0.f);
 
-    decorate(track, b);
-    place_wet_spots(track);
+    // Scenery and wet spots along the whole lap, the right routes of the forks
+    // being in the track now; then along each left route.
+    const int n = static_cast<int>(track.segments.size());
+    decorate(track, b, 0, n, 0x6b75727au);
+    place_wet_spots(track, 0, n, 0x77657473u);
+    for (size_t i = 0; i < track.branches.size(); ++i) {
+        const Branch& br = track.branches[i];
+        track.choose_branch(i, 0);
+        decorate(track, b, br.fork, br.end(), 0x6c656674u + static_cast<uint32_t>(i));
+        place_wet_spots(track, br.fork, br.end(), 0x6c657774u + static_cast<uint32_t>(i));
+        track.choose_branch(i, 1);
+    }
+
+    // Billboards greeting the driver along the start straight.
+    for (int i = 20; i < 160; i += 20) {
+        b.scenery(i, Scenery::Billboard, (i / 20) % 2 ? -1.15f : 1.15f);
+    }
     return track;
 }
 

@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <cmath>
 #include <vector>
 
 namespace racer {
@@ -79,6 +80,11 @@ inline void place_on_road(Vertical& v, float road_y) { v = Vertical{road_y, 0.f,
 // It only takes off when it would clear the road by this much, so a sharp
 // change of grade taken slowly is not a hop.
 constexpr float takeoff_clearance = 15.f;
+
+// At a fork, is a car at lateral position x (relative to the road it is
+// on) nearer to the other road, whose centre is at `other`? Then it is on
+// that one now.
+inline bool nearer_other_road(float x, float other) { return std::abs(x - other) < std::abs(x); }
 
 // Speed after one step that changed it from `before` to `after`: the engine
 // cannot push the car beyond `top`, and above it (after a nitro burn or a
