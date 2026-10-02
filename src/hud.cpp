@@ -164,6 +164,12 @@ void draw_hud(Framebuffer& fb, const HudState& hud) {
     // Below them, the mini map.
     if (hud.map) draw_minimap(fb, w - 6 - 58, 46, 58, hud);
 
+    // A fork ahead: which way goes where.
+    if (!hud.fork_left.empty()) {
+        text(fb, 6, 112, "< " + hud.fork_left, Value);
+        text_right(fb, w - 6, 112, hud.fork_right + " >", Value);
+    }
+
     // Bottom left: speed and revs.
     const int kmh = static_cast<int>(std::lround(hud.speed_fraction * top_speed_kmh));
     text_right(fb, 52, h - 28, std::to_string(kmh), Value, 3);

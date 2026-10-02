@@ -84,6 +84,7 @@ private:
     void spawn_dust(float x, float y, int count, float strength);
     void spawn_spray(float speed_pct);
     void land(float impact);
+    void follow_fork(float prev_car_z);
     int indicator(Entity e, const Transform& t, const Traffic& traffic) const;
     InputState autopilot() const;
     void update_fuel(const InputState& input, float dt);

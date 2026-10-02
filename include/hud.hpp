@@ -28,6 +28,8 @@ struct HudState {
     int map_start = 0;
     const std::vector<int>* map_stations = nullptr;
     bool map_blink = false;      // the player's dot blinks
+    std::string fork_left;       // a fork ahead: the left route's name
+    std::string fork_right;      // ... and the right one's
     float nitro_burn = 0.f;      // fraction left of the canister burning now, 0 for none
     std::string banner;          // country, shown when entering a new zone
     std::string banner_sub;      // region below it

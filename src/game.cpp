@@ -426,6 +426,7 @@ void Game::fixed_update(const InputState& input, float dt) {
     if (!airborne) {
         tr.x += dx * input.steer * (0.5f + 0.5f * grip);
         tr.x -= dx * speed_pct * seg.curve * player.centrifugal / grip;
+        follow_fork(prev_z + player_z);
     }
     if (aquaplaning_) {
         rng_ = rng_ * 1664525u + 1013904223u;
@@ -656,6 +657,29 @@ void Game::spawn_dust(float x, float y, int count, float strength) {
                               3.f + 3.f * b * strength, blend(dust, Color{0xff, 0xff, 0xff}, 0.3f * b),
                               Particle::Kind::Dust});
     }
+}
+
+// Where a fork's routes part, the car is on whichever road it is nearer to:
+// crossing over makes that route the active one (the car's lateral position
+// is then measured from it). The chosen route is announced as the roads
+// separate.
+void Game::follow_fork(float prev_car_z) {
+    auto& tr = world_.get<Transform>(player_);
+    const float car_z = tr.z + world_.get<Camera>(camera_).player_z();
+    const int seg = track_.index_at(car_z);
+    const int index = track_.branch_at(seg);
+    if (index < 0) return;
+    const Branch& br = track_.branches[static_cast<size_t>(index)];
+    if (seg >= br.fork + br.bend) return;
+    const float t = std::fmod(car_z, track_.segment_length) / track_.segment_length;
+    const float other = track_.branch_offset(seg) + (track_.branch_offset(seg + 1) - track_.branch_offset(seg)) * t;
+    if (!std::isnan(other) && nearer_other_road(tr.x, other)) {
+        track_.choose_branch(static_cast<size_t>(index), 1 - br.active);
+        tr.x -= other;
+        map_ = track_map(track_);
+    }
+    const int announce = br.fork + br.bend / 2;
+    if (track_.index_at(prev_car_z) < announce && seg >= announce) show_message(br.names[br.active], 2.f);
 }
 
 // Touching down after a jump: the harder, the bigger the thump, the dust and
@@ -1048,6 +1072,14 @@ void Game::render() {
     hud.nitro = nitro_.canisters();
     hud.fuel = fuel_.level();
     hud.map = &map_;
+    // A fork coming up: the routes' names, left and right.
+    for (const Branch& br : track_.branches) {
+        const int ahead = br.fork - track_.index_at(tr.z + cam.player_z());
+        if (ahead > 0 && ahead < 200) {
+            hud.fork_left = br.names[0];
+            hud.fork_right = br.names[1];
+        }
+    }
     hud.map_player = track_.index_at(tr.z + cam.player_z());
     hud.map_start = track_.index_at(track_.start_z);
     hud.map_stations = &stations_;
