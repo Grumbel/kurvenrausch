@@ -50,6 +50,11 @@ Bitmap make_rival_front(const CarStyle& style, int signal, int tread = 0);
 // for a raised arm.
 Bitmap make_player_car(const CarStyle& style, int turn, bool brake, int tread, int headroom);
 
+// The player's truck from behind, the same size as make_player_car(): a
+// cab-over tractor whose cab fills the headroom, its rear window where a
+// car's is, so make_occupants() fits it as a closed car.
+Bitmap make_player_truck(const CarStyle& style, int turn, bool brake, int tread, int headroom);
+
 // The people in the player's car, to draw over make_player_car() (same size):
 // in a convertible their heads above the seats, in a closed car dimly
 // through the rear window. wave: -1 the driver waves out on the left, +1 the

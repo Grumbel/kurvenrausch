@@ -37,6 +37,7 @@ const CarModel& car_model(int index) {
         {"GT COUPE",    1.12f, 0.85f, 0.92f}, // fastest flat out, slow to get there
         {"HOT HATCH",   0.88f, 1.30f, 1.12f}, // quick away and sure-footed
         {"MUSCLE",      1.06f, 1.22f, 0.78f}, // brute force, little grip
+        {"BIG RIG",     0.84f, 0.62f, 1.25f}, // the truck: slow, but planted
     };
     return models[((index % car_models) + car_models) % car_models];
 }

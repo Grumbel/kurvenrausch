@@ -654,6 +654,41 @@ Bitmap make_hospital_sign() {
     return b;
 }
 
+// A truck stop: a diner with a long row of windows under a big sign.
+Bitmap make_truckstop() {
+    Bitmap b(192, 96);
+    const Color wall{0xd8, 0xcc, 0xb0}, trim{0xb0, 0x20, 0x20}, glass{0x70, 0xa0, 0xc0}, yellow{0xf8, 0xc8, 0x20};
+    paint::rect(b, 4, 36, 184, 60, wall);
+    paint::rect(b, 0, 32, 192, 6, trim);
+    for (int x = 12; x < 176; x += 20) paint::rect(b, x, 46, 16, 18, glass);
+    paint::rect(b, 0, 66, 192, 4, trim);
+    paint::rect(b, 86, 72, 20, 24, Color{0x60, 0x40, 0x28}); // the door
+    paint::rect(b, 88, 74, 16, 10, glass);
+    paint::text(b, 22, 78, "DINER", trim);
+    paint::text(b, 130, 78, "DIESEL", trim);
+    // The sign on the roof, on two legs.
+    paint::rect(b, 50, 22, 4, 10, Color{0x6c, 0x6c, 0x74});
+    paint::rect(b, 138, 22, 4, 10, Color{0x6c, 0x6c, 0x74});
+    paint::rect(b, 30, 0, 132, 24, trim);
+    paint::rect(b, 32, 2, 128, 20, yellow);
+    paint::text(b, (192 - font::text_width("TRUCK STOP", 2)) / 2, 5, "TRUCK STOP", Color{0x20, 0x18, 0x10}, 2);
+    paint::outline(b, Outline);
+    return b;
+}
+
+// The truck stop's tall sign: TRUCK STOP in black on yellow.
+Bitmap make_truck_sign() {
+    Bitmap b(44, 112);
+    paint::rect(b, 19, 40, 6, 72, Color{0x9a, 0x9a, 0xa4});
+    paint::rect(b, 23, 40, 2, 72, Color{0x6c, 0x6c, 0x74});
+    paint::rect(b, 0, 0, 44, 40, Color{0xb0, 0x20, 0x20});
+    paint::rect(b, 2, 2, 40, 36, Color{0xf8, 0xc8, 0x20});
+    paint::text(b, (44 - font::text_width("TRUCK")) / 2, 8, "TRUCK", Color{0x20, 0x18, 0x10});
+    paint::text(b, (44 - font::text_width("STOP")) / 2, 22, "STOP", Color{0x20, 0x18, 0x10});
+    paint::outline(b, Outline);
+    return b;
+}
+
 // A date palm: a tall, ringed trunk under a crown of drooping fronds.
 Bitmap make_date_palm() {
     Bitmap b(64, 112);
@@ -1619,6 +1654,52 @@ Bitmap make_rival(const CarStyle& st, int signal, bool brake, int tread) {
     return b;
 }
 
+Bitmap make_player_truck(const CarStyle& style, int turn, bool brake, int tread, int headroom) {
+    Bitmap b(96, 44 + headroom);
+    const int h = b.h;
+    const Color frame{0x24, 0x24, 0x28}, steel{0x50, 0x50, 0x58}, chrome{0xb0, 0xb0, 0xbc}, chrome_dark{0x70, 0x70, 0x7c};
+    paint::ellipse(b, 48.f, static_cast<float>(h) - 3.f, 46.f, 3.f, Color{0x22, 0x22, 0x22});
+    // Twin wheels each side, planted; mudflaps hanging behind their lower half.
+    for (int x : {3, 12, 70, 79}) tyre(b, x, h - 18, 9, 17, tread);
+    for (int x : {4, 72}) {
+        paint::rect(b, x, h - 9, 20, 7, Color{0x14, 0x14, 0x18});
+        paint::rect(b, x + 2, h - 8, 16, 1, chrome_dark);
+    }
+    // The chassis: frame rails, the fifth-wheel plate and the rear bar.
+    paint::rect(b, 22, h - 24, 52, 12, frame);
+    paint::shaded_ellipse(b, 48.f, static_cast<float>(h) - 23.f, 18.f, 4.f, frame, steel, chrome_dark);
+    paint::rect(b, 14, h - 14, 68, 5, steel);
+    paint::rect(b, 14, h - 14, 68, 1, chrome);
+    const Color lamp = brake ? Color{0xff, 0x54, 0x3c} : Color{0x8c, 0x12, 0x12};
+    for (int x : {16, 70}) {
+        paint::rect(b, x, h - 14, 10, 5, lamp);
+        if (brake) paint::rect(b, x + 1, h - 13, 8, 2, Color{0xff, 0xf0, 0xe0});
+    }
+    paint::rect(b, 42, h - 13, 12, 4, Color{0xe8, 0xe8, 0xd8}); // plate
+
+    // The cab, leaning into turns, and its back wall with the window.
+    const int u = 2 * turn;
+    paint::rect(b, 18 + u, 4, 60, h - 26, style.body);
+    paint::rect(b, 18 + u, 4, 2, h - 26, style.body_light);
+    paint::rect(b, 76 + u, 4, 2, h - 26, style.body_dark);
+    paint::rect(b, 18 + u, h - 28, 60, 4, style.body_dark);
+    for (int y = headroom + 15; y < h - 28; y += 3) paint::rect(b, 22 + u, y, 52, 1, style.body_dark); // ribs
+    // The air deflector on the roof, narrower towards the top.
+    for (int y = 0; y < 4; ++y) paint::rect(b, 26 + u - 2 * y, y, 44 + 4 * y, 1, y ? style.body : style.body_light);
+    for (int x : {30, 46, 62}) paint::rect(b, x + u, 5, 4, 2, Color{0xff, 0xb0, 0x30}); // marker lamps
+    paint::rect(b, 26 + u, headroom + 5, 44, 8, Color{0x2c, 0x3c, 0x54});
+    paint::stroke(b, 30.f + u, static_cast<float>(headroom) + 12.f, 36.f + u, static_cast<float>(headroom) + 5.f, 1.f, 1.f,
+                  Color{0x70, 0x88, 0xa8});
+    // Exhaust stacks up both sides.
+    for (int x : {11, 81}) {
+        paint::rect(b, x + turn, 0, 4, h - 20, chrome);
+        paint::rect(b, x + turn + 3, 0, 1, h - 20, chrome_dark);
+        paint::rect(b, x + turn, 0, 4, 2, Color{0x20, 0x20, 0x20});
+    }
+    paint::outline(b, Outline);
+    return b;
+}
+
 Bitmap make_rival_front(const CarStyle& st, int signal, int tread) {
     Bitmap b(100, 40);
     paint::ellipse(b, 50.f, 37.f, 49.f, 3.f, Color{0x22, 0x22, 0x22});
@@ -1762,6 +1843,7 @@ SpriteSheet::SpriteSheet() {
         {{0x10, 0x1c, 0x48}, {0x1c, 0x34, 0x7c}, {0x50, 0x78, 0xc0}, false}, // GT Coupe
         {{0xb0, 0x88, 0x08}, {0xf0, 0xc8, 0x20}, {0xff, 0xec, 0x80}, false}, // Hot Hatch
         {{0x0c, 0x0c, 0x10}, {0x24, 0x24, 0x2a}, {0xe0, 0xb0, 0x30}, true},  // Muscle
+        {{0xa0, 0x40, 0x08}, {0xe8, 0x78, 0x18}, {0xff, 0xb0, 0x58}, false}, // Big Rig
     };
     for (int model = 0; model < car_models; ++model) {
         player_convertible_[static_cast<size_t>(model)] = player_styles[model].convertible;
@@ -1769,7 +1851,9 @@ SpriteSheet::SpriteSheet() {
             for (int brake = 0; brake < 2; ++brake) {
                 for (int t = 0; t < tyre_frames; ++t) {
                     player_[static_cast<size_t>(model)][static_cast<size_t>(turn + 1)][static_cast<size_t>(brake)]
-                           [static_cast<size_t>(t)] = make_player_car(player_styles[model], turn, brake, t, player_headroom);
+                           [static_cast<size_t>(t)] =
+                        model == truck_model ? make_player_truck(player_styles[model], turn, brake, t, player_headroom)
+                                             : make_player_car(player_styles[model], turn, brake, t, player_headroom);
                 }
             }
         }
@@ -1861,6 +1945,8 @@ SpriteSheet::SpriteSheet() {
     scenery_[static_cast<size_t>(Scenery::MotelSign)] = make_motel_sign();
     scenery_[static_cast<size_t>(Scenery::Hospital)] = make_hospital();
     scenery_[static_cast<size_t>(Scenery::HospitalSign)] = make_hospital_sign();
+    scenery_[static_cast<size_t>(Scenery::Truckstop)] = make_truckstop();
+    scenery_[static_cast<size_t>(Scenery::TruckSign)] = make_truck_sign();
 }
 
 namespace {

@@ -71,6 +71,8 @@ const SceneryInfo& scenery_info(Scenery kind) {
         /* MotelSign */ { 700.f, true,  false, false},
         /* Hospital  */ {4800.f, true,  false, false},
         /* HospitalSign*/{ 700.f, true, false, false},
+        /* Truckstop */ {4800.f, true,  false, false},
+        /* TruckSign */ { 700.f, true,  false, false},
     };
     static_assert(sizeof(infos) / sizeof(infos[0]) == static_cast<size_t>(Scenery::Count),
                   "scenery_info() needs an entry for every Scenery kind");
@@ -156,6 +158,7 @@ const LotNames& lot_names(Lot kind) {
         {"CAR WASH", "wash"},
         {"MOTEL", "motel"},
         {"HOSPITAL", "hospital"},
+        {"TRUCK STOP", "truckstop"},
     };
     static_assert(sizeof(names) / sizeof(names[0]) == static_cast<size_t>(lot_kinds), "every lot needs its names");
     return names[static_cast<size_t>(kind)];
@@ -537,6 +540,7 @@ public:
     // A motel and a hospital, laid out the same way.
     void motel() { forecourt_lot(Lot::Motel); }
     void hospital() { forecourt_lot(Lot::Hospital); }
+    void truckstop() { forecourt_lot(Lot::Truckstop); }
 
     void forecourt_lot(Lot kind) {
         const int from = size();
@@ -571,6 +575,10 @@ public:
             case Lot::Hospital:
                 scenery(from + 1, Scenery::HospitalSign, 1.25f);
                 scenery(from + start + 26, Scenery::Hospital, forecourt_width + 0.1f);
+                break;
+            case Lot::Truckstop:
+                scenery(from + 1, Scenery::TruckSign, 1.25f);
+                scenery(from + start + 26, Scenery::Truckstop, forecourt_width + 0.1f);
                 break;
         }
     }
@@ -1312,6 +1320,7 @@ Track build_demo_track() {
     b.straight(Len::Medium);
     b.gas_station();
     b.straight(Len::Short);
+    b.truckstop(); // before the Autobahn
     // The fast way or the scenic one.
     b.fork("AUTOBAHN", "LANDSTRASSE",
            [&] {
@@ -1386,6 +1395,7 @@ Track build_demo_track() {
     b.begin_zone(zone_australia());
     // Dead straight through the red outback.
     b.straight(Len::Long);
+    b.truckstop(); // where the road trains stop
     b.gas_station();
     b.curve(Len::Long, Bend::Easy, Hill::None);
     b.car_wash();

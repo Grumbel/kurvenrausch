@@ -153,6 +153,7 @@ private:
     int car_model_ = 0;
     int driver_ = 0;     // see driver(): the hospital changes it
     int passenger_ = 0;  // see passenger(): the motel changes it
+    int car_before_truck_ = 0; // the car left at the truck stop, to take back
     bool bandaged_ = false; // the driver after a crash, until a hospital patches them up
     Bitmap player_bitmap_; // the car with its people, put together each frame
     float base_max_speed_ = 0.f;

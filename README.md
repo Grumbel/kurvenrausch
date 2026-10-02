@@ -89,8 +89,11 @@ weather and road markings, fading smoothly into one another:
   or right to pick up another passenger, among them a granny and a dog; at a
   hospital (Holland, Korea) another driver takes the wheel. A crash leaves
   the driver with a bandage round the head until a hospital patches them up
+- **Truck stops** (before the Autobahn, in the outback): swap the car for the
+  Big Rig, an orange cab-over tractor, slow but planted; steer again at a
+  truck stop to take your car back
 - **Mini map** of the lap with your position, the start line, the gas
-  stations, the car dealers, car washes, motels and hospitals
+  stations, the car dealers, car washes, motels, hospitals and truck stops
 - **Synthesised sound**: a six-cylinder engine with exhaust pulses ringing a
   pipe and a body resonance for the bass, building with the revs, surging as
   the throttle opens and crackling on the overrun; gear changes, tyre squeal,

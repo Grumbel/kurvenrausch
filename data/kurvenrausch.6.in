@@ -19,7 +19,8 @@ the road you want to take.
 On the way there is traffic to pass, fuel to buy at gas stations, other cars
 to choose at car dealers (stop on the forecourt and steer left or right), car
 washes to clean off the mud and oil the car picks up, motels to change the
-passenger and hospitals to change the driver (or patch them up after a crash),
+passenger, hospitals to change the driver (or patch them up after a crash),
+truck stops to swap the car for a truck,
 nitro to burn and, in San Francisco, crests to jump.
 .PP
 Without options the game opens a window and starts at the start line; the lap
@@ -87,7 +88,7 @@ Start the headless run with
 .BI \-\-car " N"
 Drive car model
 .I N
-in the headless run: 0 Spider, 1 GT Coupe, 2 Hot Hatch, 3 Muscle.
+in the headless run: 0 Spider, 1 GT Coupe, 2 Hot Hatch, 3 Muscle, 4 Big Rig (the truck).
 .TP
 .B \-\-dealer
 Let the autopilot pull in at the next car dealer during the headless run, and
@@ -114,9 +115,10 @@ during the headless run, and stay there:
 (a gas station),
 .BR dealer ,
 .BR wash ,
-.B motel
+.BR motel ,
+.B hospital
 or
-.BR hospital .
+.BR truckstop .
 .TP
 .B \-\-pause
 Show the pause menu in the screenshot.

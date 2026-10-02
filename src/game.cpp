@@ -391,6 +391,7 @@ bool Game::screenshot(const ScreenshotOptions& opts) {
     if (opts.fuel >= 0.f) fuel_.set(opts.fuel);
     if (opts.car >= 0) {
         car_model_ = opts.car % car_models;
+        car_before_truck_ = car_model_ == truck_model ? 0 : car_model_;
         apply_car();
     }
     if (opts.visit >= 0) autopilot_visit_ = static_cast<Lot>(opts.visit);
@@ -682,7 +683,7 @@ void Game::apply_car() {
 void Game::visit_lot(const InputState& input) {
     const float speed_pct = std::abs(world_.get<Velocity>(player_).speed) / world_.get<Player>(player_).max_speed;
     const std::optional<Lot> here = speed_pct < refuel_speed ? lot_here() : std::nullopt;
-    const bool choice = here == Lot::Dealer || here == Lot::Motel || here == Lot::Hospital;
+    const bool choice = here == Lot::Dealer || here == Lot::Motel || here == Lot::Hospital || here == Lot::Truckstop;
     offer_ = choice ? here : std::nullopt;
     if (here == Lot::Hospital && bandaged_) {
         bandaged_ = false;
@@ -692,8 +693,21 @@ void Game::visit_lot(const InputState& input) {
     const int push = input.steer > 0.5f ? 1 : input.steer < -0.5f ? -1 : 0;
     if (offer_ && push != 0 && lot_steer_ == 0) {
         switch (*offer_) {
-            case Lot::Dealer:
-                car_model_ = (car_model_ + push + car_models) % car_models;
+            case Lot::Dealer: {
+                // Driving up in the truck, the cars start from the one left behind.
+                const int from = car_model_ == truck_model ? car_before_truck_ : car_model_;
+                car_model_ = (from + push + dealer_models) % dealer_models;
+                apply_car();
+                break;
+            }
+            case Lot::Truckstop:
+                // Either way: the truck, or back into the car left here.
+                if (car_model_ == truck_model) {
+                    car_model_ = car_before_truck_;
+                } else {
+                    car_before_truck_ = car_model_;
+                    car_model_ = truck_model;
+                }
                 apply_car();
                 break;
             case Lot::Motel:
@@ -1336,7 +1350,7 @@ void Game::render() {
     hud.reverse = vel.speed < 0.f;
     if (offer_) {
         hud.offer_title = lot_name(*offer_);
-        if (*offer_ == Lot::Dealer) {
+        if (*offer_ == Lot::Dealer || *offer_ == Lot::Truckstop) {
             const CarModel& m = car_model(car_model_);
             hud.offer_name = m.name;
             hud.offer_stats = true;

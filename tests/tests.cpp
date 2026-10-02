@@ -682,6 +682,7 @@ void test_lots() {
         {Lot::Wash, 3, Scenery::CarWash, Scenery::WashSign},
         {Lot::Motel, 2, Scenery::Motel, Scenery::MotelSign},
         {Lot::Hospital, 2, Scenery::Hospital, Scenery::HospitalSign},
+        {Lot::Truckstop, 2, Scenery::Truckstop, Scenery::TruckSign},
     };
     for (const auto& e : expected) {
         const std::vector<int> lots = t.lots(e.kind);
