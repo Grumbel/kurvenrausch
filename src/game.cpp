@@ -582,6 +582,7 @@ void Game::fixed_update(const InputState& input, float dt) {
         dirt_.splash(speed_pct, dt);
     }
     if (surface == Patch::Oil && speed_pct > 0.02f) dirt_.oil(dt);
+    dirt_.rinse(look.rain, dt);
     if (handbraking_) spawn_smoke(speed_pct);
 
     weather_.update(look.rain, look.snowfall, -seg.curve * 25.f * speed_pct, speed_pct, dt);

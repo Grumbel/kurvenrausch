@@ -88,6 +88,12 @@ void Dirt::wash(float dt) {
     oil_ = std::max(0.f, oil_ - dt / wash_seconds);
 }
 
+void Dirt::rinse(float rain, float dt) {
+    const float r = std::clamp(rain, 0.f, 1.f) * dt / rinse_seconds;
+    mud_ = std::max(0.f, mud_ - r);
+    oil_ = std::max(0.f, oil_ - r / 4.f);
+}
+
 void Dirt::set(float mud, float oil) {
     mud_ = std::clamp(mud, 0.f, 1.f);
     oil_ = std::clamp(oil, 0.f, 1.f);

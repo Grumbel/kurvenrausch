@@ -652,6 +652,14 @@ void test_dirt() {
     CHECK(d.clean() && d.mud() == 0.f);
     d.set(2.f, -1.f);
     CHECK(d.mud() == 1.f && d.oil() == 0.f);
+    // Rain rinses mud off slowly, oil slower still; no rain, nothing.
+    d.set(1.f, 1.f);
+    d.rinse(0.f, 100.f);
+    CHECK(d.mud() == 1.f && d.oil() == 1.f);
+    d.rinse(1.f, Dirt::rinse_seconds / 2.f);
+    CHECK(std::abs(d.mud() - 0.5f) < 1e-5f && std::abs(d.oil() - 0.875f) < 1e-5f);
+    d.rinse(0.5f, Dirt::rinse_seconds * 2.f);
+    CHECK(d.mud() == 0.f && d.oil() > 0.f);
 
     // The overlay: none when clean, more of the car covered the dirtier it
     // is, mud thickest low down, and transparent pixels left alone.
