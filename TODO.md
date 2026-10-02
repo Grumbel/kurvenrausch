@@ -6,11 +6,12 @@ Base: `fc65858 Fix rendering: correct projection, pixel format, colors &
 sprites` (upstream master). Work line: kurvenrausch-003.x, bundles are
 cumulative from `fc65858`.
 
-Latest bundle: `kurvenrausch-006.1-brakes-crash-map-fuel-fc65858.bundle`, tip
-is the "Document brake lights, crashes, the mini map and fuel" commit on
+Latest bundle: `kurvenrausch-007.1-vehicles-weather-engine-fc65858.bundle`,
+tip is the "Document vehicles, wet spots, vection and the engine" commit on
 `master`. 004.1 added the rear-view mirror on top of 003.1 (`fe8e0df`); 005.1
 horn, close-pass wave and boost, and nitro; 006.1 brake lights, the crash
-animation, the mini map, fuel and gas stations.
+animation, the mini map, fuel and gas stations; 007.1 the VERSION file, new
+vehicles, the engine sound, weather vection and wet spots.
 
 History: 001.1 was built on `d66c91a`; upstream then added a rename and its own
 rendering fix, so the work was rebased onto `fc65858` (002.1). 003.1 adds the
@@ -20,6 +21,51 @@ Upstream master has since been fast-forwarded to `64fda32`, the tip of 002.1, so
 from `fc65858` regardless, as the rules require.
 The rebase notes: upstream's rename is kept, its rendering fix is superseded by
 the road/framebuffer rewrite, `Color::to_u32()` became `Color::argb()`.
+
+## Round 6 (007.1): version, vehicles, engine, vection, wet spots, done
+
+Requested: a VERSION file (owner's rules: single source of truth, `-dev` in
+git, Nix dev builds append `.revCount+g<rev>`, `--version`); vans, trucks
+and rare rival sports cars; a more dynamic engine with more bass; rain and
+snow with vection according to the speed; wet spots on the road.
+
+Design decisions:
+
+- VERSION: `0.1.0-dev`; CMake reads it into `PROJECT_VERSION_FULL` (or takes
+  `-DPROJECT_VERSION_FULL`), gives `project()` the numeric part and the game
+  `KURVENRAUSCH_VERSION`; the flake builds the dev string with
+  `self.revCount or 0`. No other docs for it, as asked. Release: set VERSION
+  without `-dev`, commit, tag `v` + version, bump to the next `-dev`.
+- Vehicles (`vehicles.hpp`, tested): kind, width, speed range, colour count
+  and share (cars 55%, vans 22%, trucks 17%, rivals 6%). Pixel art at the
+  cars' 6.25 units per pixel, rear views with indicator and brake variants,
+  front views for the mirror. Trucks are slow, so traffic queues behind them.
+  A rival cruises at 78-90% and races at 97% of the player's top speed while
+  the player is within 30 segments ahead of it or 7.5 behind.
+- Engine: measured before changing (the level only followed the throttle,
+  bass under 200 Hz fell from ~90% to ~8% of the energy above mid revs, no
+  transients). Now every firing kicks a pipe resonance at twice the firing
+  frequency and a 68 Hz body resonance; the three firings of a revolution
+  differ, keeping bass at the revolution rate; level builds with the revs;
+  a surge on opening (slow throttle follower), exhaust pops on the overrun
+  (also on upshifts). Four tests pin this and fail on the old engine. Not
+  heard on real speakers.
+- Vection: particles also flow out from the vanishing point at
+  `outflow_rate * speed * distance` (more for near ones); streaks follow the
+  motion and grow with the outflow only, so standing looks as before; at
+  speed they are fed back in around the middle. Tested.
+- Wet spots: `Segment::wet_x/wet_w`, tapering like forecourts; chance per
+  segment 0.003 + 0.03 * max(rain, snowfall), never in the desert, clear of
+  the start and forecourts. Above 35% of top speed the car aquaplanes (grip
+  x0.35, twitch, drag, pad buzz); spray and mist particles, splash sound.
+
+Verified: every commit builds warning-free and passes the tests; ASan+UBSan
+(full lap with horn and nitro, refuelling, crashes in three zones, live
+loop); TSan (live loop, harness incl. splash); `reuse lint`; screenshots of
+rain and snow standing and at speed, wet spots and aquaplaning spray, the new
+sprites, a truck and a van in traffic and a truck's cab in the mirror.
+Not verified: the sound on speakers; a rival up close in a run (its sprites
+were checked); how aquaplaning feels.
 
 ## Round 5 (006.1): brake lights, crash animation, mini map, gas stations, done
 

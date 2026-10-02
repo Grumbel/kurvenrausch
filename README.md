@@ -32,15 +32,20 @@ weather and road markings, fading smoothly into one another:
   rise and fall with the terrain, rails above the sea or a valley; both are
   solid, the car scrapes along them and throws sparks
 - **Weather**: rain streaks, swaying snowflakes, fog, a sun, tinted clouds and
-  haze; wet and icy roads reduce grip
+  haze; wet and icy roads reduce grip. Driving, the rain and snow stream out
+  of the vanishing point in ever longer streaks the faster you go
+- **Wet spots**: puddles on the road in the rainy and snowy zones; hit one
+  fast and the car aquaplanes, throwing up spray
 - Roadside scenery as scaled, fogged pixel-art sprites; objects behind a crest
   peek over it
 - Parallax backdrop: copper-banded sky, drifting clouds, mountains and hills
   scrolling at different rates through bends
 - Road markings per region: dashed white lines in Europe, double yellow centre
   line and white edge lines in the USA
-- AI traffic that changes lanes to pass, blinking its indicators, or brakes
-  behind slower cars (and you) when it can't; rear-ending a car slows you down
+- AI traffic of cars, vans, slow trucks and the rare rival sports car that
+  races you when you come close; it changes lanes to pass, blinking its
+  indicators, or brakes behind slower vehicles (and you) when it can't;
+  rear-ending one slows you down
 - Working brake lights, on your car and on the traffic
 - **Horn**: cars ahead in your line signal and pull over to let you through
 - **Close passes**: squeeze past a car and your driver (or passenger, on the
@@ -59,9 +64,10 @@ weather and road markings, fading smoothly into one another:
   in a spare can after a few seconds
 - **Mini map** of the lap with your position, the start line and the gas
   stations
-- **Synthesised sound**: a six-cylinder engine that follows revs and load, with
-  gear changes, tyre squeal, gravel, wind, rain, barrier scraping and crashes;
-  `M` mutes
+- **Synthesised sound**: a six-cylinder engine with exhaust pulses ringing a
+  pipe and a body resonance for the bass, building with the revs, surging as
+  the throttle opens and crackling on the overrun; gear changes, tyre squeal,
+  gravel, wind, rain, splashes, barrier scraping and crashes; `M` mutes
 - Keyboard and **gamepad** (any controller SDL knows, hot-pluggable, with
   rumble)
 - HUD in a bitmap font: lap time, lap counter, best and last lap, speedometer,
@@ -157,6 +163,7 @@ include/
   display.hpp      SDL window presentation, BMP export
   input.hpp        keyboard and gamepad input (analog), rumble
   drivetrain.hpp   gears and revs, shared by the HUD and the sound
+  vehicles.hpp     the kinds of traffic: sizes, speeds, shares, the rival
   driving.hpp      nitro, fuel, overspeed, the pass boost, yielding to the
                    horn, following traffic, the crash animation
   synth.hpp        sound synthesis (pure DSP, no SDL), WAV export
