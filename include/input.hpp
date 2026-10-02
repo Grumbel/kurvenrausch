@@ -17,6 +17,7 @@ struct InputState {
     float steer = 0.f;    // -1 (left) .. +1 (right)
     bool horn = false;    // held
     bool nitro = false;   // held; a burn starts when it is pressed
+    bool handbrake = false; // held
 
     // One-shot events since the last poll.
     bool quit = false;
@@ -37,7 +38,7 @@ struct PadState {
     bool b = false;             // brake, as an alternative to the trigger
     bool x = false;             // horn
     bool y = false;             // nitro
-    bool left_shoulder = false; // horn
+    bool left_shoulder = false; // handbrake
     bool right_shoulder = false;// nitro
 };
 

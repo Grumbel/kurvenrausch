@@ -58,6 +58,14 @@ constexpr float aquaplane_grip = 0.35f;
 constexpr float oil_speed = 0.15f;
 constexpr float oil_grip = 0.08f;
 
+// The handbrake, pulled above this fraction of the top speed: the grip left
+// for the tail, how much harder the steering bites, and how strongly it
+// slows the car (of the foot brake).
+constexpr float handbrake_speed = 0.1f;
+constexpr float handbrake_grip = 0.5f;
+constexpr float handbrake_steer = 1.7f;
+constexpr float handbrake_decel = 0.6f;
+
 // Refuelling works on the forecourt below this fraction of the top speed.
 constexpr float refuel_speed = 0.08f;
 // Stranded with an empty tank this long, the driver pours in a spare can.
@@ -240,7 +248,7 @@ void Game::reset() {
     wave_time_ = 0.f;
     crash_time_ = -1.f;
     particles_.clear();
-    wet_ = aquaplaning_ = oily_ = false;
+    wet_ = aquaplaning_ = oily_ = handbraking_ = false;
     spin_time_ = 0.f;
     place_on_road(vertical_, track_.height_at(world_.get<Camera>(camera_).player_z()));
     landing_time_ = 0.f;
@@ -259,6 +267,8 @@ void Game::update_rumble() {
         input_.rumble(1.f, 0.8f, 250);
     } else if (passed_) {
         input_.rumble(0.2f, 0.6f, 120);
+    } else if (handbraking_) {
+        input_.rumble(0.3f, 0.5f, 60);
     } else if (oily_) {
         input_.rumble(0.2f, 0.7f, 60);
     } else if (aquaplaning_) {
@@ -346,6 +356,7 @@ bool Game::screenshot(const ScreenshotOptions& opts) {
         if (opts.force_steer && i >= opts.steer_from) in.steer = opts.steer;
         in.horn = opts.horn;
         in.nitro = i == opts.nitro_frame;
+        in.handbrake = opts.handbrake_from >= 0 && i >= opts.handbrake_from;
         fixed_update(in, fixed_dt_);
         if (!opts.wav_path.empty()) {
             sound.resize(sound.size() + samples_per_step);
@@ -456,12 +467,15 @@ void Game::fixed_update(const InputState& input, float dt) {
     oily_ = surface == Patch::Oil && speed_pct > oil_speed;
     if (oily_) spin_time_ = 0.6f;
     else if (spin_time_ > 0.f) spin_time_ -= dt;
+    // The handbrake locks the rear wheels: the tail swings out of bends and
+    // the steering bites harder, a handbrake turn.
+    handbraking_ = input.handbrake && !airborne && speed_pct > handbrake_speed;
     const float grip = std::max(look.grip * car_model(car_model_).grip, 0.2f) * (aquaplaning_ ? aquaplane_grip : 1.f) *
-                       (oily_ ? oil_grip : 1.f);
+                       (oily_ ? oil_grip : 1.f) * (handbraking_ ? handbrake_grip : 1.f);
     steer_ = input.steer > 0.3f ? 1 : input.steer < -0.3f ? -1 : 0;
     braking_ = input.brake > 0.1f;
     if (!airborne) {
-        tr.x += dx * input.steer * (0.5f + 0.5f * grip);
+        tr.x += dx * input.steer * (0.5f + 0.5f * grip) * (handbraking_ ? handbrake_steer : 1.f);
         tr.x -= dx * speed_pct * seg.curve * player.centrifugal / grip;
         follow_fork(prev_z + player_z);
     }
@@ -475,6 +489,7 @@ void Game::fixed_update(const InputState& input, float dt) {
         vel.speed -= player.max_speed * 0.15f * dt;
     }
     if (wet_) spawn_spray(speed_pct);
+    if (handbraking_) spawn_smoke(speed_pct);
 
     weather_.update(look.rain, look.snowfall, -seg.curve * 25.f * speed_pct, speed_pct, dt);
 
@@ -484,9 +499,10 @@ void Game::fixed_update(const InputState& input, float dt) {
     const float drive = engine_on_ ? input.throttle * (1.f - input.brake) : 0.f;
     float accel = 0.f;
     if (!airborne) {
-        accel = player.accel * drive;
+        accel = input.handbrake ? 0.f : player.accel * drive;
         if (input.brake > 0.01f) accel += player.brake * input.brake;
         else accel += player.decel * (1.f - drive);
+        if (input.handbrake) accel += player.brake * handbrake_decel;
     }
     accel += player.accel * Nitro::thrust * nitro_.intensity();
     const float speed_before = vel.speed;
@@ -703,7 +719,7 @@ void Game::update_crash(float dt) {
     bounce_ = 0.f;
     steer_ = 0;
     braking_ = false;
-    wet_ = aquaplaning_ = oily_ = false;
+    wet_ = aquaplaning_ = oily_ = handbraking_ = false;
     spin_time_ = 0.f;
     if (crash_time_ >= crash_seconds) {
         crash_time_ = -1.f;
@@ -783,6 +799,17 @@ void Game::land(float impact) {
         landing_time_ = 0.2f;
     }
     world_.get<Velocity>(player_).speed *= 1.f - 0.08f * strength;
+}
+
+// Tyre smoke from the locked rear wheels.
+void Game::spawn_smoke(float speed_pct) {
+    for (int side = -1; side <= 1; side += 2) {
+        rng_ = rng_ * 1664525u + 1013904223u;
+        const float a = static_cast<float>(rng_ >> 8) / 16777216.f;
+        particles_.push_back({static_cast<float>(width) / 2.f + static_cast<float>(side) * (36.f + 8.f * a), ground_y - 3.f,
+                              static_cast<float>(side) * 20.f * speed_pct, -15.f - 20.f * a, 0.6f, 0.6f, 2.f + 2.f * a,
+                              Color{0xd8, 0xd8, 0xdc}, Particle::Kind::Dust});
+    }
 }
 
 // Water thrown up by the rear tyres: drops fanning out from their outer
@@ -896,6 +923,7 @@ void Game::update_audio(const InputState& input, float dt) {
     const bool off_road = std::abs(tr.x) > 1.f && !track_.on_forecourt(tr.z + player_z, tr.x);
     p.skid = skid * std::clamp(speed_pct * 5.f, 0.f, 1.f) * (off_road ? 0.3f : 1.f);
     if (oily_) p.skid = 1.f;
+    if (handbraking_) p.skid = std::max(p.skid, 0.85f);
 
     p.gravel = off_road && speed_pct > 0.01f ? std::clamp((std::abs(tr.x) - 1.f) * 8.f, 0.f, 1.f) : 0.f;
     p.scrape = scraping_ && vel.speed > 0.f ? 1.f : 0.f;

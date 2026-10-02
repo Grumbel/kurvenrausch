@@ -106,21 +106,21 @@ void test_pad_mapping() {
         racer::merge_pad(in, left);
         CHECK_NEAR(in.steer, 0.f, 1e-6f);
     }
-    {   // Horn on X or the left shoulder, nitro on Y or the right shoulder.
+    {   // Horn on X, nitro on Y or the right shoulder, handbrake on the left shoulder.
         InputState in;
         racer::merge_pad(in, PadState{});
-        CHECK(!in.horn && !in.nitro);
+        CHECK(!in.horn && !in.nitro && !in.handbrake);
         PadState pad;
         pad.x = true;
         pad.right_shoulder = true;
         racer::merge_pad(in, pad);
-        CHECK(in.horn && in.nitro);
+        CHECK(in.horn && in.nitro && !in.handbrake);
         InputState in2;
         PadState pad2;
         pad2.left_shoulder = true;
         pad2.y = true;
         racer::merge_pad(in2, pad2);
-        CHECK(in2.horn && in2.nitro);
+        CHECK(!in2.horn && in2.nitro && in2.handbrake);
         // A key held on the keyboard is not released by an idle pad.
         InputState key;
         key.horn = true;

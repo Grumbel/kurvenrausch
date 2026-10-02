@@ -91,6 +91,11 @@ in the headless run: 0 Spider, 1 GT Coupe, 2 Hot Hatch, 3 Muscle.
 Let the autopilot pull in at the next car dealer during the headless run, and
 stay there.
 .TP
+.BI \-\-handbrake " N"
+Hold the handbrake from step
+.I N
+of the headless run on.
+.TP
 .BI \-\-icon " FILE"
 Write the application icon (32\(mu32 pixels) as a BMP image to
 .IR FILE ,
@@ -108,7 +113,8 @@ Keyboard	Gamepad	Action
 \(ua or W	right trigger, A	accelerate
 \(da or S	left trigger, B	brake
 \(<- \(-> or A D	left stick, D-pad	steer
-H	X, left shoulder	horn
+Ctrl	left shoulder	handbrake
+H	X	horn
 Space	Y, right shoulder	nitro
 R	Start	restart
 M		mute the sound

@@ -43,7 +43,8 @@ void merge_pad(InputState& in, const PadState& pad) {
                                  pad.b ? 1.f : 0.f);
     in.throttle = std::max(in.throttle, throttle);
     in.brake = std::max(in.brake, brake);
-    in.horn = in.horn || pad.x || pad.left_shoulder;
+    in.horn = in.horn || pad.x;
+    in.handbrake = in.handbrake || pad.left_shoulder;
     in.nitro = in.nitro || pad.y || pad.right_shoulder;
 }
 
@@ -136,6 +137,7 @@ void Input::poll(InputState& state) {
     state.steer = (right ? 1.f : 0.f) - (left ? 1.f : 0.f);
     state.horn = keys[SDL_SCANCODE_H];
     state.nitro = keys[SDL_SCANCODE_SPACE];
+    state.handbrake = keys[SDL_SCANCODE_LCTRL] || keys[SDL_SCANCODE_RCTRL];
 
     for (SDL_GameController* pad : pads_) {
         PadState p;
