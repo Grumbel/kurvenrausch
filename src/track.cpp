@@ -136,23 +136,16 @@ bool Track::on_forecourt(float z, float x) const {
     return edge > 1.f && x > 1.f && x < edge;
 }
 
-namespace {
-
-std::vector<int> forecourt_starts(const Track& t, bool dealer) {
+std::vector<int> Track::lots(Lot kind) const {
     std::vector<int> starts;
-    const int n = static_cast<int>(t.segments.size());
+    const int n = static_cast<int>(segments.size());
     for (int i = 0; i < n; ++i) {
-        const Segment& s = t.segment(i);
-        if (s.dealer == dealer && s.forecourt >= forecourt_width && t.segment(i - 1).forecourt < forecourt_width)
+        const Segment& s = segment(i);
+        if (s.lot == kind && s.forecourt >= forecourt_width && segment(i - 1).forecourt < forecourt_width)
             starts.push_back(i);
     }
     return starts;
 }
-
-} // namespace
-
-std::vector<int> Track::gas_stations() const { return forecourt_starts(*this, false); }
-std::vector<int> Track::dealerships() const { return forecourt_starts(*this, true); }
 
 void Track::choose_branch(size_t index, int route) {
     Branch& br = branches.at(index);
@@ -502,13 +495,13 @@ public:
 
     // A gas station on the right: a flat straight with the forecourt beside
     // it, tapering in and out, a sign ahead of it, two pumps and the shop.
-    void gas_station() { forecourt_lot(false); }
+    void gas_station() { forecourt_lot(Lot::Gas); }
 
     // A car dealer, laid out like a gas station: a showroom beyond the
     // forecourt, a sign ahead of it.
-    void car_dealer() { forecourt_lot(true); }
+    void car_dealer() { forecourt_lot(Lot::Dealer); }
 
-    void forecourt_lot(bool dealer) {
+    void forecourt_lot(Lot kind) {
         const int from = size();
         road(8, 40, 8, Bend::None, Hill::None);
         constexpr int start = 6, taper = 4, length = 44;
@@ -516,9 +509,9 @@ public:
             const float in = std::min(static_cast<float>(i + 1), static_cast<float>(length - i)) / taper;
             Segment& seg = t_.segments[static_cast<size_t>(from + start + i)];
             seg.forecourt = 1.f + (forecourt_width - 1.f) * std::min(1.f, in);
-            seg.dealer = dealer;
+            seg.lot = kind;
         }
-        if (dealer) {
+        if (kind == Lot::Dealer) {
             scenery(from + 1, Scenery::DealerSign, 1.25f);
             scenery(from + start + 26, Scenery::Showroom, forecourt_width + 0.1f);
             return;

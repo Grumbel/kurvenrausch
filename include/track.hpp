@@ -89,6 +89,12 @@ enum class Patch : uint8_t {
     Oil,   // an oil slick: hardly any grip at all
 };
 
+// What a forecourt belongs to.
+enum class Lot : uint8_t {
+    Gas,    // a gas station: refuel
+    Dealer, // a car dealer: change cars
+};
+
 // Lateral position of the edge features, in road half-widths, and their size.
 constexpr float rail_offset = 1.22f;
 constexpr float cliff_offset = 1.40f;
@@ -120,7 +126,7 @@ struct Segment {
     // (up to forecourt_width), or 0 for none. It widens and narrows at the
     // ends; refuelling works where it is full width.
     float forecourt = 0.f;
-    bool dealer = false; // the forecourt is a car dealer's, not a gas station's
+    Lot lot = Lot::Gas;    // whose forecourt it is
     // A patch on the road surface (a puddle or an oil slick): its kind, centre
     // and half width in road half-widths; a half width of 0 means none. It
     // swells and shrinks along a few segments.
@@ -295,10 +301,9 @@ struct Track {
     // segment at z?
     bool on_forecourt(float z, float x) const;
 
-    // First segments of each gas station's or car dealer's forecourt at full
-    // width, in track order.
-    std::vector<int> gas_stations() const;
-    std::vector<int> dealerships() const;
+    // First segments of each forecourt of this kind at full width, in track
+    // order.
+    std::vector<int> lots(Lot kind) const;
 
     // Half width of a patch at the boundary in front of segment `boundary`
     // (the narrower side, so patches come to a point at both ends), and its

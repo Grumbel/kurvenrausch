@@ -97,6 +97,8 @@ private:
     void land(float impact);
     void apply_car();
     void visit_dealer(const InputState& input);
+    // On the full-width part of a forecourt of this kind.
+    bool parked_at(Lot kind) const;
     void follow_fork(float prev_car_z);
     int indicator(Entity e, const Transform& t, const Traffic& traffic) const;
     InputState autopilot() const;

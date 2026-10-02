@@ -807,7 +807,7 @@ void test_yield_lane() {
 void test_gas_stations() {
     using namespace racer;
     const Track t = build_demo_track();
-    const std::vector<int> stations = t.gas_stations();
+    const std::vector<int> stations = t.lots(Lot::Gas);
     // One in every zone.
     CHECK(stations.size() == t.zones.size());
     std::vector<int> per_zone(t.zones.size(), 0);

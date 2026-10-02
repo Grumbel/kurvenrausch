@@ -171,8 +171,8 @@ bool overlap(float c1, float w1, float c2, float w2) {
 Game::Game()
     : fb_(width, height), track_(build_demo_track()), mirror_fb_(mirror_width, mirror_height),
       weather_(width, height) {
-    stations_ = track_.gas_stations();
-    dealers_ = track_.dealerships();
+    stations_ = track_.lots(Lot::Gas);
+    dealers_ = track_.lots(Lot::Dealer);
     map_ = track_map(track_);
     player_ = world_.create();
     world_.add<Transform>(player_);
@@ -447,7 +447,7 @@ InputState Game::autopilot() const {
     if (fuel || autopilot_dealer_) {
         const int n = static_cast<int>(track_.segments.size());
         const int here = track_.index_at(tr.z + cam.player_z());
-        const bool on = seg.forecourt >= forecourt_width && seg.dealer == !fuel;
+        const bool on = seg.forecourt >= forecourt_width && seg.lot == (fuel ? Lot::Gas : Lot::Dealer);
         for (int start : fuel ? stations_ : dealers_) {
             const int ahead = ((start - here) % n + n) % n;
             if (!on && ahead > 120) continue;
@@ -669,12 +669,8 @@ void Game::apply_car() {
 // the steering to a side shows the next one that way, and the player drives
 // off in whichever is showing.
 void Game::visit_dealer(const InputState& input) {
-    const auto& tr = world_.get<Transform>(player_);
-    const float car_z = tr.z + world_.get<Camera>(camera_).player_z();
-    const Segment& seg = track_.segment_at(car_z);
     const float speed_pct = std::abs(world_.get<Velocity>(player_).speed) / world_.get<Player>(player_).max_speed;
-    at_dealer_ = seg.dealer && seg.forecourt >= forecourt_width && track_.on_forecourt(car_z, tr.x) &&
-                 speed_pct < refuel_speed;
+    at_dealer_ = parked_at(Lot::Dealer) && speed_pct < refuel_speed;
     const int push = input.steer > 0.5f ? 1 : input.steer < -0.5f ? -1 : 0;
     if (at_dealer_ && push != 0 && dealer_steer_ == 0) {
         car_model_ = (car_model_ + push + car_models) % car_models;
@@ -684,17 +680,21 @@ void Game::visit_dealer(const InputState& input) {
     dealer_steer_ = push;
 }
 
+bool Game::parked_at(Lot kind) const {
+    const float car_z = world_.get<Transform>(player_).z + world_.get<Camera>(camera_).player_z();
+    const Segment& seg = track_.segment_at(car_z);
+    return seg.lot == kind && seg.forecourt >= forecourt_width &&
+           track_.on_forecourt(car_z, world_.get<Transform>(player_).x);
+}
+
 // Burns fuel with the engine's load, refuels on a forecourt, sputters when
 // nearly empty and dies when empty; stranded, the driver uses a spare can.
 void Game::update_fuel(const InputState& input, float dt) {
-    const auto& tr = world_.get<Transform>(player_);
     const auto& vel = world_.get<Velocity>(player_);
     const auto& player = world_.get<Player>(player_);
-    const float car_z = tr.z + world_.get<Camera>(camera_).player_z();
     const float speed_pct = std::abs(vel.speed) / player.max_speed;
 
-    const bool at_pump = track_.segment_at(car_z).forecourt >= forecourt_width && !track_.segment_at(car_z).dealer &&
-                         track_.on_forecourt(car_z, tr.x) && speed_pct < refuel_speed;
+    const bool at_pump = parked_at(Lot::Gas) && speed_pct < refuel_speed;
     const bool was_refuelling = refuelling_;
     refuelling_ = at_pump && !fuel_.full();
     if (refuelling_) {
