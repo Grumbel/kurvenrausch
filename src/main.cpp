@@ -23,6 +23,7 @@ void usage(const char* argv0) {
               << "  --horn              hold the horn during the headless run\n"
               << "  --fuel L            start the headless run with L (0 .. 1) of a tank\n"
               << "  --nitro N           press nitro at step N of the headless run\n"
+              << "  --icon FILE         write the application icon (32x32) as a BMP and exit\n"
               << "  --version           print the version and exit\n"
               << "  --help              show this help\n";
 }
@@ -58,6 +59,9 @@ int main(int argc, char* argv[]) {
             shot.horn = true;
         } else if (arg == "--nitro" && i + 1 < argc) {
             shot.nitro_frame = std::atoi(argv[++i]);
+        } else if (arg == "--icon" && i + 1 < argc) {
+            const racer::Bitmap icon = racer::make_app_icon();
+            return racer::save_bmp(argv[++i], icon.px.data(), icon.w, icon.h) ? 0 : 1;
         } else if (arg == "--version") {
             std::cout << "kurvenrausch " << KURVENRAUSCH_VERSION << "\n";
             return 0;

@@ -14,9 +14,21 @@ Display::~Display() {
     if (SDL_WasInit(SDL_INIT_VIDEO)) SDL_QuitSubSystem(SDL_INIT_VIDEO);
 }
 
-bool Display::init(const char* title, int fb_width, int fb_height, int window_scale) {
+bool Display::init(const char* title, const char* app_id, int fb_width, int fb_height, int window_scale) {
     fb_w_ = fb_width;
     fb_h_ = fb_height;
+
+    // Before the video subsystem starts, so the window carries them.
+#ifdef SDL_HINT_VIDEO_X11_WMCLASS
+    SDL_SetHint(SDL_HINT_VIDEO_X11_WMCLASS, app_id);
+#endif
+#ifdef SDL_HINT_VIDEO_WAYLAND_WMCLASS
+    SDL_SetHint(SDL_HINT_VIDEO_WAYLAND_WMCLASS, app_id);
+#endif
+#ifdef SDL_HINT_APP_NAME
+    SDL_SetHint(SDL_HINT_APP_NAME, title);
+#endif
+    (void)app_id;
 
     if (SDL_InitSubSystem(SDL_INIT_VIDEO) != 0) {
         std::cerr << "SDL video init failed: " << SDL_GetError() << "\n";
@@ -70,6 +82,16 @@ void Display::present(const uint32_t* argb_pixels) {
     SDL_RenderClear(renderer_);
     SDL_RenderCopy(renderer_, texture_, nullptr, nullptr);
     SDL_RenderPresent(renderer_);
+}
+
+void Display::set_icon(const uint32_t* argb_pixels, int width, int height) {
+    // SDL copies the pixels; the const_cast is safe.
+    SDL_Surface* surface = SDL_CreateRGBSurfaceWithFormatFrom(
+        const_cast<uint32_t*>(argb_pixels), width, height, 32,
+        width * static_cast<int>(sizeof(uint32_t)), SDL_PIXELFORMAT_ARGB8888);
+    if (!surface) return;
+    SDL_SetWindowIcon(window_, surface);
+    SDL_FreeSurface(surface);
 }
 
 void Display::toggle_fullscreen() {

@@ -18,7 +18,11 @@ public:
     Display(const Display&) = delete;
     Display& operator=(const Display&) = delete;
 
-    bool init(const char* title, int fb_width, int fb_height, int window_scale);
+    // `app_id` names the application to the desktop (X11 window class,
+    // Wayland app ID), so it can be matched to its desktop entry.
+    bool init(const char* title, const char* app_id, int fb_width, int fb_height, int window_scale);
+    // The window's icon, an ARGB8888 image.
+    void set_icon(const uint32_t* argb_pixels, int width, int height);
     void present(const uint32_t* argb_pixels);
     void toggle_fullscreen();
 

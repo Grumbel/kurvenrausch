@@ -193,7 +193,9 @@ void Game::spawn_traffic() {
 
 bool Game::init() {
     display_ = std::make_unique<Display>();
-    if (!display_->init("Kurvenrausch", width, height, window_scale)) return false;
+    if (!display_->init("Kurvenrausch", app_id, width, height, window_scale)) return false;
+    const Bitmap icon = make_app_icon();
+    display_->set_icon(icon.px.data(), icon.w, icon.h);
 
     input_.init(); // not fatal: the keyboard always works
     audio_.init(synth_); // nor is a missing audio device

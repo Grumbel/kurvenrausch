@@ -42,6 +42,15 @@ Bitmap make_rival_front(const CarStyle& style, int signal, int tread = 0);
 // the right, 0 nobody; frame 0 or 1 animates the wave.
 Bitmap make_player_car(const CarStyle& style, int turn, int side, int frame, bool brake, int tread, int headroom);
 
+// The application icon, 32x32 pixel art: a road into a sunset with the red
+// car on it, on a rounded square. The window icon and the desktop icons
+// (tools/make_icons.py, via --icon) all come from this.
+Bitmap make_app_icon();
+
+// The application's ID, as used for the desktop entry, the icons and the
+// AppStream metadata (reverse DNS of the project's home).
+constexpr const char* app_id = "io.github.grumbel.kurvenrausch";
+
 // All game sprites, generated procedurally as pixel art at startup.
 class SpriteSheet {
 public:

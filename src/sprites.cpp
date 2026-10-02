@@ -948,6 +948,82 @@ Bitmap make_rival_front(const CarStyle& st, int signal, int tread) {
     return b;
 }
 
+Bitmap make_app_icon() {
+    constexpr int n = 32;
+    Bitmap b(n, n);
+    const Color sky_top{0x38, 0x24, 0x68}, sky_low{0xf4, 0x9a, 0x54}, sun{0xff, 0xd8, 0x70};
+    const Color grass[2] = {{0x4a, 0xa0, 0x3a}, {0x3a, 0x80, 0x2a}};
+    const Color road{0x68, 0x68, 0x70}, white{0xf0, 0xf0, 0xf0}, red{0xd0, 0x20, 0x20};
+    constexpr int horizon = 14;
+
+    // Sunset sky in dithered bands, the sun sitting on the horizon.
+    for (int y = 0; y < horizon; ++y) {
+        const float t = static_cast<float>(y) / static_cast<float>(horizon - 1) * 3.f;
+        const int band = static_cast<int>(t);
+        const Color c0 = blend(sky_top, sky_low, static_cast<float>(band) / 3.f);
+        const Color c1 = blend(sky_top, sky_low, static_cast<float>(std::min(band + 1, 3)) / 3.f);
+        for (int x = 0; x < n; ++x) b.set(x, y, bayer4(x, y) < t - static_cast<float>(band) ? c1 : c0);
+    }
+    for (int y = horizon - 6; y < horizon; ++y)
+        for (int x = 10; x < 22; ++x)
+            if (std::hypot(static_cast<float>(x) + 0.5f - 16.f, static_cast<float>(y) + 0.5f - static_cast<float>(horizon)) < 6.f)
+                b.set(x, y, sun);
+
+    // Grass and the road running to the vanishing point, with rumble strips
+    // and a dashed centre line.
+    for (int y = horizon; y < n; ++y) {
+        const int band = ((n - y) / 3) % 2;
+        for (int x = 0; x < n; ++x) b.set(x, y, grass[band]);
+        const float t = static_cast<float>(y - horizon + 1) / static_cast<float>(n - horizon);
+        const float half = 1.f + 14.f * t, rumble = std::max(1.f, 2.f * t);
+        for (int x = 0; x < n; ++x) {
+            const float d = std::abs(static_cast<float>(x) + 0.5f - 16.f);
+            if (d < half) b.set(x, y, road);
+            else if (d < half + rumble) b.set(x, y, band ? white : red);
+        }
+        if (band && y < n - 2) b.set(15, y, white), b.set(16, y, white);
+    }
+
+    // The car from behind.
+    const Color body{0xd0, 0x18, 0x1c}, dark{0x88, 0x08, 0x10}, light{0xf0, 0x60, 0x50};
+    const Color tyre{0x18, 0x18, 0x1c}, lamp{0xff, 0x50, 0x34}, glass{0x2c, 0x3c, 0x54};
+    paint::rect(b, 9, 27, 3, 4, tyre);
+    paint::rect(b, 20, 27, 3, 4, tyre);
+    paint::rect(b, 12, 20, 8, 3, glass);
+    paint::rect(b, 11, 20, 1, 3, body);
+    paint::rect(b, 20, 20, 1, 3, body);
+    paint::rect(b, 9, 23, 14, 5, body);
+    paint::rect(b, 10, 22, 12, 1, light);
+    paint::rect(b, 9, 27, 14, 1, dark);
+    paint::rect(b, 10, 24, 3, 2, lamp);
+    paint::rect(b, 19, 24, 3, 2, lamp);
+    paint::rect(b, 14, 25, 4, 1, Color{0x20, 0x20, 0x24});
+    // Outline the car (body, cabin, tyres) against the road.
+    const auto is_car = [](int x, int y) {
+        const bool body = x >= 9 && x < 23 && y >= 22 && y < 28;
+        const bool cabin = x >= 11 && x < 21 && y >= 20 && y < 22;
+        const bool tyres = ((x >= 9 && x < 12) || (x >= 20 && x < 23)) && y >= 27 && y < 31;
+        return body || cabin || tyres;
+    };
+    for (int y = 19; y < 31; ++y) {
+        for (int x = 8; x < 24; ++x) {
+            if (!is_car(x, y) && (is_car(x - 1, y) || is_car(x + 1, y) || is_car(x, y - 1) || is_car(x, y + 1))) {
+                b.set(x, y, Outline);
+            }
+        }
+    }
+
+    // Rounded corners and a dark rim.
+    for (int y = 0; y < n; ++y) {
+        for (int x = 0; x < n; ++x) {
+            const int dx = std::min(x, n - 1 - x), dy = std::min(y, n - 1 - y);
+            if (dx + dy < 2) b.px[static_cast<size_t>(y) * n + x] = 0u;
+            else if (dx == 0 || dy == 0 || dx + dy == 2) b.set(x, y, Outline);
+        }
+    }
+    return b;
+}
+
 SpriteSheet::SpriteSheet() {
     scenery_[static_cast<size_t>(Scenery::Palm)] = make_palm();
     scenery_[static_cast<size_t>(Scenery::Tree)] = make_tree();
