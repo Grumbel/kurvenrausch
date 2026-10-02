@@ -105,6 +105,16 @@ Start the headless run with the car this dirty, from 0 (clean) to 1.
 Let the autopilot pull in at the next car wash during the headless run, and
 stay there.
 .TP
+.BI \-\-visit " KIND"
+Let the autopilot pull in at the next lot of
+.I KIND
+during the headless run, and stay there:
+.B gas
+(a gas station),
+.B dealer
+or
+.BR wash .
+.TP
 .B \-\-pause
 Show the pause menu in the screenshot.
 .TP

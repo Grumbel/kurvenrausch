@@ -19,7 +19,9 @@
 #include "track.hpp"
 
 #include <cstdint>
+#include <array>
 #include <memory>
+#include <optional>
 #include <vector>
 #include <string>
 
@@ -38,12 +40,11 @@ struct ScreenshotOptions {
     int nitro_frame = -1;    // if >= 0, press nitro at this step
     float fuel = -1.f;       // if >= 0, start with this much fuel (0 .. 1)
     int car = -1;            // if >= 0, drive car model `car` (see car_model())
-    bool dealer = false;     // the autopilot pulls in at the next car dealer and stays
+    int visit = -1;          // if >= 0, the autopilot pulls in at the next lot of this kind (a Lot) and stays
     int handbrake_from = -1; // if >= 0, hold the handbrake from this step on
     int brake_from = -1;     // if >= 0, brake (throttle off) from this step on to a stop, let go, then hold it: reverse
     bool pause = false;      // show the pause menu in the screenshot
     float dirt = -1.f;       // if >= 0, start this dirty (mud and oil, 0 .. 1)
-    bool wash = false;       // the autopilot pulls in at the next car wash and stays
 };
 
 class Game {
@@ -98,9 +99,10 @@ private:
     void spawn_smoke(float speed_pct);
     void land(float impact);
     void apply_car();
-    void visit_dealer(const InputState& input);
-    // On the full-width part of a forecourt of this kind.
-    bool parked_at(Lot kind) const;
+    void visit_lot(const InputState& input);
+    // The lot whose forecourt the car is on, where it is full width.
+    std::optional<Lot> lot_here() const;
+    bool parked_at(Lot kind) const { return lot_here() == kind; }
     void update_wash(float dt);
     void follow_fork(float prev_car_z);
     int indicator(Entity e, const Transform& t, const Traffic& traffic) const;
@@ -153,19 +155,16 @@ private:
     int passenger_ = 0;  // see passenger(): the motel changes it
     Bitmap player_bitmap_; // the car with its people, put together each frame
     float base_max_speed_ = 0.f;
-    std::vector<int> dealers_;  // first full-width forecourt segment of each car dealer
-    bool at_dealer_ = false;    // standing on a dealer's forecourt: the cars are on offer
-    int dealer_steer_ = 0;      // the steering last step, to change cars once per push
-    bool autopilot_dealer_ = false; // headless: the autopilot visits the next car dealer
-    bool autopilot_wash_ = false;   // ... or the next car wash
-    std::vector<int> washes_;   // first full-width forecourt segment of each car wash
+    std::array<std::vector<int>, lot_kinds> lots_; // first full-width forecourt segment of each lot, per kind
+    std::optional<Lot> offer_;  // standing at a lot with a choice: it is on offer
+    int lot_steer_ = 0;         // the steering last step, to choose once per push
+    std::optional<Lot> autopilot_visit_; // headless: the autopilot visits the next lot of this kind
     Dirt dirt_;
     bool washing_ = false;      // standing in a car wash, being cleaned
     float view_yaw_ = 0.f;   // the view turning over to a newly taken road at a fork,
     float view_shift_ = 0.f; // and moving over to it; see RoadView::yaw and shift
 
     Fuel fuel_;
-    std::vector<int> stations_; // first full-width forecourt segment of each gas station
     std::vector<MapPoint> map_; // plan view for the mini map
     bool engine_on_ = true;     // false when out of fuel, or for a sputter
     bool refuelling_ = false;

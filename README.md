@@ -178,7 +178,7 @@ made and how rendering changes are checked without a display:
 ./build/kurvenrausch --screenshot shot.bmp --frames 2400 --fuel 0.3   # low fuel: pulls in
 ./build/kurvenrausch --screenshot shot.bmp --frames 640 --steer -1 --steer-from 600  # crash
 ./build/kurvenrausch --screenshot shot.bmp --zone 1 --frames 300 --car 2   # another car
-./build/kurvenrausch --screenshot shot.bmp --zone 5 --frames 2000 --dealer # visit a dealer
+./build/kurvenrausch --screenshot shot.bmp --zone 5 --frames 1400 --dealer # visit a dealer
 ```
 
 It simulates the given number of 60 Hz steps with a simple autopilot that also

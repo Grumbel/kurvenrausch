@@ -138,6 +138,28 @@ bool Track::on_forecourt(float z, float x) const {
     return edge > 1.f && x > 1.f && x < edge;
 }
 
+namespace {
+
+struct LotNames {
+    const char* name;
+    const char* keyword;
+};
+
+const LotNames& lot_names(Lot kind) {
+    static const LotNames names[] = {
+        {"GAS STATION", "gas"},
+        {"CAR DEALER", "dealer"},
+        {"CAR WASH", "wash"},
+    };
+    static_assert(sizeof(names) / sizeof(names[0]) == static_cast<size_t>(lot_kinds), "every lot needs its names");
+    return names[static_cast<size_t>(kind)];
+}
+
+} // namespace
+
+const char* lot_name(Lot kind) { return lot_names(kind).name; }
+const char* lot_keyword(Lot kind) { return lot_names(kind).keyword; }
+
 std::vector<int> Track::lots(Lot kind) const {
     std::vector<int> starts;
     const int n = static_cast<int>(segments.size());

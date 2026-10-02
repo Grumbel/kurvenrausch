@@ -6,6 +6,7 @@
 #include "menu.hpp"
 #include "track.hpp"
 
+#include <array>
 #include <string>
 
 namespace racer {
@@ -29,13 +30,14 @@ struct HudState {
     const std::vector<MapPoint>* map = nullptr;
     int map_player = 0;
     int map_start = 0;
-    const std::vector<int>* map_stations = nullptr;
-    const std::vector<int>* map_dealers = nullptr;
-    const std::vector<int>* map_washes = nullptr;
-    // At a car dealer: the car on offer and its top speed, acceleration and
-    // grip (factors of the standard car).
-    const char* dealer_car = nullptr;
-    float dealer_stats[3] = {1.f, 1.f, 1.f};
+    const std::array<std::vector<int>, lot_kinds>* map_lots = nullptr; // each kind's, see Track::lots()
+    // Standing at a lot that offers a choice (a car dealer): what it is,
+    // what is on offer and, for a car, its top speed, acceleration and grip
+    // (factors of the standard car).
+    std::string offer_title;     // empty for none
+    std::string offer_name;
+    bool offer_stats = false;
+    float offer_values[3] = {1.f, 1.f, 1.f};
     bool map_blink = false;      // the player's dot blinks
     std::string fork_left;       // a fork ahead: the left route's name
     std::string fork_right;      // ... and the right one's

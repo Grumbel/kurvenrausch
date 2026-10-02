@@ -93,14 +93,17 @@ void draw_minimap(Framebuffer& fb, int x, int y, int size, const HudState& hud) 
         fb.put_pixel(cx - 1, cy, Value); fb.put_pixel(cx + 1, cy, Value);
         fb.put_pixel(cx - 2, cy + 1, Value); fb.put_pixel(cx, cy + 1, Value);
     }
-    if (hud.map_stations) {
-        for (int s : *hud.map_stations) dot(s, Color{0x30, 0x90, 0xf0}, Color{0xb0, 0xe0, 0xff});
-    }
-    if (hud.map_dealers) {
-        for (int s : *hud.map_dealers) dot(s, Color{0xf8, 0xd0, 0x20}, Color{0xff, 0xf4, 0xc0});
-    }
-    if (hud.map_washes) {
-        for (int s : *hud.map_washes) dot(s, Color{0x30, 0xc8, 0xc0}, Color{0xc0, 0xff, 0xf8});
+    if (hud.map_lots) {
+        // Per Lot kind: the dot and its centre.
+        static constexpr Color colors[][2] = {
+            {{0x30, 0x90, 0xf0}, {0xb0, 0xe0, 0xff}}, // gas station
+            {{0xf8, 0xd0, 0x20}, {0xff, 0xf4, 0xc0}}, // car dealer
+            {{0x30, 0xc8, 0xc0}, {0xc0, 0xff, 0xf8}}, // car wash
+        };
+        static_assert(sizeof(colors) / sizeof(colors[0]) == static_cast<size_t>(lot_kinds), "every lot needs its colours");
+        for (size_t k = 0; k < hud.map_lots->size(); ++k) {
+            for (int s : (*hud.map_lots)[k]) dot(s, colors[k][0], colors[k][1]);
+        }
     }
     const Color car{0xf0, 0x30, 0x20};
     dot(hud.map_player, car, hud.map_blink ? Value : car);
@@ -170,18 +173,19 @@ void draw_hud(Framebuffer& fb, const HudState& hud) {
     // Below them, the mini map.
     if (hud.map) draw_minimap(fb, w - 6 - 58, 46, 58, hud);
 
-    // At a car dealer: the car on offer, with bars for its strengths.
-    if (hud.dealer_car) {
-        const int px = 70, py = 68, pw = w - 140, ph = 70;
+    // At a lot with a choice: what is on offer, for a car with bars for its
+    // strengths.
+    if (!hud.offer_title.empty()) {
+        const int px = 70, py = 68, pw = w - 140, ph = hud.offer_stats ? 70 : 36;
         for (int y = py; y < py + ph; ++y)
             for (int x = px; x < px + pw; ++x) fb.blend_pixel(x, y, Shadow, 0.7f);
-        text_center(fb, py + 5, "CAR DEALER", Label);
-        text_center(fb, py + 16, std::string("< ") + hud.dealer_car + " >", Value, 2);
+        text_center(fb, py + 5, hud.offer_title, Label);
+        text_center(fb, py + 16, "< " + hud.offer_name + " >", Value, 2);
         const char* labels[3] = {"SPEED", "ACCEL", "GRIP"};
-        for (int i = 0; i < 3; ++i) {
+        for (int i = 0; hud.offer_stats && i < 3; ++i) {
             const int y = py + 36 + i * 10;
             text(fb, px + 8, y, labels[i], Label);
-            const int bar = static_cast<int>(std::lround(std::clamp((hud.dealer_stats[i] - 0.6f) / 0.75f, 0.f, 1.f) * 90.f));
+            const int bar = static_cast<int>(std::lround(std::clamp((hud.offer_values[i] - 0.6f) / 0.75f, 0.f, 1.f) * 90.f));
             fb.fill_rect(px + 50, y, 90, 7, Color{0x30, 0x30, 0x40});
             fb.fill_rect(px + 50, y, bar, 7, Color{0x30, 0xe0, 0x40});
         }

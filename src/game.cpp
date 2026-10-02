@@ -171,9 +171,7 @@ bool overlap(float c1, float w1, float c2, float w2) {
 Game::Game()
     : fb_(width, height), track_(build_demo_track()), mirror_fb_(mirror_width, mirror_height),
       weather_(width, height) {
-    stations_ = track_.lots(Lot::Gas);
-    dealers_ = track_.lots(Lot::Dealer);
-    washes_ = track_.lots(Lot::Wash);
+    for (int k = 0; k < lot_kinds; ++k) lots_[static_cast<size_t>(k)] = track_.lots(static_cast<Lot>(k));
     map_ = track_map(track_);
     player_ = world_.create();
     world_.add<Transform>(player_);
@@ -394,8 +392,7 @@ bool Game::screenshot(const ScreenshotOptions& opts) {
         car_model_ = opts.car % car_models;
         apply_car();
     }
-    autopilot_dealer_ = opts.dealer;
-    autopilot_wash_ = opts.wash;
+    if (opts.visit >= 0) autopilot_visit_ = static_cast<Lot>(opts.visit);
     if (opts.dirt >= 0.f) dirt_.set(opts.dirt, opts.dirt);
     std::vector<int16_t> sound;
     constexpr int samples_per_step = Synth::sample_rate / 60; // 735, exactly
@@ -445,16 +442,16 @@ InputState Game::autopilot() const {
 
     // Low on fuel with a gas station coming up: move over to the right, slow
     // down, pull onto the forecourt and wait there until the tank is full.
-    // Asked to visit a car dealer (--dealer), it does the same there, and stays.
+    // Asked to visit another kind of lot (--visit), it does the same there, and stays.
     float target_x = 0.f;
     float speed_limit = 1.f;
     const bool fuel = fuel_.level() < 0.45f || (refuelling_ && !fuel_.full());
-    if (fuel || autopilot_dealer_ || autopilot_wash_) {
+    if (fuel || autopilot_visit_) {
         const int n = static_cast<int>(track_.segments.size());
         const int here = track_.index_at(tr.z + cam.player_z());
-        const Lot visit = fuel ? Lot::Gas : autopilot_wash_ ? Lot::Wash : Lot::Dealer;
+        const Lot visit = fuel ? Lot::Gas : *autopilot_visit_;
         const bool on = seg.forecourt >= forecourt_width && seg.lot == visit;
-        for (int start : visit == Lot::Gas ? stations_ : visit == Lot::Wash ? washes_ : dealers_) {
+        for (int start : lots_[static_cast<size_t>(visit)]) {
             const int ahead = ((start - here) % n + n) % n;
             if (!on && ahead > 120) continue;
             target_x = on || seg.forecourt > 1.3f ? 1.45f : 0.6f;
@@ -566,7 +563,7 @@ void Game::fixed_update(const InputState& input, float dt) {
 
     // Braking overrides the throttle; without either the car coasts down.
     update_fuel(input, dt);
-    visit_dealer(input);
+    visit_lot(input);
     update_wash(dt);
     const float drive = engine_on_ ? input.throttle * (1.f - input.brake) : 0.f;
     reverse_armed_ = reverse_armed(reverse_armed_, vel.speed, input.throttle, input.brake);
@@ -676,26 +673,28 @@ void Game::apply_car() {
     p.accel = standard.accel * m.acceleration;
 }
 
-// Standing on a car dealer's forecourt, the cars are on offer: each push of
-// the steering to a side shows the next one that way, and the player drives
-// off in whichever is showing.
-void Game::visit_dealer(const InputState& input) {
+// Standing on the forecourt of a lot with a choice, it is on offer: at a car
+// dealer the cars. Each push of the steering to a side shows the next one
+// that way, and the player drives off with whichever is showing.
+void Game::visit_lot(const InputState& input) {
     const float speed_pct = std::abs(world_.get<Velocity>(player_).speed) / world_.get<Player>(player_).max_speed;
-    at_dealer_ = parked_at(Lot::Dealer) && speed_pct < refuel_speed;
+    const std::optional<Lot> here = speed_pct < refuel_speed ? lot_here() : std::nullopt;
+    offer_ = here == Lot::Dealer ? here : std::nullopt;
     const int push = input.steer > 0.5f ? 1 : input.steer < -0.5f ? -1 : 0;
-    if (at_dealer_ && push != 0 && dealer_steer_ == 0) {
+    if (offer_ && push != 0 && lot_steer_ == 0) {
         car_model_ = (car_model_ + push + car_models) % car_models;
         apply_car();
         synth_.trigger_ding();
     }
-    dealer_steer_ = push;
+    lot_steer_ = push;
 }
 
-bool Game::parked_at(Lot kind) const {
+std::optional<Lot> Game::lot_here() const {
     const float car_z = world_.get<Transform>(player_).z + world_.get<Camera>(camera_).player_z();
     const Segment& seg = track_.segment_at(car_z);
-    return seg.lot == kind && seg.forecourt >= forecourt_width &&
-           track_.on_forecourt(car_z, world_.get<Transform>(player_).x);
+    if (seg.forecourt < forecourt_width || !track_.on_forecourt(car_z, world_.get<Transform>(player_).x))
+        return std::nullopt;
+    return seg.lot;
 }
 
 // Standing on a car wash's forecourt, the car is washed clean: water and
@@ -1313,12 +1312,14 @@ void Game::render() {
     hud.speed_fraction = std::abs(vel.speed) / player.max_speed;
     hud.speed_kmh_fraction = std::abs(vel.speed) / base_max_speed_;
     hud.reverse = vel.speed < 0.f;
-    if (at_dealer_) {
+    if (offer_) {
         const CarModel& m = car_model(car_model_);
-        hud.dealer_car = m.name;
-        hud.dealer_stats[0] = m.top_speed;
-        hud.dealer_stats[1] = m.acceleration;
-        hud.dealer_stats[2] = m.grip;
+        hud.offer_title = lot_name(*offer_);
+        hud.offer_name = m.name;
+        hud.offer_stats = true;
+        hud.offer_values[0] = m.top_speed;
+        hud.offer_values[1] = m.acceleration;
+        hud.offer_values[2] = m.grip;
     }
     hud.lap = lap_;
     hud.lap_time = lap_time_;
@@ -1340,9 +1341,7 @@ void Game::render() {
     }
     hud.map_player = track_.index_at(tr.z + cam.player_z());
     hud.map_start = track_.index_at(track_.start_z);
-    hud.map_stations = &stations_;
-    hud.map_dealers = &dealers_;
-    hud.map_washes = &washes_;
+    hud.map_lots = &lots_;
     hud.map_blink = std::fmod(clock_, 0.4f) < 0.2f;
     hud.fuel_warning = fuel_.level() < Fuel::low && std::fmod(clock_, 0.5f) < 0.3f;
     hud.nitro_burn = nitro_.burn_left();

@@ -97,6 +97,10 @@ enum class Lot : uint8_t {
     Dealer, // a car dealer: change cars
     Wash,   // a car wash: clean the car
 };
+constexpr int lot_kinds = 3;
+// The name the HUD shows, and the keyword --visit takes.
+const char* lot_name(Lot kind);
+const char* lot_keyword(Lot kind);
 
 // Lateral position of the edge features, in road half-widths, and their size.
 constexpr float rail_offset = 1.22f;

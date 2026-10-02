@@ -29,6 +29,7 @@ void usage(const char* argv0) {
               << "  --pause             show the pause menu in the screenshot\n"
               << "  --dirt L            start the headless run this dirty (0 to 1)\n"
               << "  --wash              pull in at the next car wash during the headless run\n"
+              << "  --visit KIND        pull in at the next lot of KIND (gas, dealer, wash) and stay\n"
               << "  --nitro N           press nitro at step N of the headless run\n"
               << "  --icon FILE         write the application icon (32x32) as a BMP and exit\n"
               << "  --version           print the version and exit\n"
@@ -69,11 +70,20 @@ int main(int argc, char* argv[]) {
         } else if (arg == "--dirt" && i + 1 < argc) {
             shot.dirt = static_cast<float>(std::atof(argv[++i]));
         } else if (arg == "--wash") {
-            shot.wash = true;
+            shot.visit = static_cast<int>(racer::Lot::Wash);
+        } else if (arg == "--visit" && i + 1 < argc) {
+            const std::string kind = argv[++i];
+            for (int k = 0; k < racer::lot_kinds; ++k) {
+                if (kind == racer::lot_keyword(static_cast<racer::Lot>(k))) shot.visit = k;
+            }
+            if (shot.visit < 0) {
+                std::cerr << "Unknown lot for --visit: " << kind << "\n";
+                return 1;
+            }
         } else if (arg == "--pause") {
             shot.pause = true;
         } else if (arg == "--dealer") {
-            shot.dealer = true;
+            shot.visit = static_cast<int>(racer::Lot::Dealer);
         } else if (arg == "--fuel" && i + 1 < argc) {
             shot.fuel = static_cast<float>(std::atof(argv[++i]));
         } else if (arg == "--horn") {
