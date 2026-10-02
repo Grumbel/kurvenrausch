@@ -1019,6 +1019,11 @@ Bitmap make_dry_shrub() {
 
 } // namespace
 
+namespace {
+void draw_head(Bitmap& b, float x, float y, float r, const Person& p);
+void heads_behind_glass(Bitmap& b, float u, int top, const Person& driver, const Person& passenger);
+} // namespace
+
 Bitmap make_car(const CarStyle& style, int turn, int signal, bool brake, int tread_frame, bool people) {
     Bitmap b(96, 44);
     const Color tire{0x18, 0x18, 0x1c}, tread{0x60, 0x60, 0x6a};
@@ -1097,6 +1102,15 @@ Bitmap make_car(const CarStyle& style, int turn, int signal, bool brake, int tre
         paint::rect(b, 22 + u, 3, 52, 12, style.body);
         paint::rect(b, 24 + u, 2, 48, 1, style.body_light);
         paint::rect(b, 26 + u, 5, 44, 8, Color{0x2c, 0x3c, 0x54});
+        if (people) {
+            // Who sits inside follows from the paint job.
+            const int k = style.body.r + 3 * style.body.g + 7 * style.body.b;
+            Bitmap heads(b.w, b.h);
+            heads_behind_glass(heads, static_cast<float>(u), 0, driver(k % drivers), passenger(k / 7 % passengers));
+            for (size_t i = 0; i < heads.px.size(); ++i) {
+                if (heads.px[i] >> 24) b.px[i] = heads.px[i];
+            }
+        }
         paint::stroke(b, 30.f + u, 12.f, 36.f + u, 5.f, 1.f, 1.f, Color{0x70, 0x88, 0xa8});
     }
 
@@ -1214,6 +1228,26 @@ void draw_head(Bitmap& b, float x, float y, float r, const Person& p) {
     }
 }
 
+// The two of them seen through a closed car's rear window, `top` pixels down
+// in `b`, whose other pixels must still be transparent: their heads, clipped
+// to the glass and lightly tinted by it.
+void heads_behind_glass(Bitmap& b, float u, int top, const Person& driver, const Person& passenger) {
+    const float t = static_cast<float>(top);
+    draw_head(b, 37.f + u, t + 10.5f, 4.5f, driver);
+    draw_head(b, 59.f + u, t + 10.5f, 4.5f, passenger);
+    const Color glass{0x2c, 0x3c, 0x54};
+    const int x0 = 26 + static_cast<int>(u), y0 = top + 5;
+    for (int y = 0; y < b.h; ++y) {
+        for (int x = 0; x < b.w; ++x) {
+            uint32_t& p = b.px[static_cast<size_t>(y) * b.w + x];
+            if (!(p >> 24)) continue;
+            if (x < x0 || x >= x0 + 44 || y < y0 || y >= y0 + 8) { p = 0u; continue; }
+            const Color c{static_cast<uint8_t>(p >> 16), static_cast<uint8_t>(p >> 8), static_cast<uint8_t>(p)};
+            p = blend(c, glass, 0.25f).argb();
+        }
+    }
+}
+
 } // namespace
 
 Bitmap make_occupants(const Person& driver, const Person& passenger, int turn, int wave, int frame, bool convertible,
@@ -1230,20 +1264,9 @@ Bitmap make_occupants(const Person& driver, const Person& passenger, int turn, i
         paint::shaded_ellipse(b, 60.f + u, h + 12.f, 6.f, 4.f, rest_dark, rest, rest_light);
         paint::outline(b, Outline);
     } else {
-        // Seen dimly through the rear window: the tops of their heads.
-        draw_head(b, 37.f + u, h + 11.f, 4.f, driver);
-        draw_head(b, 59.f + u, h + 11.f, 4.f, passenger);
-        const Color glass{0x2c, 0x3c, 0x54};
-        const int x0 = 26 + static_cast<int>(u), y0 = headroom + 5;
-        for (int y = 0; y < b.h; ++y) {
-            for (int x = 0; x < b.w; ++x) {
-                uint32_t& p = b.px[static_cast<size_t>(y) * b.w + x];
-                if (!(p >> 24)) continue;
-                if (x < x0 || x >= x0 + 44 || y < y0 || y >= y0 + 8) { p = 0u; continue; }
-                const Color c{static_cast<uint8_t>(p >> 16), static_cast<uint8_t>(p >> 8), static_cast<uint8_t>(p)};
-                p = blend(c, glass, 0.45f).argb();
-            }
-        }
+        heads_behind_glass(b, u, headroom, driver, passenger);
+        // The glint on the glass stays in front of them.
+        paint::stroke(b, 30.f + u, h + 12.f, 36.f + u, h + 5.f, 1.f, 1.f, Color{0x70, 0x88, 0xa8});
     }
     if (wave == 0) return b;
 
