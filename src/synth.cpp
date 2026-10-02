@@ -42,6 +42,7 @@ void Synth::set_params(const SynthParams& p) {
     engine_.store(p.engine, std::memory_order_relaxed);
     pump_.store(p.pump, std::memory_order_relaxed);
     splash_.store(p.splash, std::memory_order_relaxed);
+    siren_.store(p.siren, std::memory_order_relaxed);
 }
 
 void Synth::trigger_ding() {
@@ -77,12 +78,13 @@ void Synth::render(int16_t* out, int frames) {
     const float t_skid = load(skid_), t_gravel = load(gravel_), t_scrape = load(scrape_);
     const float t_rain = load(rain_), t_volume = load(volume_);
     const float t_horn = load(horn_), t_nitro = load(nitro_), t_engine = load(engine_), t_pump = load(pump_);
-    const float t_splash = load(splash_);
+    const float t_splash = load(splash_), t_siren = load(siren_);
 
     if (!primed_) { // start from the current state instead of fading in from silence
         s_rpm_ = t_rpm; s_throttle_ = t_throttle; s_speed_ = t_speed; s_skid_ = t_skid;
         s_gravel_ = t_gravel; s_scrape_ = t_scrape; s_rain_ = t_rain; s_volume_ = t_volume;
         s_horn_ = t_horn; s_nitro_ = t_nitro; s_engine_ = t_engine; s_pump_ = t_pump; s_splash_ = t_splash;
+        s_siren_ = t_siren;
         slow_throttle_ = t_throttle;
         primed_ = true;
     }
@@ -271,6 +273,20 @@ void Synth::render(int16_t* out, int frames) {
             thump_env *= thump_decay;
         }
 
+        // ---- Siren: the wail, up and down every second and a half ----------
+        s_siren_ += (t_siren - s_siren_) * a_load;
+        float siren = 0.f;
+        if (s_siren_ > 1e-4f) {
+            siren_sweep_ += 1.0 / (1.5 * sample_rate);
+            siren_sweep_ -= std::floor(siren_sweep_);
+            const double tri = siren_sweep_ < 0.5 ? siren_sweep_ * 2.0 : 2.0 - siren_sweep_ * 2.0;
+            siren_phase_ += (650.0 + 700.0 * tri) / sample_rate;
+            siren_phase_ -= std::floor(siren_phase_);
+            const float wave = siren_phase_ < 0.5 ? 1.f : -1.f;
+            siren_lp_ += (wave - siren_lp_) * lowpass_coeff(2200.f);
+            siren = siren_lp_ * s_siren_ * 0.3f;
+        }
+
         // ---- Thunder: a crack, then a low rumble rolling on for seconds -----
         float thunder = 0.f;
         if (thunder_age_ < 6.f) {
@@ -358,7 +374,7 @@ void Synth::render(int16_t* out, int frames) {
         }
 
         const float mix = engine + roar + wind + gravel + rain + skid + scrape + crash + horn + nitro + whoosh + pump + ding +
-                          splash + thunder + 0.55f * music_.sample();
+                          splash + thunder + siren + 0.55f * music_.sample();
         const float x = std::tanh(mix * s_volume_ * 1.1f);
         out[i] = static_cast<int16_t>(std::lround(x * 30000.f));
     }

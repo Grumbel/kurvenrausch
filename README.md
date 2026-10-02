@@ -102,6 +102,11 @@ weather and road markings, fading smoothly into one another:
   truck stop to take your car back
 - **Mini map** of the lap with your position, the start line, the gas
   stations, the car dealers, car washes, motels, hospitals and truck stops
+- **Police chases**: now and then, driving fast, a police car turns up in
+  the mirror, lights flashing and siren wailing. It is as fast as the standard
+  car and gains whenever you slow down; let it tail you for three seconds and
+  you are pulled over, get far enough ahead (nitro, a faster car, clean
+  lines) or hold out until it gives up and you escape
 - **Radio**: three synthesised songs (Sunset Cruise, Turbo Breeze, Night
   Drive), each a loop of pads, bass, lead and drums from a step sequencer;
   flick the right stick or press N to change the track or switch it off

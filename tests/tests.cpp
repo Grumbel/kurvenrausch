@@ -11,6 +11,7 @@
 #include "views.hpp"
 #include "climate.hpp"
 #include "music.hpp"
+#include "police.hpp"
 #include "components.hpp"
 #include "road.hpp"
 #include "synth.hpp"
@@ -806,6 +807,53 @@ void test_views() {
     CHECK(sheet.wheel(0).w == wheel_size && sheet.wheel(0).px != sheet.wheel(2).px); // the driver's hands
 }
 
+void test_police() {
+    using namespace racer;
+    const float top = 1000.f;
+    Chase chase;
+    // Far behind it is faster than the standard car, and pushes harder the
+    // further; tailing, it keeps the car's speed; giving up, it slows.
+    CHECK(police_speed(chase, top, 15.f, top) == top);
+    CHECK(police_speed(chase, top, 45.f, top) > top);
+    CHECK(std::abs(police_speed(chase, 300.f, police_tail_distance, top) - 300.f) < 1e-3f);
+    CHECK(police_speed(chase, 300.f, police_tail_distance + 1.f, top) > 300.f);
+    CHECK(police_speed(chase, 300.f, police_tail_distance - 1.f, top) < 300.f);
+    CHECK(police_speed(chase, 300.f, -2.f, top) < 300.f); // ahead of the car, it drops back
+    CHECK(police_tail_distance * 200.f > Camera{}.player_z()); // behind the camera, not over the car
+    CHECK(police_min_gap * 200.f > Camera{}.player_z() && police_min_gap < police_tail_distance);
+    // Tailing for long enough catches the car; a break starts the count anew.
+    const float dt = 1.f / 60.f;
+    for (int i = 0; i < 60 * 2; ++i) CHECK(update_chase(chase, 1.f, dt) == ChaseOutcome::Going);
+    CHECK(update_chase(chase, chase_tail_gap + 2.f, dt) == ChaseOutcome::Going && chase.tailing == 0.f);
+    ChaseOutcome out = ChaseOutcome::Going;
+    int steps = 0;
+    while (out == ChaseOutcome::Going && steps < 60 * 10) {
+        out = update_chase(chase, 1.f, dt);
+        ++steps;
+    }
+    CHECK(out == ChaseOutcome::Caught && std::abs(static_cast<float>(steps) * dt - chase_catch_seconds) < 0.05f);
+    // Far enough ahead, the car is away.
+    Chase lost;
+    CHECK(update_chase(lost, chase_escape_gap + 1.f, dt) == ChaseOutcome::Escaped);
+    // Out of time it gives up: it slows, it can't catch anyone any more, and
+    // once far enough behind the car has escaped.
+    Chase late;
+    late.time = chase_give_up;
+    CHECK(update_chase(late, 1.f, dt) == ChaseOutcome::Going && late.giving_up);
+    CHECK(police_speed(late, top, 10.f, top) < 0.6f * top);
+    for (int i = 0; i < 60 * 5; ++i) CHECK(update_chase(late, 1.f, dt) == ChaseOutcome::Going);
+    CHECK(update_chase(late, chase_escape_gap + 1.f, dt) == ChaseOutcome::Escaped);
+    // Chases start only at speed, now and then.
+    CHECK(!chase_starts(0.f, 0.5f, dt));
+    CHECK(chase_starts(0.f, 0.9f, dt) && !chase_starts(0.5f, 0.9f, dt));
+    // The lightbar flashes red, blue, or neither.
+    const SpriteSheet sheet;
+    const Bitmap& red = sheet.vehicle(Vehicle::Police, 0, -1), &blue = sheet.vehicle(Vehicle::Police, 0, 1);
+    const Bitmap& dark = sheet.vehicle(Vehicle::Police, 0, 0);
+    CHECK(red.px != blue.px && red.px != dark.px && blue.px != dark.px);
+    CHECK(sheet.vehicle_front(Vehicle::Police, 0, -1).px != sheet.vehicle_front(Vehicle::Police, 0, 1).px);
+}
+
 void test_pause_menu() {
     using namespace racer;
     PauseMenu m;
@@ -1287,13 +1335,16 @@ void test_car_models() {
 
 void test_vehicles() {
     using namespace racer;
-    // Shares add up; picking by them gives every kind, rivals rarely.
+    // Shares add up; picking by them gives every kind but the police (who
+    // only turn up for a chase), rivals rarely.
     float sum = 0.f;
     int counts[static_cast<int>(Vehicle::Count)] = {};
     for (int i = 0; i < static_cast<int>(Vehicle::Count); ++i) sum += vehicle_info(static_cast<Vehicle>(i)).share;
     CHECK_NEAR(sum, 1.f, 1e-5f);
     for (int i = 0; i < 1000; ++i) ++counts[static_cast<int>(traffic_vehicle((static_cast<float>(i) + 0.5f) / 1000.f))];
-    for (int n : counts) CHECK(n > 0);
+    for (int k = 0; k < static_cast<int>(Vehicle::Count); ++k) {
+        CHECK(static_cast<Vehicle>(k) == Vehicle::Police ? counts[k] == 0 : counts[k] > 0);
+    }
     CHECK(counts[static_cast<int>(Vehicle::Rival)] < 100);
     CHECK(counts[static_cast<int>(Vehicle::Car)] > counts[static_cast<int>(Vehicle::Truck)]);
     // Trucks are slower than rivals; rivals race only when the player is near.
@@ -1982,6 +2033,7 @@ int main() {
     test_follow_speed();
     test_steer_rate();
     test_pause_menu();
+    test_police();
     test_climate();
     test_music();
     test_views();

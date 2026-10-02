@@ -278,6 +278,10 @@ void Game::reset() {
     place_on_road(vertical_, track_.height_at(world_.get<Camera>(camera_).player_z()));
     landing_time_ = 0.f;
     view_yaw_ = view_shift_ = 0.f;
+    police_ = INVALID_ENTITY; // gone with the traffic
+    chase_ = Chase{};
+    chase_cooldown_ = chase_cooldown;
+    pulled_over_ = siren_ = 0.f;
     front_.reset();
     flash_time_ = 0.f;
     thunder_delay_ = -1.f;
@@ -441,6 +445,7 @@ bool Game::screenshot(const ScreenshotOptions& opts) {
         in.horn = opts.horn;
         in.nitro = i == opts.nitro_frame;
         in.handbrake = opts.handbrake_from >= 0 && i >= opts.handbrake_from;
+        if (i == opts.police_frame) start_chase();
         // Brake to a stop, let go a moment, then hold it again: reverse.
         if (opts.brake_from >= 0 && i >= opts.brake_from) {
             if (stopped_at < 0 && world_.get<Velocity>(player_).speed <= 0.f) stopped_at = i;
@@ -508,7 +513,14 @@ InputState Game::autopilot() const {
     return in;
 }
 
-void Game::fixed_update(const InputState& input, float dt) {
+void Game::fixed_update(const InputState& driver_input, float dt) {
+    // Pulled over by the police, the car stands at the side of the road.
+    InputState input = driver_input;
+    if (pulled_over_ > 0.f) {
+        input.throttle = 0.f;
+        input.brake = 1.f;
+        input.nitro = false;
+    }
     update_particles(dt);
     wheel_distance_ = std::fmod(wheel_distance_ + world_.get<Velocity>(player_).speed * dt,
                                 SpriteSheet::tread_step * SpriteSheet::tyre_frames * 1000.f);
@@ -701,6 +713,7 @@ void Game::fixed_update(const InputState& input, float dt) {
 
     update_laps(prev_z + player_z, tr.z + player_z, dt);
     update_traffic(dt);
+    update_police(dt);
     check_close_passes();
     update_audio(input, dt);
 }
@@ -932,6 +945,7 @@ void Game::update_crash(float dt) {
 
     update_laps(prev_z + player_z, tr.z + player_z, dt);
     update_traffic(dt);
+    update_police(dt);
     check_close_passes();
     update_audio(InputState{}, dt);
 }
@@ -1129,6 +1143,7 @@ void Game::update_audio(const InputState& input, float dt) {
     p.throttle = shift_cut_ > 0.f || !engine_on_ ? 0.f : input.throttle * (1.f - input.brake);
     p.engine = engine_on_ ? 1.f : 0.f;
     p.pump = refuelling_ ? 1.f : 0.f;
+    p.siren = siren_;
     p.splash = washing_ ? 0.8f : wet_ ? std::clamp(speed_pct * 1.3f, 0.f, 1.f) : 0.f;
     if (vertical_.airborne) p.rpm = std::min(1.f, p.rpm + 0.25f * input.throttle); // wheels spinning free
     p.speed = speed_pct;
@@ -1159,6 +1174,8 @@ void Game::update_audio(const InputState& input, float dt) {
 
 // Indicator a car shows while changing lanes: -1, +1, or 0 between blinks.
 int Game::indicator(Entity e, const Transform& t, const Traffic& traffic) const {
+    // The police car's lightbar flashes red, blue, red, ... until it gives up.
+    if (traffic.kind == Vehicle::Police) return chase_.giving_up ? 0 : static_cast<int>(clock_ / 0.12f) % 2 ? 1 : -1;
     const float d = traffic.target_x - t.x;
     if (std::abs(d) < 0.02f) return 0;
     const float phase = static_cast<float>(e % 5) * 0.11f; // they don't all blink in step
@@ -1189,6 +1206,7 @@ void Game::update_traffic(float dt) {
 
     const float max_speed = base_max_speed_; // traffic goes by the standard car, whatever the player drives
     world_.view<Transform, Velocity, Traffic>([&](Entity e, Transform& t, Velocity& v, Traffic& traffic) {
+        if (traffic.kind == Vehicle::Police) return; // it chases, see update_police()
         // The road may have a different number of lanes here than where the
         // car was heading: aim for the nearest lane that exists.
         const int lanes = track_.look_at(t.z).lanes;
@@ -1256,6 +1274,84 @@ void Game::update_traffic(float dt) {
         else v.speed = std::min(wanted, v.speed + traffic_accel * max_speed * dt);
         t.z = track_.wrap(t.z + v.speed * dt);
     });
+}
+
+// A police car turns up behind the car, lights flashing, siren wailing.
+void Game::start_chase() {
+    const auto& tr = world_.get<Transform>(player_);
+    const float car_z = tr.z + world_.get<Camera>(camera_).player_z();
+    police_ = world_.create();
+    world_.add<Transform>(police_, Transform{tr.x, 0.f, track_.wrap(car_z - chase_start_gap * track_.segment_length)});
+    world_.add<Velocity>(police_, Velocity{world_.get<Velocity>(player_).speed});
+    Traffic traffic;
+    traffic.kind = Vehicle::Police;
+    traffic.target_x = tr.x;
+    world_.add<Traffic>(police_, traffic);
+    chase_ = Chase{};
+    show_message("POLICE!", 2.f);
+}
+
+void Game::end_chase() {
+    if (police_ != INVALID_ENTITY) world_.destroy(police_);
+    police_ = INVALID_ENTITY;
+    chase_cooldown_ = chase_cooldown;
+    siren_ = 0.f;
+}
+
+// The chase: the police car closes in on the car and tails it; tailed long
+// enough, the car is pulled over, far enough ahead it has escaped.
+void Game::update_police(float dt) {
+    const auto& tr = world_.get<Transform>(player_);
+    const auto& vel = world_.get<Velocity>(player_);
+    const float car_z = tr.z + world_.get<Camera>(camera_).player_z();
+    if (pulled_over_ > 0.f) {
+        pulled_over_ -= dt;
+        if (pulled_over_ <= 0.f) {
+            end_chase();
+            show_message("DRIVE ON", 1.5f);
+        }
+    }
+    if (police_ == INVALID_ENTITY) {
+        if (chase_cooldown_ > 0.f) chase_cooldown_ -= dt;
+        rng_ = rng_ * 1664525u + 1013904223u;
+        const float roll = static_cast<float>(rng_ >> 8) / 16777216.f;
+        if (chase_cooldown_ <= 0.f && race_started_ && crash_time_ < 0.f &&
+            chase_starts(roll, vel.speed / base_max_speed_, dt)) {
+            start_chase();
+        }
+        return;
+    }
+    auto& t = world_.get<Transform>(police_);
+    auto& v = world_.get<Velocity>(police_);
+    auto& traffic = world_.get<Traffic>(police_);
+    float gap = signed_gap(t.z, car_z, track_.length()) / track_.segment_length;
+    const float wanted = police_speed(chase_, vel.speed, gap, base_max_speed_);
+    traffic.braking = wanted < v.speed - 0.02f * base_max_speed_;
+    v.speed += std::clamp(wanted - v.speed, -base_max_speed_ * dt, 0.6f * base_max_speed_ * dt);
+    t.z = track_.wrap(t.z + v.speed * dt);
+    // However hard the car brakes, the police car stays behind it (and the
+    // camera): never closer than police_min_gap.
+    if (signed_gap(t.z, car_z, track_.length()) < police_min_gap * track_.segment_length) {
+        t.z = track_.wrap(car_z - police_min_gap * track_.segment_length);
+        v.speed = std::min(v.speed, std::max(vel.speed, 0.f));
+    }
+    gap = signed_gap(t.z, car_z, track_.length()) / track_.segment_length;
+    if (!chase_.giving_up) t.x += std::clamp(tr.x - t.x, -dt, dt); // into the car's line
+    siren_ = chase_.giving_up ? 0.f : 1.f / (1.f + std::max(gap, 0.f) / 15.f);
+
+    if (pulled_over_ > 0.f) return; // waiting behind the car
+    switch (update_chase(chase_, gap, dt)) {
+        case ChaseOutcome::Caught:
+            pulled_over_ = pulled_over_seconds;
+            show_message("PULLED OVER", pulled_over_seconds);
+            break;
+        case ChaseOutcome::Escaped:
+            end_chase();
+            synth_.trigger_ding();
+            show_message("ESCAPED!", 2.f);
+            break;
+        case ChaseOutcome::Going: break;
+    }
 }
 
 void Game::update_laps(float prev_z, float z, float dt) {

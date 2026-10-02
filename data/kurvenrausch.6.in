@@ -123,6 +123,11 @@ or
 .B \-\-pause
 Show the pause menu in the screenshot.
 .TP
+.BI \-\-police " N"
+Start a police chase at step
+.I N
+of the headless run.
+.TP
 .BI \-\-music " N"
 Play the radio's track
 .I N

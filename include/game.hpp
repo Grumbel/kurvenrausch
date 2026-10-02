@@ -13,6 +13,7 @@
 #include "hud.hpp"
 #include "input.hpp"
 #include "menu.hpp"
+#include "police.hpp"
 #include "road.hpp"
 #include "state.hpp"
 #include "sprites.hpp"
@@ -50,6 +51,7 @@ struct ScreenshotOptions {
     int view = 0;            // the camera view, a ViewMode
     float storm = -1.f;      // if >= 0, hold the weather front at this level (0 clear .. 1 storm)
     int music = -1;          // the radio's track in the --wav recording, -1 off
+    int police_frame = -1;   // if >= 0, a police chase starts at this step
     float dirt = -1.f;       // if >= 0, start this dirty (mud and oil, 0 .. 1)
 };
 
@@ -91,7 +93,11 @@ private:
     bool update_pause(const InputState& input);
     void spawn_traffic();
     void update_traffic(float dt);
-    void fixed_update(const InputState& input, float dt);
+    void fixed_update(const InputState& driver_input, float dt);
+    // Police chases: one may start, the police car chases, and the chase ends.
+    void start_chase();
+    void update_police(float dt);
+    void end_chase();
     void update_laps(float prev_z, float z, float dt);
     void show_message(std::string text, float seconds);
     void update_rumble();
@@ -169,6 +175,11 @@ private:
     bool bandaged_ = false;
     ViewMode view_mode_ = ViewMode::Chase;
     int music_ = 0;          // the radio's track (see Music), -1 off
+    Entity police_ = INVALID_ENTITY; // the police car in a chase
+    Chase chase_;
+    float chase_cooldown_ = chase_cooldown; // seconds until a chase may start
+    float pulled_over_ = 0.f; // seconds left standing at the side of the road, caught
+    float siren_ = 0.f;       // loudness of the siren, 0 .. 1
     WeatherFront front_;
     float flash_time_ = 0.f;     // seconds left of a lightning flash
     float thunder_delay_ = -1.f; // seconds until its thunder, < 0 for none

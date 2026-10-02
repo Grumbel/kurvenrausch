@@ -1654,6 +1654,33 @@ Bitmap make_rival(const CarStyle& st, int signal, bool brake, int tread) {
     return b;
 }
 
+namespace {
+
+// A police car's lightbar on the roof, red on the left and blue on the
+// right; `lit` -1 flashes the red, +1 the blue, 0 neither.
+void lightbar(Bitmap& b, int lit) {
+    const Color red_off{0x70, 0x10, 0x14}, blue_off{0x10, 0x20, 0x70};
+    const Color red{0xff, 0x30, 0x30}, blue{0x40, 0x70, 0xff}, core{0xff, 0xf8, 0xf0};
+    paint::rect(b, 30, 0, 36, 3, Color{0x30, 0x30, 0x34});
+    paint::rect(b, 31, 0, 16, 2, lit < 0 ? red : red_off);
+    paint::rect(b, 49, 0, 16, 2, lit > 0 ? blue : blue_off);
+    if (lit != 0) paint::rect(b, lit < 0 ? 35 : 53, 0, 8, 1, core);
+}
+
+} // namespace
+
+Bitmap make_police(const CarStyle& style, int lights, bool brake, int tread) {
+    Bitmap b = make_car(style, 0, 0, brake, tread);
+    lightbar(b, lights);
+    return b;
+}
+
+Bitmap make_police_front(const CarStyle& style, int lights, int tread) {
+    Bitmap b = make_car_front(style, 0, tread);
+    lightbar(b, lights);
+    return b;
+}
+
 Bitmap make_player_truck(const CarStyle& style, int turn, bool brake, int tread, int headroom) {
     Bitmap b(96, 44 + headroom);
     const int h = b.h;
@@ -1947,6 +1974,7 @@ SpriteSheet::SpriteSheet() {
                      {{0x20, 0x50, 0x28}, {0x30, 0x78, 0x3c}, {0x68, 0xb0, 0x70}, false}},
         /* Rival */ {{{0x0c, 0x0c, 0x10}, {0x20, 0x20, 0x26}, {0xf0, 0xc0, 0x30}, false},
                      {{0x3c, 0x10, 0x58}, {0x64, 0x20, 0x8c}, {0xf0, 0xf0, 0xf8}, false}},
+        /* Police */ {{{0x10, 0x10, 0x14}, {0xf0, 0xf0, 0xf4}, {0xff, 0xff, 0xff}, false}},
     };
     static_assert(sizeof(styles) / sizeof(styles[0]) == static_cast<size_t>(Vehicle::Count),
                   "every vehicle kind needs its colours");
@@ -1964,6 +1992,7 @@ SpriteSheet::SpriteSheet() {
                             case Vehicle::Van: rear = make_van(st, signal, brake, t); break;
                             case Vehicle::Truck: rear = make_truck(st, signal, brake, t); break;
                             case Vehicle::Rival: rear = make_rival(st, signal, brake, t); break;
+                            case Vehicle::Police: rear = make_police(st, signal, brake, t); break;
                             default: rear = make_car(st, 0, signal, brake, t); break;
                         }
                     }
@@ -1971,6 +2000,7 @@ SpriteSheet::SpriteSheet() {
                         case Vehicle::Van: v.front[s][tf] = make_van_front(st, signal, t); break;
                         case Vehicle::Truck: v.front[s][tf] = make_truck_front(st, signal, t); break;
                         case Vehicle::Rival: v.front[s][tf] = make_rival_front(st, signal, t); break;
+                        case Vehicle::Police: v.front[s][tf] = make_police_front(st, signal, t); break;
                         default: v.front[s][tf] = make_car_front(st, signal, t); break;
                     }
                 }

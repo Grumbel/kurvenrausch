@@ -14,6 +14,7 @@ const VehicleInfo& vehicle_info(Vehicle kind) {
         /* Van   */ {650.f, 0.25f, 0.45f, 3, 0.22f},
         /* Truck */ {700.f, 0.20f, 0.35f, 3, 0.17f},
         /* Rival */ {620.f, 0.78f, 0.90f, 2, 0.06f},
+        /* Police*/ {600.f, 0.f,   0.f,   1, 0.f},
     };
     static_assert(sizeof(infos) / sizeof(infos[0]) == static_cast<size_t>(Vehicle::Count),
                   "vehicle_info() needs an entry for every Vehicle");

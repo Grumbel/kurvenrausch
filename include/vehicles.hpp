@@ -13,6 +13,7 @@ enum class Vehicle : uint8_t {
     Van,
     Truck,  // a box trailer, slow
     Rival,  // a rare sports car that races the player
+    Police, // never in the traffic: it turns up for a chase (see police.hpp)
     Count
 };
 

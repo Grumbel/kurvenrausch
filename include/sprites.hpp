@@ -50,6 +50,11 @@ Bitmap make_rival_front(const CarStyle& style, int signal, int tread = 0);
 // for a raised arm.
 Bitmap make_player_car(const CarStyle& style, int turn, bool brake, int tread, int headroom);
 
+// A police car, from behind and from the front (as in the mirror): `lights`
+// -1 flashes the red half of the lightbar, +1 the blue, 0 neither.
+Bitmap make_police(const CarStyle& style, int lights, bool brake, int tread);
+Bitmap make_police_front(const CarStyle& style, int lights, int tread);
+
 // The player's truck from behind, the same size as make_player_car(): a
 // cab-over tractor whose cab fills the headroom, its rear window where a
 // car's is, so make_occupants() fits it as a closed car.
