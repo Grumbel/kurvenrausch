@@ -1019,7 +1019,7 @@ Bitmap make_dry_shrub() {
 
 } // namespace
 
-Bitmap make_car(const CarStyle& style, int turn, int signal, bool brake, int tread_frame) {
+Bitmap make_car(const CarStyle& style, int turn, int signal, bool brake, int tread_frame, bool people) {
     Bitmap b(96, 44);
     const Color tire{0x18, 0x18, 0x1c}, tread{0x60, 0x60, 0x6a};
     const Color chrome{0x9a, 0x9a, 0xa8}, grille{0x14, 0x14, 0x18}, slat{0x3a, 0x3a, 0x42};
@@ -1081,13 +1081,15 @@ Bitmap make_car(const CarStyle& style, int turn, int signal, bool brake, int tre
 
     const int u = 2 * turn; // cabin leans further than the body
     if (style.convertible) {
-        const Color hair_dark{0x3a, 0x22, 0x14}, hair{0x5c, 0x38, 0x1c}, hair_light{0x84, 0x58, 0x2c};
-        const Color blond_dark{0xb0, 0x80, 0x30}, blond{0xe0, 0xb4, 0x50}, blond_light{0xf8, 0xe0, 0x90};
-        const Color rest_dark{0x20, 0x20, 0x24}, rest{0x3c, 0x3c, 0x44}, rest_light{0x60, 0x60, 0x6a};
-        paint::shaded_ellipse(b, 60.f + u, 8.f, 6.f, 7.f, blond_dark, blond, blond_light);
-        paint::shaded_ellipse(b, 36.f + u, 6.f, 5.f, 5.f, hair_dark, hair, hair_light);
-        paint::shaded_ellipse(b, 36.f + u, 12.f, 6.f, 4.f, rest_dark, rest, rest_light);
-        paint::shaded_ellipse(b, 60.f + u, 12.f, 6.f, 4.f, rest_dark, rest, rest_light);
+        if (people) {
+            const Color rest_dark{0x20, 0x20, 0x24}, rest{0x3c, 0x3c, 0x44}, rest_light{0x60, 0x60, 0x6a};
+            paint::shaded_ellipse(b, 60.f + u, 8.f, 6.f, 7.f, Color{0xb0, 0x80, 0x30}, Color{0xe0, 0xb4, 0x50},
+                                  Color{0xf8, 0xe0, 0x90});
+            paint::shaded_ellipse(b, 36.f + u, 6.f, 5.f, 5.f, Color{0x3a, 0x22, 0x14}, Color{0x5c, 0x38, 0x1c},
+                                  Color{0x84, 0x58, 0x2c});
+            paint::shaded_ellipse(b, 36.f + u, 12.f, 6.f, 4.f, rest_dark, rest, rest_light);
+            paint::shaded_ellipse(b, 60.f + u, 12.f, 6.f, 4.f, rest_dark, rest, rest_light);
+        }
         paint::stroke(b, 21.f + u, 15.f, 28.f + u, 7.f, 1.5f, 1.5f, chrome);
         paint::stroke(b, 75.f + u, 15.f, 68.f + u, 7.f, 1.5f, 1.5f, chrome);
         paint::stroke(b, 28.f + u, 7.f, 68.f + u, 7.f, 1.f, 1.f, chrome);
@@ -1166,28 +1168,99 @@ Bitmap make_car_front(const CarStyle& style, int signal, int tread_frame) {
     return b;
 }
 
-Bitmap make_player_car(const CarStyle& style, int turn, int side, int frame, bool brake, int tread, int headroom) {
-    const Bitmap car = make_car(style, turn, 0, brake, tread);
+Bitmap make_player_car(const CarStyle& style, int turn, bool brake, int tread, int headroom) {
+    const Bitmap car = make_car(style, turn, 0, brake, tread, false);
     Bitmap b(car.w, car.h + headroom);
     std::copy(car.px.begin(), car.px.end(), b.px.begin() + static_cast<std::ptrdiff_t>(headroom) * car.w);
-    if (side == 0) return b;
+    return b;
+}
 
-    // A raised arm and open hand, waving: outlined on its own, then laid over
-    // the car so the car's outline does not run through it.
-    const Color skin{0xf0, 0xbc, 0x8c}, skin_dark{0xc4, 0x88, 0x5c};
+namespace {
+
+// A head from behind, centred at (x, y), radius r.
+void draw_head(Bitmap& b, float x, float y, float r, const Person& p) {
+    const float ry = p.style == HeadStyle::Long ? r * 1.35f : r;
+    switch (p.style) {
+        case HeadStyle::Bald:
+            paint::shaded_ellipse(b, x, y, r, r, p.hair_dark, p.hair, p.hair_light);
+            break;
+        case HeadStyle::Mohawk:
+            paint::shaded_ellipse(b, x, y, r, r, blend(p.skin, Color{0, 0, 0}, 0.25f), p.skin, blend(p.skin, Color{255, 255, 255}, 0.3f));
+            paint::rect(b, static_cast<int>(x) - 1, static_cast<int>(y - r) - 3, 3, static_cast<int>(r) + 4, p.hair);
+            paint::rect(b, static_cast<int>(x) - 1, static_cast<int>(y - r) - 3, 1, static_cast<int>(r) + 4, p.hair_light);
+            break;
+        case HeadStyle::Helmet:
+            paint::shaded_ellipse(b, x, y, r + 1.f, r + 1.f, p.hair_dark, p.hair, p.hair_light);
+            paint::rect(b, static_cast<int>(x) - 1, static_cast<int>(y - r) - 1, 2, static_cast<int>(2.f * r) + 2, p.accent);
+            break;
+        case HeadStyle::Cap:
+            paint::shaded_ellipse(b, x, y, r, r, p.hair_dark, p.hair, p.hair_light);
+            paint::shaded_ellipse(b, x, y - r * 0.45f, r + 0.5f, r * 0.6f, blend(p.accent, Color{0, 0, 0}, 0.3f), p.accent,
+                                  blend(p.accent, Color{255, 255, 255}, 0.3f));
+            break;
+        case HeadStyle::Bun:
+            paint::shaded_ellipse(b, x, y, r, r, p.hair_dark, p.hair, p.hair_light);
+            paint::shaded_ellipse(b, x, y - r - 1.5f, r * 0.5f, r * 0.45f, p.hair_dark, p.hair, p.hair_light);
+            break;
+        case HeadStyle::Dog:
+            paint::shaded_ellipse(b, x, y, r, r * 0.9f, p.hair_dark, p.hair, p.hair_light);
+            for (float side : {-1.f, 1.f}) {
+                paint::shaded_ellipse(b, x + side * r, y + 1.f, 2.f, r * 0.8f, p.hair_dark, p.hair_dark, p.hair);
+            }
+            break;
+        default:
+            paint::shaded_ellipse(b, x, y, r, ry, p.hair_dark, p.hair, p.hair_light);
+            break;
+    }
+}
+
+} // namespace
+
+Bitmap make_occupants(const Person& driver, const Person& passenger, int turn, int wave, int frame, bool convertible,
+                      int headroom) {
+    Bitmap b(96, 44 + headroom);
     const float u = static_cast<float>(2 * turn); // the cabin leans like in make_car
     const float h = static_cast<float>(headroom);
+    if (convertible) {
+        // Heads above the seats, the headrests in front of their necks.
+        const Color rest_dark{0x20, 0x20, 0x24}, rest{0x3c, 0x3c, 0x44}, rest_light{0x60, 0x60, 0x6a};
+        draw_head(b, 60.f + u, h + 7.f, 6.f, passenger);
+        draw_head(b, 36.f + u, h + 6.f, 5.f, driver);
+        paint::shaded_ellipse(b, 36.f + u, h + 12.f, 6.f, 4.f, rest_dark, rest, rest_light);
+        paint::shaded_ellipse(b, 60.f + u, h + 12.f, 6.f, 4.f, rest_dark, rest, rest_light);
+        paint::outline(b, Outline);
+    } else {
+        // Seen dimly through the rear window: the tops of their heads.
+        draw_head(b, 37.f + u, h + 11.f, 4.f, driver);
+        draw_head(b, 59.f + u, h + 11.f, 4.f, passenger);
+        const Color glass{0x2c, 0x3c, 0x54};
+        const int x0 = 26 + static_cast<int>(u), y0 = headroom + 5;
+        for (int y = 0; y < b.h; ++y) {
+            for (int x = 0; x < b.w; ++x) {
+                uint32_t& p = b.px[static_cast<size_t>(y) * b.w + x];
+                if (!(p >> 24)) continue;
+                if (x < x0 || x >= x0 + 44 || y < y0 || y >= y0 + 8) { p = 0u; continue; }
+                const Color c{static_cast<uint8_t>(p >> 16), static_cast<uint8_t>(p >> 8), static_cast<uint8_t>(p)};
+                p = blend(c, glass, 0.45f).argb();
+            }
+        }
+    }
+    if (wave == 0) return b;
+
+    // A raised arm and open hand (or paw), waving: outlined on its own.
+    const Person& waver = wave < 0 ? driver : passenger;
+    const Color skin = waver.skin, skin_dark = blend(waver.skin, Color{0, 0, 0}, 0.25f);
     // The shoulder: in a convertible above the seat, in a closed car at the
     // side window.
-    const float sx = style.convertible ? (side < 0 ? 30.f : 66.f) + u : (side < 0 ? 22.f : 74.f) + u;
-    const float sy = style.convertible ? h + 11.f : h + 9.f;
-    const float out = static_cast<float>(side) * (frame ? 4.f : 8.f); // lean of the wave
-    const float hx = sx + out, hy = h - 7.f + (frame ? 0.f : 1.f);   // hand
+    const float sx = convertible ? (wave < 0 ? 30.f : 66.f) + u : (wave < 0 ? 22.f : 74.f) + u;
+    const float sy = convertible ? h + 11.f : h + 9.f;
+    const float out = static_cast<float>(wave) * (frame ? 4.f : 8.f); // lean of the wave
+    const float hx = sx + out, hy = h - 7.f + (frame ? 0.f : 1.f);    // hand
     Bitmap arm(b.w, b.h);
     paint::stroke(arm, sx, sy, hx, hy + 3.f, 2.6f, 2.f, skin);
     paint::stroke(arm, sx + 1.f, sy, hx + 1.f, hy + 3.f, 1.f, 1.f, skin_dark);
     paint::ellipse(arm, hx, hy, 2.5f, 3.f, skin);
-    paint::rect(arm, static_cast<int>(hx) - (side < 0 ? 4 : -3), static_cast<int>(hy), 2, 1, skin); // thumb
+    paint::rect(arm, static_cast<int>(hx) - (wave < 0 ? 4 : -3), static_cast<int>(hy), 2, 1, skin); // thumb
     paint::outline(arm, Outline);
     for (size_t i = 0; i < arm.px.size(); ++i) {
         if (arm.px[i] >> 24) b.px[i] = arm.px[i];
@@ -1473,6 +1546,21 @@ Bitmap make_app_icon() {
     return b;
 }
 
+const Bitmap& SpriteSheet::occupants(int driver_index, int passenger_index, int steer, int wave, int frame,
+                                     int model) const {
+    const bool convertible = player_convertible(model);
+    const auto d = static_cast<uint32_t>(((driver_index % drivers) + drivers) % drivers);
+    const auto p = static_cast<uint32_t>(((passenger_index % passengers) + passengers) % passengers);
+    const uint32_t key = d | p << 4 | static_cast<uint32_t>(steer + 1) << 8 | static_cast<uint32_t>(wave + 1) << 10 |
+                         static_cast<uint32_t>(frame & 1) << 12 | static_cast<uint32_t>(convertible) << 13;
+    auto it = occupants_.find(key);
+    if (it == occupants_.end()) {
+        it = occupants_.emplace(key, make_occupants(driver(static_cast<int>(d)), passenger(static_cast<int>(p)), steer,
+                                                    wave, frame, convertible, player_headroom)).first;
+    }
+    return it->second;
+}
+
 SpriteSheet::SpriteSheet() {
     scenery_[static_cast<size_t>(Scenery::Palm)] = make_palm();
     scenery_[static_cast<size_t>(Scenery::Tree)] = make_tree();
@@ -1502,18 +1590,13 @@ SpriteSheet::SpriteSheet() {
         {{0xb0, 0x88, 0x08}, {0xf0, 0xc8, 0x20}, {0xff, 0xec, 0x80}, false}, // Hot Hatch
         {{0x0c, 0x0c, 0x10}, {0x24, 0x24, 0x2a}, {0xe0, 0xb0, 0x30}, true},  // Muscle
     };
-    for (int model = 0; model < car_models; ++model)
-    for (int turn = -1; turn <= 1; ++turn) {
-        const CarStyle& player = player_styles[model];
-        auto& poses = player_[static_cast<size_t>(model)][static_cast<size_t>(turn + 1)];
-        for (int brake = 0; brake < 2; ++brake) {
-            const auto b = static_cast<size_t>(brake);
-            for (int t = 0; t < tyre_frames; ++t) {
-                const auto tf = static_cast<size_t>(t);
-                poses[0][b][tf] = make_player_car(player, turn, 0, 0, brake, t, player_headroom);
-                for (int frame = 0; frame < 2; ++frame) {
-                    poses[static_cast<size_t>(1 + frame)][b][tf] = make_player_car(player, turn, -1, frame, brake, t, player_headroom);
-                    poses[static_cast<size_t>(3 + frame)][b][tf] = make_player_car(player, turn, 1, frame, brake, t, player_headroom);
+    for (int model = 0; model < car_models; ++model) {
+        player_convertible_[static_cast<size_t>(model)] = player_styles[model].convertible;
+        for (int turn = -1; turn <= 1; ++turn) {
+            for (int brake = 0; brake < 2; ++brake) {
+                for (int t = 0; t < tyre_frames; ++t) {
+                    player_[static_cast<size_t>(model)][static_cast<size_t>(turn + 1)][static_cast<size_t>(brake)]
+                           [static_cast<size_t>(t)] = make_player_car(player_styles[model], turn, brake, t, player_headroom);
                 }
             }
         }

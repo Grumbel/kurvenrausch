@@ -11,6 +11,7 @@
 #include "synth.hpp"
 #include "track.hpp"
 #include "vehicles.hpp"
+#include "people.hpp"
 #include "sprites.hpp"
 #include "weather.hpp"
 
@@ -1107,9 +1108,29 @@ void test_vehicles() {
                 if (f0.get(x, y) != f1.get(x, y)) top = std::min(top, y);
         CHECK(top > f0.h / 3);
     }
-    CHECK(sheet.player(0, 0, 0, 0, false, 0).px != sheet.player(0, 0, 0, 0, false, 1).px);
+    CHECK(sheet.player(0, 0, false, 0).px != sheet.player(0, 0, false, 1).px);
     // Each car model looks different.
     for (int m = 1; m < car_models; ++m) CHECK(sheet.player(m, 0).px != sheet.player(0, 0).px);
+    // The people: drawn over the car, the same size; each passenger and each
+    // driver looks different; a wave raises an arm into the headroom.
+    const Bitmap& base = sheet.occupants(0, 0, 0, 0, 0, 0);
+    CHECK(base.w == sheet.player(0, 0).w && base.h == sheet.player(0, 0).h);
+    for (int p = 1; p < passengers; ++p) CHECK(sheet.occupants(0, p, 0, 0, 0, 0).px != base.px);
+    for (int d = 1; d < drivers; ++d) CHECK(sheet.occupants(d, 0, 0, 0, 0, 0).px != base.px);
+    auto top_row = [](const Bitmap& b) {
+        for (int y = 0; y < b.h; ++y)
+            for (int x = 0; x < b.w; ++x)
+                if (b.get(x, y) >> 24) return y;
+        return b.h;
+    };
+    CHECK(top_row(sheet.occupants(0, 0, 0, -1, 0, 0)) < SpriteSheet::player_headroom);
+    CHECK(top_row(base) >= SpriteSheet::player_headroom - 4);
+    CHECK(&sheet.occupants(0, 0, 0, 0, 0, 0) == &base); // kept, not made again
+    // In a closed car the heads only show through the rear window, dimmed.
+    int closed = 0, open = 0;
+    for (uint32_t px : sheet.occupants(0, 0, 0, 0, 0, 1).px) closed += (px >> 24) != 0;
+    for (uint32_t px : base.px) open += (px >> 24) != 0;
+    CHECK(closed > 0 && closed < open);
     CHECK(SpriteSheet::tyre_frame(0.f) == 0);
     CHECK(SpriteSheet::tyre_frame(SpriteSheet::tread_step * 1.5f) == 1);
     CHECK(SpriteSheet::tyre_frame(SpriteSheet::tread_step * 2.5f) == 2);

@@ -1129,9 +1129,15 @@ void Game::render() {
     // the sprite's native size, so the pixel art is shown 1:1.
     // Twitching after an oil slick, the car flicks from one side to the other.
     const int shown_steer = spin_time_ > 0.f ? (static_cast<int>(clock_ * 16.f) % 2 ? 1 : -1) : steer_;
-    const Bitmap& car = sprites_.player(car_model_, shown_steer, wave_time_ > 0.f ? wave_side_ : 0,
-                                        static_cast<int>(clock_ / 0.15f) & 1, braking_,
-                                        SpriteSheet::tyre_frame(wheel_distance_));
+    // The car with its people drawn over it.
+    const Bitmap& body = sprites_.player(car_model_, shown_steer, braking_, SpriteSheet::tyre_frame(wheel_distance_));
+    const Bitmap& people = sprites_.occupants(driver_, passenger_, shown_steer, wave_time_ > 0.f ? wave_side_ : 0,
+                                              static_cast<int>(clock_ / 0.15f) & 1, car_model_);
+    player_bitmap_ = body;
+    for (size_t i = 0; i < people.px.size() && i < player_bitmap_.px.size(); ++i) {
+        if (people.px[i] >> 24) player_bitmap_.px[i] = people.px[i];
+    }
+    const Bitmap& car = player_bitmap_;
     const float scale = cam.depth / cam.player_z() * (width / 2.f);
     RoadSprite me;
     me.z = tr.z + cam.player_z();

@@ -4,10 +4,12 @@
 #pragma once
 #include "bitmap.hpp"
 #include "track.hpp"
+#include "people.hpp"
 #include "vehicles.hpp"
 
 #include <array>
 #include <cmath>
+#include <map>
 #include <vector>
 
 namespace racer {
@@ -22,7 +24,10 @@ struct CarStyle {
 // Rear view of a car, 96x44 pixels. turn is -1 (left), 0, or +1 (right);
 // signal lights the left (-1) or right (+1) indicator; brake the brake lights;
 // tread_frame (0 .. 2) shifts the tyres' tread, for rolling.
-Bitmap make_car(const CarStyle& style, int turn, int signal = 0, bool brake = false, int tread_frame = 0);
+// people: a convertible shows its driver and passenger (traffic); without,
+// they are drawn over it by make_occupants() (the player's car).
+Bitmap make_car(const CarStyle& style, int turn, int signal = 0, bool brake = false, int tread_frame = 0,
+                bool people = true);
 // Front view of a car, 96x44 pixels, mirrored as seen in the rear-view mirror.
 // signal is the side the car turns to, which the mirror shows on that side.
 Bitmap make_car_front(const CarStyle& style, int signal = 0, int tread_frame = 0);
@@ -37,10 +42,16 @@ Bitmap make_truck_front(const CarStyle& style, int signal, int tread = 0);
 Bitmap make_rival(const CarStyle& style, int signal, bool brake, int tread = 0);    // 100x40
 Bitmap make_rival_front(const CarStyle& style, int signal, int tread = 0);
 
-// The player's convertible with `headroom` empty rows on top, room for a
-// raised arm: side -1 the driver waves out on the left, +1 the passenger on
-// the right, 0 nobody; frame 0 or 1 animates the wave.
-Bitmap make_player_car(const CarStyle& style, int turn, int side, int frame, bool brake, int tread, int headroom);
+// The player's car, without the people, with `headroom` empty rows on top
+// for a raised arm.
+Bitmap make_player_car(const CarStyle& style, int turn, bool brake, int tread, int headroom);
+
+// The people in the player's car, to draw over make_player_car() (same size):
+// in a convertible their heads above the seats, in a closed car dimly
+// through the rear window. wave: -1 the driver waves out on the left, +1 the
+// passenger on the right, 0 nobody; frame 0 or 1 animates the wave.
+Bitmap make_occupants(const Person& driver, const Person& passenger, int turn, int wave, int frame, bool convertible,
+                      int headroom);
 
 // The application icon, 32x32 pixel art: a road into a sunset with the red
 // car on it, on a rounded square. The window icon and the desktop icons
@@ -62,14 +73,17 @@ public:
     const Bitmap& scenery_back(Scenery kind) const {
         return is_billboard(kind) ? billboard_back_ : scenery(kind);
     }
-    // The player's car: model (see car_model()); steer: -1 left, 0 straight, +1 right. wave: -1 the driver waves on the
-    // left, +1 the passenger on the right, 0 nobody; frame 0 or 1. brake
-    // lights the brake lights.
-    const Bitmap& player(int model, int steer, int wave = 0, int frame = 0, bool brake = false, int tread = 0) const {
-        const int pose = wave == 0 ? 0 : 1 + (wave > 0 ? 2 : 0) + (frame & 1);
+    // The player's car, without its people: model (see car_model()); steer
+    // -1 left, 0 straight, +1 right; brake lights; tyre frame.
+    const Bitmap& player(int model, int steer, bool brake = false, int tread = 0) const {
         const auto m = static_cast<size_t>(((model % car_models) + car_models) % car_models);
-        return player_[m][static_cast<size_t>(steer + 1)][static_cast<size_t>(pose)][brake ? 1 : 0][tread_index(tread)];
+        return player_[m][static_cast<size_t>(steer + 1)][brake ? 1 : 0][tread_index(tread)];
     }
+    bool player_convertible(int model) const {
+        return player_convertible_[static_cast<size_t>(((model % car_models) + car_models) % car_models)];
+    }
+    // The people to draw over it (see make_occupants()), made once and kept.
+    const Bitmap& occupants(int driver_index, int passenger_index, int steer, int wave, int frame, int model) const;
     // A vehicle in the traffic from behind; style picks the colours (modulo
     // vehicle_info(kind).styles), signal the indicator blinking towards -1
     // (left), +1 (right), or 0.
@@ -106,8 +120,10 @@ private:
     std::array<Bitmap, static_cast<size_t>(Scenery::Count)> scenery_;
     static size_t tread_index(int tread) { return static_cast<size_t>(((tread % tyre_frames) + tyre_frames) % tyre_frames); }
 
-    // [model][steer][pose][brake][tread]
-    std::array<std::array<std::array<std::array<std::array<Bitmap, tyre_frames>, 2>, 5>, 3>, car_models> player_;
+    // [model][steer][brake][tread]
+    std::array<std::array<std::array<std::array<Bitmap, tyre_frames>, 2>, 3>, car_models> player_;
+    std::array<bool, car_models> player_convertible_{};
+    mutable std::map<uint32_t, Bitmap> occupants_;
     struct VehicleSprites {
         std::array<std::array<std::array<Bitmap, tyre_frames>, 2>, 3> rear; // [signal][brake][tread]
         std::array<std::array<Bitmap, tyre_frames>, 3> front;               // [signal][tread]

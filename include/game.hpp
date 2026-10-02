@@ -135,6 +135,9 @@ private:
     // The player's car (car_model()); the standard top speed, which traffic
     // and the speedometer are measured against whatever the car.
     int car_model_ = 0;
+    int driver_ = 0;     // see driver(): the hospital changes it
+    int passenger_ = 0;  // see passenger(): the motel changes it
+    Bitmap player_bitmap_; // the car with its people, put together each frame
     float base_max_speed_ = 0.f;
     std::vector<int> dealers_;  // first full-width forecourt segment of each car dealer
     bool at_dealer_ = false;    // standing on a dealer's forecourt: the cars are on offer
