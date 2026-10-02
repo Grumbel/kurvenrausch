@@ -10,9 +10,10 @@ kurvenrausch \- classic pseudo-3D arcade racer
 .SH DESCRIPTION
 .B kurvenrausch
 is a racer in the spirit of OutRun and Lotus Esprit Turbo Challenge: one lap
-around the world, from the Cote d'Azur through England, the Netherlands, the
-Black Forest, the Alps and Tuscany to Arizona, the California coast, San
-Francisco and Japan.
+around the world in sixteen zones, from the Cote d'Azur through England, the
+Netherlands, the Black Forest, the Alps, Tuscany, Egypt, Kenya, India, Korea,
+Japan and the Australian outback to Arizona, the California coast, San
+Francisco and the Amazon rainforest.
 The road forks in places into two routes that join again; keep to the side of
 the road you want to take.
 On the way there is traffic to pass, fuel to buy at gas stations, other cars

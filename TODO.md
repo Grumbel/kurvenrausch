@@ -21,6 +21,42 @@ Upstream master has since been fast-forwarded to `64fda32`, the tip of 002.1, so
 The rebase notes: upstream's rename is kept, its rendering fix is superseded by
 the road/framebuffer rewrite, `Color::to_u32()` became `Color::argb()`.
 
+## Round 11: smooth forks, six more countries, done
+
+Requested: the transitions where the road splits feel rough; even more
+countries (Korea, India, Africa and so on).
+
+Forks, what was rough and what changed:
+- The S-bends switched a constant curvature on, flipped it halfway and
+  switched it off: now a full sine over 70 segments (`TrackBuilder::fork`),
+  same 3.75 half-widths apart.
+- The other road was cut off where the routes had parted and popped up where
+  they meet: now it stays alongside the whole way at that distance
+  (`update_branch_offsets`), with its own scenery (`other_route_segment()`,
+  drawn shifted by the offset); scenery facing it stays between the roads
+  (offset plus width at most 2.6, `facing_branch`); none at all in the bends
+  (`branch_bend`).
+- Changing road snapped the view to the new road's heading and position:
+  now only while the roads overlap (centres under 1.5 apart), with a margin
+  (`nearer_other_road`, no flipping while they coincide), and the camera keeps
+  where it stood and looked (`RoadView::yaw` and `shift`, measured at the
+  camera, which is a few segments behind the car) and moves over in 0.35 s.
+- Measured on renders of every step through both forks: the biggest jump
+  between frames fell from 1.8 to 1.2 times the usual going straight through,
+  from 2.3 to 1.4 when changing road late. Traffic on a fork still drives on
+  whichever route is active.
+
+Countries (16 zones now): Egypt (Nile), Kenya (Masai Mara), India
+(Rajasthan), Korea (Seoraksan), Australia (Outback) and Brazil (Amazonas),
+with `make_theme()` for the common part of a theme, a decor rule each and
+fifteen sprites. Order: Europe, Egypt, Kenya, India, Korea, Japan,
+Australia, the USA, Brazil (ends the lap). Each has a gas station.
+
+Verified: builds warning-free; tests (branches: smooth curvature, offsets and
+headings, scenery between the roads; 16 zones; the rest as before);
+ASan+UBSan through both forks changing road, crashes in each new zone, a
+12000-step lap; screenshots of every new zone and sprite.
+
 ## Round 10: more countries, narrow roads, oil, car dealers, done
 
 Requested: more countries, some with different streets (England with narrow

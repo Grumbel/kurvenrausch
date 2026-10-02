@@ -12,10 +12,10 @@ Packaged with a **Nix flake**.
 
 ![Kurvenrausch on the Cote d'Azur corniche](docs/screenshot.png)
 
-One lap takes you through ten zones, each with its own country, scenery,
+One lap takes you around the world through sixteen zones, each with its own country, scenery,
 weather and road markings, fading smoothly into one another:
 
-![The ten zones: France, England, the Netherlands, Germany, Switzerland, Italy, Arizona, California, San Francisco, Japan](docs/zones.png)
+![The sixteen zones: France, England, the Netherlands, Germany, Switzerland, Italy, Egypt, Kenya, India, Korea, Japan, Australia, Arizona, California, San Francisco, Brazil](docs/zones.png)
 
 ## Features
 
@@ -23,15 +23,19 @@ weather and road markings, fading smoothly into one another:
   curves by accumulated lateral offset, hills and crests with correct
   occlusion, alternating rumble strips and grass bands, lane markings, a
   chequered start line, and distance fog
-- **Ten zones** with blended looks: the Cote d'Azur (palms, sunny), England
-  (narrow lanes between hedgerows and stone walls, drizzle), the Netherlands
-  (dead flat: windmills, tulip fields, a canal), the Black Forest (firs in
-  the rain), the Alps (snowfall, chalets, a pass), Tuscany (cypress avenues at
-  sunset), Arizona (desert, cacti, mesas, telephone poles), the California
-  coast (sandstone cliff and sea in thick fog), San Francisco (steep streets
-  between Victorian row houses) and Japan (cherry blossom, shrine gates, a
-  snow-capped volcano); a banner announces each country. Roads differ in
-  width as well as in markings
+- **Sixteen zones** with blended looks: the Cote d'Azur (palms, sunny),
+  England (narrow lanes between hedgerows and stone walls, drizzle), the
+  Netherlands (dead flat: windmills, tulip fields, a canal), the Black Forest
+  (firs in the rain), the Alps (snowfall, chalets, a pass), Tuscany (cypress
+  avenues at sunset), Egypt (date palms along the Nile, pyramids), Kenya
+  (acacias, giraffes and Kilimanjaro under an orange sky), India (banyans,
+  temples, cows, haze), Korea (red maples and hanok gates in autumn), Japan
+  (cherry blossom, shrine gates, a snow-capped volcano), the Australian
+  outback (red earth, gum trees, Uluru), Arizona (desert, cacti, mesas,
+  telephone poles), the California coast (sandstone cliff and sea in thick
+  fog), San Francisco (steep streets between Victorian row houses) and the
+  Amazon rainforest in a downpour; a banner announces each country. Roads
+  differ in width as well as in markings
 - **Cliffs and guard rails** along the road: strata-textured rock walls that
   rise and fall with the terrain, rails above the sea or a valley; both are
   solid, the car scrapes along them and throws sparks
@@ -61,7 +65,8 @@ weather and road markings, fading smoothly into one another:
 - **Rear-view mirror** at the top of the screen: the road behind, drawn by the
   same renderer looking back, with the fronts of the cars you have passed
 - **Forks**: the road splits OutRun-style into two routes that join again
-  later, signposted and named on screen: the Autobahn or the Landstrasse in
+  later, in smooth S-bends, the other road in view alongside; signposted and
+  named on screen: the Autobahn or the Landstrasse in
   Germany, Route 66 or the Canyon Road in Arizona; keep to the side of the
   road you want to take
 - **Jumps**: San Francisco's streets climb and drop at up to 55% grade, flat
