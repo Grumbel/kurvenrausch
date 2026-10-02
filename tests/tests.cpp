@@ -735,13 +735,30 @@ void test_wet_spots() {
         CHECK(std::abs(s.wet_x) + s.wet_w <= 0.95f + 1e-5f);
         CHECK(i >= 20 && !s.checker && s.forecourt == 0.f);
     }
-    // None in the desert; more where it rains than in fair weather.
-    for (size_t z = 0; z < t.zones.size(); ++z) {
-        if (t.zones[z].decor == Decor::Desert) CHECK(wet[z] == 0);
+    // Spots (counted where they start) are where it rains or snows: none in
+    // the desert, at most one in a zone of fair weather, and many more per
+    // segment in the wet zones than in the dry ones.
+    std::vector<int> spots(t.zones.size(), 0);
+    for (int i = 1; i < n; ++i) {
+        if (t.segment(i).wet_w > 0.f && t.segment(i - 1).wet_w == 0.f)
+            ++spots[static_cast<size_t>(t.zone_index[static_cast<size_t>(i)])];
     }
-    auto share = [&](size_t z) { return static_cast<float>(wet[z]) / static_cast<float>(length[z]); };
-    CHECK(wet[1] > 0); // Germany, rainy
-    CHECK(share(1) > 2.f * share(0)); // ... than the Cote d'Azur
+    int wet_spots = 0, wet_length = 0, dry_spots = 0, dry_length = 0;
+    for (size_t z = 0; z < t.zones.size(); ++z) {
+        const RoadTheme& th = t.zones[z].theme;
+        if (t.zones[z].decor == Decor::Desert) CHECK(spots[z] == 0);
+        if (th.rain > 0.f || th.snowfall > 0.f) {
+            CHECK(spots[z] >= 3);
+            wet_spots += spots[z];
+            wet_length += length[z];
+        } else {
+            CHECK(spots[z] <= 1);
+            dry_spots += spots[z];
+            dry_length += length[z];
+        }
+    }
+    CHECK(static_cast<float>(wet_spots) / static_cast<float>(wet_length) >
+          10.f * static_cast<float>(dry_spots + 1) / static_cast<float>(dry_length));
     // Spots come to a point at both ends and are widest in the middle.
     for (int i = 1; i < n; ++i) {
         if (t.segment(i).wet_w > 0.f && t.segment(i - 1).wet_w == 0.f) {

@@ -813,8 +813,8 @@ void decorate(Track& track, TrackBuilder& b, int from, int to, uint32_t seed) {
     }
 }
 
-// Wet spots on the road: plenty where it rains or snows, the odd one in
-// fair weather, none in the desert. Each runs over a few segments, widest in
+// Wet spots on the road: where it rains or snows, in proportion; in fair
+// weather hardly ever, in the desert never. Each runs over a few segments, widest in
 // the middle, and keeps clear of the start and the forecourts.
 void place_wet_spots(Track& track, int from, int to, uint32_t seed) {
     Rng rng(seed);
@@ -823,7 +823,7 @@ void place_wet_spots(Track& track, int from, int to, uint32_t seed) {
         const Zone& zone = track.zones[static_cast<size_t>(track.zone_index[static_cast<size_t>(i)])];
         if (zone.decor == Decor::Desert || i - last_end < 20) continue;
         const float wetness = std::max(zone.theme.rain, zone.theme.snowfall);
-        if (!rng.chance(0.003f + 0.03f * wetness)) continue;
+        if (!rng.chance(0.0003f + 0.03f * wetness)) continue;
         const int length = static_cast<int>(rng.range(5.f, 11.f));
         bool clear = true;
         for (int k = -2; k < length + 2; ++k) {
