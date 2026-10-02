@@ -9,6 +9,7 @@
 #include <cmath>
 #include <cstddef>
 #include <string_view>
+#include <tuple>
 
 namespace racer {
 
@@ -513,6 +514,60 @@ Bitmap make_dealer_sign() {
     paint::rect(b, 3, 13, 38, 30, white);
     paint::text(b, (44 - font::text_width("CARS")) / 2, 3, "CARS", white);
     showroom_car(b, 10, 20, Color{0xd0, 0x18, 0x1c}, Color{0xf0, 0x60, 0x50});
+    paint::outline(b, Outline);
+    return b;
+}
+
+// A car wash: a wash bay open to the road, its two big brushes inside, a
+// soap-bubble sign on the roof.
+Bitmap make_car_wash() {
+    Bitmap b(192, 96);
+    const Color wall{0xe8, 0xf0, 0xf4}, trim{0x20, 0x90, 0xc8}, inside{0x30, 0x3c, 0x48}, floor{0x58, 0x64, 0x6c};
+    const Color white{0xf4, 0xf4, 0xf4};
+    paint::rect(b, 4, 30, 184, 66, wall);
+    paint::rect(b, 4, 24, 184, 7, trim);
+    paint::rect(b, 24, 40, 144, 56, inside);
+    paint::rect(b, 24, 88, 144, 8, floor);
+    paint::rect(b, 24, 40, 144, 3, Color{0x9c, 0xa8, 0xb4}); // the gantry rail
+    // The brushes: tall cylinders of blue and red bristles.
+    const Color bristle[2][3] = {{{0x18, 0x48, 0xa0}, {0x30, 0x70, 0xd0}, {0x80, 0xb0, 0xf0}},
+                                 {{0x98, 0x18, 0x28}, {0xd0, 0x30, 0x40}, {0xf0, 0x80, 0x88}}};
+    for (int k = 0; k < 2; ++k) {
+        const int x = k ? 120 : 48;
+        paint::rect(b, x + 11, 43, 2, 6, Color{0x9c, 0xa8, 0xb4});
+        for (int y = 49; y < 92; ++y) {
+            paint::rect(b, x, y, 24, 1, bristle[k][1]);
+            paint::rect(b, x, y, 4, 1, bristle[k][0]);
+            paint::rect(b, x + 20, y, 4, 1, bristle[k][0]);
+            if (y % 4 == 0) paint::rect(b, x + 6, y, 8, 1, bristle[k][2]);
+        }
+    }
+    // Water dripping in the bay.
+    for (int x = 30; x < 166; x += 9) paint::rect(b, x, 46 + (x * 7) % 30, 1, 3, Color{0xa0, 0xd0, 0xf0});
+    // The sign: WASH among soap bubbles.
+    paint::rect(b, 52, 2, 88, 24, trim);
+    paint::rect(b, 54, 4, 84, 20, Color{0x40, 0xb0, 0xe0});
+    paint::text(b, (192 - font::text_width("WASH", 2)) / 2, 8, "WASH", white, 2);
+    for (const auto& [x, y, r] : {std::tuple{50.f, 6.f, 4.f}, {144.f, 10.f, 5.f}, {138.f, 2.f, 3.f}, {46.f, 18.f, 3.f}}) {
+        paint::shaded_ellipse(b, x, y, r, r, Color{0x90, 0xc8, 0xe8}, Color{0xd8, 0xf0, 0xff}, white);
+    }
+    paint::outline(b, Outline);
+    return b;
+}
+
+// The car wash's tall sign: WASH over a car in the bubbles.
+Bitmap make_wash_sign() {
+    Bitmap b(44, 112);
+    const Color trim{0x20, 0x90, 0xc8}, white{0xf4, 0xf4, 0xf4};
+    paint::rect(b, 19, 44, 6, 68, Color{0x9a, 0x9a, 0xa4});
+    paint::rect(b, 23, 44, 2, 68, Color{0x6c, 0x6c, 0x74});
+    paint::rect(b, 0, 0, 44, 46, trim);
+    paint::rect(b, 3, 13, 38, 30, Color{0xd8, 0xf0, 0xff});
+    paint::text(b, (44 - font::text_width("WASH")) / 2, 3, "WASH", white);
+    showroom_car(b, 10, 24, Color{0xd0, 0x18, 0x1c}, Color{0xf0, 0x60, 0x50});
+    for (const auto& [x, y, r] : {std::tuple{9.f, 19.f, 3.f}, {33.f, 18.f, 4.f}, {22.f, 17.f, 2.f}}) {
+        paint::shaded_ellipse(b, x, y, r, r, Color{0x90, 0xc8, 0xe8}, white, white);
+    }
     paint::outline(b, Outline);
     return b;
 }
@@ -1705,6 +1760,53 @@ SpriteSheet::SpriteSheet() {
     scenery_[static_cast<size_t>(Scenery::Uluru)] = make_uluru();
     scenery_[static_cast<size_t>(Scenery::JungleTree)] = make_jungle_tree();
     scenery_[static_cast<size_t>(Scenery::Banana)] = make_banana();
+    scenery_[static_cast<size_t>(Scenery::CarWash)] = make_car_wash();
+    scenery_[static_cast<size_t>(Scenery::WashSign)] = make_wash_sign();
+}
+
+namespace {
+
+// Smooth noise 0 .. 1 over the plane, varying over about `cell` pixels: the
+// same at the same place every time.
+float value_noise(int x, int y, int cell, uint32_t seed) {
+    const auto corner = [seed](int cx, int cy) {
+        uint32_t h = static_cast<uint32_t>(cx) * 73856093u ^ static_cast<uint32_t>(cy) * 19349663u ^ seed;
+        h = (h ^ (h >> 13)) * 0x5bd1e995u;
+        return static_cast<float>((h >> 8) & 0xffff) / 65536.f;
+    };
+    const int cx = x / cell, cy = y / cell;
+    const float fx = static_cast<float>(x % cell) / static_cast<float>(cell);
+    const float fy = static_cast<float>(y % cell) / static_cast<float>(cell);
+    const float top = corner(cx, cy) + (corner(cx + 1, cy) - corner(cx, cy)) * fx;
+    const float bottom = corner(cx, cy + 1) + (corner(cx + 1, cy + 1) - corner(cx, cy + 1)) * fx;
+    return top + (bottom - top) * fy;
+}
+
+} // namespace
+
+void apply_dirt(Bitmap& car, float mud, float oil) {
+    if (mud <= 0.f && oil <= 0.f) return;
+    const Color mud_color{0x6c, 0x52, 0x34}, oil_color{0x16, 0x14, 0x12};
+    const uint32_t outline = Outline.argb();
+    for (int y = 0; y < car.h; ++y) {
+        // Mud is thrown up from below: it reaches the lower body first.
+        const float low = static_cast<float>(y) / static_cast<float>(car.h);
+        for (int x = 0; x < car.w; ++x) {
+            uint32_t& p = car.px[static_cast<size_t>(y) * car.w + x];
+            if (!(p >> 24) || p == outline) continue;
+            const Color c{static_cast<uint8_t>(p >> 16), static_cast<uint8_t>(p >> 8), static_cast<uint8_t>(p)};
+            // Splotches: smooth noise above a threshold that falls with the
+            // dirt, plus a fine grain at their edges.
+            const float grain = static_cast<float>((static_cast<uint32_t>(x * 7 + y * 13) * 2654435761u) >> 28) / 64.f;
+            const float m = value_noise(x, y, 5, 0x1234u) + 0.25f * value_noise(x, y, 2, 0x99u) + grain;
+            const float o = value_noise(x, y, 3, 0xbeefu) + grain;
+            if (o > 1.25f - 0.45f * oil) {
+                p = blend(c, oil_color, 0.8f).argb();
+            } else if (m > 1.45f - mud * (0.6f + 0.9f * low)) {
+                p = blend(c, mud_color, 0.35f + 0.35f * mud).argb();
+            }
+        }
+    }
 }
 
 } // namespace racer

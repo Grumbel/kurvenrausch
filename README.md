@@ -82,8 +82,11 @@ weather and road markings, fading smoothly into one another:
 - **Car dealers**: stop at one and choose from four cars, the Spider, the GT
   Coupe, the Hot Hatch and the Muscle car, each with its own top speed,
   acceleration and grip
+- **Dirt and car washes**: puddles splash the car with mud, crashes add more,
+  oil slicks leave black spots; stop at one of the car washes in England,
+  Kenya and the outback to have it washed clean
 - **Mini map** of the lap with your position, the start line, the gas
-  stations and the car dealers
+  stations, the car dealers and the car washes
 - **Synthesised sound**: a six-cylinder engine with exhaust pulses ringing a
   pipe and a body resonance for the bass, building with the revs, surging as
   the throttle opens and crackling on the overrun; gear changes, tyre squeal,

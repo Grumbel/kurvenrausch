@@ -42,6 +42,8 @@ struct ScreenshotOptions {
     int handbrake_from = -1; // if >= 0, hold the handbrake from this step on
     int brake_from = -1;     // if >= 0, brake (throttle off) from this step on to a stop, let go, then hold it: reverse
     bool pause = false;      // show the pause menu in the screenshot
+    float dirt = -1.f;       // if >= 0, start this dirty (mud and oil, 0 .. 1)
+    bool wash = false;       // the autopilot pulls in at the next car wash and stays
 };
 
 class Game {
@@ -99,6 +101,7 @@ private:
     void visit_dealer(const InputState& input);
     // On the full-width part of a forecourt of this kind.
     bool parked_at(Lot kind) const;
+    void update_wash(float dt);
     void follow_fork(float prev_car_z);
     int indicator(Entity e, const Transform& t, const Traffic& traffic) const;
     InputState autopilot() const;
@@ -154,6 +157,10 @@ private:
     bool at_dealer_ = false;    // standing on a dealer's forecourt: the cars are on offer
     int dealer_steer_ = 0;      // the steering last step, to change cars once per push
     bool autopilot_dealer_ = false; // headless: the autopilot visits the next car dealer
+    bool autopilot_wash_ = false;   // ... or the next car wash
+    std::vector<int> washes_;   // first full-width forecourt segment of each car wash
+    Dirt dirt_;
+    bool washing_ = false;      // standing in a car wash, being cleaned
     float view_yaw_ = 0.f;   // the view turning over to a newly taken road at a fork,
     float view_shift_ = 0.f; // and moving over to it; see RoadView::yaw and shift
 

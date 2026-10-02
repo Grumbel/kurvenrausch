@@ -59,6 +59,33 @@ private:
     float level_ = 1.f;
 };
 
+// How dirty the car is, 0 (clean) .. 1 (filthy) for each kind of dirt: mud
+// from ploughing through puddles and from crashes, oil from slicks. Only the
+// car wash takes it off again.
+class Dirt {
+public:
+    static constexpr float puddle_rate = 0.5f;  // mud per second through a puddle at top speed
+    static constexpr float oil_rate = 0.6f;     // oil per second on a slick
+    static constexpr float crash_mud = 0.4f;    // mud from a crash at top speed
+    static constexpr float wash_seconds = 3.f;  // filthy to clean in the car wash
+
+    // Through a puddle at speed_pct (0 .. 1) of top speed for dt seconds.
+    void splash(float speed_pct, float dt);
+    void oil(float dt);
+    // A crash at speed_pct of top speed.
+    void crash(float speed_pct);
+    void wash(float dt);
+    void set(float mud, float oil);
+    void reset() { set(0.f, 0.f); }
+
+    float mud() const { return mud_; }
+    float oil() const { return oil_; }
+    bool clean() const { return mud_ <= 0.f && oil_ <= 0.f; }
+
+private:
+    float mud_ = 0.f, oil_ = 0.f;
+};
+
 // The car's height over crests: it follows the road unless the road falls
 // away faster than gravity can pull it down, then it flies until it lands.
 // World units; `gravity` in units per second squared.

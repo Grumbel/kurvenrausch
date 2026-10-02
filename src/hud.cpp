@@ -99,6 +99,9 @@ void draw_minimap(Framebuffer& fb, int x, int y, int size, const HudState& hud) 
     if (hud.map_dealers) {
         for (int s : *hud.map_dealers) dot(s, Color{0xf8, 0xd0, 0x20}, Color{0xff, 0xf4, 0xc0});
     }
+    if (hud.map_washes) {
+        for (int s : *hud.map_washes) dot(s, Color{0x30, 0xc8, 0xc0}, Color{0xc0, 0xff, 0xf8});
+    }
     const Color car{0xf0, 0x30, 0x20};
     dot(hud.map_player, car, hud.map_blink ? Value : car);
 }

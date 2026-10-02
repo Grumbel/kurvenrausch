@@ -65,6 +65,8 @@ const SceneryInfo& scenery_info(Scenery kind) {
         /* Uluru     */ {16000.f, true, false, false},
         /* JungleTree*/ {2200.f, true,  false, true},
         /* Banana    */ { 900.f, true,  false, true},
+        /* CarWash   */ {4800.f, true,  false, false},
+        /* WashSign  */ { 700.f, true,  false, false},
     };
     static_assert(sizeof(infos) / sizeof(infos[0]) == static_cast<size_t>(Scenery::Count),
                   "scenery_info() needs an entry for every Scenery kind");
@@ -501,6 +503,9 @@ public:
     // forecourt, a sign ahead of it.
     void car_dealer() { forecourt_lot(Lot::Dealer); }
 
+    // A car wash, laid out the same way: the wash bay beyond the forecourt.
+    void car_wash() { forecourt_lot(Lot::Wash); }
+
     void forecourt_lot(Lot kind) {
         const int from = size();
         road(8, 40, 8, Bend::None, Hill::None);
@@ -514,6 +519,11 @@ public:
         if (kind == Lot::Dealer) {
             scenery(from + 1, Scenery::DealerSign, 1.25f);
             scenery(from + start + 26, Scenery::Showroom, forecourt_width + 0.1f);
+            return;
+        }
+        if (kind == Lot::Wash) {
+            scenery(from + 1, Scenery::WashSign, 1.25f);
+            scenery(from + start + 26, Scenery::CarWash, forecourt_width + 0.1f);
             return;
         }
         scenery(from + 1, Scenery::FuelSign, 1.25f);
@@ -1237,6 +1247,7 @@ Track build_demo_track() {
     b.gas_station();
     b.curve(Len::Short, Bend::Hard, Hill::Low);
     b.curve(Len::Short, -Bend::Medium, -Hill::Low);
+    b.car_wash(); // after the muddy lanes
 
     b.begin_zone(zone_netherlands());
     // Dead straight and flat, along a canal for a while.
@@ -1306,6 +1317,7 @@ Track build_demo_track() {
     b.curve(Len::Medium, Bend::Medium, Hill::None);
     b.gas_station();
     b.hill(Len::Medium, -Hill::Low);
+    b.car_wash(); // the red dust of the savanna
 
     b.begin_zone(zone_india());
     b.curve(Len::Short, -Bend::Medium, Hill::None);
@@ -1330,6 +1342,7 @@ Track build_demo_track() {
     b.straight(Len::Long);
     b.gas_station();
     b.curve(Len::Long, Bend::Easy, Hill::None);
+    b.car_wash();
 
     b.begin_zone(zone_arizona());
     b.hill(Len::Long, Hill::Low);

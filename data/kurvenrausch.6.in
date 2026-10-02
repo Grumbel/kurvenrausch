@@ -17,7 +17,8 @@ Francisco and the Amazon rainforest.
 The road forks in places into two routes that join again; keep to the side of
 the road you want to take.
 On the way there is traffic to pass, fuel to buy at gas stations, other cars
-to choose at car dealers (stop on the forecourt and steer left or right),
+to choose at car dealers (stop on the forecourt and steer left or right), car
+washes to clean off the mud and oil the car picks up,
 nitro to burn and, in San Francisco, crests to jump.
 .PP
 Without options the game opens a window and starts at the start line; the lap
@@ -96,6 +97,13 @@ From step
 .I N
 of the headless run on, brake (and not accelerate) to a stop, let go of the
 brake for a moment, then hold it again: the car reverses.
+.TP
+.BI \-\-dirt " L"
+Start the headless run with the car this dirty, from 0 (clean) to 1.
+.TP
+.B \-\-wash
+Let the autopilot pull in at the next car wash during the headless run, and
+stay there.
 .TP
 .B \-\-pause
 Show the pause menu in the screenshot.

@@ -173,6 +173,7 @@ Game::Game()
       weather_(width, height) {
     stations_ = track_.lots(Lot::Gas);
     dealers_ = track_.lots(Lot::Dealer);
+    washes_ = track_.lots(Lot::Wash);
     map_ = track_map(track_);
     player_ = world_.create();
     world_.add<Transform>(player_);
@@ -264,6 +265,8 @@ void Game::reset() {
     engine_on_ = true;
     refuelling_ = false;
     stranded_time_ = 0.f;
+    dirt_.reset();
+    washing_ = false;
 }
 
 void Game::update_rumble() {
@@ -392,6 +395,8 @@ bool Game::screenshot(const ScreenshotOptions& opts) {
         apply_car();
     }
     autopilot_dealer_ = opts.dealer;
+    autopilot_wash_ = opts.wash;
+    if (opts.dirt >= 0.f) dirt_.set(opts.dirt, opts.dirt);
     std::vector<int16_t> sound;
     constexpr int samples_per_step = Synth::sample_rate / 60; // 735, exactly
     int stopped_at = -1; // --brake: when the car came to a stop
@@ -444,11 +449,12 @@ InputState Game::autopilot() const {
     float target_x = 0.f;
     float speed_limit = 1.f;
     const bool fuel = fuel_.level() < 0.45f || (refuelling_ && !fuel_.full());
-    if (fuel || autopilot_dealer_) {
+    if (fuel || autopilot_dealer_ || autopilot_wash_) {
         const int n = static_cast<int>(track_.segments.size());
         const int here = track_.index_at(tr.z + cam.player_z());
-        const bool on = seg.forecourt >= forecourt_width && seg.lot == (fuel ? Lot::Gas : Lot::Dealer);
-        for (int start : fuel ? stations_ : dealers_) {
+        const Lot visit = fuel ? Lot::Gas : autopilot_wash_ ? Lot::Wash : Lot::Dealer;
+        const bool on = seg.forecourt >= forecourt_width && seg.lot == visit;
+        for (int start : visit == Lot::Gas ? stations_ : visit == Lot::Wash ? washes_ : dealers_) {
             const int ahead = ((start - here) % n + n) % n;
             if (!on && ahead > 120) continue;
             target_x = on || seg.forecourt > 1.3f ? 1.45f : 0.6f;
@@ -549,7 +555,11 @@ void Game::fixed_update(const InputState& input, float dt) {
         tr.x += (static_cast<float>(rng_ >> 8) / 16777216.f - 0.5f) * 1.6f * speed_pct * dt;
         vel.speed -= player.max_speed * 0.15f * dt;
     }
-    if (wet_) spawn_spray(speed_pct);
+    if (wet_) {
+        spawn_spray(speed_pct);
+        dirt_.splash(speed_pct, dt);
+    }
+    if (surface == Patch::Oil && speed_pct > 0.02f) dirt_.oil(dt);
     if (handbraking_) spawn_smoke(speed_pct);
 
     weather_.update(look.rain, look.snowfall, -seg.curve * 25.f * speed_pct, speed_pct, dt);
@@ -557,6 +567,7 @@ void Game::fixed_update(const InputState& input, float dt) {
     // Braking overrides the throttle; without either the car coasts down.
     update_fuel(input, dt);
     visit_dealer(input);
+    update_wash(dt);
     const float drive = engine_on_ ? input.throttle * (1.f - input.brake) : 0.f;
     reverse_armed_ = reverse_armed(reverse_armed_, vel.speed, input.throttle, input.brake);
     const bool reversing = !airborne && engine_on_ && in_reverse(vel.speed, input.throttle, input.brake, reverse_armed_);
@@ -687,6 +698,42 @@ bool Game::parked_at(Lot kind) const {
            track_.on_forecourt(car_z, world_.get<Transform>(player_).x);
 }
 
+// Standing on a car wash's forecourt, the car is washed clean: water and
+// foam rain down on it until the last of the dirt is gone.
+void Game::update_wash(float dt) {
+    const float speed_pct = std::abs(world_.get<Velocity>(player_).speed) / world_.get<Player>(player_).max_speed;
+    const bool was_washing = washing_;
+    washing_ = parked_at(Lot::Wash) && speed_pct < refuel_speed && !dirt_.clean();
+    if (!washing_) {
+        if (was_washing) message_.clear(); // drove off before it was clean
+        return;
+    }
+    dirt_.wash(dt);
+    auto random = [this] {
+        rng_ = rng_ * 1664525u + 1013904223u;
+        return static_cast<float>(rng_ >> 8) / 16777216.f;
+    };
+    const Color water{0xc8, 0xe0, 0xf4}, foam{0xf8, 0xfc, 0xff};
+    for (int i = 0; i < 3; ++i) {
+        const float a = random(), b = random();
+        particles_.push_back({static_cast<float>(width) / 2.f + (a - 0.5f) * 100.f, ground_y - 50.f - 10.f * b,
+                              (b - 0.5f) * 40.f, 40.f * b, 0.5f, 0.5f, 1.f + b, blend(water, foam, b),
+                              Particle::Kind::Spray});
+    }
+    if (random() < 0.3f) {
+        const float a = random();
+        particles_.push_back({static_cast<float>(width) / 2.f + (a - 0.5f) * 80.f, ground_y - 30.f, 0.f, -8.f, 0.6f,
+                              0.6f, 3.f + 3.f * a, foam, Particle::Kind::Dust});
+    }
+    if (dirt_.clean()) {
+        washing_ = false;
+        synth_.trigger_ding();
+        show_message("SPARKLING CLEAN", 2.f);
+    } else {
+        show_message("WASHING", 0.2f);
+    }
+}
+
 // Burns fuel with the engine's load, refuels on a forecourt, sputters when
 // nearly empty and dies when empty; stranded, the driver uses a spare can.
 void Game::update_fuel(const InputState& input, float dt) {
@@ -741,6 +788,7 @@ void Game::start_crash(float speed_pct) {
     nitro_.stop();
     wave_time_ = 0.f;
     synth_.trigger_crash(1.f);
+    dirt_.crash(speed_pct);
 
     // Bits of car flying off, and a cloud of dust.
     const float x = static_cast<float>(width) / 2.f;
@@ -979,7 +1027,7 @@ void Game::update_audio(const InputState& input, float dt) {
     p.throttle = shift_cut_ > 0.f || !engine_on_ ? 0.f : input.throttle * (1.f - input.brake);
     p.engine = engine_on_ ? 1.f : 0.f;
     p.pump = refuelling_ ? 1.f : 0.f;
-    p.splash = wet_ ? std::clamp(speed_pct * 1.3f, 0.f, 1.f) : 0.f;
+    p.splash = washing_ ? 0.8f : wet_ ? std::clamp(speed_pct * 1.3f, 0.f, 1.f) : 0.f;
     if (vertical_.airborne) p.rpm = std::min(1.f, p.rpm + 0.25f * input.throttle); // wheels spinning free
     p.speed = speed_pct;
 
@@ -1185,6 +1233,7 @@ void Game::render() {
     const Bitmap& people = sprites_.occupants(driver_, passenger_, shown_steer, wave_time_ > 0.f ? wave_side_ : 0,
                                               static_cast<int>(clock_ / 0.15f) & 1, car_model_);
     player_bitmap_ = body;
+    apply_dirt(player_bitmap_, dirt_.mud(), dirt_.oil());
     for (size_t i = 0; i < people.px.size() && i < player_bitmap_.px.size(); ++i) {
         if (people.px[i] >> 24) player_bitmap_.px[i] = people.px[i];
     }
@@ -1293,6 +1342,7 @@ void Game::render() {
     hud.map_start = track_.index_at(track_.start_z);
     hud.map_stations = &stations_;
     hud.map_dealers = &dealers_;
+    hud.map_washes = &washes_;
     hud.map_blink = std::fmod(clock_, 0.4f) < 0.2f;
     hud.fuel_warning = fuel_.level() < Fuel::low && std::fmod(clock_, 0.5f) < 0.3f;
     hud.nitro_burn = nitro_.burn_left();

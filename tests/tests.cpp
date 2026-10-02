@@ -627,6 +627,72 @@ void test_reverse() {
     CHECK(braked == 0.f); // to a stop, not on into forwards
 }
 
+void test_dirt() {
+    using namespace racer;
+    Dirt d;
+    CHECK(d.clean());
+    d.splash(0.f, 1.f); // standing in a puddle: nothing thrown up
+    CHECK(d.clean());
+    d.splash(1.f, 0.5f);
+    CHECK(std::abs(d.mud() - Dirt::puddle_rate * 0.5f) < 1e-5f && d.oil() == 0.f);
+    d.oil(10.f);
+    CHECK(d.oil() == 1.f); // capped
+    d.crash(1.f);
+    CHECK(std::abs(d.mud() - (Dirt::puddle_rate * 0.5f + Dirt::crash_mud)) < 1e-5f);
+    d.wash(Dirt::wash_seconds * 0.5f);
+    CHECK(!d.clean() && d.oil() == 0.5f);
+    d.wash(Dirt::wash_seconds);
+    CHECK(d.clean() && d.mud() == 0.f);
+    d.set(2.f, -1.f);
+    CHECK(d.mud() == 1.f && d.oil() == 0.f);
+
+    // The overlay: none when clean, more of the car covered the dirtier it
+    // is, mud thickest low down, and transparent pixels left alone.
+    const Bitmap car = make_car(CarStyle{{0x80, 0x10, 0x10}, {0xc0, 0x20, 0x20}, {0xf0, 0x60, 0x60}, false}, 0);
+    const auto changed = [&](float mud, float oil, int y0, int y1) {
+        Bitmap b = car;
+        apply_dirt(b, mud, oil);
+        int n = 0;
+        for (int y = y0; y < y1; ++y) {
+            for (int x = 0; x < b.w; ++x) {
+                const size_t i = static_cast<size_t>(y) * b.w + x;
+                CHECK((b.px[i] >> 24) == (car.px[i] >> 24));
+                n += b.px[i] != car.px[i];
+            }
+        }
+        return n;
+    };
+    CHECK(changed(0.f, 0.f, 0, car.h) == 0);
+    const int some = changed(0.3f, 0.f, 0, car.h), lots = changed(1.f, 0.f, 0, car.h);
+    CHECK(some > 0 && lots > 2 * some);
+    CHECK(changed(0.5f, 0.f, car.h / 2, car.h) > changed(0.5f, 0.f, 0, car.h / 2));
+    CHECK(changed(0.f, 0.8f, 0, car.h) > 0);
+}
+
+void test_car_washes() {
+    using namespace racer;
+    const Track t = build_demo_track();
+    const std::vector<int> washes = t.lots(Lot::Wash);
+    CHECK(washes.size() == 3);
+    for (int s : washes) {
+        int len = 0;
+        while (t.segment(s + len).forecourt >= forecourt_width) {
+            CHECK(t.segment(s + len).lot == Lot::Wash && t.segment(s + len).curve == 0.f);
+            ++len;
+        }
+        CHECK(len > 30);
+        // The wash bay stands beyond the forecourt, the sign before it.
+        bool bay = false, sign = false;
+        for (int i = s - 10; i < s + len; ++i) {
+            for (const RoadsideObject& o : t.segment(i).scenery) {
+                bay = bay || o.kind == Scenery::CarWash;
+                sign = sign || o.kind == Scenery::WashSign;
+            }
+        }
+        CHECK(bay && sign);
+    }
+}
+
 void test_pause_menu() {
     using namespace racer;
     PauseMenu m;
@@ -1693,6 +1759,8 @@ int main() {
     test_follow_speed();
     test_steer_rate();
     test_pause_menu();
+    test_dirt();
+    test_car_washes();
     test_reverse();
     test_fuel();
     test_crash_pose();

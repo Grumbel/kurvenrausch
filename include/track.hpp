@@ -63,6 +63,8 @@ enum class Scenery : uint8_t {
     Uluru,        // the great red rock, a landmark far from the road
     JungleTree,
     Banana,
+    CarWash,      // the wash bay with its brushes, beyond its forecourt
+    WashSign,     // the tall sign announcing it
     Count
 };
 
@@ -93,6 +95,7 @@ enum class Patch : uint8_t {
 enum class Lot : uint8_t {
     Gas,    // a gas station: refuel
     Dealer, // a car dealer: change cars
+    Wash,   // a car wash: clean the car
 };
 
 // Lateral position of the edge features, in road half-widths, and their size.

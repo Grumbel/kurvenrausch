@@ -21,6 +21,10 @@ struct CarStyle {
     bool convertible;
 };
 
+// Dirties a car's bitmap in place: mud (0 .. 1) in splotches, thickest low
+// down, oil (0 .. 1) in black spots. The outline stays.
+void apply_dirt(Bitmap& car, float mud, float oil);
+
 // Rear view of a car, 96x44 pixels. turn is -1 (left), 0, or +1 (right);
 // signal lights the left (-1) or right (+1) indicator; brake the brake lights;
 // tread_frame (0 .. 2) shifts the tyres' tread, for rolling.

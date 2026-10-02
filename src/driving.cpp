@@ -75,6 +75,24 @@ float steer_rate(float speed) {
     return rate * (speed >= knee ? speed : std::sqrt(speed * knee));
 }
 
+void Dirt::splash(float speed_pct, float dt) {
+    mud_ = std::min(1.f, mud_ + puddle_rate * std::clamp(speed_pct, 0.f, 1.f) * dt);
+}
+
+void Dirt::oil(float dt) { oil_ = std::min(1.f, oil_ + oil_rate * dt); }
+
+void Dirt::crash(float speed_pct) { mud_ = std::min(1.f, mud_ + crash_mud * std::clamp(speed_pct, 0.f, 1.f)); }
+
+void Dirt::wash(float dt) {
+    mud_ = std::max(0.f, mud_ - dt / wash_seconds);
+    oil_ = std::max(0.f, oil_ - dt / wash_seconds);
+}
+
+void Dirt::set(float mud, float oil) {
+    mud_ = std::clamp(mud, 0.f, 1.f);
+    oil_ = std::clamp(oil, 0.f, 1.f);
+}
+
 bool reverse_armed(bool armed, float speed, float throttle, float brake) {
     if (speed > 0.f) return false;                        // moving forwards
     if (brake < 0.1f && throttle < 0.1f) return true;     // standing (or backing), the brake let go

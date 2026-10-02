@@ -31,6 +31,7 @@ struct HudState {
     int map_start = 0;
     const std::vector<int>* map_stations = nullptr;
     const std::vector<int>* map_dealers = nullptr;
+    const std::vector<int>* map_washes = nullptr;
     // At a car dealer: the car on offer and its top speed, acceleration and
     // grip (factors of the standard car).
     const char* dealer_car = nullptr;
