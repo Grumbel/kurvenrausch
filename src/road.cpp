@@ -138,26 +138,12 @@ void RoadRenderer::draw_segment(Framebuffer& fb, const Track& track, const Slice
     const int near = direction_ > 0 ? s.index : s.index + 1;
 
     // Where a fork's routes part or meet, the other route's road beside
-    // ours, with its own rumble strips and lane markings.
+    // ours. Where the two overlap they must look the same whichever is the
+    // active one, so both roads' rumble strips go down first, then both
+    // surfaces, then both lane markings.
     const float oa = track.branch_offset(near), ob = track.branch_offset(near + direction_);
-    if (!std::isnan(oa) && !std::isnan(ob)) {
-        const float ca = a.x + oa * a.w, cb = b.x + ob * b.w;
-        const float ra_ = a.w / static_cast<float>(std::max(6, 2 * lanes));
-        const float rb_ = b.w / static_cast<float>(std::max(6, 2 * lanes));
-        const Color rumble = fogged(theme.rumble[band]);
-        fb.fill_trapezoid(b.y, cb - b.w - rb_, cb + b.w + rb_, a.y, ca - a.w - ra_, ca + a.w + ra_, rumble);
-        fb.fill_trapezoid(b.y, cb - b.w, cb + b.w, a.y, ca - a.w, ca + a.w, fogged(theme.road[band]));
-        if (seg.alt) {
-            const float la = a.w / static_cast<float>(std::max(32, 8 * lanes));
-            const float lb = b.w / static_cast<float>(std::max(32, 8 * lanes));
-            for (int i = 1; i < lanes; ++i) {
-                const float f = static_cast<float>(i) / static_cast<float>(lanes);
-                const float xa = ca - a.w + 2.f * a.w * f, xb = cb - b.w + 2.f * b.w * f;
-                fb.fill_trapezoid(b.y, xb - lb, xb + lb, a.y, xa - la, xa + la,
-                                  fogged(theme.us_markings ? theme.center_line : theme.lane));
-            }
-        }
-    }
+    const bool other_road = !std::isnan(oa) && !std::isnan(ob);
+    const float oca = other_road ? a.x + oa * a.w : 0.f, ocb = other_road ? b.x + ob * b.w : 0.f;
 
     // A gas station's forecourt on the right: paved, with a kerb at its edge.
     const float court_a = track.forecourt_at(near), court_b = track.forecourt_at(near + direction_);
@@ -170,12 +156,16 @@ void RoadRenderer::draw_segment(Framebuffer& fb, const Track& track, const Slice
                           fogged(theme.rumble[0]));
     }
 
-    // Rumble strips.
+    // Rumble strips (the other road's too), then the other road's surface.
     const float ra = a.w / static_cast<float>(std::max(6, 2 * lanes));
     const float rb = b.w / static_cast<float>(std::max(6, 2 * lanes));
     const Color rumble = fogged(theme.rumble[band]);
+    if (other_road) {
+        fb.fill_trapezoid(b.y, ocb - b.w - rb, ocb + b.w + rb, a.y, oca - a.w - ra, oca + a.w + ra, rumble);
+    }
     fb.fill_trapezoid(b.y, b.x - b.w - rb, b.x - b.w, a.y, a.x - a.w - ra, a.x - a.w, rumble);
     fb.fill_trapezoid(b.y, b.x + b.w, b.x + b.w + rb, a.y, a.x + a.w, a.x + a.w + ra, rumble);
+    if (other_road) fb.fill_trapezoid(b.y, ocb - b.w, ocb + b.w, a.y, oca - a.w, oca + a.w, fogged(theme.road[band]));
 
     if (seg.checker) {
         // Chequered start/finish line, two rows of squares.
@@ -223,6 +213,18 @@ void RoadRenderer::draw_segment(Framebuffer& fb, const Track& track, const Slice
                                       a.y, a.x + sd * gap * a.w - a.w * th, a.x + sd * gap * a.w + a.w * th, yellow);
                 }
             }
+        }
+    }
+
+    // The other road's lane markings, over both surfaces.
+    if (other_road && seg.alt) {
+        const float la = a.w / static_cast<float>(std::max(32, 8 * lanes));
+        const float lb = b.w / static_cast<float>(std::max(32, 8 * lanes));
+        for (int i = 1; i < lanes; ++i) {
+            const float f = static_cast<float>(i) / static_cast<float>(lanes);
+            const float xa = oca - a.w + 2.f * a.w * f, xb = ocb - b.w + 2.f * b.w * f;
+            fb.fill_trapezoid(b.y, xb - lb, xb + lb, a.y, xa - la, xa + la,
+                              fogged(theme.us_markings ? theme.center_line : theme.lane));
         }
     }
 

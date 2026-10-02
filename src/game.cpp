@@ -52,6 +52,7 @@ constexpr float camera_air_share = 0.7f;
 // with this time constant (seconds).
 constexpr float fork_overlap = 1.5f;
 constexpr float view_turn_seconds = 0.35f;
+constexpr float fork_bend_push = 0.3f;
 constexpr float aquaplane_grip = 0.35f;
 
 // On an oil slick above this fraction of the top speed the tyres keep only
@@ -488,7 +489,11 @@ void Game::fixed_update(const InputState& input, float dt) {
     braking_ = input.brake > 0.1f && vel.speed >= 0.f; // reversing, it's the reverse gear
     if (!airborne) {
         tr.x += dx * input.steer * (0.5f + 0.5f * grip) * (handbraking_ ? handbrake_steer : 1.f);
-        tr.x -= dx * speed_pct * seg.curve * player.centrifugal / grip;
+        // The S-bends where a fork's routes part are a split, not a corner:
+        // they push the car outwards only a little, so it stays on the road
+        // it is on instead of drifting over to the other one.
+        const float push = seg.branch_bend ? fork_bend_push : 1.f;
+        tr.x -= dx * speed_pct * seg.curve * player.centrifugal * push / grip;
         follow_fork(prev_z + player_z);
     }
     if (oily_) {
