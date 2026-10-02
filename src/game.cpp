@@ -275,6 +275,9 @@ void Game::reset() {
     place_on_road(vertical_, track_.height_at(world_.get<Camera>(camera_).player_z()));
     landing_time_ = 0.f;
     view_yaw_ = view_shift_ = 0.f;
+    front_.reset();
+    flash_time_ = 0.f;
+    thunder_delay_ = -1.f;
     fuel_.reset();
     engine_on_ = true;
     refuelling_ = false;
@@ -416,6 +419,7 @@ bool Game::screenshot(const ScreenshotOptions& opts) {
         apply_car();
     }
     if (opts.visit >= 0) autopilot_visit_ = static_cast<Lot>(opts.visit);
+    if (opts.storm >= 0.f) front_.force(opts.storm);
     view_mode_ = static_cast<ViewMode>(((opts.view % view_modes) + view_modes) % view_modes);
     if (opts.dirt >= 0.f) dirt_.set(opts.dirt, opts.dirt);
     std::vector<int16_t> sound;
@@ -461,7 +465,7 @@ InputState Game::autopilot() const {
     const Segment& seg = track_.segment_at(tr.z + cam.player_z());
     const float pct = vel.speed / player.max_speed;
     // Lateral push the curve will apply this tick, relative to one steering tick.
-    const float grip = std::max(track_.look_at(tr.z + cam.player_z()).grip * car_model(car_model_).grip, 0.2f);
+    const float grip = std::max(look_at(tr.z + cam.player_z()).grip * car_model(car_model_).grip, 0.2f);
     const float drift = -pct * seg.curve * player.centrifugal / grip;
 
     // Low on fuel with a gas station coming up: move over to the right, slow
@@ -540,7 +544,7 @@ void Game::fixed_update(const InputState& input, float dt) {
     // effect and the car is pushed further out of curves.
     // Ploughing through a wet spot fast, the tyres lose most of their grip
     // too: the car barely steers, slides out of bends, twitches and slows.
-    const RoadTheme& look = track_.look_at(tr.z + player_z);
+    const RoadTheme look = look_at(tr.z + player_z);
     // On an oil slick there is next to no grip at all: in a bend the car
     // slides out, on a straight it twitches, and it squeals.
     const Patch surface = airborne ? Patch::None
@@ -583,6 +587,8 @@ void Game::fixed_update(const InputState& input, float dt) {
     }
     if (surface == Patch::Oil && speed_pct > 0.02f) dirt_.oil(dt);
     dirt_.rinse(look.rain, dt);
+    front_.update(dt);
+    update_lightning(look.rain, dt);
     if (handbraking_) spawn_smoke(speed_pct);
 
     weather_.update(look.rain, look.snowfall, -seg.curve * 25.f * speed_pct, speed_pct, dt);
@@ -883,7 +889,7 @@ void Game::update_crash(float dt) {
     tr.z = track_.wrap(tr.z + dt * vel.speed);
     const Segment& seg = track_.segment_at(tr.z + player_z);
     background_.update(seg.curve, dt * vel.speed / track_.segment_length, dt);
-    const RoadTheme& look = track_.look_at(tr.z + player_z);
+    const RoadTheme look = look_at(tr.z + player_z);
     weather_.update(look.rain, look.snowfall, 0.f, vel.speed / player.max_speed, dt);
     tr.y = track_.height_at(tr.z + player_z);
     place_on_road(vertical_, tr.y);
@@ -915,8 +921,25 @@ void Game::update_crash(float dt) {
     update_audio(InputState{}, dt);
 }
 
+// In a heavy storm lightning strikes now and then: a flash, and after a
+// moment (the further away, the longer and the softer) its thunder.
+void Game::update_lightning(float rain, float dt) {
+    if (flash_time_ > 0.f) flash_time_ -= dt;
+    if (thunder_delay_ >= 0.f) {
+        thunder_delay_ -= dt;
+        if (thunder_delay_ < 0.f) synth_.trigger_thunder(thunder_strength_);
+    }
+    rng_ = rng_ * 1664525u + 1013904223u;
+    if (static_cast<float>(rng_ >> 8) / 16777216.f >= lightning_rate(rain) * dt || thunder_delay_ >= 0.f) return;
+    rng_ = rng_ * 1664525u + 1013904223u;
+    const float distance = static_cast<float>(rng_ >> 8) / 16777216.f; // 0 overhead .. 1 far off
+    flash_time_ = 0.08f + 0.1f * (1.f - distance);
+    thunder_delay_ = 0.2f + 2.5f * distance;
+    thunder_strength_ = 1.f - 0.7f * distance;
+}
+
 void Game::spawn_dust(float x, float y, int count, float strength) {
-    const RoadTheme& look = track_.look_at(world_.get<Transform>(player_).z + world_.get<Camera>(camera_).player_z());
+    const RoadTheme look = look_at(world_.get<Transform>(player_).z + world_.get<Camera>(camera_).player_z());
     const Color dust = blend(look.grass[0], Color{0xc8, 0xc0, 0xb0}, 0.6f);
     for (int i = 0; i < count; ++i) {
         rng_ = rng_ * 1664525u + 1013904223u;
@@ -1077,7 +1100,7 @@ void Game::update_audio(const InputState& input, float dt) {
     const auto& player = world_.get<Player>(player_);
     const float player_z = world_.get<Camera>(camera_).player_z();
     const Segment& seg = track_.segment_at(tr.z + player_z);
-    const RoadTheme& look = track_.look_at(tr.z + player_z);
+    const RoadTheme look = look_at(tr.z + player_z);
     const float speed_pct = std::abs(vel.speed) / player.max_speed;
 
     // The automatic gearbox lifts the throttle briefly on every upshift.
@@ -1263,7 +1286,7 @@ void Game::render() {
     const auto& player = world_.get<Player>(player_);
     const auto& cam = world_.get<Camera>(camera_);
 
-    const RoadTheme& look = track_.look_at(tr.z + cam.player_z());
+    const RoadTheme look = look_at(tr.z + cam.player_z());
     background_.render(fb_, look);
 
     // The camera of the chosen view, placed relative to the car; the car's
@@ -1383,6 +1406,13 @@ void Game::render() {
         }
     }
     weather_.render(fb_);
+    if (flash_time_ > 0.f) {
+        // Lightning lights up everything for a moment.
+        const float a = std::min(0.75f, flash_time_ * 5.f);
+        for (int y = 0; y < height; ++y) {
+            for (int x = 0; x < width; ++x) fb_.blend_pixel(x, y, Color{0xf0, 0xf4, 0xff}, a);
+        }
+    }
     if (setup.cockpit) {
         // The dashboard and the wheel, shaking with the car.
         const Bitmap& dash = sprites_.dashboard(car_model_);
@@ -1456,7 +1486,7 @@ void Game::render_mirror() {
     const auto& tr = world_.get<Transform>(player_);
     const auto& cam = world_.get<Camera>(camera_);
     const float car_z = tr.z + cam.player_z();
-    const RoadTheme& look = track_.look_at(car_z);
+    const RoadTheme look = look_at(car_z);
 
     // Keep the proportions of the main view, which maps a world unit to
     // width/2 pixels across and height/2 pixels up at scale 1.

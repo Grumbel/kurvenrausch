@@ -53,6 +53,11 @@ void Synth::trigger_crash(float intensity) {
     crash_events_.fetch_add(1, std::memory_order_release);
 }
 
+void Synth::trigger_thunder(float intensity) {
+    thunder_intensity_.store(std::clamp(intensity, 0.f, 1.f), std::memory_order_relaxed);
+    thunder_events_.fetch_add(1, std::memory_order_release);
+}
+
 void Synth::trigger_whoosh(float intensity) {
     whoosh_intensity_.store(std::clamp(intensity, 0.f, 1.f), std::memory_order_relaxed);
     whoosh_events_.fetch_add(1, std::memory_order_release);
@@ -93,6 +98,12 @@ void Synth::render(int16_t* out, int frames) {
         ding_seen_ = dings;
         ding_age_ = 0.f;
         ding_phase_[0] = ding_phase_[1] = 0.0;
+    }
+    const int thunders = thunder_events_.load(std::memory_order_acquire);
+    if (thunders != thunder_seen_) {
+        thunder_seen_ = thunders;
+        thunder_strength_ = thunder_intensity_.load(std::memory_order_relaxed);
+        thunder_age_ = 0.f;
     }
     const int whooshes = whoosh_events_.load(std::memory_order_acquire);
     if (whooshes != whoosh_seen_) {
@@ -258,6 +269,21 @@ void Synth::render(int16_t* out, int frames) {
             thump_env *= thump_decay;
         }
 
+        // ---- Thunder: a crack, then a low rumble rolling on for seconds -----
+        float thunder = 0.f;
+        if (thunder_age_ < 6.f) {
+            const float age = thunder_age_;
+            thunder_crack_lp_ += (n - thunder_crack_lp_) * lowpass_coeff(2500.f);
+            const float crack = (n - thunder_crack_lp_) * thunder_strength_ * thunder_strength_ * std::exp(-age / 0.07f);
+            thunder_low_[0] += (n - thunder_low_[0]) * lowpass_coeff(160.f);
+            thunder_low_[1] += (thunder_low_[0] - thunder_low_[1]) * lowpass_coeff(90.f);
+            // The roll: the rumble swells and fades in irregular waves.
+            if ((samples_ & 1023u) == 0) thunder_roll_ = 0.55f + 0.45f * std::abs(noise());
+            const float env = std::min(1.f, age / 0.15f) * std::exp(-age / 1.6f) * (0.4f + 0.6f * thunder_strength_);
+            thunder = crack * 0.8f + thunder_low_[1] * env * thunder_roll_ * 9.f;
+            thunder_age_ += 1.f / sr;
+        }
+
         // ---- Horn: two tones a major third apart, square-ish and filtered ---
         float horn = 0.f;
         if (s_horn_ > 1e-4f) {
@@ -330,7 +356,7 @@ void Synth::render(int16_t* out, int frames) {
         }
 
         const float mix = engine + roar + wind + gravel + rain + skid + scrape + crash + horn + nitro + whoosh + pump + ding +
-                          splash;
+                          splash + thunder;
         const float x = std::tanh(mix * s_volume_ * 1.1f);
         out[i] = static_cast<int16_t>(std::lround(x * 30000.f));
     }

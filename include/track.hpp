@@ -197,6 +197,7 @@ struct RoadTheme {
     // Weather
     float rain = 0.f;                   // 0 .. 1
     float snowfall = 0.f;               // 0 .. 1
+    float showers = 0.3f;               // the rain a passing storm brings on top, 0 .. 1 (see weathered())
     float grip = 1.f;                   // tyre grip: 1 dry road, less when wet or icy
     float road_scale = 1.f;             // road width, of the standard Track::road_width
 

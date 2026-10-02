@@ -46,6 +46,9 @@ public:
     void trigger_whoosh(float intensity);
     // A two-note chime, as when the tank is full.
     void trigger_ding();
+    // Thunder: a crack (the louder the nearer, `intensity` 0 .. 1) and a long,
+    // rolling rumble.
+    void trigger_thunder(float intensity);
 
     // Renders mono 16-bit samples. For constant parameters the output depends
     // only on the number of samples rendered so far, not on how the calls are
@@ -59,8 +62,8 @@ private:
     std::atomic<float> rpm_{0.f}, throttle_{0.f}, speed_{0.f}, skid_{0.f};
     std::atomic<float> gravel_{0.f}, scrape_{0.f}, rain_{0.f}, volume_{1.f};
     std::atomic<float> horn_{0.f}, nitro_{0.f}, engine_{1.f}, pump_{0.f}, splash_{0.f};
-    std::atomic<float> crash_intensity_{0.f}, whoosh_intensity_{0.f};
-    std::atomic<int> crash_events_{0}, whoosh_events_{0}, ding_events_{0};
+    std::atomic<float> crash_intensity_{0.f}, whoosh_intensity_{0.f}, thunder_intensity_{0.f};
+    std::atomic<int> crash_events_{0}, whoosh_events_{0}, ding_events_{0}, thunder_events_{0};
 
     // Smoothed parameters and DSP state (audio thread only).
     bool primed_ = false;
@@ -98,6 +101,9 @@ private:
     int ding_seen_ = 0;
     float ding_age_ = 10.f;
     double ding_phase_[2] = {0.0, 0.0};
+    int thunder_seen_ = 0;
+    float thunder_strength_ = 0.f, thunder_age_ = 100.f;
+    float thunder_low_[2] = {0.f, 0.f}, thunder_crack_lp_ = 0.f, thunder_roll_ = 0.f;
 };
 
 // Writes mono 16-bit PCM as a WAV file.

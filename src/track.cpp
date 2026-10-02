@@ -333,7 +333,7 @@ float barrier_limit(const Segment& seg, int side, float car_half_width) {
 RoadTheme mix_themes(const RoadTheme& a, const RoadTheme& b, float t) {
     // Tripwire: when a field is added to RoadTheme this changes, as a reminder
     // to blend it below and to update the expected size.
-    static_assert(sizeof(RoadTheme) == 180, "RoadTheme changed: update mix_themes()");
+    static_assert(sizeof(RoadTheme) == 184, "RoadTheme changed: update mix_themes()");
 
     RoadTheme r = t < 0.5f ? a : b; // discrete fields come from the nearer theme
     const auto c = [t](Color x, Color y) { return blend(x, y, t); };
@@ -373,6 +373,7 @@ RoadTheme mix_themes(const RoadTheme& a, const RoadTheme& b, float t) {
     r.snow_line = f(a.snow_line, b.snow_line);
     r.rain = f(a.rain, b.rain);
     r.snowfall = f(a.snowfall, b.snowfall);
+    r.showers = f(a.showers, b.showers);
     r.grip = f(a.grip, b.grip);
     r.road_scale = f(a.road_scale, b.road_scale);
     r.center_line = c(a.center_line, b.center_line);
@@ -672,6 +673,7 @@ private:
 Zone zone_france() {
     Zone z{"FRANCE", "COTE D'AZUR", RoadTheme{}, 0, Decor::Riviera};
     z.theme.sun_amount = 0.3f; // a small noon sun, the classic default look otherwise
+    z.theme.showers = 0.30f;
     return z;
 }
 
@@ -702,6 +704,7 @@ Zone zone_england() {
     t.grip = 0.9f;
     t.lanes = 2;
     t.road_scale = 0.62f; // narrow country lanes
+    z.theme.showers = 0.60f;
     return z;
 }
 
@@ -726,6 +729,7 @@ Zone zone_netherlands() {
     t.snow_line = 1.0e9f;
     t.rain = 0.1f;
     t.lanes = 2;
+    z.theme.showers = 0.60f;
     return z;
 }
 
@@ -754,6 +758,7 @@ Zone zone_japan() {
     t.snow_line = 44.f;
     t.lanes = 2;
     t.road_scale = 0.75f;
+    z.theme.showers = 0.50f;
     return z;
 }
 
@@ -793,6 +798,7 @@ Zone zone_egypt() {
     t.hill_scale = 0.4f;
     t.cloud_tint = Color{0xff, 0xf4, 0xe0};
     t.cloud_tint_amount = 0.2f;
+    z.theme.showers = 0.00f;
     return z;
 }
 
@@ -813,6 +819,7 @@ Zone zone_kenya() {
     t.cloud_tint = Color{0xf8, 0x9c, 0x5c};
     t.cloud_tint_amount = 0.5f;
     t.road_scale = 0.85f;
+    z.theme.showers = 0.40f;
     return z;
 }
 
@@ -830,6 +837,7 @@ Zone zone_india() {
     t.haze = 0.5f; // hot and hazy
     t.mountain_scale = 0.4f;
     t.road_scale = 0.8f;
+    z.theme.showers = 0.85f; // the monsoon
     return z;
 }
 
@@ -845,6 +853,7 @@ Zone zone_korea() {
     t.mountain_scale = 1.4f; // rocky peaks
     t.hill_scale = 1.2f;
     t.sun_amount = 0.4f;
+    z.theme.showers = 0.50f;
     return z;
 }
 
@@ -863,6 +872,7 @@ Zone zone_australia() {
     t.mountain_scale = 0.3f;
     t.hill_scale = 0.3f;
     t.road_scale = 0.85f;
+    z.theme.showers = 0.10f;
     return z;
 }
 
@@ -883,6 +893,7 @@ Zone zone_brazil() {
     t.hill_scale = 1.3f;
     t.rain = 0.9f; // tropical downpour
     t.grip = 0.82f;
+    z.theme.showers = 0.10f;
     return z;
 }
 
@@ -909,6 +920,7 @@ Zone zone_germany() {
     t.snow_line = 1.0e9f;
     t.rain = 0.85f;
     t.grip = 0.8f;
+    z.theme.showers = 0.15f;
     return z;
 }
 
@@ -943,6 +955,7 @@ Zone zone_switzerland() {
     t.snowfall = 0.7f;
     t.grip = 0.7f;
     t.lanes = 2;
+    z.theme.showers = 0.00f; // it snows harder instead
     return z;
 }
 
@@ -968,6 +981,7 @@ Zone zone_italy() {
     t.mountain_scale = 0.8f;
     t.snow_line = 1.0e9f;
     t.lanes = 2;
+    z.theme.showers = 0.35f;
     return z;
 }
 
@@ -996,6 +1010,7 @@ Zone zone_arizona() {
     t.snow_line = 1.0e9f;
     t.lanes = 2;
     t.us_markings = true;
+    z.theme.showers = 0.25f; // desert thunderstorms
     return z;
 }
 
@@ -1029,6 +1044,7 @@ Zone zone_california() {
     t.grip = 0.95f;
     t.lanes = 2;
     t.us_markings = true;
+    z.theme.showers = 0.20f;
     return z;
 }
 
@@ -1058,6 +1074,7 @@ Zone zone_san_francisco() {
     t.snow_line = 1.0e9f;
     t.lanes = 2;
     t.us_markings = true;
+    z.theme.showers = 0.35f;
     return z;
 }
 

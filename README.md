@@ -41,7 +41,12 @@ weather and road markings, fading smoothly into one another:
   solid, the car scrapes along them and throws sparks
 - **Weather**: rain streaks, swaying snowflakes, fog, a sun, tinted clouds and
   haze; wet and icy roads reduce grip. Driving, the rain and snow stream out
-  of the vanishing point in ever longer streaks the faster you go
+  of the vanishing point in ever longer streaks the faster you go. The
+  weather changes as you drive: fronts pass over, the rainy zones dry up for
+  a while, storms darken the sky, thicken the fog and make the road
+  slippery, each climate its own way (monsoon in India, the odd desert
+  thunderstorm, never a drop in Egypt), with lightning and rolling thunder in
+  the worst of it
 - **Wet spots**: puddles on the road in the rainy and snowy zones; hit one
   fast and the car aquaplanes, throwing up spray. Rarely, an **oil slick**:
   hardly any grip at all

@@ -123,6 +123,11 @@ or
 .B \-\-pause
 Show the pause menu in the screenshot.
 .TP
+.BI \-\-storm " L"
+Hold the weather of the headless run at
+.IR L ,
+from 0 (clear) to 1 (a storm), instead of letting it drift.
+.TP
 .BI \-\-view " N"
 Render the headless run from camera view
 .IR N :

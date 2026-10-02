@@ -27,6 +27,7 @@ add_library(kurvenrausch_core STATIC
     src/audio.cpp
     src/background.cpp
     src/bitmap.cpp
+    src/climate.cpp
     src/display.cpp
     src/driving.cpp
     src/font.cpp

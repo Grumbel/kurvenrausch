@@ -9,6 +9,7 @@
 #include "input.hpp"
 #include "state.hpp"
 #include "views.hpp"
+#include "climate.hpp"
 #include "components.hpp"
 #include "road.hpp"
 #include "synth.hpp"
@@ -1632,6 +1633,71 @@ void test_synth_engine() {
     }
 }
 
+void test_climate() {
+    using namespace racer;
+    // The front drifts between 0 and 1 without jumps, the same every time,
+    // mostly fair.
+    WeatherFront front;
+    float prev = front.level(), lo = 1.f, hi = 0.f, sum = 0.f, max_step = 0.f;
+    const int steps = 60 * 60 * 20; // twenty minutes
+    for (int i = 0; i < steps; ++i) {
+        front.update(1.f / 60.f);
+        const float l = front.level();
+        CHECK(l >= 0.f && l <= 1.f);
+        max_step = std::max(max_step, std::abs(l - prev));
+        lo = std::min(lo, l);
+        hi = std::max(hi, l);
+        sum += l;
+        prev = l;
+    }
+    CHECK(max_step < 0.002f);
+    CHECK(lo < 0.15f && hi > 0.7f);
+    CHECK(sum / steps < 0.5f);
+    WeatherFront again;
+    again.update(123.f);
+    WeatherFront other;
+    for (int i = 0; i < 123; ++i) other.update(1.f);
+    CHECK(std::abs(again.level() - other.level()) < 1e-4f);
+    again.force(0.8f);
+    CHECK(again.level() == 0.8f);
+    again.force(-1.f);
+    CHECK(std::abs(again.level() - other.level()) < 1e-4f);
+
+    // A wet climate dries up in fair weather and pours in a storm, darker,
+    // foggier and more slippery; a desert stays dry whatever comes.
+    RoadTheme wet;
+    wet.rain = 0.5f;
+    wet.showers = 0.4f;
+    wet.sun_amount = 0.5f;
+    const RoadTheme fair = weathered(wet, 0.f), storm = weathered(wet, 1.f);
+    CHECK(fair.rain < wet.rain && storm.rain > wet.rain + 0.3f);
+    CHECK(storm.grip < wet.grip && fair.grip >= wet.grip);
+    CHECK(storm.fog_density > wet.fog_density && storm.sun_amount < wet.sun_amount);
+    CHECK(storm.sky_top.r + storm.sky_top.g + storm.sky_top.b < wet.sky_top.r + wet.sky_top.g + wet.sky_top.b);
+    RoadTheme desert;
+    desert.showers = 0.f;
+    CHECK(weathered(desert, 1.f).rain == 0.f && weathered(desert, 1.f).grip == 1.f);
+    RoadTheme alps;
+    alps.snowfall = 0.7f;
+    alps.showers = 0.f;
+    CHECK(weathered(alps, 1.f).snowfall > 0.7f && weathered(alps, 0.f).snowfall < 0.7f);
+    // Lightning only in heavy rain.
+    CHECK(lightning_rate(0.5f) == 0.f && lightning_rate(1.f) > 0.1f);
+
+    // Thunder: loud and low at first, rolling away over a few seconds.
+    SynthParams quiet;
+    quiet.engine = 0.f;
+    Synth synth;
+    synth.set_params(quiet);
+    synth.trigger_thunder(1.f);
+    Samples s(static_cast<size_t>(Synth::sample_rate) * 6);
+    synth.render(s.data(), static_cast<int>(s.size()));
+    const size_t sr = Synth::sample_rate;
+    CHECK(rms(s, 0, sr) > 0.05);
+    CHECK(rms(s, 4 * sr, 5 * sr) < 0.3 * rms(s, 0, sr));
+    CHECK(band_power(s, 20, 300) > band_power(s, 1000, 8000));
+}
+
 void test_synth_effects() {
     using namespace racer;
     const Samples base = render_sound(driving(), 1.5);
@@ -1872,6 +1938,7 @@ int main() {
     test_follow_speed();
     test_steer_rate();
     test_pause_menu();
+    test_climate();
     test_views();
     test_state();
     test_dirt();
