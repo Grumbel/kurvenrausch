@@ -178,8 +178,10 @@ void draw_hud(Framebuffer& fb, const HudState& hud) {
 
     // At a lot with a choice: what is on offer, for a car with bars for its
     // strengths.
+    int message_y = h / 2 - 42;
     if (!hud.offer_title.empty()) {
         const int px = 70, py = 68, pw = w - 140, ph = hud.offer_stats ? 70 : 36;
+        message_y = py + ph + 6; // below the panel, not over it
         for (int y = py; y < py + ph; ++y)
             for (int x = px; x < px + pw; ++x) fb.blend_pixel(x, y, Shadow, 0.7f);
         text_center(fb, py + 5, hud.offer_title, Label);
@@ -220,7 +222,7 @@ void draw_hud(Framebuffer& fb, const HudState& hud) {
     }
 
     if (!hud.message.empty() && hud.message_visible) {
-        text_center(fb, h / 2 - 42, hud.message, Label, 3);
+        text_center(fb, message_y, hud.message, Label, 3);
     }
 }
 

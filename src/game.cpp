@@ -746,11 +746,9 @@ void Game::visit_lot(const InputState& input) {
                 break;
             case Lot::Motel:
                 passenger_ = (passenger_ + push + passengers) % passengers;
-                show_message(std::string(passenger(passenger_).name) + " GETS IN", 1.5f);
                 break;
             default:
                 driver_ = (driver_ + push + drivers) % drivers;
-                show_message(std::string(driver(driver_).name) + " DRIVES", 1.5f);
                 break;
         }
         synth_.trigger_ding();
