@@ -815,7 +815,7 @@ Bitmap make_rival(const CarStyle& st, int signal, bool brake) {
     paint::rect(b, 8, 2, 84, 4, st.body_dark); // wing
     for (int x : {42, 54}) {
         paint::rect(b, x, 2, 4, 4, st.body_light); // stripes over wing and deck
-        paint::rect(b, x, 15, 4, 12, st.body_light);
+        paint::rect(b, x, 15, 4, 9, st.body_light);
     }
     for (int x : {16, 28, 72, 84}) {
         const Color lamp = brake ? Color{0xff, 0x54, 0x3c} : Color{0x8c, 0x12, 0x12};
