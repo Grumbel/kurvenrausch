@@ -572,6 +572,88 @@ Bitmap make_wash_sign() {
     return b;
 }
 
+// A roadside motel: a long row of rooms, doors in turn with windows, under a
+// flat roof.
+Bitmap make_motel() {
+    Bitmap b(192, 96);
+    const Color wall{0xf0, 0xe0, 0xc4}, roof{0x2c, 0x9c, 0x98}, roof_dark{0x1c, 0x6c, 0x68};
+    const Color door{0xd0, 0x50, 0x70}, glass{0x60, 0x90, 0xb0}, curtain{0xf0, 0xc8, 0x60};
+    paint::rect(b, 6, 44, 180, 52, wall);
+    paint::rect(b, 0, 36, 192, 8, roof);
+    paint::rect(b, 0, 43, 192, 2, roof_dark);
+    for (int i = 0; i < 8; ++i) {
+        const int x = 12 + i * 22;
+        paint::rect(b, x, 60, 8, 34, door);
+        paint::rect(b, x + 6, 76, 1, 2, Color{0xf0, 0xd0, 0x40}); // knob
+        paint::rect(b, x + 1, 52, 6, 5, Color{0xf8, 0xf8, 0xf0});  // room number
+        paint::rect(b, x + 3, 53, 2, 3, Color{0x30, 0x30, 0x30});
+        paint::rect(b, x + 10, 60, 10, 12, glass);
+        paint::rect(b, x + 10, 60, 3, 12, curtain);
+        paint::rect(b, x + 17, 60, 3, 12, curtain);
+    }
+    paint::rect(b, 0, 94, 192, 2, Color{0x90, 0x88, 0x78}); // the walkway
+    // The office at the end, with its sign on the roof.
+    paint::rect(b, 56, 14, 80, 22, roof_dark);
+    paint::rect(b, 58, 16, 76, 18, Color{0x18, 0x18, 0x30});
+    paint::text(b, (192 - font::text_width("MOTEL", 2)) / 2, 18, "MOTEL", Color{0xff, 0x50, 0x90}, 2);
+    paint::outline(b, Outline);
+    return b;
+}
+
+// The motel's neon sign: MOTEL down a red panel, VACANCY glowing below.
+Bitmap make_motel_sign() {
+    Bitmap b(44, 112);
+    paint::rect(b, 19, 60, 6, 52, Color{0x9a, 0x9a, 0xa4});
+    paint::rect(b, 23, 60, 2, 52, Color{0x6c, 0x6c, 0x74});
+    paint::rect(b, 8, 0, 28, 50, Color{0xc0, 0x18, 0x30});
+    paint::rect(b, 10, 2, 24, 46, Color{0x80, 0x10, 0x20});
+    const char* letters = "MOTEL";
+    for (int i = 0; i < 5; ++i) {
+        const char s[2] = {letters[i], 0};
+        paint::text(b, 20, 4 + i * 9, s, Color{0xff, 0xe0, 0x90});
+    }
+    paint::rect(b, 0, 50, 44, 11, Color{0x18, 0x30, 0x20});
+    paint::text(b, 1, 52, "VACANCY", Color{0x60, 0xff, 0x80});
+    paint::outline(b, Outline);
+    return b;
+}
+
+// A hospital: white, rows of windows, a red cross on the roof and the
+// emergency entrance at the front.
+Bitmap make_hospital() {
+    Bitmap b(192, 96);
+    const Color wall{0xf4, 0xf4, 0xf0}, shade{0xc8, 0xcc, 0xd0}, glass{0x80, 0xb0, 0xd8}, red{0xd8, 0x20, 0x20};
+    paint::rect(b, 4, 20, 184, 76, wall);
+    paint::rect(b, 4, 20, 184, 3, shade);
+    for (int row = 0; row < 3; ++row) {
+        for (int x = 12; x < 180; x += 14) paint::rect(b, x, 28 + row * 14, 9, 8, glass);
+    }
+    paint::rect(b, 0, 70, 192, 4, Color{0x2c, 0x5c, 0xb0}); // a blue band
+    paint::rect(b, 70, 74, 52, 22, Color{0x50, 0x70, 0x88});  // the entrance
+    paint::rect(b, 72, 76, 48, 20, glass);
+    paint::rect(b, 95, 76, 2, 20, Color{0x50, 0x70, 0x88});
+    paint::rect(b, 64, 64, 64, 8, red);
+    paint::text(b, (192 - font::text_width("HOSPITAL")) / 2, 64, "HOSPITAL", Color{0xff, 0xff, 0xff});
+    // The cross on the roof.
+    paint::rect(b, 86, 0, 20, 20, wall);
+    paint::rect(b, 93, 3, 6, 14, red);
+    paint::rect(b, 89, 7, 14, 6, red);
+    paint::outline(b, Outline);
+    return b;
+}
+
+// The blue road sign with a white H.
+Bitmap make_hospital_sign() {
+    Bitmap b(44, 112);
+    paint::rect(b, 19, 40, 6, 72, Color{0x9a, 0x9a, 0xa4});
+    paint::rect(b, 23, 40, 2, 72, Color{0x6c, 0x6c, 0x74});
+    paint::rect(b, 2, 0, 40, 40, Color{0xf4, 0xf4, 0xf4});
+    paint::rect(b, 4, 2, 36, 36, Color{0x1c, 0x4c, 0xa8});
+    paint::text(b, (44 - font::text_width("H", 4)) / 2, 6, "H", Color{0xf4, 0xf4, 0xf4}, 4);
+    paint::outline(b, Outline);
+    return b;
+}
+
 // A date palm: a tall, ringed trunk under a crown of drooping fronds.
 Bitmap make_date_palm() {
     Bitmap b(64, 112);
@@ -1076,7 +1158,8 @@ Bitmap make_dry_shrub() {
 
 namespace {
 void draw_head(Bitmap& b, float x, float y, float r, const Person& p);
-void heads_behind_glass(Bitmap& b, float u, int top, const Person& driver, const Person& passenger);
+void heads_behind_glass(Bitmap& b, float u, int top, const Person& driver, const Person& passenger,
+                        bool bandaged = false);
 } // namespace
 
 Bitmap make_car(const CarStyle& style, int turn, int signal, bool brake, int tread_frame, bool people) {
@@ -1283,12 +1366,22 @@ void draw_head(Bitmap& b, float x, float y, float r, const Person& p) {
     }
 }
 
+// A bandage wound round a head of radius r at (x, y), a spot of red on it.
+void bandage(Bitmap& b, float x, float y, float r) {
+    const Color gauze{0xf4, 0xf4, 0xec}, shade{0xc8, 0xc8, 0xc0};
+    const int x0 = static_cast<int>(x - r), w = static_cast<int>(2.f * r) + 1, y0 = static_cast<int>(y - r * 0.4f);
+    paint::rect(b, x0, y0, w, 3, gauze);
+    paint::rect(b, x0, y0 + 2, w, 1, shade);
+    paint::rect(b, static_cast<int>(x + r * 0.3f), y0, 2, 2, Color{0xd0, 0x20, 0x20});
+}
+
 // The two of them seen through a closed car's rear window, `top` pixels down
 // in `b`, whose other pixels must still be transparent: their heads, clipped
 // to the glass and lightly tinted by it.
-void heads_behind_glass(Bitmap& b, float u, int top, const Person& driver, const Person& passenger) {
+void heads_behind_glass(Bitmap& b, float u, int top, const Person& driver, const Person& passenger, bool bandaged) {
     const float t = static_cast<float>(top);
     draw_head(b, 37.f + u, t + 10.5f, 4.5f, driver);
+    if (bandaged) bandage(b, 37.f + u, t + 10.5f, 4.5f);
     draw_head(b, 59.f + u, t + 10.5f, 4.5f, passenger);
     const Color glass{0x2c, 0x3c, 0x54};
     const int x0 = 26 + static_cast<int>(u), y0 = top + 5;
@@ -1306,7 +1399,7 @@ void heads_behind_glass(Bitmap& b, float u, int top, const Person& driver, const
 } // namespace
 
 Bitmap make_occupants(const Person& driver, const Person& passenger, int turn, int wave, int frame, bool convertible,
-                      int headroom) {
+                      int headroom, bool bandaged) {
     Bitmap b(96, 44 + headroom);
     const float u = static_cast<float>(2 * turn); // the cabin leans like in make_car
     const float h = static_cast<float>(headroom);
@@ -1315,11 +1408,12 @@ Bitmap make_occupants(const Person& driver, const Person& passenger, int turn, i
         const Color rest_dark{0x20, 0x20, 0x24}, rest{0x3c, 0x3c, 0x44}, rest_light{0x60, 0x60, 0x6a};
         draw_head(b, 60.f + u, h + 7.f, 6.f, passenger);
         draw_head(b, 36.f + u, h + 6.f, 5.f, driver);
+        if (bandaged) bandage(b, 36.f + u, h + 6.f, 5.f);
         paint::shaded_ellipse(b, 36.f + u, h + 12.f, 6.f, 4.f, rest_dark, rest, rest_light);
         paint::shaded_ellipse(b, 60.f + u, h + 12.f, 6.f, 4.f, rest_dark, rest, rest_light);
         paint::outline(b, Outline);
     } else {
-        heads_behind_glass(b, u, headroom, driver, passenger);
+        heads_behind_glass(b, u, headroom, driver, passenger, bandaged);
         // The glint on the glass stays in front of them.
         paint::stroke(b, 30.f + u, h + 12.f, 36.f + u, h + 5.f, 1.f, 1.f, Color{0x70, 0x88, 0xa8});
     }
@@ -1625,16 +1719,17 @@ Bitmap make_app_icon() {
 }
 
 const Bitmap& SpriteSheet::occupants(int driver_index, int passenger_index, int steer, int wave, int frame,
-                                     int model) const {
+                                     int model, bool bandaged) const {
     const bool convertible = player_convertible(model);
     const auto d = static_cast<uint32_t>(((driver_index % drivers) + drivers) % drivers);
     const auto p = static_cast<uint32_t>(((passenger_index % passengers) + passengers) % passengers);
     const uint32_t key = d | p << 4 | static_cast<uint32_t>(steer + 1) << 8 | static_cast<uint32_t>(wave + 1) << 10 |
-                         static_cast<uint32_t>(frame & 1) << 12 | static_cast<uint32_t>(convertible) << 13;
+                         static_cast<uint32_t>(frame & 1) << 12 | static_cast<uint32_t>(convertible) << 13 |
+                         static_cast<uint32_t>(bandaged) << 14;
     auto it = occupants_.find(key);
     if (it == occupants_.end()) {
         it = occupants_.emplace(key, make_occupants(driver(static_cast<int>(d)), passenger(static_cast<int>(p)), steer,
-                                                    wave, frame, convertible, player_headroom)).first;
+                                                    wave, frame, convertible, player_headroom, bandaged)).first;
     }
     return it->second;
 }
@@ -1762,6 +1857,10 @@ SpriteSheet::SpriteSheet() {
     scenery_[static_cast<size_t>(Scenery::Banana)] = make_banana();
     scenery_[static_cast<size_t>(Scenery::CarWash)] = make_car_wash();
     scenery_[static_cast<size_t>(Scenery::WashSign)] = make_wash_sign();
+    scenery_[static_cast<size_t>(Scenery::Motel)] = make_motel();
+    scenery_[static_cast<size_t>(Scenery::MotelSign)] = make_motel_sign();
+    scenery_[static_cast<size_t>(Scenery::Hospital)] = make_hospital();
+    scenery_[static_cast<size_t>(Scenery::HospitalSign)] = make_hospital_sign();
 }
 
 namespace {

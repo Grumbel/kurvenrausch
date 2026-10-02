@@ -153,6 +153,7 @@ private:
     int car_model_ = 0;
     int driver_ = 0;     // see driver(): the hospital changes it
     int passenger_ = 0;  // see passenger(): the motel changes it
+    bool bandaged_ = false; // the driver after a crash, until a hospital patches them up
     Bitmap player_bitmap_; // the car with its people, put together each frame
     float base_max_speed_ = 0.f;
     std::array<std::vector<int>, lot_kinds> lots_; // first full-width forecourt segment of each lot, per kind

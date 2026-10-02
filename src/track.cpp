@@ -67,6 +67,10 @@ const SceneryInfo& scenery_info(Scenery kind) {
         /* Banana    */ { 900.f, true,  false, true},
         /* CarWash   */ {4800.f, true,  false, false},
         /* WashSign  */ { 700.f, true,  false, false},
+        /* Motel     */ {4800.f, true,  false, false},
+        /* MotelSign */ { 700.f, true,  false, false},
+        /* Hospital  */ {4800.f, true,  false, false},
+        /* HospitalSign*/{ 700.f, true, false, false},
     };
     static_assert(sizeof(infos) / sizeof(infos[0]) == static_cast<size_t>(Scenery::Count),
                   "scenery_info() needs an entry for every Scenery kind");
@@ -150,6 +154,8 @@ const LotNames& lot_names(Lot kind) {
         {"GAS STATION", "gas"},
         {"CAR DEALER", "dealer"},
         {"CAR WASH", "wash"},
+        {"MOTEL", "motel"},
+        {"HOSPITAL", "hospital"},
     };
     static_assert(sizeof(names) / sizeof(names[0]) == static_cast<size_t>(lot_kinds), "every lot needs its names");
     return names[static_cast<size_t>(kind)];
@@ -528,6 +534,10 @@ public:
     // A car wash, laid out the same way: the wash bay beyond the forecourt.
     void car_wash() { forecourt_lot(Lot::Wash); }
 
+    // A motel and a hospital, laid out the same way.
+    void motel() { forecourt_lot(Lot::Motel); }
+    void hospital() { forecourt_lot(Lot::Hospital); }
+
     void forecourt_lot(Lot kind) {
         const int from = size();
         road(8, 40, 8, Bend::None, Hill::None);
@@ -538,20 +548,31 @@ public:
             seg.forecourt = 1.f + (forecourt_width - 1.f) * std::min(1.f, in);
             seg.lot = kind;
         }
-        if (kind == Lot::Dealer) {
-            scenery(from + 1, Scenery::DealerSign, 1.25f);
-            scenery(from + start + 26, Scenery::Showroom, forecourt_width + 0.1f);
-            return;
+        // The sign ahead, the building beyond the forecourt.
+        switch (kind) {
+            case Lot::Gas:
+                scenery(from + 1, Scenery::FuelSign, 1.25f);
+                scenery(from + start + 16, Scenery::FuelPump, 1.75f);
+                scenery(from + start + 24, Scenery::FuelPump, 1.75f);
+                scenery(from + start + 30, Scenery::GasStation, forecourt_width + 0.1f);
+                break;
+            case Lot::Dealer:
+                scenery(from + 1, Scenery::DealerSign, 1.25f);
+                scenery(from + start + 26, Scenery::Showroom, forecourt_width + 0.1f);
+                break;
+            case Lot::Wash:
+                scenery(from + 1, Scenery::WashSign, 1.25f);
+                scenery(from + start + 26, Scenery::CarWash, forecourt_width + 0.1f);
+                break;
+            case Lot::Motel:
+                scenery(from + 1, Scenery::MotelSign, 1.25f);
+                scenery(from + start + 26, Scenery::Motel, forecourt_width + 0.1f);
+                break;
+            case Lot::Hospital:
+                scenery(from + 1, Scenery::HospitalSign, 1.25f);
+                scenery(from + start + 26, Scenery::Hospital, forecourt_width + 0.1f);
+                break;
         }
-        if (kind == Lot::Wash) {
-            scenery(from + 1, Scenery::WashSign, 1.25f);
-            scenery(from + start + 26, Scenery::CarWash, forecourt_width + 0.1f);
-            return;
-        }
-        scenery(from + 1, Scenery::FuelSign, 1.25f);
-        scenery(from + start + 16, Scenery::FuelPump, 1.75f);
-        scenery(from + start + 24, Scenery::FuelPump, 1.75f);
-        scenery(from + start + 30, Scenery::GasStation, forecourt_width + 0.1f);
     }
 
     // A fork: two routes, `left` and `right` building their middle parts.
@@ -1280,6 +1301,7 @@ Track build_demo_track() {
     b.mark(canal, b.size(), Edge::Rail, Edge::None);
     b.gas_station();
     b.curve(Len::Medium, -Bend::Easy, Hill::None);
+    b.hospital();
 
     b.begin_zone(zone_germany());
     b.curve(Len::Medium, -Bend::Medium, Hill::Low);
@@ -1346,12 +1368,14 @@ Track build_demo_track() {
     b.curve(Len::Short, Bend::Medium, Hill::Low / 2.f);
     b.gas_station();
     b.curve(Len::Medium, -Bend::Easy, -Hill::Low / 2.f);
+    b.motel();
 
     b.begin_zone(zone_korea());
     // Up through the autumn forest and down again.
     b.curve(Len::Medium, Bend::Hard, Hill::Medium);
     b.gas_station();
     b.curve(Len::Medium, -Bend::Hard, -Hill::Medium);
+    b.hospital();
 
     b.begin_zone(zone_japan());
     // Past the cherry trees towards the mountain.
@@ -1387,6 +1411,7 @@ Track build_demo_track() {
            });
     b.curve(Len::Medium, -Bend::Medium, Hill::Low);
     b.straight(Len::Medium);
+    b.motel(); // on the old highway
 
     b.begin_zone(zone_california());
     const int pch = b.size(); // the coast road: the ocean on the left, sandstone on the right

@@ -18,7 +18,8 @@ The road forks in places into two routes that join again; keep to the side of
 the road you want to take.
 On the way there is traffic to pass, fuel to buy at gas stations, other cars
 to choose at car dealers (stop on the forecourt and steer left or right), car
-washes to clean off the mud and oil the car picks up,
+washes to clean off the mud and oil the car picks up, motels to change the
+passenger and hospitals to change the driver (or patch them up after a crash),
 nitro to burn and, in San Francisco, crests to jump.
 .PP
 Without options the game opens a window and starts at the start line; the lap
@@ -111,9 +112,11 @@ Let the autopilot pull in at the next lot of
 during the headless run, and stay there:
 .B gas
 (a gas station),
-.B dealer
+.BR dealer ,
+.BR wash ,
+.B motel
 or
-.BR wash .
+.BR hospital .
 .TP
 .B \-\-pause
 Show the pause menu in the screenshot.

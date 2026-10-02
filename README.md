@@ -85,8 +85,12 @@ weather and road markings, fading smoothly into one another:
 - **Dirt and car washes**: puddles splash the car with mud, crashes add more,
   oil slicks leave black spots; stop at one of the car washes in England,
   Kenya and the outback to have it washed clean
+- **Motels and hospitals**: stop at a motel (India, Route 66) and steer left
+  or right to pick up another passenger, among them a granny and a dog; at a
+  hospital (Holland, Korea) another driver takes the wheel. A crash leaves
+  the driver with a bandage round the head until a hospital patches them up
 - **Mini map** of the lap with your position, the start line, the gas
-  stations, the car dealers and the car washes
+  stations, the car dealers, car washes, motels and hospitals
 - **Synthesised sound**: a six-cylinder engine with exhaust pulses ringing a
   pipe and a body resonance for the bass, building with the revs, surging as
   the throttle opens and crackling on the overrun; gear changes, tyre squeal,

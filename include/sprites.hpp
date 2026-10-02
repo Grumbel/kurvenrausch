@@ -54,8 +54,9 @@ Bitmap make_player_car(const CarStyle& style, int turn, bool brake, int tread, i
 // in a convertible their heads above the seats, in a closed car dimly
 // through the rear window. wave: -1 the driver waves out on the left, +1 the
 // passenger on the right, 0 nobody; frame 0 or 1 animates the wave.
+// bandaged: the driver wears a bandage round the head, after a crash.
 Bitmap make_occupants(const Person& driver, const Person& passenger, int turn, int wave, int frame, bool convertible,
-                      int headroom);
+                      int headroom, bool bandaged = false);
 
 // The application icon, 32x32 pixel art: a road into a sunset with the red
 // car on it, on a rounded square. The window icon and the desktop icons
@@ -87,7 +88,8 @@ public:
         return player_convertible_[static_cast<size_t>(((model % car_models) + car_models) % car_models)];
     }
     // The people to draw over it (see make_occupants()), made once and kept.
-    const Bitmap& occupants(int driver_index, int passenger_index, int steer, int wave, int frame, int model) const;
+    const Bitmap& occupants(int driver_index, int passenger_index, int steer, int wave, int frame, int model,
+                            bool bandaged = false) const;
     // A vehicle in the traffic from behind; style picks the colours (modulo
     // vehicle_info(kind).styles), signal the indicator blinking towards -1
     // (left), +1 (right), or 0.

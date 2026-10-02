@@ -65,6 +65,10 @@ enum class Scenery : uint8_t {
     Banana,
     CarWash,      // the wash bay with its brushes, beyond its forecourt
     WashSign,     // the tall sign announcing it
+    Motel,        // a row of rooms, beyond its forecourt
+    MotelSign,    // the neon sign announcing it
+    Hospital,     // beyond its forecourt
+    HospitalSign, // the blue H sign announcing it
     Count
 };
 
@@ -96,8 +100,10 @@ enum class Lot : uint8_t {
     Gas,    // a gas station: refuel
     Dealer, // a car dealer: change cars
     Wash,   // a car wash: clean the car
+    Motel,  // a motel: change the passenger
+    Hospital, // a hospital: patch up the driver, or change drivers
 };
-constexpr int lot_kinds = 3;
+constexpr int lot_kinds = 5;
 // The name the HUD shows, and the keyword --visit takes.
 const char* lot_name(Lot kind);
 const char* lot_keyword(Lot kind);

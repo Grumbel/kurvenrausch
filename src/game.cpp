@@ -265,6 +265,7 @@ void Game::reset() {
     stranded_time_ = 0.f;
     dirt_.reset();
     washing_ = false;
+    bandaged_ = false;
 }
 
 void Game::update_rumble() {
@@ -674,16 +675,36 @@ void Game::apply_car() {
 }
 
 // Standing on the forecourt of a lot with a choice, it is on offer: at a car
-// dealer the cars. Each push of the steering to a side shows the next one
-// that way, and the player drives off with whichever is showing.
+// dealer the cars, at a motel the passengers, at a hospital the drivers.
+// Each push of the steering to a side shows the next one that way, and the
+// player drives off with whichever is showing. A hospital also patches up
+// a driver hurt in a crash.
 void Game::visit_lot(const InputState& input) {
     const float speed_pct = std::abs(world_.get<Velocity>(player_).speed) / world_.get<Player>(player_).max_speed;
     const std::optional<Lot> here = speed_pct < refuel_speed ? lot_here() : std::nullopt;
-    offer_ = here == Lot::Dealer ? here : std::nullopt;
+    const bool choice = here == Lot::Dealer || here == Lot::Motel || here == Lot::Hospital;
+    offer_ = choice ? here : std::nullopt;
+    if (here == Lot::Hospital && bandaged_) {
+        bandaged_ = false;
+        synth_.trigger_ding();
+        show_message("PATCHED UP", 2.f);
+    }
     const int push = input.steer > 0.5f ? 1 : input.steer < -0.5f ? -1 : 0;
     if (offer_ && push != 0 && lot_steer_ == 0) {
-        car_model_ = (car_model_ + push + car_models) % car_models;
-        apply_car();
+        switch (*offer_) {
+            case Lot::Dealer:
+                car_model_ = (car_model_ + push + car_models) % car_models;
+                apply_car();
+                break;
+            case Lot::Motel:
+                passenger_ = (passenger_ + push + passengers) % passengers;
+                show_message(std::string(passenger(passenger_).name) + " GETS IN", 1.5f);
+                break;
+            default:
+                driver_ = (driver_ + push + drivers) % drivers;
+                show_message(std::string(driver(driver_).name) + " DRIVES", 1.5f);
+                break;
+        }
         synth_.trigger_ding();
     }
     lot_steer_ = push;
@@ -788,6 +809,7 @@ void Game::start_crash(float speed_pct) {
     wave_time_ = 0.f;
     synth_.trigger_crash(1.f);
     dirt_.crash(speed_pct);
+    bandaged_ = true;
 
     // Bits of car flying off, and a cloud of dust.
     const float x = static_cast<float>(width) / 2.f;
@@ -1230,7 +1252,7 @@ void Game::render() {
     // The car with its people drawn over it.
     const Bitmap& body = sprites_.player(car_model_, shown_steer, braking_, SpriteSheet::tyre_frame(wheel_distance_));
     const Bitmap& people = sprites_.occupants(driver_, passenger_, shown_steer, wave_time_ > 0.f ? wave_side_ : 0,
-                                              static_cast<int>(clock_ / 0.15f) & 1, car_model_);
+                                              static_cast<int>(clock_ / 0.15f) & 1, car_model_, bandaged_);
     player_bitmap_ = body;
     apply_dirt(player_bitmap_, dirt_.mud(), dirt_.oil());
     for (size_t i = 0; i < people.px.size() && i < player_bitmap_.px.size(); ++i) {
@@ -1313,13 +1335,17 @@ void Game::render() {
     hud.speed_kmh_fraction = std::abs(vel.speed) / base_max_speed_;
     hud.reverse = vel.speed < 0.f;
     if (offer_) {
-        const CarModel& m = car_model(car_model_);
         hud.offer_title = lot_name(*offer_);
-        hud.offer_name = m.name;
-        hud.offer_stats = true;
-        hud.offer_values[0] = m.top_speed;
-        hud.offer_values[1] = m.acceleration;
-        hud.offer_values[2] = m.grip;
+        if (*offer_ == Lot::Dealer) {
+            const CarModel& m = car_model(car_model_);
+            hud.offer_name = m.name;
+            hud.offer_stats = true;
+            hud.offer_values[0] = m.top_speed;
+            hud.offer_values[1] = m.acceleration;
+            hud.offer_values[2] = m.grip;
+        } else {
+            hud.offer_name = *offer_ == Lot::Motel ? passenger(passenger_).name : driver(driver_).name;
+        }
     }
     hud.lap = lap_;
     hud.lap_time = lap_time_;

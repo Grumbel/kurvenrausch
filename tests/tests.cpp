@@ -669,28 +669,41 @@ void test_dirt() {
     CHECK(changed(0.f, 0.8f, 0, car.h) > 0);
 }
 
-void test_car_washes() {
+void test_lots() {
     using namespace racer;
     const Track t = build_demo_track();
-    const std::vector<int> washes = t.lots(Lot::Wash);
-    CHECK(washes.size() == 3);
-    for (int s : washes) {
-        int len = 0;
-        while (t.segment(s + len).forecourt >= forecourt_width) {
-            CHECK(t.segment(s + len).lot == Lot::Wash && t.segment(s + len).curve == 0.f);
-            ++len;
-        }
-        CHECK(len > 30);
-        // The wash bay stands beyond the forecourt, the sign before it.
-        bool bay = false, sign = false;
-        for (int i = s - 10; i < s + len; ++i) {
-            for (const RoadsideObject& o : t.segment(i).scenery) {
-                bay = bay || o.kind == Scenery::CarWash;
-                sign = sign || o.kind == Scenery::WashSign;
+    // How many of each there are, and the building and sign each has.
+    const struct {
+        Lot kind;
+        size_t count;
+        Scenery building, sign;
+    } expected[] = {
+        {Lot::Dealer, 2, Scenery::Showroom, Scenery::DealerSign},
+        {Lot::Wash, 3, Scenery::CarWash, Scenery::WashSign},
+        {Lot::Motel, 2, Scenery::Motel, Scenery::MotelSign},
+        {Lot::Hospital, 2, Scenery::Hospital, Scenery::HospitalSign},
+    };
+    for (const auto& e : expected) {
+        const std::vector<int> lots = t.lots(e.kind);
+        CHECK(lots.size() == e.count);
+        for (int s : lots) {
+            int len = 0;
+            while (t.segment(s + len).forecourt >= forecourt_width) {
+                CHECK(t.segment(s + len).lot == e.kind && t.segment(s + len).curve == 0.f);
+                ++len;
             }
+            CHECK(len > 30);
+            bool building = false, sign = false;
+            for (int i = s - 10; i < s + len; ++i) {
+                for (const RoadsideObject& o : t.segment(i).scenery) {
+                    building = building || o.kind == e.building;
+                    sign = sign || o.kind == e.sign;
+                }
+            }
+            CHECK(building && sign);
         }
-        CHECK(bay && sign);
     }
+    for (int k = 0; k < lot_kinds; ++k) CHECK(std::string(lot_name(static_cast<Lot>(k))).size() > 0);
 }
 
 void test_pause_menu() {
@@ -1235,6 +1248,8 @@ void test_vehicles() {
     CHECK(top_row(sheet.occupants(0, 0, 0, -1, 0, 0)) < SpriteSheet::player_headroom);
     CHECK(top_row(base) >= SpriteSheet::player_headroom - 4);
     CHECK(&sheet.occupants(0, 0, 0, 0, 0, 0) == &base); // kept, not made again
+    CHECK(sheet.occupants(0, 0, 0, 0, 0, 0, true).px != base.px); // the bandage shows
+    CHECK(sheet.occupants(0, 0, 0, 0, 0, 1, true).px != sheet.occupants(0, 0, 0, 0, 0, 1).px);
     // In a closed car the heads only show through the rear window, dimmed.
     int closed = 0, open = 0;
     for (uint32_t px : sheet.occupants(0, 0, 0, 0, 0, 1).px) closed += (px >> 24) != 0;
@@ -1760,7 +1775,7 @@ int main() {
     test_steer_rate();
     test_pause_menu();
     test_dirt();
-    test_car_washes();
+    test_lots();
     test_reverse();
     test_fuel();
     test_crash_pose();
