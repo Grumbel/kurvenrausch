@@ -220,5 +220,5 @@ The repository follows the [REUSE](https://reuse.software/) specification:
 
 ## Credits
 
-Inspired by Louis Gorenfeld's "Lou's Pseudo 3D Page" and Jake Gordon's
-JavaScript Racer tutorial. The code itself is original.
+Inspired by Louis Gorenfeld's ["Lou's Pseudo 3D Page"](http://www.extentofthejam.com/pseudo/)
+and Jake Gordon's [JavaScript Racer tutorial](https://codeincomplete.com/articles/javascript-racer/). The code itself is original.
