@@ -39,6 +39,7 @@ struct ScreenshotOptions {
     int car = -1;            // if >= 0, drive car model `car` (see car_model())
     bool dealer = false;     // the autopilot pulls in at the next car dealer and stays
     int handbrake_from = -1; // if >= 0, hold the handbrake from this step on
+    int brake_from = -1;     // if >= 0, hold the brake (throttle off) from this step on: stop, then reverse
 };
 
 class Game {

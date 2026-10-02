@@ -97,6 +97,15 @@ inline bool nearer_other_road(float x, float other) {
 // down to nothing when standing.
 float steer_rate(float speed);
 
+// Reversing. Standing (or already rolling backwards), holding the brake
+// without the throttle drives the car backwards, up to `max_reverse`; the
+// throttle brakes a car rolling backwards to a stop (`stop_decel`), letting
+// go of both lets it roll to a stop more gently. Speeds are negative
+// backwards; all magnitudes are positive.
+bool in_reverse(float speed, float throttle, float brake);
+float reverse_speed(float speed, float throttle, float brake, float accel, float stop_decel, float max_reverse,
+                    float dt);
+
 // Speed after one step that changed it from `before` to `after`: the engine
 // cannot push the car beyond `top`, and above it (after a nitro burn or a
 // boost) the car slows back down by `drag` per second.

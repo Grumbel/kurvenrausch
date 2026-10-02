@@ -66,6 +66,10 @@ constexpr float handbrake_grip = 0.5f;
 constexpr float handbrake_steer = 1.7f;
 constexpr float handbrake_decel = 0.6f;
 
+// Reverse gear: top speed and acceleration, of the forward ones.
+constexpr float reverse_top = 0.15f;
+constexpr float reverse_accel = 0.4f;
+
 // Refuelling works on the forecourt below this fraction of the top speed.
 constexpr float refuel_speed = 0.08f;
 // Stranded with an empty tank this long, the driver pours in a spare can.
@@ -262,7 +266,7 @@ void Game::reset() {
 void Game::update_rumble() {
     const auto& vel = world_.get<Velocity>(player_);
     const auto& tr = world_.get<Transform>(player_);
-    const float speed_pct = vel.speed / world_.get<Player>(player_).max_speed;
+    const float speed_pct = std::abs(vel.speed) / world_.get<Player>(player_).max_speed;
     if (crashed_) {
         input_.rumble(1.f, 0.8f, 250);
     } else if (passed_) {
@@ -357,6 +361,10 @@ bool Game::screenshot(const ScreenshotOptions& opts) {
         in.horn = opts.horn;
         in.nitro = i == opts.nitro_frame;
         in.handbrake = opts.handbrake_from >= 0 && i >= opts.handbrake_from;
+        if (opts.brake_from >= 0 && i >= opts.brake_from) {
+            in.brake = 1.f;
+            in.throttle = 0.f;
+        }
         fixed_update(in, fixed_dt_);
         if (!opts.wav_path.empty()) {
             sound.resize(sound.size() + samples_per_step);
@@ -428,7 +436,9 @@ void Game::fixed_update(const InputState& input, float dt) {
     const float player_z = cam.player_z();
 
     const Segment& seg = track_.segment_at(tr.z + player_z);
-    const float speed_pct = vel.speed / player.max_speed;
+    // Most things go by how fast the car goes, either way; reversing
+    // (negative speed) only its movement along the track cares about.
+    const float speed_pct = std::abs(vel.speed) / player.max_speed;
     const float dx = dt * steer_rate(speed_pct);
 
     // Horn, nitro and the wave after a close pass.
@@ -473,7 +483,7 @@ void Game::fixed_update(const InputState& input, float dt) {
     const float grip = std::max(look.grip * car_model(car_model_).grip, 0.2f) * (aquaplaning_ ? aquaplane_grip : 1.f) *
                        (oily_ ? oil_grip : 1.f) * (handbraking_ ? handbrake_grip : 1.f);
     steer_ = input.steer > 0.3f ? 1 : input.steer < -0.3f ? -1 : 0;
-    braking_ = input.brake > 0.1f;
+    braking_ = input.brake > 0.1f && vel.speed >= 0.f; // reversing, it's the reverse gear
     if (!airborne) {
         tr.x += dx * input.steer * (0.5f + 0.5f * grip) * (handbraking_ ? handbrake_steer : 1.f);
         tr.x -= dx * speed_pct * seg.curve * player.centrifugal / grip;
@@ -497,6 +507,7 @@ void Game::fixed_update(const InputState& input, float dt) {
     update_fuel(input, dt);
     visit_dealer(input);
     const float drive = engine_on_ ? input.throttle * (1.f - input.brake) : 0.f;
+    const bool reversing = !airborne && engine_on_ && in_reverse(vel.speed, input.throttle, input.brake);
     float accel = 0.f;
     if (!airborne) {
         accel = input.handbrake ? 0.f : player.accel * drive;
@@ -506,7 +517,12 @@ void Game::fixed_update(const InputState& input, float dt) {
     }
     accel += player.accel * Nitro::thrust * nitro_.intensity();
     const float speed_before = vel.speed;
-    vel.speed += accel * dt;
+    if (reversing) {
+        vel.speed = reverse_speed(vel.speed, input.throttle, input.brake, player.accel * reverse_accel,
+                                  -player.brake, reverse_top * player.max_speed, dt);
+    } else {
+        vel.speed += accel * dt;
+    }
 
     if (!airborne && std::abs(tr.x) > 1.f) {
         // The forecourt is paved: no slowing down there.
@@ -550,7 +566,10 @@ void Game::fixed_update(const InputState& input, float dt) {
             scrape_side_ = side;
         }
     }
-    if (scraping_) vel.speed -= player.max_speed * 0.5f * dt;
+    if (scraping_) { // scraping slows the car whichever way it goes
+        const float drag = player.max_speed * 0.5f * dt;
+        vel.speed = vel.speed > 0.f ? std::max(0.f, vel.speed - drag) : std::min(0.f, vel.speed + drag);
+    }
 
     // Rear-ending traffic: bounce off and drop behind it.
     const int car_segment = track_.index_at(tr.z + player_z);
@@ -568,7 +587,7 @@ void Game::fixed_update(const InputState& input, float dt) {
 
     tr.x = std::clamp(tr.x, -3.f, 3.f);
     const float top = player.max_speed * (nitro_.burning() ? Nitro::top_speed : 1.f);
-    vel.speed = std::max(0.f, limit_speed(speed_before, vel.speed, top, overspeed_drag * player.max_speed, dt));
+    if (!reversing) vel.speed = std::max(0.f, limit_speed(speed_before, vel.speed, top, overspeed_drag * player.max_speed, dt));
     tr.y = track_.height_at(tr.z + player_z);
     if (landing > 0.f) land(landing);
 
@@ -601,7 +620,7 @@ void Game::visit_dealer(const InputState& input) {
     const auto& tr = world_.get<Transform>(player_);
     const float car_z = tr.z + world_.get<Camera>(camera_).player_z();
     const Segment& seg = track_.segment_at(car_z);
-    const float speed_pct = world_.get<Velocity>(player_).speed / world_.get<Player>(player_).max_speed;
+    const float speed_pct = std::abs(world_.get<Velocity>(player_).speed) / world_.get<Player>(player_).max_speed;
     at_dealer_ = seg.dealer && seg.forecourt >= forecourt_width && track_.on_forecourt(car_z, tr.x) &&
                  speed_pct < refuel_speed;
     const int push = input.steer > 0.5f ? 1 : input.steer < -0.5f ? -1 : 0;
@@ -620,7 +639,7 @@ void Game::update_fuel(const InputState& input, float dt) {
     const auto& vel = world_.get<Velocity>(player_);
     const auto& player = world_.get<Player>(player_);
     const float car_z = tr.z + world_.get<Camera>(camera_).player_z();
-    const float speed_pct = vel.speed / player.max_speed;
+    const float speed_pct = std::abs(vel.speed) / player.max_speed;
 
     const bool at_pump = track_.segment_at(car_z).forecourt >= forecourt_width && !track_.segment_at(car_z).dealer &&
                          track_.on_forecourt(car_z, tr.x) && speed_pct < refuel_speed;
@@ -895,7 +914,7 @@ void Game::update_audio(const InputState& input, float dt) {
     const float player_z = world_.get<Camera>(camera_).player_z();
     const Segment& seg = track_.segment_at(tr.z + player_z);
     const RoadTheme& look = track_.look_at(tr.z + player_z);
-    const float speed_pct = vel.speed / player.max_speed;
+    const float speed_pct = std::abs(vel.speed) / player.max_speed;
 
     // The automatic gearbox lifts the throttle briefly on every upshift.
     const int gear = drivetrain::gear(speed_pct);
@@ -1183,8 +1202,9 @@ void Game::render() {
     render_mirror();
 
     HudState hud;
-    hud.speed_fraction = vel.speed / player.max_speed;
-    hud.speed_kmh_fraction = vel.speed / base_max_speed_;
+    hud.speed_fraction = std::abs(vel.speed) / player.max_speed;
+    hud.speed_kmh_fraction = std::abs(vel.speed) / base_max_speed_;
+    hud.reverse = vel.speed < 0.f;
     if (at_dealer_) {
         const CarModel& m = car_model(car_model_);
         hud.dealer_car = m.name;

@@ -75,6 +75,17 @@ float steer_rate(float speed) {
     return rate * (speed >= knee ? speed : std::sqrt(speed * knee));
 }
 
+bool in_reverse(float speed, float throttle, float brake) {
+    return speed < 0.f || (speed <= 0.f && brake > 0.5f && throttle < 0.1f);
+}
+
+float reverse_speed(float speed, float throttle, float brake, float accel, float stop_decel, float max_reverse,
+                    float dt) {
+    if (brake > 0.5f && throttle < 0.1f) return std::max(-max_reverse, speed - accel * brake * dt);
+    const float decel = throttle > 0.1f ? stop_decel : 0.4f * stop_decel;
+    return std::min(0.f, speed + decel * dt);
+}
+
 float limit_speed(float before, float after, float top, float drag, float dt) {
     if (after <= top) return after;
     // Braking still works up here; accelerating does not.

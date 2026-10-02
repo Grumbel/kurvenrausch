@@ -194,6 +194,7 @@ void draw_hud(Framebuffer& fb, const HudState& hud) {
     const int kmh = static_cast<int>(std::lround(hud.speed_kmh_fraction * top_speed_kmh));
     text_right(fb, 52, h - 28, std::to_string(kmh), Value, 3);
     text(fb, 56, h - 14, "KM/H", Label);
+    if (hud.reverse) text(fb, 86, h - 21, "R", Value, 2);
     draw_tacho(fb, 6, h - 37, hud.speed_fraction);
     draw_fuel(fb, 56, h - 28, hud.fuel, hud.fuel_warning);
 

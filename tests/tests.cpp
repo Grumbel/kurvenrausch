@@ -593,6 +593,28 @@ void test_fuel() {
     CHECK(f.full());
 }
 
+void test_reverse() {
+    using namespace racer;
+    // Moving forwards, the brake just brakes; standing, it drives backwards.
+    CHECK(!in_reverse(100.f, 0.f, 1.f));
+    CHECK(in_reverse(0.f, 0.f, 1.f));
+    CHECK(!in_reverse(0.f, 1.f, 1.f)); // both pedals: not reverse
+    CHECK(!in_reverse(0.f, 0.f, 0.f));
+    CHECK(in_reverse(-50.f, 1.f, 0.f)); // rolling backwards, whatever the pedals
+    const float accel = 1000.f, stop = 4000.f, top = 1800.f, dt = 1.f / 60.f;
+    float v = 0.f;
+    for (int i = 0; i < 600; ++i) v = reverse_speed(v, 0.f, 1.f, accel, stop, top, dt);
+    CHECK_NEAR(v, -top, 1e-3f); // backwards, up to the reverse top speed
+    float braked = v, coasted = v;
+    for (int i = 0; i < 10; ++i) {
+        braked = reverse_speed(braked, 1.f, 0.f, accel, stop, top, dt);
+        coasted = reverse_speed(coasted, 0.f, 0.f, accel, stop, top, dt);
+    }
+    CHECK(braked > coasted && coasted > v); // the throttle stops it quicker than letting go
+    for (int i = 0; i < 200; ++i) braked = reverse_speed(braked, 1.f, 0.f, accel, stop, top, dt);
+    CHECK(braked == 0.f); // to a stop, not on into forwards
+}
+
 void test_steer_rate() {
     using racer::steer_rate;
     // Nothing when standing, more the faster, as before from half speed up.
@@ -1606,6 +1628,7 @@ int main() {
     test_yield_lane();
     test_follow_speed();
     test_steer_rate();
+    test_reverse();
     test_fuel();
     test_crash_pose();
     test_vertical();
