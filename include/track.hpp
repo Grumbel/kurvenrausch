@@ -65,6 +65,13 @@ enum class Edge : uint8_t {
     Cliff,  // rock wall rising beside the road
 };
 
+// Patches on the road surface.
+enum class Patch : uint8_t {
+    None,
+    Water, // a puddle: aquaplaning at speed, spray
+    Oil,   // an oil slick: hardly any grip at all
+};
+
 // Lateral position of the edge features, in road half-widths, and their size.
 constexpr float rail_offset = 1.22f;
 constexpr float cliff_offset = 1.40f;
@@ -96,10 +103,12 @@ struct Segment {
     // (up to forecourt_width), or 0 for none. It widens and narrows at the
     // ends; refuelling works where it is full width.
     float forecourt = 0.f;
-    // A wet spot on the road: centre and half width in road half-widths; a
-    // half width of 0 means dry. It swells and shrinks along a few segments.
-    float wet_x = 0.f;
-    float wet_w = 0.f;
+    // A patch on the road surface (a puddle or an oil slick): its kind, centre
+    // and half width in road half-widths; a half width of 0 means none. It
+    // swells and shrinks along a few segments.
+    Patch patch = Patch::None;
+    float patch_x = 0.f;
+    float patch_w = 0.f;
     // Where a route of a fork bends away from or back to the other one: the
     // side facing it (-1 left, +1 right), which stays clear of scenery.
     int8_t facing_branch = 0;
@@ -262,15 +271,15 @@ struct Track {
     // First segments of each forecourt at full width, in track order.
     std::vector<int> gas_stations() const;
 
-    // Half width of a wet spot at the boundary in front of segment
-    // `boundary` (the narrower side, so spots come to a point at both ends),
-    // and its centre.
-    float wet_width_at(int boundary) const;
-    float wet_center_at(int boundary) const;
+    // Half width of a patch at the boundary in front of segment `boundary`
+    // (the narrower side, so patches come to a point at both ends), and its
+    // centre.
+    float patch_width_at(int boundary) const;
+    float patch_center_at(int boundary) const;
 
-    // Does a car at lateral position x with the given half width (both in
-    // road half-widths) touch a wet spot on the segment at z?
-    bool on_wet(float z, float x, float half_width) const;
+    // The patch a car at lateral position x with the given half width (both
+    // in road half-widths) touches on the segment at z, or Patch::None.
+    Patch patch_under(float z, float x, float half_width) const;
 
     std::vector<Branch> branches;
 

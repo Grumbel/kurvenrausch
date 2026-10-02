@@ -168,17 +168,18 @@ int Track::branch_at(int index) const {
     return -1;
 }
 
-float Track::wet_width_at(int boundary) const {
-    return std::min(segment(boundary).wet_w, segment(boundary - 1).wet_w);
+float Track::patch_width_at(int boundary) const {
+    return std::min(segment(boundary).patch_w, segment(boundary - 1).patch_w);
 }
 
-float Track::wet_center_at(int boundary) const {
-    return segment(boundary).wet_w > 0.f ? segment(boundary).wet_x : segment(boundary - 1).wet_x;
+float Track::patch_center_at(int boundary) const {
+    return segment(boundary).patch_w > 0.f ? segment(boundary).patch_x : segment(boundary - 1).patch_x;
 }
 
-bool Track::on_wet(float z, float x, float half_width) const {
+Patch Track::patch_under(float z, float x, float half_width) const {
     const Segment& s = segment_at(z);
-    return s.wet_w > 0.f && std::abs(x - s.wet_x) < s.wet_w + half_width;
+    const bool touching = s.patch_w > 0.f && std::abs(x - s.patch_x) < s.patch_w + half_width;
+    return touching ? s.patch : Patch::None;
 }
 
 float Track::edge_height(int boundary, int side) const {
@@ -936,34 +937,43 @@ void decorate(Track& track, TrackBuilder& b, int from, int to, uint32_t seed) {
     }
 }
 
-// Wet spots on the road: where it rains or snows, in proportion; in fair
-// weather hardly ever, in the desert never. Each runs over a few segments, widest in
-// the middle, and keeps clear of the start and the forecourts.
-void place_wet_spots(Track& track, int from, int to, uint32_t seed) {
+// Patches on the road surface, each over a few segments, widest in the
+// middle, clear of the start, the forecourts, the forks' bends and each
+// other. Puddles where it rains or snows, in proportion; in fair weather
+// hardly ever, in the desert never. Oil slicks rarely, anywhere.
+void place_patches(Track& track, int from, int to, uint32_t seed) {
     Rng rng(seed);
-    int last_end = -1000;
-    for (int i = std::max(from, 20); i < to - 12; ++i) {
-        const Zone& zone = track.zones[static_cast<size_t>(track.zone_index[static_cast<size_t>(i)])];
-        if (zone.decor == Decor::Desert || i - last_end < 20) continue;
-        const float wetness = std::max(zone.theme.rain, zone.theme.snowfall);
-        if (!rng.chance(0.0003f + 0.03f * wetness)) continue;
-        const int length = static_cast<int>(rng.range(5.f, 11.f));
-        bool clear = true;
-        for (int k = -2; k < length + 2; ++k) {
-            const Segment& s = track.segment(i + k);
-            clear = clear && s.forecourt == 0.f && !s.checker && s.facing_branch == 0 && i + k < to;
+    auto place = [&](Patch kind, auto chance) {
+        int last_end = -1000;
+        for (int i = std::max(from, 20); i < to - 12; ++i) {
+            const Zone& zone = track.zones[static_cast<size_t>(track.zone_index[static_cast<size_t>(i)])];
+            if (i - last_end < 20 || !rng.chance(chance(zone))) continue;
+            const int length = static_cast<int>(kind == Patch::Oil ? rng.range(4.f, 8.f) : rng.range(5.f, 11.f));
+            bool clear = true;
+            for (int k = -2; k < length + 2; ++k) {
+                const Segment& s = track.segment(i + k);
+                clear = clear && s.forecourt == 0.f && !s.checker && s.facing_branch == 0 && s.patch_w == 0.f &&
+                        i + k < to;
+            }
+            if (!clear) continue;
+            const float width = kind == Patch::Oil ? rng.range(0.12f, 0.28f) : rng.range(0.12f, 0.35f);
+            const float centre = rng.range(-0.95f + width, 0.95f - width);
+            for (int k = 0; k < length; ++k) {
+                Segment& s = track.segments[static_cast<size_t>(i + k)];
+                s.patch = kind;
+                s.patch_x = centre;
+                // Rounded rather than pointed: the root of a sine.
+                s.patch_w = width * std::sqrt(std::sin(PI * (static_cast<float>(k) + 0.5f) / static_cast<float>(length)));
+            }
+            last_end = i + length;
+            i += length;
         }
-        if (!clear) continue;
-        const float width = rng.range(0.12f, 0.35f);
-        const float centre = rng.range(-0.95f + width, 0.95f - width);
-        for (int k = 0; k < length; ++k) {
-            Segment& s = track.segments[static_cast<size_t>(i + k)];
-            s.wet_x = centre;
-            s.wet_w = width * std::sin(PI * (static_cast<float>(k) + 0.5f) / static_cast<float>(length));
-        }
-        last_end = i + length;
-        i += length;
-    }
+    };
+    place(Patch::Water, [](const Zone& z) {
+        if (z.decor == Decor::Desert) return 0.f;
+        return 0.0003f + 0.03f * std::max(z.theme.rain, z.theme.snowfall);
+    });
+    place(Patch::Oil, [](const Zone&) { return 0.0006f; });
 }
 
 Track build_demo_track() {
@@ -1123,16 +1133,16 @@ Track build_demo_track() {
     track.segments[start + 1].checker = true;
     b.scenery(start, Scenery::Gantry, 0.f);
 
-    // Scenery and wet spots along the whole lap, the right routes of the forks
+    // Scenery and patches along the whole lap, the right routes of the forks
     // being in the track now; then along each left route.
     const int n = static_cast<int>(track.segments.size());
     decorate(track, b, 0, n, 0x6b75727au);
-    place_wet_spots(track, 0, n, 0x77657473u);
+    place_patches(track, 0, n, 0x77657473u);
     for (size_t i = 0; i < track.branches.size(); ++i) {
         const Branch& br = track.branches[i];
         track.choose_branch(i, 0);
         decorate(track, b, br.fork, br.end(), 0x6c656674u + static_cast<uint32_t>(i));
-        place_wet_spots(track, br.fork, br.end(), 0x6c657774u + static_cast<uint32_t>(i));
+        place_patches(track, br.fork, br.end(), 0x6c657774u + static_cast<uint32_t>(i));
         track.choose_branch(i, 1);
     }
 

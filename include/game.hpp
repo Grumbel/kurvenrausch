@@ -143,6 +143,8 @@ private:
     float landing_time_ = 0.f; // seconds left of the squash after a hard landing
     bool wet_ = false;        // the tyres are in a wet spot
     bool aquaplaning_ = false; // ... fast enough to lose their grip
+    bool oily_ = false;       // sliding on an oil slick
+    float spin_time_ = 0.f;   // seconds left of the car twitching after an oil slick
 
     // Debris, dust and spray, in screen space.
     struct Particle {

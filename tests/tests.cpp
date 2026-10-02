@@ -780,10 +780,10 @@ void test_wet_spots() {
         const auto z = static_cast<size_t>(t.zone_index[static_cast<size_t>(i)]);
         ++length[z];
         const Segment& s = t.segment(i);
-        if (s.wet_w <= 0.f) continue;
+        if (s.patch != Patch::Water) continue;
         ++wet[z];
         // On the road, clear of the start and the forecourts.
-        CHECK(std::abs(s.wet_x) + s.wet_w <= 0.95f + 1e-5f);
+        CHECK(std::abs(s.patch_x) + s.patch_w <= 0.95f + 1e-5f);
         CHECK(i >= 20 && !s.checker && s.forecourt == 0.f);
     }
     // Spots (counted where they start) are where it rains or snows: none in
@@ -791,7 +791,7 @@ void test_wet_spots() {
     // wet, and many more per segment in the wet zones than in the dry ones.
     std::vector<int> spots(t.zones.size(), 0);
     for (int i = 1; i < n; ++i) {
-        if (t.segment(i).wet_w > 0.f && t.segment(i - 1).wet_w == 0.f)
+        if (t.segment(i).patch == Patch::Water && t.segment(i - 1).patch_w == 0.f)
             ++spots[static_cast<size_t>(t.zone_index[static_cast<size_t>(i)])];
     }
     int wet_spots = 0, wet_length = 0, dry_spots = 0, dry_length = 0;
@@ -810,22 +810,28 @@ void test_wet_spots() {
     }
     CHECK(static_cast<float>(wet_spots) / static_cast<float>(wet_length) >
           10.f * static_cast<float>(dry_spots + 1) / static_cast<float>(dry_length));
-    // Spots come to a point at both ends and are widest in the middle.
+    // Oil slicks: rare, but there are some, in fair weather and foul, and
+    // never on the same stretch as a puddle (each segment has one patch).
+    int slicks = 0;
+    for (int i = 1; i < n; ++i) slicks += t.segment(i).patch == Patch::Oil && t.segment(i - 1).patch_w == 0.f;
+    CHECK(slicks >= 3 && slicks < wet_spots);
+    // Patches (puddles and slicks alike) come to a point at both ends and are
+    // widest in the middle.
     for (int i = 1; i < n; ++i) {
-        if (t.segment(i).wet_w > 0.f && t.segment(i - 1).wet_w == 0.f) {
-            CHECK(t.wet_width_at(i) == 0.f); // starts at a point
+        if (t.segment(i).patch_w > 0.f && t.segment(i - 1).patch_w == 0.f) {
+            CHECK(t.patch_width_at(i) == 0.f); // starts at a point
             int len = 0;
-            while (t.segment(i + len).wet_w > 0.f) ++len;
-            CHECK(len >= 5);
-            CHECK(t.wet_width_at(i + len) == 0.f);
-            CHECK(t.segment(i + len / 2).wet_w > t.segment(i).wet_w);
+            while (t.segment(i + len).patch_w > 0.f) ++len;
+            CHECK(len >= 4);
+            CHECK(t.patch_width_at(i + len) == 0.f);
+            CHECK(t.segment(i + len / 2).patch_w > t.segment(i).patch_w);
             // A car touching it counts, one beside it does not.
             const Segment& mid = t.segment(i + len / 2);
             const float z = (static_cast<float>(i + len / 2) + 0.5f) * t.segment_length;
-            CHECK(t.on_wet(z, mid.wet_x, 0.15f));
-            CHECK(t.on_wet(z, mid.wet_x + mid.wet_w + 0.1f, 0.15f));
-            CHECK(!t.on_wet(z, mid.wet_x + mid.wet_w + 0.2f, 0.15f));
-            CHECK(t.wet_center_at(i + len / 2) == mid.wet_x);
+            CHECK(t.patch_under(z, mid.patch_x, 0.15f) == mid.patch);
+            CHECK(t.patch_under(z, mid.patch_x + mid.patch_w + 0.1f, 0.15f) == mid.patch);
+            CHECK(t.patch_under(z, mid.patch_x + mid.patch_w + 0.2f, 0.15f) == Patch::None);
+            CHECK(t.patch_center_at(i + len / 2) == mid.patch_x);
         }
     }
 }

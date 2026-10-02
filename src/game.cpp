@@ -47,6 +47,11 @@ constexpr float aquaplane_speed = 0.35f;
 constexpr float camera_air_share = 0.7f;
 constexpr float aquaplane_grip = 0.35f;
 
+// On an oil slick above this fraction of the top speed the tyres keep only
+// this much of their grip.
+constexpr float oil_speed = 0.15f;
+constexpr float oil_grip = 0.08f;
+
 // Refuelling works on the forecourt below this fraction of the top speed.
 constexpr float refuel_speed = 0.08f;
 // Stranded with an empty tank this long, the driver pours in a spare can.
@@ -226,7 +231,8 @@ void Game::reset() {
     wave_time_ = 0.f;
     crash_time_ = -1.f;
     particles_.clear();
-    wet_ = aquaplaning_ = false;
+    wet_ = aquaplaning_ = oily_ = false;
+    spin_time_ = 0.f;
     place_on_road(vertical_, track_.height_at(world_.get<Camera>(camera_).player_z()));
     landing_time_ = 0.f;
     fuel_.reset();
@@ -243,6 +249,8 @@ void Game::update_rumble() {
         input_.rumble(1.f, 0.8f, 250);
     } else if (passed_) {
         input_.rumble(0.2f, 0.6f, 120);
+    } else if (oily_) {
+        input_.rumble(0.2f, 0.7f, 60);
     } else if (aquaplaning_) {
         input_.rumble(0.1f, 0.4f, 60);
     } else if (nitro_.burning()) {
@@ -419,16 +427,27 @@ void Game::fixed_update(const InputState& input, float dt) {
     // Ploughing through a wet spot fast, the tyres lose most of their grip
     // too: the car barely steers, slides out of bends, twitches and slows.
     const RoadTheme& look = track_.look_at(tr.z + player_z);
-    wet_ = !airborne && speed_pct > 0.05f &&
-           track_.on_wet(tr.z + player_z, tr.x, player.car_width / track_.half_width_at(tr.z + player_z) / 2.f);
+    // On an oil slick there is next to no grip at all: in a bend the car
+    // slides out, on a straight it twitches, and it squeals.
+    const Patch surface = airborne ? Patch::None
+                                 : track_.patch_under(tr.z + player_z, tr.x,
+                                                      player.car_width / track_.half_width_at(tr.z + player_z) / 2.f);
+    wet_ = surface == Patch::Water && speed_pct > 0.05f;
     aquaplaning_ = wet_ && speed_pct > aquaplane_speed;
-    const float grip = std::max(look.grip, 0.2f) * (aquaplaning_ ? aquaplane_grip : 1.f);
+    oily_ = surface == Patch::Oil && speed_pct > oil_speed;
+    if (oily_) spin_time_ = 0.6f;
+    else if (spin_time_ > 0.f) spin_time_ -= dt;
+    const float grip = std::max(look.grip, 0.2f) * (aquaplaning_ ? aquaplane_grip : 1.f) * (oily_ ? oil_grip : 1.f);
     steer_ = input.steer > 0.3f ? 1 : input.steer < -0.3f ? -1 : 0;
     braking_ = input.brake > 0.1f;
     if (!airborne) {
         tr.x += dx * input.steer * (0.5f + 0.5f * grip);
         tr.x -= dx * speed_pct * seg.curve * player.centrifugal / grip;
         follow_fork(prev_z + player_z);
+    }
+    if (oily_) {
+        rng_ = rng_ * 1664525u + 1013904223u;
+        tr.x += (static_cast<float>(rng_ >> 8) / 16777216.f - 0.5f) * 3.f * speed_pct * dt;
     }
     if (aquaplaning_) {
         rng_ = rng_ * 1664525u + 1013904223u;
@@ -634,7 +653,8 @@ void Game::update_crash(float dt) {
     bounce_ = 0.f;
     steer_ = 0;
     braking_ = false;
-    wet_ = aquaplaning_ = false;
+    wet_ = aquaplaning_ = oily_ = false;
+    spin_time_ = 0.f;
     if (crash_time_ >= crash_seconds) {
         crash_time_ = -1.f;
         vel.speed = 0.f;
@@ -808,6 +828,7 @@ void Game::update_audio(const InputState& input, float dt) {
     skid = std::max(skid, 0.7f * std::clamp((input.brake * speed_pct - 0.6f) / 0.4f, 0.f, 1.f));
     const bool off_road = std::abs(tr.x) > 1.f && !track_.on_forecourt(tr.z + player_z, tr.x);
     p.skid = skid * std::clamp(speed_pct * 5.f, 0.f, 1.f) * (off_road ? 0.3f : 1.f);
+    if (oily_) p.skid = 1.f;
 
     p.gravel = off_road && speed_pct > 0.01f ? std::clamp((std::abs(tr.x) - 1.f) * 8.f, 0.f, 1.f) : 0.f;
     p.scrape = scraping_ && vel.speed > 0.f ? 1.f : 0.f;
@@ -988,7 +1009,9 @@ void Game::render() {
     // The player's car sits centred, its tyres on the bottom screen row. It
     // is drawn at the projection scale of player_z, which maps car_width to
     // the sprite's native size, so the pixel art is shown 1:1.
-    const Bitmap& car = sprites_.player(steer_, wave_time_ > 0.f ? wave_side_ : 0,
+    // Twitching after an oil slick, the car flicks from one side to the other.
+    const int shown_steer = spin_time_ > 0.f ? (static_cast<int>(clock_ * 16.f) % 2 ? 1 : -1) : steer_;
+    const Bitmap& car = sprites_.player(shown_steer, wave_time_ > 0.f ? wave_side_ : 0,
                                         static_cast<int>(clock_ / 0.15f) & 1, braking_,
                                         SpriteSheet::tyre_frame(wheel_distance_));
     const float scale = cam.depth / cam.player_z() * (width / 2.f);

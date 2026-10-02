@@ -226,23 +226,33 @@ void RoadRenderer::draw_segment(Framebuffer& fb, const Track& track, const Slice
         }
     }
 
-    // A wet spot: water darker than the road at its edge, mirroring the sky
-    // towards the middle, with thin glints of light in it.
-    const float wa = track.wet_width_at(near), wb = track.wet_width_at(near + direction_);
-    if (wa > 0.f || wb > 0.f) {
-        const float ca = track.wet_center_at(near), cb = track.wet_center_at(near + direction_);
+    // A patch on the road. Water: darker than the road at its edge,
+    // mirroring the sky towards the middle, with thin glints of light. Oil:
+    // nearly black, with an iridescent sheen of purple, teal and gold.
+    const float wa = track.patch_width_at(near), wb = track.patch_width_at(near + direction_);
+    if (seg.patch != Patch::None && (wa > 0.f || wb > 0.f)) {
+        const float ca = track.patch_center_at(near), cb = track.patch_center_at(near + direction_);
         const float xa = a.x + ca * a.w, xb = b.x + cb * b.w;
-        const Color edge = blend(theme.road[band], Color{0x10, 0x12, 0x18}, 0.4f);
-        const Color mirror = blend(edge, theme.sky_horizon, 0.35f);
         auto band_of = [&](float from, float to, Color c) {
             fb.fill_trapezoid(b.y, xb + from * wb * b.w, xb + to * wb * b.w, a.y, xa + from * wa * a.w, xa + to * wa * a.w,
                               fogged(c));
         };
-        band_of(-1.f, 1.f, edge);
-        band_of(-0.75f, 0.75f, mirror);
-        const int glint = s.index % 4; // glints scattered along the spot
-        if (glint == 1) band_of(-0.45f, -0.3f, blend(mirror, Color{0xff, 0xff, 0xff}, 0.45f));
-        if (glint == 3) band_of(0.2f, 0.32f, blend(mirror, Color{0xff, 0xff, 0xff}, 0.35f));
+        const int glint = s.index % 4; // glints scattered along the patch
+        if (seg.patch == Patch::Oil) {
+            const Color slick{0x16, 0x14, 0x1a};
+            const Color sheen[3] = {{0x6c, 0x3c, 0x7c}, {0x2c, 0x74, 0x7c}, {0x8c, 0x7c, 0x34}};
+            band_of(-1.f, 1.f, slick);
+            band_of(-0.55f, -0.35f, blend(slick, sheen[s.index % 3], 0.8f));
+            band_of(0.05f, 0.2f, blend(slick, sheen[(s.index + 1) % 3], 0.7f));
+            if (glint == 2) band_of(0.4f, 0.55f, blend(slick, sheen[(s.index + 2) % 3], 0.6f));
+        } else {
+            const Color edge = blend(theme.road[band], Color{0x10, 0x12, 0x18}, 0.4f);
+            const Color mirror = blend(edge, theme.sky_horizon, 0.35f);
+            band_of(-1.f, 1.f, edge);
+            band_of(-0.75f, 0.75f, mirror);
+            if (glint == 1) band_of(-0.45f, -0.3f, blend(mirror, Color{0xff, 0xff, 0xff}, 0.45f));
+            if (glint == 3) band_of(0.2f, 0.32f, blend(mirror, Color{0xff, 0xff, 0xff}, 0.35f));
+        }
     }
 
     fb.reset_clip();
