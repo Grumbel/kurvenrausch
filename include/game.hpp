@@ -13,6 +13,7 @@
 #include "input.hpp"
 #include "menu.hpp"
 #include "road.hpp"
+#include "state.hpp"
 #include "sprites.hpp"
 #include "synth.hpp"
 #include "weather.hpp"
@@ -99,6 +100,8 @@ private:
     void spawn_smoke(float speed_pct);
     void land(float impact);
     void apply_car();
+    // Remembers the car, driver and passenger for the next run.
+    void save_choices() const;
     void visit_lot(const InputState& input);
     // The lot whose forecourt the car is on, where it is full width.
     std::optional<Lot> lot_here() const;
@@ -154,7 +157,9 @@ private:
     int driver_ = 0;     // see driver(): the hospital changes it
     int passenger_ = 0;  // see passenger(): the motel changes it
     int car_before_truck_ = 0; // the car left at the truck stop, to take back
-    bool bandaged_ = false; // the driver after a crash, until a hospital patches them up
+    bool bandaged_ = false;
+    Store store_;         // what is kept between runs; nothing in headless runs
+    float record_lap_ = 0.f; // the fastest lap ever, from the store // the driver after a crash, until a hospital patches them up
     Bitmap player_bitmap_; // the car with its people, put together each frame
     float base_max_speed_ = 0.f;
     std::array<std::vector<int>, lot_kinds> lots_; // first full-width forecourt segment of each lot, per kind

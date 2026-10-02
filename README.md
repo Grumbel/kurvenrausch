@@ -155,6 +155,12 @@ passes, nitro and when you leave the road. Additional mappings can be supplied t
 `SDL_GAMECONTROLLERCONFIG` environment variable. Keyboard and gamepad can be
 used together.
 
+The game remembers the car, driver and passenger you chose last, and keeps
+every lap you complete, in `$XDG_STATE_HOME/kurvenrausch/` (usually
+`~/.local/state/kurvenrausch/`): `choices`, and `laps.tsv` with one lap per
+line (time, seconds, car, driver, passenger). The fastest lap there is the
+record shown as BEST. Headless runs leave it alone.
+
 ## Tests
 
 ```bash

@@ -168,6 +168,24 @@ Additional game controller mappings, in SDL's format.
 Select SDL's video and audio drivers, for example
 .B dummy
 to run without a display or sound device.
+.TP
+.B XDG_STATE_HOME
+Where the game keeps its state, see
+.BR FILES ;
+unset, empty or not an absolute path, it is
+.IR ~/.local/state .
+.SH FILES
+The game remembers between runs, in
+.IR $XDG_STATE_HOME/kurvenrausch/ ;
+headless runs neither read nor write these:
+.TP
+.I choices
+The car, driver and passenger chosen last, picked up again on the next start.
+.TP
+.I laps.tsv
+Every lap completed, one per line: the time (UTC), the lap time in seconds,
+the car, the driver and the passenger, separated by tabs.
+The fastest of them is the record shown as BEST.
 .SH EXIT STATUS
 0 on success; 1 if the window could not be opened, an option is unknown,
 incomplete or needs

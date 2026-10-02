@@ -7,6 +7,7 @@
 #include "drivetrain.hpp"
 #include "driving.hpp"
 #include "input.hpp"
+#include "state.hpp"
 #include "road.hpp"
 #include "synth.hpp"
 #include "track.hpp"
@@ -21,6 +22,10 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <ctime>
+#include <filesystem>
+#include <optional>
+#include <string>
 #include <vector>
 #include <string>
 
@@ -705,6 +710,61 @@ void test_lots() {
         }
     }
     for (int k = 0; k < lot_kinds; ++k) CHECK(std::string(lot_name(static_cast<Lot>(k))).size() > 0);
+}
+
+void test_state() {
+    using namespace racer;
+    namespace fs = std::filesystem;
+    // Where: XDG_STATE_HOME when absolute, else ~/.local/state, else nowhere.
+    CHECK(state_dir("/xdg", "/home/me") == "/xdg/kurvenrausch");
+    CHECK(state_dir(nullptr, "/home/me") == "/home/me/.local/state/kurvenrausch");
+    CHECK(state_dir("", "/home/me") == "/home/me/.local/state/kurvenrausch");
+    CHECK(state_dir("relative/path", "/home/me") == "/home/me/.local/state/kurvenrausch");
+    CHECK(state_dir(nullptr, nullptr).empty());
+    CHECK(state_dir(nullptr, "home").empty());
+
+    // Choices round-trip; garbage and unknown keys are skipped.
+    const Choices c{3, 1, 4, 2};
+    const Choices back = parse_choices(format_choices(c));
+    CHECK(back.car == 3 && back.car_before_truck == 1 && back.driver == 4 && back.passenger == 2);
+    const Choices junk = parse_choices("car\nfoo 7\ndriver x\npassenger 2\n\n");
+    CHECK(junk.car == 0 && junk.driver == 0 && junk.passenger == 2);
+
+    // Lap lines round-trip; malformed ones are rejected.
+    const LapRecord lap{"2026-10-02T12:00:00Z", 83.25f, "SPIDER", "BRUNETTE", "DOG"};
+    const std::optional<LapRecord> parsed = parse_lap(format_lap(lap));
+    CHECK(parsed && parsed->when == lap.when && std::abs(parsed->seconds - 83.25f) < 0.01f && parsed->car == "SPIDER" &&
+          parsed->driver == "BRUNETTE" && parsed->passenger == "DOG");
+    CHECK(!parse_lap(""));
+    CHECK(!parse_lap("2026\tabc\tA\tB\tC"));
+    CHECK(!parse_lap("2026\t-3\tA\tB\tC"));
+    CHECK(!parse_lap("2026\t80\tA\tB"));
+    CHECK(utc_timestamp().size() == 20 && utc_timestamp().back() == 'Z');
+
+    // The store, in a fresh directory two levels down.
+    const fs::path root = fs::temp_directory_path() / ("kurvenrausch-test-" + std::to_string(std::time(nullptr)) + "-" +
+                                                       std::to_string(std::rand()));
+    const Store store((root / "state" / "kurvenrausch").string());
+    CHECK(!store.load_choices());
+    CHECK(store.load_laps().empty());
+    store.save_choices(c);
+    CHECK((fs::status(root / "state").permissions() & fs::perms::all) == fs::perms::owner_all);
+    CHECK((fs::status(root / "state" / "kurvenrausch").permissions() & fs::perms::all) == fs::perms::owner_all);
+    CHECK(!fs::exists(root / "state" / "kurvenrausch" / "choices.tmp"));
+    const std::optional<Choices> loaded = store.load_choices();
+    CHECK(loaded && loaded->car == 3 && loaded->passenger == 2);
+    store.add_lap(lap);
+    store.add_lap({"2026-10-02T12:05:00Z", 79.5f, "BIG RIG", "PUNK", "GRANNY"});
+    const std::vector<LapRecord> laps = store.load_laps();
+    CHECK(laps.size() == 2 && laps[1].car == "BIG RIG");
+    CHECK(std::abs(best_lap(laps) - 79.5f) < 0.01f);
+    CHECK(best_lap({}) == 0.f);
+    // No directory, no files.
+    const Store none;
+    none.save_choices(c);
+    none.add_lap(lap);
+    CHECK(!none.load_choices() && none.load_laps().empty());
+    fs::remove_all(root);
 }
 
 void test_pause_menu() {
@@ -1775,6 +1835,7 @@ int main() {
     test_follow_speed();
     test_steer_rate();
     test_pause_menu();
+    test_state();
     test_dirt();
     test_lots();
     test_reverse();

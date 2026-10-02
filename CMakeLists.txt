@@ -38,6 +38,7 @@ add_library(kurvenrausch_core STATIC
     src/people.cpp
     src/road.cpp
     src/sprites.cpp
+    src/state.cpp
     src/synth.cpp
     src/track.cpp
     src/vehicles.cpp

@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <iostream>
 
 namespace racer {
@@ -225,6 +226,19 @@ bool Game::init() {
     const Bitmap icon = make_app_icon();
     display_->set_icon(icon.px.data(), icon.w, icon.h);
 
+    // Last run's choices and the lap record.
+    store_ = Store(state_dir(std::getenv("XDG_STATE_HOME"), std::getenv("HOME")));
+    if (const std::optional<Choices> c = store_.load_choices()) {
+        const auto wrap = [](int i, int n) { return ((i % n) + n) % n; };
+        car_model_ = wrap(c->car, car_models);
+        car_before_truck_ = wrap(c->car_before_truck, dealer_models);
+        driver_ = wrap(c->driver, drivers);
+        passenger_ = wrap(c->passenger, passengers);
+        apply_car();
+    }
+    record_lap_ = best_lap(store_.load_laps());
+    best_lap_ = record_lap_;
+
     input_.init(); // not fatal: the keyboard always works
     audio_.init(synth_); // nor is a missing audio device
 
@@ -243,7 +257,8 @@ void Game::reset() {
     spawn_traffic();
     race_started_ = false;
     lap_ = 0;
-    lap_time_ = last_lap_ = best_lap_ = 0.f;
+    lap_time_ = last_lap_ = 0.f;
+    best_lap_ = record_lap_;
     message_.clear();
     message_time_ = 0.f;
     zone_ = -1;
@@ -667,6 +682,10 @@ void Game::fixed_update(const InputState& input, float dt) {
 
 // The player's car takes its model's top speed and acceleration (grip is
 // applied where the road's grip is).
+void Game::save_choices() const {
+    store_.save_choices({car_model_, car_before_truck_, driver_, passenger_});
+}
+
 void Game::apply_car() {
     const CarModel& m = car_model(car_model_);
     const Player standard = Player::for_segment_length(track_.segment_length);
@@ -720,6 +739,7 @@ void Game::visit_lot(const InputState& input) {
                 break;
         }
         synth_.trigger_ding();
+        save_choices();
     }
     lot_steer_ = push;
 }
@@ -1213,9 +1233,13 @@ void Game::update_laps(float prev_z, float z, float dt) {
     if (race_started_) {
         nitro_.refill(); // a full set of canisters for every lap
         last_lap_ = lap_time_;
-        const bool record = best_lap_ == 0.f || lap_time_ < best_lap_;
-        if (record) best_lap_ = lap_time_;
-        show_message(record && lap_ > 1 ? "NEW RECORD" : "LAP " + std::to_string(lap_ + 1), 2.5f);
+        // A record beats the best lap so far, of this run or an earlier one;
+        // the very first lap is merely the first.
+        const bool record = best_lap_ > 0.f && lap_time_ < best_lap_;
+        if (record || best_lap_ == 0.f) best_lap_ = record_lap_ = lap_time_;
+        show_message(record ? "NEW RECORD" : "LAP " + std::to_string(lap_ + 1), 2.5f);
+        store_.add_lap({utc_timestamp(), lap_time_, car_model(car_model_).name, driver(driver_).name,
+                        passenger(passenger_).name});
     } else {
         show_message("GO!", 1.5f);
     }
