@@ -3,6 +3,7 @@
 
 #pragma once
 #include "framebuffer.hpp"
+#include "menu.hpp"
 #include "track.hpp"
 
 #include <string>
@@ -43,6 +44,9 @@ struct HudState {
 };
 
 void draw_hud(Framebuffer& fb, const HudState& hud);
+
+// The pause menu over the dimmed game; `country` is the start choice's name.
+void draw_pause_menu(Framebuffer& fb, const PauseMenu& menu, const std::string& country);
 
 // Formats seconds as m'ss"cc, the classic arcade lap time.
 std::string format_lap_time(float seconds);

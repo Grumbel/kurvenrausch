@@ -11,6 +11,7 @@
 #include "framebuffer.hpp"
 #include "hud.hpp"
 #include "input.hpp"
+#include "menu.hpp"
 #include "road.hpp"
 #include "sprites.hpp"
 #include "synth.hpp"
@@ -39,7 +40,8 @@ struct ScreenshotOptions {
     int car = -1;            // if >= 0, drive car model `car` (see car_model())
     bool dealer = false;     // the autopilot pulls in at the next car dealer and stays
     int handbrake_from = -1; // if >= 0, hold the handbrake from this step on
-    int brake_from = -1;     // if >= 0, hold the brake (throttle off) from this step on: stop, then reverse
+    int brake_from = -1;     // if >= 0, brake (throttle off) from this step on to a stop, let go, then hold it: reverse
+    bool pause = false;      // show the pause menu in the screenshot
 };
 
 class Game {
@@ -74,6 +76,10 @@ public:
 
 private:
     void reset();
+    // Puts the car, standing, at camera position `position`.
+    void start_at(float position);
+    // Opens and drives the pause menu; false when the player chose to quit.
+    bool update_pause(const InputState& input);
     void spawn_traffic();
     void update_traffic(float dt);
     void fixed_update(const InputState& input, float dt);
@@ -114,6 +120,9 @@ private:
     Synth synth_;   // declared before audio_, which must be destroyed first
     Audio audio_;
     bool muted_ = false;
+    bool paused_ = false;
+    PauseMenu menu_;
+    SynthParams sound_;  // what the synth was last told
     bool horn_ = false;
     Nitro nitro_;
     bool nitro_held_ = false; // a burn starts when the button goes down

@@ -97,6 +97,9 @@ From step
 of the headless run on, brake (and not accelerate) to a stop, let go of the
 brake for a moment, then hold it again: the car reverses.
 .TP
+.B \-\-pause
+Show the pause menu in the screenshot.
+.TP
 .BI \-\-handbrake " N"
 Hold the handbrake from step
 .I N
@@ -122,10 +125,11 @@ Keyboard	Gamepad	Action
 Ctrl	left shoulder	handbrake
 H	X	horn
 Space	Y, right shoulder	nitro
-R	Start	restart
+P	Start	pause menu: resume, restart, start in a country, quit
+R		restart
 M		mute the sound
 F11, Alt+Enter		toggle fullscreen
-Esc		quit
+Esc		quit; in the pause menu, back to the race
 .TE
 .PP
 Any game controller SDL knows works and can be plugged in at any time.

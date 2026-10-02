@@ -90,7 +90,10 @@ void Input::close_controller(SDL_JoystickID instance) {
 
 void Input::poll(InputState& state) {
     state.quit = false;
+    state.escape = false;
+    state.pause = false;
     state.restart = false;
+    state.menu = MenuInput{};
     state.toggle_fullscreen = false;
     state.toggle_mute = false;
 
@@ -103,12 +106,19 @@ void Input::poll(InputState& state) {
             case SDL_KEYDOWN:
                 if (e.key.repeat) break;
                 switch (e.key.keysym.sym) {
-                    case SDLK_ESCAPE: state.quit = true; break;
+                    case SDLK_ESCAPE: state.escape = true; state.menu.back = true; break;
+                    case SDLK_p: state.pause = true; break;
                     case SDLK_r: state.restart = true; break;
+                    case SDLK_UP: case SDLK_w: state.menu.up = true; break;
+                    case SDLK_DOWN: case SDLK_s: state.menu.down = true; break;
+                    case SDLK_LEFT: case SDLK_a: state.menu.left = true; break;
+                    case SDLK_RIGHT: case SDLK_d: state.menu.right = true; break;
+                    case SDLK_SPACE: state.menu.confirm = true; break;
                     case SDLK_F11: state.toggle_fullscreen = true; break;
                     case SDLK_m: state.toggle_mute = true; break;
                     case SDLK_RETURN:
                         if (e.key.keysym.mod & KMOD_ALT) state.toggle_fullscreen = true;
+                        else state.menu.confirm = true;
                         break;
                     default: break;
                 }
@@ -120,7 +130,16 @@ void Input::poll(InputState& state) {
                 close_controller(e.cdevice.which);
                 break;
             case SDL_CONTROLLERBUTTONDOWN:
-                if (e.cbutton.button == SDL_CONTROLLER_BUTTON_START) state.restart = true;
+                switch (e.cbutton.button) {
+                    case SDL_CONTROLLER_BUTTON_START: state.pause = true; break;
+                    case SDL_CONTROLLER_BUTTON_DPAD_UP: state.menu.up = true; break;
+                    case SDL_CONTROLLER_BUTTON_DPAD_DOWN: state.menu.down = true; break;
+                    case SDL_CONTROLLER_BUTTON_DPAD_LEFT: state.menu.left = true; break;
+                    case SDL_CONTROLLER_BUTTON_DPAD_RIGHT: state.menu.right = true; break;
+                    case SDL_CONTROLLER_BUTTON_A: state.menu.confirm = true; break;
+                    case SDL_CONTROLLER_BUTTON_B: state.menu.back = true; break;
+                    default: break;
+                }
                 break;
             default:
                 break;

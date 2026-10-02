@@ -34,6 +34,7 @@ add_library(kurvenrausch_core STATIC
     src/game.cpp
     src/hud.cpp
     src/input.cpp
+    src/menu.cpp
     src/people.cpp
     src/road.cpp
     src/sprites.cpp

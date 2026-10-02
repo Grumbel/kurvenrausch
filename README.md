@@ -132,10 +132,11 @@ icon is the game's own pixel art, also its window icon;
 | ← → / A D        | Left stick, D-pad        | Steer              |
 | H                | X, left shoulder         | Horn               |
 | Space            | Y, right shoulder        | Nitro              |
-| R                | Start                    | Restart            |
+| P                | Start                    | Pause menu: resume, restart, start in a chosen country, quit |
+| R                |                          | Restart            |
 | M                |                          | Mute sound         |
 | F11 / Alt+Enter  |                          | Toggle fullscreen  |
-| Esc              |                          | Quit               |
+| Esc              |                          | Quit (in the pause menu: back to the race) |
 
 Any controller SDL knows (Xbox, PlayStation, Switch Pro, most generic pads) works
 and can be plugged in at any time; analog sticks and triggers steer and

@@ -214,4 +214,18 @@ void draw_hud(Framebuffer& fb, const HudState& hud) {
     }
 }
 
+void draw_pause_menu(Framebuffer& fb, const PauseMenu& menu, const std::string& country) {
+    for (int y = 0; y < fb.height(); ++y) {
+        for (int x = 0; x < fb.width(); ++x) fb.blend_pixel(x, y, Shadow, 0.55f);
+    }
+    const int top = fb.height() / 2 - 50;
+    text_center(fb, top, "PAUSED", Value, 3);
+    const std::string items[PauseMenu::items] = {"RESUME", "RESTART", "START IN < " + country + " >", "QUIT"};
+    for (int i = 0; i < PauseMenu::items; ++i) {
+        const bool on = i == menu.selected;
+        const std::string line = on ? "> " + items[i] + " <" : items[i];
+        text_center(fb, top + 36 + 16 * i, line, on ? Label : Value);
+    }
+}
+
 } // namespace racer

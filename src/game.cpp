@@ -231,8 +231,8 @@ bool Game::init() {
 
     std::cout << "Kurvenrausch: " << track_.segments.size() << " segments, "
               << track_.length() << " units.\n"
-              << "Controls: Arrows / WASD or gamepad to drive, R / Start to restart,\n"
-              << "          M mute, F11 fullscreen, Esc to quit.\n";
+              << "Controls: Arrows / WASD or gamepad to drive, P / Start to pause,\n"
+              << "          R restart, M mute, F11 fullscreen, Esc to quit.\n";
     return true;
 }
 
@@ -308,24 +308,62 @@ void Game::run() {
 
         input_.poll(input);
         if (input.quit) break;
-        if (input.restart) reset();
         if (input.toggle_fullscreen) display_->toggle_fullscreen();
         if (input.toggle_mute) muted_ = !muted_;
+        if (!update_pause(input)) break;
 
-        accumulator += dt;
         crashed_ = false;
         passed_ = false;
-        while (accumulator >= fixed_dt_) {
-            fixed_update(input, fixed_dt_);
-            accumulator -= fixed_dt_;
+        if (paused_) {
+            accumulator = 0.f;
+        } else {
+            accumulator += dt;
+            while (accumulator >= fixed_dt_) {
+                fixed_update(input, fixed_dt_);
+                accumulator -= fixed_dt_;
+            }
+            update_rumble();
         }
-        update_rumble();
 
         render();
+        if (paused_) draw_pause_menu(fb_, menu_, track_.zones[static_cast<size_t>(menu_.zone)].country);
         display_->present(fb_.pixels());
 
         if (!display_->vsync()) SDL_Delay(1);
     }
+}
+
+bool Game::update_pause(const InputState& input) {
+    if (!paused_) {
+        if (input.escape) return false;
+        if (input.restart) reset();
+        if (input.pause) {
+            paused_ = true;
+            menu_.open(zone_, static_cast<int>(track_.zones.size()));
+            SynthParams quiet = sound_;
+            quiet.volume = 0.f;
+            synth_.set_params(quiet);
+        }
+        return true;
+    }
+    switch (input.pause ? MenuAction::Resume : menu_.update(input.menu)) {
+        case MenuAction::None: return true;
+        case MenuAction::Quit: return false;
+        case MenuAction::Restart: reset(); break;
+        case MenuAction::StartZone:
+            reset();
+            start_at(zone_start_position(menu_.zone));
+            break;
+        case MenuAction::Resume: break;
+    }
+    paused_ = false;
+    return true;
+}
+
+void Game::start_at(float position) {
+    world_.get<Transform>(player_).z = track_.wrap(position);
+    place_on_road(vertical_, track_.height_at(position + world_.get<Camera>(camera_).player_z()));
+    zone_ = -1;
 }
 
 float Game::zone_start_position(int index) const {
@@ -347,9 +385,7 @@ void Game::print_zones() const {
 
 bool Game::screenshot(const ScreenshotOptions& opts) {
     const float start = opts.zone >= 0 ? zone_start_position(opts.zone) : opts.position;
-    world_.get<Transform>(player_).z = track_.wrap(start);
-    place_on_road(vertical_, track_.height_at(start + world_.get<Camera>(camera_).player_z()));
-    zone_ = -1;
+    start_at(start);
     if (opts.fuel >= 0.f) fuel_.set(opts.fuel);
     if (opts.car >= 0) {
         car_model_ = opts.car % car_models;
@@ -381,7 +417,12 @@ bool Game::screenshot(const ScreenshotOptions& opts) {
         std::cerr << "Writing " << opts.wav_path << " failed\n";
         return false;
     }
+    paused_ = opts.pause;
     render();
+    if (opts.pause) {
+        menu_.open(zone_, static_cast<int>(track_.zones.size()));
+        draw_pause_menu(fb_, menu_, track_.zones[static_cast<size_t>(menu_.zone)].country);
+    }
     return save_bmp(opts.path, fb_.pixels(), width, height);
 }
 
@@ -962,6 +1003,7 @@ void Game::update_audio(const InputState& input, float dt) {
     p.nitro = nitro_.intensity();
     p.throttle = std::max(p.throttle, p.nitro);
     p.volume = muted_ ? 0.f : 1.f;
+    sound_ = p;
     synth_.set_params(p);
 }
 
@@ -1254,7 +1296,7 @@ void Game::render() {
     hud.map_blink = std::fmod(clock_, 0.4f) < 0.2f;
     hud.fuel_warning = fuel_.level() < Fuel::low && std::fmod(clock_, 0.5f) < 0.3f;
     hud.nitro_burn = nitro_.burn_left();
-    if (banner_time_ > 0.f && zone_ >= 0) {
+    if (banner_time_ > 0.f && zone_ >= 0 && !paused_) {
         hud.banner = track_.zones[static_cast<size_t>(zone_)].country;
         hud.banner_sub = track_.zones[static_cast<size_t>(zone_)].region;
     }

@@ -26,6 +26,7 @@ void usage(const char* argv0) {
               << "  --dealer            pull in at the next car dealer during the headless run\n"
               << "  --handbrake N       hold the handbrake from step N of the headless run\n"
               << "  --brake N           brake from step N to a stop, let go, then hold it: reverse\n"
+              << "  --pause             show the pause menu in the screenshot\n"
               << "  --nitro N           press nitro at step N of the headless run\n"
               << "  --icon FILE         write the application icon (32x32) as a BMP and exit\n"
               << "  --version           print the version and exit\n"
@@ -63,6 +64,8 @@ int main(int argc, char* argv[]) {
             shot.brake_from = std::atoi(argv[++i]);
         } else if (arg == "--handbrake" && i + 1 < argc) {
             shot.handbrake_from = std::atoi(argv[++i]);
+        } else if (arg == "--pause") {
+            shot.pause = true;
         } else if (arg == "--dealer") {
             shot.dealer = true;
         } else if (arg == "--fuel" && i + 1 < argc) {

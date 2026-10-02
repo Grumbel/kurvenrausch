@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include "menu.hpp"
+
 #include <SDL2/SDL.h>
 #include <vector>
 
@@ -20,8 +22,11 @@ struct InputState {
     bool handbrake = false; // held
 
     // One-shot events since the last poll.
-    bool quit = false;
+    bool quit = false;    // the window was closed
+    bool escape = false;  // Esc: quits while driving, leaves the pause menu
+    bool pause = false;   // P or Start: opens and closes the pause menu
     bool restart = false;
+    MenuInput menu;       // navigating the pause menu
     bool toggle_fullscreen = false;
     bool toggle_mute = false;
 };

@@ -627,6 +627,38 @@ void test_reverse() {
     CHECK(braked == 0.f); // to a stop, not on into forwards
 }
 
+void test_pause_menu() {
+    using namespace racer;
+    PauseMenu m;
+    m.open(18, 16); // out of range: wraps
+    CHECK(m.selected == PauseMenu::Resume && m.zone == 2 && m.zones == 16);
+    CHECK(m.update(MenuInput{}) == MenuAction::None);
+    MenuInput up; up.up = true;
+    MenuInput down; down.down = true;
+    MenuInput left; left.left = true;
+    MenuInput right; right.right = true;
+    MenuInput ok; ok.confirm = true;
+    MenuInput back; back.back = true;
+    CHECK(m.update(ok) == MenuAction::Resume);
+    m.update(up); // wraps round to the last item
+    CHECK(m.selected == PauseMenu::Quit && m.update(ok) == MenuAction::Quit);
+    m.update(right); // only changes the country on its own line
+    CHECK(m.zone == 2);
+    m.update(down);
+    m.update(down);
+    CHECK(m.selected == PauseMenu::Restart && m.update(ok) == MenuAction::Restart);
+    m.update(down);
+    m.update(left);
+    m.update(left);
+    m.update(left);
+    CHECK(m.zone == 15);
+    m.update(right);
+    CHECK(m.zone == 0 && m.update(ok) == MenuAction::StartZone);
+    CHECK(m.update(back) == MenuAction::Resume);
+    m.open(-1, 16);
+    CHECK(m.zone == 0 && m.selected == PauseMenu::Resume);
+}
+
 void test_steer_rate() {
     using racer::steer_rate;
     // Nothing when standing, more the faster, as before from half speed up.
@@ -1660,6 +1692,7 @@ int main() {
     test_yield_lane();
     test_follow_speed();
     test_steer_rate();
+    test_pause_menu();
     test_reverse();
     test_fuel();
     test_crash_pose();
