@@ -1,0 +1,148 @@
+'\" t
+.\" SPDX-FileCopyrightText: 2026 Ingo Ruhnke <grumbel@gmail.com>
+.\" SPDX-License-Identifier: GPL-3.0-or-later
+.TH KURVENRAUSCH 6 @PROJECT_DATE@ "kurvenrausch @PROJECT_VERSION_FULL@" "Games"
+.SH NAME
+kurvenrausch \- classic pseudo-3D arcade racer
+.SH SYNOPSIS
+.B kurvenrausch
+.RI [ OPTIONS ]
+.SH DESCRIPTION
+.B kurvenrausch
+is a racer in the spirit of OutRun and Lotus Esprit Turbo Challenge: one lap
+through Europe and the USA, from the Cote d'Azur through the Black Forest, the
+Alps and Tuscany to Arizona, the California coast and San Francisco.
+The road forks in places into two routes that join again; keep to the side of
+the road you want to take.
+On the way there is traffic to pass, fuel to buy at gas stations, nitro to
+burn and, in San Francisco, crests to jump.
+.PP
+Without options the game opens a window and starts at the start line; the lap
+clock runs from the first time the car crosses it.
+With
+.B \-\-screenshot
+it runs headless instead: an autopilot drives for the given number of steps,
+one frame is rendered and saved, and no window is opened.
+.SH OPTIONS
+.TP
+.BI \-\-screenshot " FILE"
+Render headless and save the frame as a BMP image to
+.IR FILE ,
+then exit.
+.TP
+.BI \-\-frames " N"
+Simulate
+.I N
+steps (60 per second) before the screenshot.
+The default is 0.
+.TP
+.BI \-\-position " Z"
+Start the headless run at distance
+.I Z
+along the track.
+.TP
+.BI \-\-zone " N"
+Start the headless run inside zone
+.IR N ;
+see
+.BR \-\-print\-zones .
+.TP
+.B \-\-print\-zones
+List the zones of the track with their segments and start positions, then
+exit.
+.TP
+.BI \-\-wav " FILE"
+Also write the sound of the headless run as a WAV file.
+Needs
+.BR \-\-screenshot .
+.TP
+.BI \-\-steer " S"
+Hold the steering at
+.I S
+(\-1 left to 1 right) instead of letting the autopilot steer.
+.TP
+.BI \-\-steer\-from " N"
+Start holding the steering only at step
+.IR N .
+The default is 0.
+.TP
+.B \-\-horn
+Hold the horn during the headless run.
+.TP
+.BI \-\-nitro " N"
+Press nitro at step
+.I N
+of the headless run.
+.TP
+.BI \-\-fuel " L"
+Start the headless run with
+.I L
+(0 to 1) of a tank.
+.TP
+.BI \-\-icon " FILE"
+Write the application icon (32\(mu32 pixels) as a BMP image to
+.IR FILE ,
+then exit.
+.TP
+.B \-\-version
+Print the version and exit.
+.TP
+.B \-\-help
+Print a summary of the options and exit.
+.SH CONTROLS
+.TS
+l l l.
+Keyboard	Gamepad	Action
+\(ua or W	right trigger, A	accelerate
+\(da or S	left trigger, B	brake
+\(<- \(-> or A D	left stick, D-pad	steer
+H	X, left shoulder	horn
+Space	Y, right shoulder	nitro
+R	Start	restart
+M		mute the sound
+F11, Alt+Enter		toggle fullscreen
+Esc		quit
+.TE
+.PP
+Any game controller SDL knows works and can be plugged in at any time.
+Sticks and triggers are analog; keyboard and gamepad can be used together.
+The pad rumbles on crashes, scraping a barrier, close passes, nitro and when
+leaving the road.
+.SH ENVIRONMENT
+.TP
+.B SDL_GAMECONTROLLERCONFIG
+Additional game controller mappings, in SDL's format.
+.TP
+.BR SDL_VIDEODRIVER ", " SDL_AUDIODRIVER
+Select SDL's video and audio drivers, for example
+.B dummy
+to run without a display or sound device.
+.SH EXIT STATUS
+0 on success; 1 if the window could not be opened, an option is unknown,
+incomplete or needs
+.B \-\-screenshot
+with it, or a file could not be written.
+.SH EXAMPLES
+Render the start of the Tuscany zone after two and a half seconds:
+.PP
+.EX
+kurvenrausch \-\-screenshot shot.bmp \-\-zone 3 \-\-frames 150
+.EE
+.PP
+Record most of a lap with its sound:
+.PP
+.EX
+kurvenrausch \-\-screenshot shot.bmp \-\-frames 9000 \-\-wav lap.wav
+.EE
+.SH AUTHOR
+Ingo Ruhnke <grumbel@gmail.com>
+.SH COPYRIGHT
+Copyright 2026 Ingo Ruhnke.
+License GPL\-3.0\-or\-later: GNU GPL version 3 or later
+<https://gnu.org/licenses/gpl.html>.
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.
+.SH SEE ALSO
+.UR https://github.com/Grumbel/kurvenrausch
+Kurvenrausch home page
+.UE

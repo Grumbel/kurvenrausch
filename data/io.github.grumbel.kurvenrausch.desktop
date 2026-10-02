@@ -1,0 +1,15 @@
+# SPDX-FileCopyrightText: 2026 Ingo Ruhnke <grumbel@gmail.com>
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+[Desktop Entry]
+Type=Application
+Name=Kurvenrausch
+GenericName=Racing Game
+Comment=Race across Europe and the USA in a classic pseudo-3D arcade racer
+Exec=kurvenrausch
+Icon=io.github.grumbel.kurvenrausch
+Terminal=false
+Categories=Game;ArcadeGame;
+Keywords=racing;racer;car;driving;arcade;outrun;pseudo-3D;
+StartupWMClass=io.github.grumbel.kurvenrausch
+SingleMainWindow=true

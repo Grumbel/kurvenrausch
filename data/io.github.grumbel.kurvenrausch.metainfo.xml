@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+SPDX-FileCopyrightText: 2026 Ingo Ruhnke <grumbel@gmail.com>
+SPDX-License-Identifier: CC0-1.0
+-->
+<component type="desktop-application">
+  <id>io.github.grumbel.kurvenrausch</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <name>Kurvenrausch</name>
+  <summary>Classic pseudo-3D arcade racer</summary>
+  <developer id="io.github.grumbel">
+    <name>Ingo Ruhnke</name>
+  </developer>
+  <description>
+    <p>
+      Kurvenrausch is a racer in the spirit of OutRun and Lotus Esprit Turbo
+      Challenge: a lap through Europe and the USA, drawn in chunky pixels with
+      the classic segment-based pseudo-3D road.
+    </p>
+    <ul>
+      <li>Seven zones, from the Cote d'Azur through the rainy Black Forest, the snowy Alps and Tuscany to Arizona, the California coast and the hills of San Francisco</li>
+      <li>Forks where the road splits into two routes, and jumps over San Francisco's crests</li>
+      <li>Traffic of cars, vans, trucks and a rare rival that races you</li>
+      <li>Horn, nitro, fuel and gas stations, a rear-view mirror and a mini map</li>
+      <li>Synthesised engine and effects, keyboard and gamepad with rumble</li>
+    </ul>
+  </description>
+  <launchable type="desktop-id">io.github.grumbel.kurvenrausch.desktop</launchable>
+  <url type="homepage">https://github.com/Grumbel/kurvenrausch</url>
+  <url type="bugtracker">https://github.com/Grumbel/kurvenrausch/issues</url>
+  <url type="vcs-browser">https://github.com/Grumbel/kurvenrausch</url>
+  <screenshots>
+    <screenshot type="default">
+      <caption>On the Cote d'Azur corniche</caption>
+      <image>https://raw.githubusercontent.com/Grumbel/kurvenrausch/master/docs/screenshot.png</image>
+    </screenshot>
+  </screenshots>
+  <supports>
+    <control>keyboard</control>
+    <control>gamepad</control>
+  </supports>
+  <provides>
+    <binary>kurvenrausch</binary>
+  </provides>
+  <content_rating type="oars-1.1"/>
+</component>

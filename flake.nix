@@ -26,6 +26,10 @@
             "${versionBase}.${toString (self.revCount or 0)}+g${gitRev}"
           else
             versionBase;
+
+        # The date of the last change, for the man page (YYYY-MM-DD).
+        lastModified = self.lastModifiedDate or "19700101000000";
+        date = "${builtins.substring 0 4 lastModified}-${builtins.substring 4 2 lastModified}-${builtins.substring 6 2 lastModified}";
       in {
         packages.default = pkgs.stdenv.mkDerivation {
           pname = "kurvenrausch";
@@ -38,12 +42,8 @@
           cmakeFlags = [
             "-DCMAKE_BUILD_TYPE=Release"
             "-DPROJECT_VERSION_FULL=${version}"
+            "-DPROJECT_DATE=${date}"
           ];
-
-          installPhase = ''
-            mkdir -p $out/bin
-            cp kurvenrausch $out/bin/
-          '';
         };
 
         devShells.default = pkgs.mkShell {
@@ -55,6 +55,11 @@
             SDL2.dev
             gdb
             clang-tools
+            # Validators for the desktop entry, AppStream data and man page,
+            # run by ctest when present.
+            desktop-file-utils
+            appstream
+            mandoc
           ];
         };
       });
