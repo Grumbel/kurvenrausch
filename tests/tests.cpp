@@ -953,6 +953,52 @@ void test_synth_engine() {
         off.throttle = 0.f;
         CHECK(band_power(render_sound(on, 1.5), 1500, 5000) > 1.5 * band_power(render_sound(off, 1.5), 1500, 5000));
     }
+    {   // It builds as it revs: much louder near the limit than low down.
+        SynthParams lo, hi;
+        lo.rpm = 0.25f; hi.rpm = 0.9f; lo.throttle = hi.throttle = 1.f;
+        CHECK(rms(render_sound(hi, 1.0), 22050, 44100) > 2.0 * rms(render_sound(lo, 1.0), 22050, 44100));
+    }
+    {   // The bass stays at high revs, where the firing frequency is far above it:
+        // the exhaust pulses ring a low body resonance, and the revolution's
+        // lumpiness keeps energy at the revolution rate.
+        SynthParams p;
+        p.rpm = 0.75f;
+        p.throttle = 1.f;
+        const Samples s = render_sound(p, 1.5);
+        const size_t from = Synth::sample_rate / 2, n = 16384;
+        auto band = [&](double lo, double hi) {
+            double sum = 0.0;
+            for (double f = lo; f < hi; f += static_cast<double>(Synth::sample_rate) / n) sum += power_at(s, from, n, f);
+            return sum;
+        };
+        CHECK(band(30, 200) > 0.3 * band(30, 6000));
+    }
+    {   // Dynamics: opening the throttle surges past the steady level, and
+        // lifting off at revs makes the exhaust crackle for a moment.
+        auto steps = [](const SynthParams& a, const SynthParams& b) {
+            Synth synth;
+            synth.set_params(a);
+            Samples out(static_cast<size_t>(Synth::sample_rate) * 5 / 2);
+            for (size_t done = 0; done < out.size(); done += 735) {
+                if (done == static_cast<size_t>(Synth::sample_rate)) synth.set_params(b);
+                synth.render(out.data() + done, static_cast<int>(std::min<size_t>(735, out.size() - done)));
+            }
+            return out;
+        };
+        SynthParams off, on;
+        off.rpm = on.rpm = 0.8f;
+        on.throttle = 1.f;
+        const size_t sr = Synth::sample_rate;
+        const Samples open = steps(off, on);
+        CHECK(rms(open, sr + sr / 20, sr + sr * 3 / 10) > 1.15 * rms(open, sr * 2, sr * 12 / 5));
+        const Samples lift = steps(on, off);
+        auto highs = [&](size_t from) {
+            double sum = 0.0;
+            for (double f = 2000.0; f < 6000.0; f += 50.0) sum += power_at(lift, from, 8192, f);
+            return sum;
+        };
+        CHECK(highs(sr + sr / 20) > 3.0 * highs(sr * 2));
+    }
     {   // It idles when standing, rather than falling silent.
         const Samples idle = render_sound(SynthParams{}, 1.0);
         CHECK(rms(idle, 22050, 44100) > 0.03);

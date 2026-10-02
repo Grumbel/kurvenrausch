@@ -76,6 +76,7 @@ void Synth::render(int16_t* out, int frames) {
         s_rpm_ = t_rpm; s_throttle_ = t_throttle; s_speed_ = t_speed; s_skid_ = t_skid;
         s_gravel_ = t_gravel; s_scrape_ = t_scrape; s_rain_ = t_rain; s_volume_ = t_volume;
         s_horn_ = t_horn; s_nitro_ = t_nitro; s_engine_ = t_engine; s_pump_ = t_pump;
+        slow_throttle_ = t_throttle;
         primed_ = true;
     }
 
@@ -106,6 +107,9 @@ void Synth::render(int16_t* out, int frames) {
     const float thump_decay = std::exp(-1.f / (sr * 0.12f));
     const float whoosh_decay = std::exp(-1.f / (sr * 0.16f));
     const float a_horn = smoothing(0.006f), a_nitro = smoothing(0.06f);
+    const float a_slow = smoothing(0.35f);
+    const float overrun_decay = std::exp(-1.f / (sr * 0.45f));
+    const float pop_decay = std::exp(-1.f / (sr * 0.004f));
     float thump_env = crash_env_ * crash_env_;
 
     for (int i = 0; i < frames; ++i, ++samples_) {
@@ -147,9 +151,49 @@ void Synth::render(int16_t* out, int frames) {
         e += 0.18f * static_cast<float>(std::sin(two_pi * 2.0 * crank_ + 1.1));
         e = std::tanh(e * (0.7f + 0.9f * s_throttle_));       // exhaust grit
 
+        // Load transients: opening the throttle surges, lifting off at revs
+        // makes the exhaust crackle (also on every upshift).
+        slow_throttle_ += (s_throttle_ - slow_throttle_) * a_slow;
+        const float surge = std::max(0.f, s_throttle_ - slow_throttle_);
+        overrun_ = std::max(overrun_ * overrun_decay, std::max(0.f, slow_throttle_ - s_throttle_) * s_rpm_ * 1.6f);
+
+        // Exhaust pulses: every firing kicks a pipe resonance that follows
+        // the revs (the growl) and a low body resonance (the bass). The three
+        // firings of a revolution differ a little, which makes the engine
+        // lumpy and keeps bass at the revolution rate even at high revs.
+        float kick = 0.f;
+        const int firing = static_cast<int>(crank_ * 3.0) % 3;
+        if (firing != firing_) {
+            firing_ = firing;
+            constexpr float cylinder[3] = {1.f, 0.7f, 0.86f};
+            kick = cylinder[firing] * (0.45f + 0.55f * s_throttle_);
+            if (overrun_ > 0.05f && 0.5f + 0.5f * noise() < overrun_) pop_ = std::max(pop_, 0.5f + 0.5f * std::abs(noise()));
+        }
+        const auto ring = [](float* y, float x, float hz, float r) {
+            const float c = 2.f * r * std::cos(6.2831853f * hz / sr);
+            const float out = c * y[0] - r * r * y[1] + x;
+            y[1] = y[0];
+            y[0] = out;
+            return out;
+        };
+        const float pipe = ring(pipe_, kick, std::min(2.f * fire_hz, 900.f), 0.992f) * 0.035f;
+        const float body = ring(body_, kick, 68.f, 0.996f) * 0.05f;
+
+        // Overrun pops: short bright bursts with a thud.
+        float pops = 0.f;
+        if (pop_ > 1e-3f) {
+            const float burst = noise() * pop_;
+            pop_lp_ += (burst - pop_lp_) * lowpass_coeff(2500.f);
+            pops = (burst - pop_lp_) * 0.9f + pop_lp_ * 0.6f;
+            pop_ *= pop_decay;
+        }
+
         intake_ += (noise() - intake_) * lowpass_coeff(500.f + 2500.f * s_rpm_);
         const float intake = intake_ * (0.08f + 0.5f * s_throttle_ * (0.4f + s_rpm_));
-        const float engine = (e * (0.5f + 0.5f * s_throttle_) + intake) * 0.42f * s_engine_;
+        // Louder as it revs, and with the load; a surge when the throttle opens.
+        const float level = (0.5f + 0.55f * s_rpm_) * (1.f + 2.2f * surge);
+        const float engine = ((e * (0.4f + 0.4f * s_throttle_) + pipe + body * (0.6f + 0.4f * s_throttle_) + intake) * level +
+                              pops) * 0.27f * s_engine_;
 
         // ---- Road, wind, gravel, rain ----------------------------------------
         const float n = noise();

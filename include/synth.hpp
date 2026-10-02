@@ -69,6 +69,12 @@ private:
     uint32_t rng_ = 0x2545f491u;
     double crank_ = 0.0;          // crank phase, 0 .. 1 per revolution
     float jitter_ = 0.f;
+    int firing_ = 0;              // which of the three firings per revolution came last
+    float pipe_[2] = {0.f, 0.f};  // exhaust pipe resonance, rings with every firing
+    float body_[2] = {0.f, 0.f};  // low body resonance: the bass
+    float slow_throttle_ = 0.f;   // a slow follower of the throttle, for surge and overrun
+    float overrun_ = 0.f;         // crackle on the overrun after lifting off at revs
+    float pop_ = 0.f, pop_lp_ = 0.f;
     float intake_ = 0.f, road_ = 0.f, gravel_lp_ = 0.f, rain_lp_ = 0.f, crash_lp_ = 0.f;
     float wind_low_ = 0.f, wind_band_ = 0.f;
     float skid_low_ = 0.f, skid_band_ = 0.f;
