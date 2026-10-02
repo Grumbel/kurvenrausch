@@ -27,8 +27,9 @@ that is scaled up with nearest-neighbour filtering for chunky pixels.
 - Sanitizers: check rendering/physics/audio changes with ASan+UBSan on a full
   headless lap, and anything touching the audio thread with ThreadSanitizer on
   the live loop (`SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy`).
-- Deliverables are cumulative `git bundle` files named
-  `kurvenrausch-NNN.M-short-slug-<shortRevOfBase>.bundle`; never patches.
+- Commit directly to `master`; no bundles or patches as deliverables.
+  Exception: work done by Grok is still delivered as cumulative `git bundle`
+  files named `kurvenrausch-NNN.M-short-slug-<shortRevOfBase>.bundle`.
 - Commit author: `Ingo Ruhnke <grumbel@gmail.com>`; every commit carries the
   trailer `Co-authored-by: Claude <noreply@anthropic.com>`.
 - Small, task-focused commits; every commit must build warning-free with

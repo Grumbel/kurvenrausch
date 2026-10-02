@@ -2,23 +2,22 @@
 
 ## Current tip
 
-Base: `fc65858 Fix rendering: correct projection, pixel format, colors &
-sprites` (upstream master). Work line: kurvenrausch-003.x, bundles are
-cumulative from `fc65858`.
-
-Latest bundle: `kurvenrausch-008.1-san-francisco-fc65858.bundle`, tip is the
-"Document San Francisco and the jumps" commit on `master`; 008.1 adds the San
-Francisco zone and jumps on top of 007.1. 004.1 added the rear-view mirror on top of 003.1 (`fe8e0df`); 005.1
-horn, close-pass wave and boost, and nitro; 006.1 brake lights, the crash
-animation, the mini map, fuel and gas stations; 007.1 the VERSION file, new
-vehicles, the engine sound, weather vection and wet spots.
+Work is committed directly to `master`; there are no more bundles (only
+Grok still delivers bundles, see AGENTS.md). The round numbers below
+(003.1 ... 008.1) are those of the bundles that carried the earlier rounds,
+cumulative from `fc65858 Fix rendering: correct projection, pixel format,
+colors & sprites`; the last one, `kurvenrausch-008.1-san-francisco-fc65858`,
+ended at the "Document San Francisco and the jumps" commit. 004.1 added the
+rear-view mirror on top of 003.1 (`fe8e0df`); 005.1 horn, close-pass wave and
+boost, and nitro; 006.1 brake lights, the crash animation, the mini map, fuel
+and gas stations; 007.1 the VERSION file, new vehicles, the engine sound,
+weather vection and wet spots; 008.1 San Francisco and jumps.
 
 History: 001.1 was built on `d66c91a`; upstream then added a rename and its own
 rendering fix, so the work was rebased onto `fc65858` (002.1). 003.1 adds the
 licence change, gamepad, zones/biomes, weather, cliffs, audio and screenshots.
 Upstream master has since been fast-forwarded to `64fda32`, the tip of 002.1, so
-003.1 applies on top of it as a plain fast-forward; the bundles stay cumulative
-from `fc65858` regardless, as the rules require.
+003.1 applied on top of it as a plain fast-forward.
 The rebase notes: upstream's rename is kept, its rendering fix is superseded by
 the road/framebuffer rewrite, `Color::to_u32()` became `Color::argb()`.
 
