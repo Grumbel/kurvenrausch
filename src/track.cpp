@@ -40,6 +40,14 @@ const SceneryInfo& scenery_info(Scenery kind) {
         /* StreetLamp*/ { 260.f, true,  false, false},
         /* SignLeft  */ { 900.f, true,  false, false},
         /* SignRight */ { 900.f, true,  false, false},
+        /* Hedge     */ {1400.f, true,  false, true},
+        /* StoneWall */ {1400.f, true,  false, true},
+        /* PhoneBox  */ { 420.f, true,  false, false},
+        /* Windmill  */ {3000.f, true,  false, true},
+        /* Tulips    */ {2400.f, false, false, true},
+        /* CherryTree*/ {1700.f, true,  false, true},
+        /* Torii     */ {1500.f, true,  false, false},
+        /* StoneLantern*/{ 320.f, true, false, false},
     };
     static_assert(sizeof(infos) / sizeof(infos[0]) == static_cast<size_t>(Scenery::Count),
                   "scenery_info() needs an entry for every Scenery kind");
@@ -550,6 +558,88 @@ Zone zone_france() {
     return z;
 }
 
+Zone zone_england() {
+    Zone z{"ENGLAND", "COTSWOLDS", RoadTheme{}, 0, Decor::Country};
+    RoadTheme& t = z.theme;
+    t.sky_top = Color{0x6c, 0x8c, 0xb8};
+    t.sky_horizon = Color{0xc8, 0xd4, 0xdc};
+    t.fog = Color{0xc4, 0xcc, 0xd0};
+    t.grass[0] = Color{0x58, 0xa0, 0x44};
+    t.grass[1] = Color{0x4e, 0x94, 0x3c};
+    t.road[0] = Color{0x58, 0x58, 0x5c};
+    t.road[1] = Color{0x52, 0x52, 0x56};
+    t.rumble[0] = Color{0xe0, 0xe0, 0xd8}; // a white edge line, no kerb stripes
+    t.rumble[1] = Color{0xe0, 0xe0, 0xd8};
+    t.mountain_lit = Color{0x88, 0xa0, 0x88};
+    t.mountain_shade = Color{0x70, 0x88, 0x74};
+    t.hill_lit = Color{0x64, 0xa0, 0x50};
+    t.hill_shade = Color{0x54, 0x8c, 0x44};
+    t.cloud_tint = Color{0xa8, 0xb0, 0xbc};
+    t.cloud_tint_amount = 0.5f;
+    t.fog_density = 7.f;
+    t.haze = 0.4f;
+    t.mountain_scale = 0.35f;
+    t.hill_scale = 1.1f;
+    t.snow_line = 1.0e9f;
+    t.rain = 0.25f; // drizzle
+    t.grip = 0.9f;
+    t.lanes = 2;
+    t.road_scale = 0.62f; // narrow country lanes
+    return z;
+}
+
+Zone zone_netherlands() {
+    Zone z{"NETHERLANDS", "HOLLAND", RoadTheme{}, 0, Decor::Polder};
+    RoadTheme& t = z.theme;
+    t.sky_top = Color{0x3c, 0x78, 0xd0};
+    t.sky_horizon = Color{0xd4, 0xe8, 0xf8};
+    t.fog = Color{0xcc, 0xe0, 0xf0};
+    t.grass[0] = Color{0x5c, 0xb0, 0x40};
+    t.grass[1] = Color{0x52, 0xa4, 0x38};
+    t.road[0] = Color{0x6c, 0x6c, 0x70};
+    t.road[1] = Color{0x66, 0x66, 0x6a};
+    t.beyond[0] = Color{0x4c, 0x7c, 0x9c}; // the canal
+    t.beyond[1] = Color{0x50, 0x82, 0xa4};
+    t.cloud_tint = Color{0xff, 0xff, 0xff};
+    t.cloud_tint_amount = 0.f;
+    t.fog_density = 3.f;
+    t.haze = 0.3f;
+    t.mountain_scale = 0.05f; // dead flat
+    t.hill_scale = 0.15f;
+    t.snow_line = 1.0e9f;
+    t.rain = 0.1f;
+    t.lanes = 2;
+    return z;
+}
+
+Zone zone_japan() {
+    Zone z{"JAPAN", "FUJI", RoadTheme{}, 0, Decor::Sakura};
+    RoadTheme& t = z.theme;
+    t.sky_top = Color{0x5c, 0x94, 0xdc};
+    t.sky_horizon = Color{0xf0, 0xdc, 0xe4};
+    t.fog = Color{0xec, 0xdc, 0xe4};
+    t.grass[0] = Color{0x6c, 0xa8, 0x50};
+    t.grass[1] = Color{0x62, 0x9c, 0x48};
+    t.road[0] = Color{0x60, 0x60, 0x66};
+    t.road[1] = Color{0x5a, 0x5a, 0x60};
+    t.rumble[0] = Color{0xf0, 0xf0, 0xf0};
+    t.rumble[1] = Color{0xc8, 0x30, 0x30};
+    t.mountain_lit = Color{0x7c, 0x90, 0xc4}; // the volcano
+    t.mountain_shade = Color{0x5c, 0x70, 0xa8};
+    t.hill_lit = Color{0x5c, 0x94, 0x4c};
+    t.hill_shade = Color{0x4c, 0x80, 0x40};
+    t.cloud_tint = Color{0xff, 0xf0, 0xf4};
+    t.cloud_tint_amount = 0.3f;
+    t.sun_amount = 0.5f;
+    t.fog_density = 4.f;
+    t.haze = 0.2f;
+    t.mountain_scale = 1.9f;
+    t.snow_line = 44.f;
+    t.lanes = 2;
+    t.road_scale = 0.75f;
+    return z;
+}
+
 Zone zone_germany() {
     Zone z{"GERMANY", "SCHWARZWALD", RoadTheme{}, 0, Decor::Forest};
     RoadTheme& t = z.theme;
@@ -814,6 +904,28 @@ void decorate(Track& track, TrackBuilder& b, int from, int to, uint32_t seed) {
                 break;
             }
 
+            case Decor::Country:
+                // Hedgerows close along both sides, with stretches of stone
+                // wall; oaks behind them and now and then a phone box.
+                for (int side = -1; side <= 1; side += 2) {
+                    if (i % 2 == (side > 0)) put((i / 60) % 3 == 1 ? Scenery::StoneWall : Scenery::Hedge, side, 1.12f);
+                }
+                if (rng.chance(0.1f)) put(Scenery::Tree, random_side(), rng.range(1.9f, 4.f));
+                if (rng.chance(0.006f)) put(Scenery::PhoneBox, random_side(), 1.12f);
+                break;
+
+            case Decor::Polder:
+                if (i % 3 == 0) both(Scenery::Tulips, 1.25f, 2.6f);
+                if (rng.chance(0.03f)) put(Scenery::Windmill, random_side(), rng.range(2.4f, 5.f));
+                if (rng.chance(0.03f)) put(Scenery::Tree, random_side(), rng.range(1.3f, 2.f));
+                break;
+
+            case Decor::Sakura:
+                if (i % 4 == 0) both(Scenery::CherryTree, 1.15f, 2.4f);
+                if (i % 90 == 45) put(Scenery::Torii, i % 180 == 45 ? -1 : 1, 1.3f);
+                if (rng.chance(0.03f)) put(Scenery::StoneLantern, random_side(), 1.12f);
+                break;
+
             case Decor::Coast:
                 if (i % 6 == 0) put(Scenery::Pole, +1, 1.2f);
                 if (rng.chance(0.06f)) put(Scenery::DryShrub, random_side(), rng.range(1.1f, 3.f));
@@ -872,6 +984,25 @@ Track build_demo_track() {
     b.mark(corniche, b.size(), Edge::Cliff, Edge::Rail);
     b.bumps();
     b.gas_station();
+
+    b.begin_zone(zone_england());
+    // Narrow lanes winding between hedgerows over the rolling hills.
+    b.curve(Len::Short, Bend::Medium, Hill::Low);
+    b.curve(Len::Short, -Bend::Hard, -Hill::Low / 2.f);
+    b.low_rolling_hills();
+    b.gas_station();
+    b.curve(Len::Short, Bend::Hard, Hill::Low);
+    b.curve(Len::Short, -Bend::Medium, -Hill::Low);
+
+    b.begin_zone(zone_netherlands());
+    // Dead straight and flat, along a canal for a while.
+    b.straight(Len::Medium);
+    const int canal = b.size();
+    b.curve(Len::Medium, Bend::Easy, Hill::None);
+    b.straight(Len::Short);
+    b.mark(canal, b.size(), Edge::Rail, Edge::None);
+    b.gas_station();
+    b.curve(Len::Medium, -Bend::Easy, Hill::None);
 
     b.begin_zone(zone_germany());
     b.curve(Len::Medium, -Bend::Medium, Hill::Low);
@@ -975,6 +1106,12 @@ Track build_demo_track() {
     b.slope(6, 0.f);
     b.slope(30, -0.5f, Bend::Medium);
     b.slope(8, 0.f);
+
+    b.begin_zone(zone_japan());
+    // Past the cherry trees towards the mountain, and down to the start.
+    b.curve(Len::Medium, Bend::Medium, Hill::Low);
+    b.gas_station();
+    b.curve(Len::Medium, -Bend::Medium, Hill::None);
     b.downhill_to_end(Len::Long);
 
     track.finish();

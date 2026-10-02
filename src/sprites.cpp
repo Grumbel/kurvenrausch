@@ -315,6 +315,155 @@ Bitmap make_fork_sign(int dir) {
     return b;
 }
 
+// An English hedgerow: a long, low, dense wall of leaves.
+Bitmap make_hedge() {
+    Bitmap b(96, 40);
+    const Color dark{0x1c, 0x4c, 0x1c}, mid{0x2c, 0x6c, 0x28}, light{0x50, 0x94, 0x3c};
+    paint::rect(b, 2, 14, 92, 26, mid);
+    for (int i = 0; i < 9; ++i) {
+        const float x = 6.f + static_cast<float>(i) * 10.5f;
+        paint::shaded_ellipse(b, x, 14.f + static_cast<float>((i * 7) % 5), 8.f, 9.f, dark, mid, light);
+    }
+    for (int x = 2; x < 94; x += 3) paint::rect(b, x, 30 + (x % 4), 2, 10 - (x % 4), dark); // shade at the foot
+    paint::outline(b, Outline);
+    return b;
+}
+
+// A dry-stone wall: uneven courses of grey stones with a row of upright
+// coping stones on top.
+Bitmap make_stone_wall() {
+    Bitmap b(96, 28);
+    const Color stones[3] = {{0x8c, 0x88, 0x7c}, {0xa8, 0xa4, 0x96}, {0x74, 0x70, 0x66}};
+    const Color gap{0x4c, 0x48, 0x40};
+    paint::rect(b, 0, 6, 96, 22, gap);
+    for (int row = 0; row < 4; ++row) {
+        const int y = 8 + row * 5;
+        for (int x = (row % 2) * 4; x < 96; x += 9) {
+            paint::rect(b, x, y, 8 - (x + row) % 3, 4, stones[(x / 9 + row) % 3]);
+        }
+    }
+    for (int x = 0; x < 96; x += 4) paint::rect(b, x, 2 + (x % 3), 3, 5 - (x % 3), stones[(x / 4) % 3]);
+    paint::outline(b, Outline);
+    return b;
+}
+
+// A red telephone box with its crown and window panes.
+Bitmap make_phone_box() {
+    Bitmap b(24, 56);
+    const Color red{0xc8, 0x18, 0x18}, red_dark{0x8c, 0x10, 0x10}, glass{0x30, 0x40, 0x50}, white{0xf0, 0xf0, 0xe8};
+    paint::rect(b, 2, 6, 20, 50, red);
+    paint::rect(b, 4, 2, 16, 5, red);
+    paint::rect(b, 10, 0, 4, 3, red_dark);
+    paint::rect(b, 4, 8, 16, 3, Color{0x18, 0x18, 0x18});
+    paint::rect(b, 6, 9, 12, 1, white);
+    for (int y = 14; y < 44; y += 6)
+        for (int x = 5; x < 19; x += 5) paint::rect(b, x, y, 4, 5, glass);
+    paint::rect(b, 18, 6, 4, 50, red_dark);
+    paint::outline(b, Outline);
+    return b;
+}
+
+// A Dutch windmill: a tapering tower with a cap and four lattice sails.
+Bitmap make_windmill() {
+    Bitmap b(96, 150);
+    const Color tower{0x6c, 0x4c, 0x34}, tower_light{0x8c, 0x68, 0x48}, cap{0x3c, 0x34, 0x30};
+    const Color sail{0xe8, 0xe0, 0xd0}, frame{0x50, 0x3c, 0x2c}, door{0x2c, 0x5c, 0x3c};
+    for (int y = 60; y < 150; ++y) {
+        const int half = 10 + (y - 60) * 12 / 90;
+        paint::rect(b, 48 - half, y, 2 * half, 1, tower);
+        paint::rect(b, 48 - half, y, half / 2, 1, tower_light);
+    }
+    paint::rect(b, 30, 112, 36, 3, frame); // the stage around it
+    paint::rect(b, 43, 128, 10, 22, door);
+    paint::rect(b, 44, 84, 8, 10, Color{0xe8, 0xe0, 0xd0});
+    paint::shaded_ellipse(b, 48.f, 58.f, 13.f, 9.f, cap, cap, Color{0x5c, 0x50, 0x48});
+    // Four sails, at an angle so the mill looks like it turns.
+    const float cx = 48.f, cy = 58.f;
+    for (int k = 0; k < 4; ++k) {
+        const float a = 0.5f + static_cast<float>(k) * 1.5707963f;
+        const float ux = std::cos(a), uy = std::sin(a), vx = -uy, vy = ux;
+        for (float t = 8.f; t < 46.f; t += 1.f) {
+            for (float w = 0.f; w < 9.f; w += 1.f) {
+                const bool lattice = static_cast<int>(t) % 6 == 0 || w < 1.f || w > 7.5f;
+                b.set(static_cast<int>(cx + ux * t + vx * w), static_cast<int>(cy + uy * t + vy * w), lattice ? frame : sail);
+            }
+        }
+        paint::stroke(b, cx, cy, cx + ux * 46.f, cy + uy * 46.f, 2.f, 1.f, frame);
+    }
+    paint::outline(b, Outline);
+    return b;
+}
+
+// A strip of tulip field: rows of red, yellow and pink blooms over green.
+Bitmap make_tulips() {
+    Bitmap b(96, 20);
+    const Color leaf{0x3c, 0x88, 0x2c}, leaf_dark{0x2c, 0x6c, 0x24};
+    const Color blooms[3] = {{0xe0, 0x20, 0x30}, {0xf8, 0xd0, 0x20}, {0xf0, 0x80, 0xb0}};
+    paint::rect(b, 0, 8, 96, 12, leaf_dark);
+    for (int band = 0; band < 3; ++band) {
+        const int x0 = band * 32;
+        for (int x = x0; x < x0 + 32; x += 2) {
+            paint::rect(b, x, 9 + (x % 3), 1, 11 - (x % 3), leaf);
+            paint::rect(b, x, 5 + ((x * 7) % 4), 2, 3, blooms[band]);
+        }
+    }
+    paint::outline(b, Outline);
+    return b;
+}
+
+// A cherry tree in blossom: a dark, crooked trunk under clouds of pink.
+Bitmap make_cherry_tree() {
+    Bitmap b(80, 96);
+    const Color bark{0x4c, 0x30, 0x2c}, bark_dark{0x30, 0x1c, 0x1c};
+    const Color dark{0xc8, 0x70, 0x94}, mid{0xf0, 0xa4, 0xc0}, light{0xff, 0xdc, 0xe8};
+    paint::stroke(b, 40.f, 95.f, 38.f, 50.f, 8.f, 5.f, bark);
+    paint::stroke(b, 39.f, 70.f, 22.f, 46.f, 3.f, 2.f, bark_dark);
+    paint::stroke(b, 39.f, 64.f, 58.f, 44.f, 3.f, 2.f, bark_dark);
+    paint::shaded_ellipse(b, 40.f, 36.f, 30.f, 20.f, dark, mid, light);
+    paint::shaded_ellipse(b, 18.f, 46.f, 15.f, 11.f, dark, mid, light);
+    paint::shaded_ellipse(b, 62.f, 44.f, 15.f, 11.f, dark, mid, light);
+    paint::shaded_ellipse(b, 30.f, 22.f, 15.f, 12.f, dark, mid, light);
+    paint::shaded_ellipse(b, 52.f, 22.f, 15.f, 12.f, dark, mid, light);
+    for (int i = 0; i < 18; ++i) b.set(8 + (i * 37) % 64, 60 + (i * 13) % 34, light); // falling petals
+    paint::outline(b, Outline);
+    return b;
+}
+
+// A red torii, the gate to a shrine.
+Bitmap make_torii() {
+    Bitmap b(80, 80);
+    const Color red{0xd0, 0x30, 0x20}, red_dark{0x98, 0x20, 0x14}, black{0x20, 0x1c, 0x1c};
+    paint::rect(b, 14, 16, 7, 64, red);
+    paint::rect(b, 59, 16, 7, 64, red);
+    paint::rect(b, 19, 16, 2, 64, red_dark);
+    paint::rect(b, 64, 16, 2, 64, red_dark);
+    paint::rect(b, 0, 6, 80, 5, black); // the top beam, curving up at the ends
+    paint::rect(b, 0, 4, 6, 3, black);
+    paint::rect(b, 74, 4, 6, 3, black);
+    paint::rect(b, 3, 11, 74, 4, red);
+    paint::rect(b, 8, 24, 64, 5, red);
+    paint::rect(b, 37, 15, 6, 9, red); // the tablet between the beams
+    paint::rect(b, 14, 74, 7, 6, black);
+    paint::rect(b, 59, 74, 7, 6, black);
+    paint::outline(b, Outline);
+    return b;
+}
+
+// A stone lantern.
+Bitmap make_stone_lantern() {
+    Bitmap b(16, 32);
+    const Color stone{0x9c, 0x98, 0x8c}, shade{0x74, 0x70, 0x66}, light{0xff, 0xe8, 0xa0};
+    paint::rect(b, 3, 28, 10, 4, stone);
+    paint::rect(b, 6, 16, 4, 12, stone);
+    paint::rect(b, 3, 12, 10, 5, stone);
+    paint::rect(b, 5, 13, 6, 3, light);
+    paint::rect(b, 1, 8, 14, 4, shade);
+    paint::rect(b, 4, 5, 8, 3, stone);
+    paint::rect(b, 7, 2, 2, 3, stone);
+    paint::outline(b, Outline);
+    return b;
+}
+
 // A street lamp: a dark green pole with a lantern.
 Bitmap make_street_lamp() {
     Bitmap b(24, 112);
@@ -1117,6 +1266,14 @@ SpriteSheet::SpriteSheet() {
     scenery_[static_cast<size_t>(Scenery::StreetLamp)] = make_street_lamp();
     scenery_[static_cast<size_t>(Scenery::SignLeft)] = make_fork_sign(-1);
     scenery_[static_cast<size_t>(Scenery::SignRight)] = make_fork_sign(1);
+    scenery_[static_cast<size_t>(Scenery::Hedge)] = make_hedge();
+    scenery_[static_cast<size_t>(Scenery::StoneWall)] = make_stone_wall();
+    scenery_[static_cast<size_t>(Scenery::PhoneBox)] = make_phone_box();
+    scenery_[static_cast<size_t>(Scenery::Windmill)] = make_windmill();
+    scenery_[static_cast<size_t>(Scenery::Tulips)] = make_tulips();
+    scenery_[static_cast<size_t>(Scenery::CherryTree)] = make_cherry_tree();
+    scenery_[static_cast<size_t>(Scenery::Torii)] = make_torii();
+    scenery_[static_cast<size_t>(Scenery::StoneLantern)] = make_stone_lantern();
 }
 
 } // namespace racer

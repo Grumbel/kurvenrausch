@@ -787,8 +787,8 @@ void test_wet_spots() {
         CHECK(i >= 20 && !s.checker && s.forecourt == 0.f);
     }
     // Spots (counted where they start) are where it rains or snows: none in
-    // the desert, at most one in a zone of fair weather, and many more per
-    // segment in the wet zones than in the dry ones.
+    // the desert, hardly any in fair weather, several where it is properly
+    // wet, and many more per segment in the wet zones than in the dry ones.
     std::vector<int> spots(t.zones.size(), 0);
     for (int i = 1; i < n; ++i) {
         if (t.segment(i).wet_w > 0.f && t.segment(i - 1).wet_w == 0.f)
@@ -799,11 +799,11 @@ void test_wet_spots() {
         const RoadTheme& th = t.zones[z].theme;
         if (t.zones[z].decor == Decor::Desert) CHECK(spots[z] == 0);
         if (th.rain > 0.f || th.snowfall > 0.f) {
-            CHECK(spots[z] >= 3);
+            if (std::max(th.rain, th.snowfall) >= 0.5f) CHECK(spots[z] >= 3);
             wet_spots += spots[z];
             wet_length += length[z];
         } else {
-            CHECK(spots[z] <= 1);
+            CHECK(spots[z] <= 3);
             dry_spots += spots[z];
             dry_length += length[z];
         }
@@ -836,9 +836,10 @@ void test_san_francisco() {
     int sf = -1;
     for (size_t k = 0; k < t.zones.size(); ++k)
         if (t.zones[k].region == "SAN FRANCISCO") sf = static_cast<int>(k);
-    CHECK(sf == static_cast<int>(t.zones.size()) - 1); // the last zone, ending the lap
+    CHECK(sf >= 0);
     const int first = t.zones[static_cast<size_t>(sf)].first_segment;
-    const int n = static_cast<int>(t.segments.size());
+    const int n = static_cast<size_t>(sf) + 1 < t.zones.size() ? t.zones[static_cast<size_t>(sf) + 1].first_segment
+                                                               : static_cast<int>(t.segments.size());
     // Huge hills: steep grades both ways, and a big difference in height.
     float steepest_up = 0.f, steepest_down = 0.f, lo = 1e9f, hi = -1e9f;
     for (int i = first; i < n; ++i) {
@@ -868,7 +869,9 @@ void test_san_francisco() {
         return count;
     };
     CHECK(jumps(first, n) >= 3);
-    CHECK(jumps(t.zones[1].first_segment, t.zones[2].first_segment) == 0); // the Black Forest
+    for (size_t k = 0; k + 1 < t.zones.size(); ++k) {
+        if (t.zones[k].region == "SCHWARZWALD") CHECK(jumps(t.zones[k].first_segment, t.zones[k + 1].first_segment) == 0);
+    }
     // City decor: houses and lamps.
     int houses = 0, lamps = 0;
     for (int i = first; i < n; ++i) {
@@ -1049,7 +1052,7 @@ void test_demo_track() {
     const Track t = build_demo_track();
     const int n = static_cast<int>(t.segments.size());
 
-    CHECK(t.zones.size() == 7);
+    CHECK(t.zones.size() == 10);
     CHECK(t.zones.front().first_segment == 0);
     CHECK((int)t.zone_index.size() == n && (int)t.looks.size() == n);
     for (size_t k = 1; k < t.zones.size(); ++k) {

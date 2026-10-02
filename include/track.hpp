@@ -38,6 +38,14 @@ enum class Scenery : uint8_t {
     StreetLamp,
     SignLeft,     // a fork ahead: this way to the left route
     SignRight,    // ... and to the right one
+    Hedge,        // English hedgerow
+    StoneWall,    // dry-stone wall
+    PhoneBox,     // red telephone box
+    Windmill,
+    Tulips,       // a strip of tulip field
+    CherryTree,   // in blossom
+    Torii,        // shrine gate
+    StoneLantern,
     Count
 };
 
@@ -166,6 +174,9 @@ enum class Decor : uint8_t {
     Desert,    // cacti, shrubs, red rocks, mesas, telephone poles
     Coast,     // sparse: shrubs, rocks, poles where the sides are free
     City,      // rows of Victorian houses along the sidewalks, street lamps
+    Country,   // English lanes: hedgerows, stone walls, oaks, the odd phone box
+    Polder,    // Dutch flatland: windmills, tulip fields
+    Sakura,    // Japan: cherry trees, shrine gates, stone lanterns
 };
 
 // A stretch of track with its own country, scenery and atmosphere.
