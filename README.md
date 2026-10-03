@@ -171,8 +171,8 @@ nix run .#install-android-kurvenrausch   # install it on a device with adb
 ```
 
 Built with the NDK and SDL2 2.30.3's Java side (`nix/android.nix`,
-`mk/android/`, after Pingus), for 32- and 64-bit ARM and x86_64, Android 7
-(API 24) and later. Landscape; touch controls, gamepads and keyboards all
+`mk/android/`, after Pingus), for 32- and 64-bit ARM and x86_64, Android 5.1
+(API 22) and later. Landscape; touch controls, gamepads and keyboards all
 work, the back button pauses. Signed with the debug key in
 `mk/android/keystore/`.
 

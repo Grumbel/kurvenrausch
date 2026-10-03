@@ -72,11 +72,11 @@
           sdlSrc = sdl2-src;
           sdlVersion = "2.30.3";
           buildToolsVersion = "30.0.3";
-          packagePlatform = "24";
+          packagePlatform = "22";
           compilePlatform = "33";
           targetAbis = [ "armeabi-v7a" "arm64-v8a" "x86_64" ];
           androidSdk = (androidPkgs.androidenv.composeAndroidPackages {
-            platformVersions = [ "24" "33" ];
+            platformVersions = [ "22" "33" ];
             buildToolsVersions = [ "30.0.3" ];
             includeNDK = true;
             ndkVersion = "29.0.14206865";

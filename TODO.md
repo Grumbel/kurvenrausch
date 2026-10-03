@@ -2,8 +2,11 @@
 
 ## Current tip
 
-Work is committed directly to `master`; there are no more bundles (only
-Grok still delivers bundles, see AGENTS.md). The round numbers below
+Tip is Round 15 (Android min SDK 22), rebased on `4cab353` (lights).
+Work is committed directly to `master`; Grok still delivers cumulative git
+bundles (see AGENTS.md).
+
+Earlier history: the round numbers below
 (003.1 ... 008.1) are those of the bundles that carried the earlier rounds,
 cumulative from `fc65858 Fix rendering: correct projection, pixel format,
 colors & sprites`; the last one, `kurvenrausch-008.1-san-francisco-fc65858`,
@@ -21,6 +24,22 @@ Upstream master has since been fast-forwarded to `64fda32`, the tip of 002.1, so
 The rebase notes: upstream's rename is kept, its rendering fix is superseded by
 the road/framebuffer rewrite, `Color::to_u32()` became `Color::argb()`.
 
+## Round 15: Android min SDK 22 (Android 5.1)
+
+Lowered the Android package / min SDK from API 24 (Android 7) to API 22
+(Android 5.1), matching Pingus. Changes:
+- `flake.nix`: `packagePlatform = "22"`, `platformVersions = [ "22" "33" ]`
+- `mk/android/app/AndroidManifest.xml`: `minSdkVersion="22"` (target stays 33)
+- README Android section updated
+
+No code changes; the build pipeline already took `PACKAGE_PLATFORM` from
+the flake. Not re-tested in an API 22 emulator here (no display / long
+build); the same NDK 29 + SDL 2.30.3 path works for Pingus on 22.
+
+Rebased onto master after upstream added: mini-map zoom (`720c2cf`), police
+stop from in front (`2b74d7d`), and light switches / headlights / indicators /
+hazards (`4cab353`).
+
 ## Round 14: ports (touch, Windows, Android, R36S), done
 
 All built on Linux from the flake; `nix flake show` lists them.
@@ -34,10 +53,11 @@ All built on Linux from the flake; `nix flake show` lists them.
   and win32. Tested under Wine (headless and live with Xvfb + xdotool).
   State in `%APPDATA%\grumbel\kurvenrausch` (SDL_GetPrefPath).
 - Android (`nix/android.nix`, `mk/android/`): ndk-build after Pingus, SDL2
-  2.30.3, NDK 29, API 24+, three ABIs, landscape via SDL_HINT_ORIENTATIONS,
-  back button pauses. Tested in an API 24 x86_64 emulator without KVM
-  (slow but works). Note: on the rotated emulator `adb input` x
-  coordinates are rescaled; SDL's normalised coordinates were right.
+  2.30.3, NDK 29, API 22+ (Android 5.1; was 24), three ABIs, landscape via
+  SDL_HINT_ORIENTATIONS, back button pauses. Tested in an API 24 x86_64
+  emulator without KVM (slow but works). Note: on the rotated emulator
+  `adb input` x coordinates are rescaled; SDL's normalised coordinates were
+  right. Min SDK lowered to 22 to match Pingus.
 - R36S / ArkOS (`nix/r36s.nix`, `mk/r36s/`): sysroot from Ubuntu eoan
   arm64 .debs (hashes from the archive's Packages index), libstdc++ 9
   headers + nixpkgs GCC 16, SDL2 link stub, `-mno-outline-atomics`,
