@@ -1564,7 +1564,7 @@ void Game::render() {
     hud.lap_time = lap_time_;
     hud.last_lap = last_lap_;
     hud.best_lap = best_lap_;
-    hud.message = message_;
+    hud.message = paused_ ? std::string() : message_; // the pause menu says what there is to say
     hud.message_visible = std::fmod(clock_, 0.5f) < 0.35f;
     hud.muted = muted_;
     hud.nitro = nitro_.canisters();
