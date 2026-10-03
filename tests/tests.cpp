@@ -810,40 +810,58 @@ void test_views() {
 
 void test_police() {
     using namespace racer;
-    const float top = 1000.f;
+    // The standard car's top speed: 60 segments (of 200) a second.
+    const float top = 12000.f, dt = 1.f / 60.f;
+    // A chase played out: the car cruises at 85% of top speed, in the right
+    // lane; the police car starts behind.
     Chase chase;
-    // Far behind it is faster than the standard car, and pushes harder the
-    // further; tailing, it keeps the car's speed; giving up, it slows.
-    CHECK(police_speed(chase, top, 15.f, top) == top);
-    CHECK(police_speed(chase, top, 45.f, top) > top);
-    CHECK(std::abs(police_speed(chase, 300.f, police_tail_distance, top) - 300.f) < 1e-3f);
-    CHECK(police_speed(chase, 300.f, police_tail_distance + 1.f, top) > 300.f);
-    CHECK(police_speed(chase, 300.f, police_tail_distance - 1.f, top) < 300.f);
-    CHECK(police_speed(chase, 300.f, -2.f, top) < 300.f); // ahead of the car, it drops back
-    CHECK(police_tail_distance * 200.f > Camera{}.player_z()); // behind the camera, not over the car
-    CHECK(police_min_gap * 200.f > Camera{}.player_z() && police_min_gap < police_tail_distance);
-    // Tailing for long enough catches the car; a break starts the count anew.
-    const float dt = 1.f / 60.f;
-    for (int i = 0; i < 60 * 2; ++i) CHECK(update_chase(chase, 1.f, dt) == ChaseOutcome::Going);
-    CHECK(update_chase(chase, chase_tail_gap + 2.f, dt) == ChaseOutcome::Going && chase.tailing == 0.f);
+    float police_z = 0.f, police_v = 0.85f * top, police_x = 0.4f;
+    float car_z = chase_start_gap * 200.f, car_v = 0.85f * top;
+    const float car_x = 0.4f;
+    bool overtook_beside = false, blocked = false;
     ChaseOutcome out = ChaseOutcome::Going;
-    int steps = 0;
-    while (out == ChaseOutcome::Going && steps < 60 * 10) {
-        out = update_chase(chase, 1.f, dt);
-        ++steps;
+    for (int i = 0; i < 60 * 60 && out == ChaseOutcome::Going; ++i) {
+        const float gap = (car_z - police_z) / 200.f;
+        const PoliceMove m = police_move(chase, police_v, car_v, car_x, gap, top, dt);
+        police_v += std::clamp(m.speed - police_v, -top * dt, 0.6f * top * dt);
+        police_x += std::clamp(m.x - police_x, -1.2f * dt, 1.2f * dt);
+        police_z += police_v * dt;
+        car_z += car_v * dt;
+        // Never caught from behind: it overtakes in the other lane ...
+        if (chase.phase == ChasePhase::Overtaking && std::abs(gap) < 1.f) {
+            overtook_beside = std::abs(police_x - car_x) > 0.5f;
+        }
+        // ... and once it blocks, the car slows down with it, down to a stop.
+        if (chase.phase == ChasePhase::Blocking) {
+            blocked = true;
+            car_v = std::min(car_v, police_v);
+        }
+        out = update_chase(chase, (car_z - police_z) / 200.f, car_v / top, car_x - police_x, dt);
     }
-    CHECK(out == ChaseOutcome::Caught && std::abs(static_cast<float>(steps) * dt - chase_catch_seconds) < 0.05f);
-    // Far enough ahead, the car is away.
+    CHECK(overtook_beside && blocked);
+    CHECK(out == ChaseOutcome::Caught && chase.phase == ChasePhase::Leaving);
+    CHECK(car_v < chase_stop_speed * top && police_z > car_z); // stopped, with the police ahead
+    CHECK(chase.time < chase_give_up);
+    // Caught only stopped: a car still rolling behind it is not.
+    Chase rolling;
+    rolling.phase = ChasePhase::Blocking;
+    for (int i = 0; i < 60 * 5; ++i) CHECK(update_chase(rolling, -2.f, 0.3f, 0.f, dt) == ChaseOutcome::Going);
+    // Swerving past it puts it back behind, closing in.
+    Chase passed;
+    passed.phase = ChasePhase::Blocking;
+    update_chase(passed, 1.f, 0.8f, 0.f, dt);
+    CHECK(passed.phase == ChasePhase::Closing);
+    // Far enough ahead, the car is away; out of time, the police slow down.
     Chase lost;
-    CHECK(update_chase(lost, chase_escape_gap + 1.f, dt) == ChaseOutcome::Escaped);
-    // Out of time it gives up: it slows, it can't catch anyone any more, and
-    // once far enough behind the car has escaped.
+    CHECK(update_chase(lost, chase_escape_gap + 1.f, 1.f, 0.f, dt) == ChaseOutcome::Escaped);
     Chase late;
     late.time = chase_give_up;
-    CHECK(update_chase(late, 1.f, dt) == ChaseOutcome::Going && late.giving_up);
-    CHECK(police_speed(late, top, 10.f, top) < 0.6f * top);
-    for (int i = 0; i < 60 * 5; ++i) CHECK(update_chase(late, 1.f, dt) == ChaseOutcome::Going);
-    CHECK(update_chase(late, chase_escape_gap + 1.f, dt) == ChaseOutcome::Escaped);
+    CHECK(update_chase(late, 3.f, 1.f, 0.f, dt) == ChaseOutcome::Going && late.giving_up);
+    CHECK(police_move(late, top, top, 0.f, 3.f, top, dt).speed < 0.6f * top);
+    // Closing in, it is as fast as the standard car, faster when far behind.
+    const Chase closing;
+    CHECK(police_move(closing, 0.f, top, 0.f, 15.f, top, dt).speed == top);
+    CHECK(police_move(closing, 0.f, top, 0.f, 45.f, top, dt).speed > top);
     // Chases start only at speed, now and then.
     CHECK(!chase_starts(0.f, 0.5f, dt));
     CHECK(chase_starts(0.f, 0.9f, dt) && !chase_starts(0.5f, 0.9f, dt));

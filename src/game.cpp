@@ -766,7 +766,9 @@ void Game::fixed_update(const InputState& driver_input, float dt) {
         const float w = vehicle_info(traffic.kind).width / track_.half_width_at(tr.z + player_z);
         if (!overlap(tr.x, car_w, t.x, w * 0.8f)) return;
         vel.speed = v.speed * (v.speed / vel.speed);
-        tr.z = track_.wrap(t.z - player_z);
+        // A segment behind it: at its own position the two would be drawn
+        // on top of each other, which shows once it stands still.
+        tr.z = track_.wrap(t.z - player_z - track_.segment_length);
         place_on_road(vertical_, track_.height_at(tr.z + player_z));
         crashed_ = true;
         synth_.trigger_crash(0.4f + 0.4f * speed_pct);
@@ -1379,10 +1381,7 @@ void Game::update_police(float dt) {
     const float car_z = tr.z + world_.get<Camera>(camera_).player_z();
     if (pulled_over_ > 0.f) {
         pulled_over_ -= dt;
-        if (pulled_over_ <= 0.f) {
-            end_chase();
-            show_message("DRIVE ON", 1.5f);
-        }
+        if (pulled_over_ <= 0.f) show_message("DRIVE ON", 1.5f); // and the police drive off
     }
     if (police_ == INVALID_ENTITY) {
         if (chase_cooldown_ > 0.f) chase_cooldown_ -= dt;
@@ -1397,23 +1396,24 @@ void Game::update_police(float dt) {
     auto& t = world_.get<Transform>(police_);
     auto& v = world_.get<Velocity>(police_);
     auto& traffic = world_.get<Traffic>(police_);
+    const float top = base_max_speed_;
     float gap = signed_gap(t.z, car_z, track_.length()) / track_.segment_length;
-    const float wanted = police_speed(chase_, vel.speed, gap, base_max_speed_);
-    traffic.braking = wanted < v.speed - 0.02f * base_max_speed_;
-    v.speed += std::clamp(wanted - v.speed, -base_max_speed_ * dt, 0.6f * base_max_speed_ * dt);
+    PoliceMove move = police_move(chase_, v.speed, vel.speed, tr.x, gap, top, dt);
+    if (pulled_over_ > 0.f) move = {0.f, t.x}; // waits in front of the stopped car
+    traffic.braking = move.speed < v.speed - 0.02f * top;
+    v.speed += std::clamp(move.speed - v.speed, -top * dt, 0.6f * top * dt);
     t.z = track_.wrap(t.z + v.speed * dt);
-    // However hard the car brakes, the police car stays behind it (and the
-    // camera): never closer than police_min_gap.
-    if (signed_gap(t.z, car_z, track_.length()) < police_min_gap * track_.segment_length) {
-        t.z = track_.wrap(car_z - police_min_gap * track_.segment_length);
-        v.speed = std::min(v.speed, std::max(vel.speed, 0.f));
-    }
+    t.x += std::clamp(move.x - t.x, -1.2f * dt, 1.2f * dt); // pulling out, cutting in
     gap = signed_gap(t.z, car_z, track_.length()) / track_.segment_length;
-    if (!chase_.giving_up) t.x += std::clamp(tr.x - t.x, -dt, dt); // into the car's line
-    siren_ = chase_.giving_up ? 0.f : 1.f / (1.f + std::max(gap, 0.f) / 15.f);
+    const bool done = chase_.giving_up || chase_.phase == ChasePhase::Leaving;
+    siren_ = done ? 0.f : 1.f / (1.f + std::abs(gap) / 15.f);
+    if (chase_.phase == ChasePhase::Leaving && pulled_over_ <= 0.f && std::abs(gap) > police_leave_gap) {
+        end_chase(); // driven off out of sight
+        return;
+    }
 
-    if (pulled_over_ > 0.f) return; // waiting behind the car
-    switch (update_chase(chase_, gap, dt)) {
+    if (pulled_over_ > 0.f) return;
+    switch (update_chase(chase_, gap, vel.speed / top, tr.x - t.x, dt)) {
         case ChaseOutcome::Caught:
             pulled_over_ = pulled_over_seconds;
             show_message("PULLED OVER", pulled_over_seconds);
