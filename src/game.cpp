@@ -286,6 +286,7 @@ void Game::reset() {
     place_on_road(vertical_, track_.height_at(world_.get<Camera>(camera_).player_z()));
     landing_time_ = 0.f;
     view_yaw_ = view_shift_ = 0.f;
+    hour_ = start_hour;
     headlights_ = hazards_ = blink_on_ = false;
     signal_ = 0;
     police_ = INVALID_ENTITY; // gone with the traffic
@@ -551,6 +552,7 @@ bool Game::screenshot(const ScreenshotOptions& opts) {
         in.handbrake = opts.handbrake_from >= 0 && i >= opts.handbrake_from;
         if (i == opts.police_frame) start_chase();
         if (i == 0) {
+            if (opts.hour >= 0.f) hour_ = opts.hour;
             headlights_ = opts.headlights;
             hazards_ = opts.signal == hazard_signal;
             signal_ = opts.signal == hazard_signal ? 0 : opts.signal;
@@ -1471,6 +1473,7 @@ void Game::update_police(float dt) {
 
 void Game::update_laps(float prev_z, float z, float dt) {
     clock_ += dt;
+    hour_ = advance_hour(hour_, dt);
 
     // Entering a new zone: announce the country and region for a few seconds.
     const int zone = track_.zone_number_at(z);
@@ -1635,13 +1638,6 @@ void Game::render() {
         }
     }
     weather_.render(fb_);
-    if (flash_time_ > 0.f) {
-        // Lightning lights up everything for a moment.
-        const float a = std::min(0.75f, flash_time_ * 5.f);
-        for (int y = 0; y < height; ++y) {
-            for (int x = 0; x < width; ++x) fb_.blend_pixel(x, y, Color{0xf0, 0xf4, 0xff}, a);
-        }
-    }
     if (setup.cockpit) {
         // The dashboard and the wheel, shaking with the car.
         const Bitmap& dash = sprites_.dashboard(car_model_);
@@ -1658,6 +1654,26 @@ void Game::render() {
                          static_cast<float>(height) + 6.f + bounce_, wheel_size, wheel_size, wheel_angle_ + twitch);
     }
     render_mirror();
+
+    // Nightfall: the picture darkened but for its lamps; the headlights
+    // light the road ahead again, from the car's front up (above the
+    // dashboard in the cockpit).
+    const Daylight light = daylight_at(hour_);
+    if (headlights_) day_picture_.assign(fb_.pixels(), fb_.pixels() + width * height);
+    apply_daylight(fb_, light);
+    if (headlights_) {
+        const int beam_bottom = setup.cockpit ? height - dashboard_height
+                              : setup.car ? static_cast<int>(me.sy + me.sh * 0.35f)
+                              : height;
+        headlight_beam(fb_, day_picture_, light, height / 2, beam_bottom);
+    }
+    if (flash_time_ > 0.f) {
+        // Lightning lights up everything for a moment.
+        const float a = std::min(0.75f, flash_time_ * 5.f);
+        for (int y = 0; y < height; ++y) {
+            for (int x = 0; x < width; ++x) fb_.blend_pixel(x, y, Color{0xf0, 0xf4, 0xff}, a);
+        }
+    }
 
     HudState hud;
     hud.speed_fraction = std::abs(vel.speed) / player.max_speed;
@@ -1681,6 +1697,12 @@ void Game::render() {
     }
     hud.lap = lap_;
     hud.lap_time = lap_time_;
+    {
+        const int minutes = static_cast<int>(hour_ * 60.f);
+        char clock[8];
+        std::snprintf(clock, sizeof clock, "%02d:%02d", minutes / 60 % 24, minutes % 60);
+        hud.time_of_day = clock;
+    }
     hud.last_lap = last_lap_;
     hud.best_lap = best_lap_;
     hud.message = paused_ ? std::string() : message_; // the pause menu says what there is to say

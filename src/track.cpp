@@ -333,7 +333,7 @@ float barrier_limit(const Segment& seg, int side, float car_half_width) {
 RoadTheme mix_themes(const RoadTheme& a, const RoadTheme& b, float t) {
     // Tripwire: when a field is added to RoadTheme this changes, as a reminder
     // to blend it below and to update the expected size.
-    static_assert(sizeof(RoadTheme) == 184, "RoadTheme changed: update mix_themes()");
+    static_assert(sizeof(RoadTheme) == 188, "RoadTheme changed: update mix_themes()");
 
     RoadTheme r = t < 0.5f ? a : b; // discrete fields come from the nearer theme
     const auto c = [t](Color x, Color y) { return blend(x, y, t); };
@@ -367,6 +367,7 @@ RoadTheme mix_themes(const RoadTheme& a, const RoadTheme& b, float t) {
     r.cloud_tint_amount = f(a.cloud_tint_amount, b.cloud_tint_amount);
     r.sun = c(a.sun, b.sun);
     r.sun_amount = f(a.sun_amount, b.sun_amount);
+    r.stars = f(a.stars, b.stars);
     r.haze = f(a.haze, b.haze);
     r.mountain_scale = f(a.mountain_scale, b.mountain_scale);
     r.hill_scale = f(a.hill_scale, b.hill_scale);

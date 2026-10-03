@@ -195,6 +195,7 @@ void draw_hud(Framebuffer& fb, const HudState& hud) {
     // Below it the lap counter; the top centre holds the rear-view mirror.
     text(fb, 6, 33, "LAP", Label);
     text(fb, 6, 42, hud.lap > 0 ? std::to_string(hud.lap) : "-", Value, 2);
+    if (!hud.time_of_day.empty()) text(fb, 34, 49, hud.time_of_day, Value); // the clock
 
     // Top right: last and best laps.
     text_right(fb, w - 6, 5, "BEST", Label);

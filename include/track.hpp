@@ -189,6 +189,7 @@ struct RoadTheme {
     float cloud_tint_amount = 0.f;      // ... by this much (storm, sunset)
     Color sun{0xff, 0xf2, 0xc0};
     float sun_amount = 0.f;             // 0 = no visible sun
+    float stars = 0.f;                  // 0 .. 1, stars in the night sky (see at_daytime())
     float haze = 0.f;                   // extra haze on mountains and hills, 0 .. 1
     float mountain_scale = 1.f;         // height of the far mountains
     float hill_scale = 1.f;             // height of the near hills

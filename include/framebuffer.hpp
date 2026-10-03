@@ -20,6 +20,7 @@ public:
     int width() const { return w_; }
     int height() const { return h_; }
     const uint32_t* pixels() const { return pixels_.data(); }
+    uint32_t* pixels_mut() { return pixels_.data(); }
 
     // Clip rectangle, half-open: [x0, x1) x [y0, y1).
     void set_clip(int x0, int y0, int x1, int y1);

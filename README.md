@@ -47,6 +47,10 @@ weather and road markings, fading smoothly into one another:
   slippery, each climate its own way (monsoon in India, the odd desert
   thunderstorm, never a drop in Egypt), with lightning and rolling thunder in
   the worst of it
+- **Day and night**: a day passes in eight minutes (a clock under the lap
+  counter): sunrise and sunset redden the sky, at night the picture darkens
+  to blue with stars overhead while tail lights, indicators and headlights
+  keep shining; the headlights (L) light the road ahead
 - **Wet spots**: puddles on the road in the rainy and snowy zones; hit one
   fast and the car aquaplanes, throwing up spray. Rarely, an **oil slick**:
   hardly any grip at all

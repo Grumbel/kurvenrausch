@@ -113,6 +113,22 @@ void Background::render(Framebuffer& fb, const RoadTheme& theme, const BackdropV
     }
     fb.fill_rect(0, horizon, w, fb.height() - horizon, theme.fog);
 
+    // Stars at night, in a fixed field above the horizon (so the mirror
+    // shows them too). Their colours are lights: they keep shining in the
+    // darkened picture (see apply_daylight()).
+    if (theme.stars > 0.02f) {
+        uint32_t seed = 0x51a7f00du;
+        for (int i = 0; i < 90; ++i) {
+            seed = seed * 1664525u + 1013904223u;
+            const int x = static_cast<int>((seed >> 8) % static_cast<uint32_t>(w));
+            seed = seed * 1664525u + 1013904223u;
+            const int y = static_cast<int>(static_cast<float>((seed >> 8) % 1000u) / 1000.f * static_cast<float>(horizon) * 0.9f);
+            const bool bright = (seed >> 28) < 4;
+            if (static_cast<float>((seed >> 4) & 0xff) / 255.f > theme.stars) continue; // fewer at dusk
+            fb.put_pixel(x, y, bright ? Color{0xe8, 0xee, 0xff} : Color{0xb8, 0xc8, 0xff});
+        }
+    }
+
     // The sun sits in the sky layer, wrapping so it is seen most of the time.
     // The sun is ahead, so the mirror never shows it.
     if (theme.sun_amount > 0.02f && !view.mirror) {

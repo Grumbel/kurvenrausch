@@ -134,6 +134,11 @@ hazard lights.
 .B \-\-headlights
 Switch the headlights on for the headless run.
 .TP
+.BI \-\-hour " H"
+Start the headless run at
+.I H
+o'clock (0 to 24); the day passes in eight minutes.
+.TP
 .BI \-\-touch " X,Y"
 Hold a finger on the touch screen at
 .IR X , Y

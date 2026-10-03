@@ -50,6 +50,7 @@ add_library(kurvenrausch_core STATIC
     src/background.cpp
     src/bitmap.cpp
     src/climate.cpp
+    src/daylight.cpp
     src/display.cpp
     src/driving.cpp
     src/font.cpp

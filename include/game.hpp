@@ -4,6 +4,7 @@
 #pragma once
 #include "background.hpp"
 #include "climate.hpp"
+#include "daylight.hpp"
 #include "audio.hpp"
 #include "components.hpp"
 #include "display.hpp"
@@ -56,6 +57,7 @@ struct ScreenshotOptions {
     std::vector<Finger> touches; // fingers held on the touch screen all run (framebuffer pixels)
     int signal = 0;          // indicators for the headless run: -1 left, +1 right, 2 the hazard lights
     bool headlights = false; // headlights on for the headless run
+    float hour = -1.f;       // if >= 0, the time of day the headless run starts at (0 .. 24)
     float dirt = -1.f;       // if >= 0, start this dirty (mud and oil, 0 .. 1)
 };
 
@@ -146,7 +148,9 @@ private:
     void render();
     void render_mirror();
     // The track's look at z under the weather passing over now.
-    RoadTheme look_at(float z) const { return weathered(track_.look_at(z), front_.level()); }
+    RoadTheme look_at(float z) const {
+        return at_daytime(weathered(track_.look_at(z), front_.level()), daylight_at(hour_));
+    }
     void update_lightning(float rain, float dt);
 
     std::unique_ptr<Display> display_;
@@ -195,6 +199,8 @@ private:
     bool bandaged_ = false;
     ViewMode view_mode_ = ViewMode::Chase;
     bool map_zoomed_ = true; // the mini map shows the stretch around the car, not the whole lap
+    float hour_ = start_hour;  // the time of day, 0 .. 24 (see daylight.hpp)
+    std::vector<uint32_t> day_picture_; // the picture before nightfall, for the headlights' beam
     // The light switches.
     bool headlights_ = false;
     int signal_ = 0;          // the indicator switched on: -1 left, +1 right, 0 none

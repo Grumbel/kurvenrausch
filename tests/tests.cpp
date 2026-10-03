@@ -13,6 +13,7 @@
 #include "music.hpp"
 #include "police.hpp"
 #include "touch.hpp"
+#include "daylight.hpp"
 #include "components.hpp"
 #include "road.hpp"
 #include "synth.hpp"
@@ -923,6 +924,46 @@ void test_touch() {
     CHECK(menu_tap(m, 300.f, first + 32.f, 320, 240).side == 1);
     CHECK(m.choose(PauseMenu::StartZone, 0) == MenuAction::StartZone);
     CHECK(menu_tap(m, 160.f, first + 48.f, 320, 240).item == -1); // no Quit line in a web page
+}
+
+void test_daylight() {
+    using namespace racer;
+    // Noon is full light without stars, midnight dark and starry, dusk red.
+    const Daylight noon = daylight_at(12.f), midnight = daylight_at(0.f), dusk = daylight_at(17.95f);
+    CHECK(noon.level == 1.f && noon.stars == 0.f && noon.glow == 0.f && noon.sun == 1.f);
+    CHECK(std::abs(midnight.level - night_level) < 1e-4f && midnight.stars == 1.f && midnight.sun == 0.f);
+    CHECK(dusk.glow > 0.7f && dusk.level < 1.f && dusk.level > night_level);
+    CHECK(daylight_at(6.05f).glow > 0.7f); // dawn too
+    // The clock: a day in day_seconds, wrapping at midnight.
+    CHECK(std::abs(advance_hour(10.f, day_seconds / 24.f) - 11.f) < 1e-4f);
+    CHECK(std::abs(advance_hour(23.f, day_seconds / 12.f) - 1.f) < 1e-3f);
+    // The sky: stars at night, the sun gone.
+    RoadTheme look;
+    look.sun_amount = 0.5f;
+    CHECK(at_daytime(look, midnight).stars == 1.f && at_daytime(look, midnight).sun_amount == 0.f);
+    CHECK(at_daytime(look, noon).sun_amount == 0.5f && at_daytime(look, noon).stars == 0.f);
+    // Night darkens everything but the lamps; daylight leaves it alone.
+    Framebuffer fb(4, 1);
+    const Color grass{0x40, 0xa0, 0x30}, tail{0x8c, 0x12, 0x12};
+    fb.put_pixel(0, 0, grass);
+    fb.put_pixel(1, 0, tail);
+    const std::vector<uint32_t> before(fb.pixels(), fb.pixels() + 4);
+    apply_daylight(fb, noon);
+    CHECK(std::vector<uint32_t>(fb.pixels(), fb.pixels() + 4) == before);
+    apply_daylight(fb, midnight);
+    CHECK(fb.pixels()[1] == tail.argb() && night_emissive(tail));
+    const uint32_t dark = fb.pixels()[0];
+    CHECK(((dark >> 8) & 0xff) < grass.g / 3);
+    // The headlights' beam brings the road ahead back, not the sky.
+    Framebuffer road(40, 40);
+    road.clear(grass);
+    const std::vector<uint32_t> day(road.pixels(), road.pixels() + 40 * 40);
+    apply_daylight(road, midnight);
+    const uint32_t night_px = road.pixels()[30 * 40 + 20];
+    headlight_beam(road, day, midnight, 20, 40);
+    CHECK(((road.pixels()[30 * 40 + 20] >> 8) & 0xff) > ((night_px >> 8) & 0xff) + 20); // ahead: lit
+    CHECK(road.pixels()[10 * 40 + 20] == night_px); // above the horizon: dark
+    CHECK(road.pixels()[30 * 40 + 1] == night_px);  // off to the side: dark
 }
 
 void test_pause_menu() {
@@ -2120,6 +2161,7 @@ int main() {
     test_follow_speed();
     test_steer_rate();
     test_pause_menu();
+    test_daylight();
     test_touch();
     test_police();
     test_climate();
