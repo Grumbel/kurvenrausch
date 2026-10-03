@@ -6,9 +6,17 @@
 #include <SDL2/SDL.h>
 #include <cstdlib>
 #include <iostream>
+#include <memory>
 #include <string>
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
 
 namespace {
+
+#ifdef __EMSCRIPTEN__
+racer::Game* web_game = nullptr; // for the web page's hooks
+#endif
 
 void usage(const char* argv0) {
     std::cout << "Usage: " << argv0 << " [OPTIONS]\n"
@@ -123,21 +131,35 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    racer::Game game;
+    // On the heap: in a web page the browser keeps calling into the game
+    // after main() has handed it the loop.
+    auto game = std::make_unique<racer::Game>();
 
     if (print_zones) {
-        game.print_zones();
+        game->print_zones();
         return 0;
     }
 
     if (!shot.path.empty()) {
-        return game.screenshot(shot) ? 0 : 1;
+        return game->screenshot(shot) ? 0 : 1;
     }
 
-    if (!game.init()) {
+    if (!game->init()) {
         std::cerr << "Failed to initialize game.\n";
         return 1;
     }
-    game.run();
+#ifdef __EMSCRIPTEN__
+    web_game = game.release(); // lives as long as the page
+    web_game->run();
+#else
+    game->run();
+#endif
     return 0;
 }
+
+#ifdef __EMSCRIPTEN__
+// Called by the web page when the tab is hidden or its Pause button pressed.
+extern "C" EMSCRIPTEN_KEEPALIVE void kurvenrausch_pause() {
+    if (web_game) web_game->pause();
+}
+#endif

@@ -6,6 +6,9 @@
 #include "drivetrain.hpp"
 
 #include <SDL2/SDL.h>
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -74,6 +77,11 @@ constexpr float reverse_top = 0.15f;
 constexpr float reverse_accel = 0.4f;
 
 // Refuelling works on the forecourt below this fraction of the top speed.
+#ifdef __EMSCRIPTEN__
+constexpr bool web = true; // running in a web page
+#else
+constexpr bool web = false;
+#endif
 constexpr float refuel_speed = 0.08f;
 // Stranded with an empty tank this long, the driver pours in a spare can.
 constexpr float stranded_seconds = 3.f;
@@ -249,7 +257,7 @@ bool Game::init() {
     std::cout << "Kurvenrausch: " << track_.segments.size() << " segments, "
               << track_.length() << " units.\n"
               << "Controls: Arrows / WASD or gamepad to drive, P / Start to pause,\n"
-              << "          R restart, M mute, F11 fullscreen, Esc to quit.\n";
+              << "          R restart, M mute, F11 fullscreen, Esc to " << (web ? "pause" : "quit") << ".\n";
     return true;
 }
 
@@ -324,65 +332,75 @@ void Game::show_message(std::string text, float seconds) {
 }
 
 void Game::run() {
-    Uint64 prev = SDL_GetPerformanceCounter();
-    const double freq = static_cast<double>(SDL_GetPerformanceFrequency());
-    float accumulator = 0.f;
-    InputState input;
-
-    for (;;) {
-        const Uint64 now = SDL_GetPerformanceCounter();
-        const float dt = std::min(static_cast<float>((now - prev) / freq), 0.25f);
-        prev = now;
-
-        input_.poll(input);
-        if (input.quit) break;
-        if (input.toggle_fullscreen) display_->toggle_fullscreen();
-        if (input.toggle_mute) muted_ = !muted_;
-        if (input.change_view && !paused_) {
-            view_mode_ = static_cast<ViewMode>((static_cast<int>(view_mode_) + 1) % view_modes);
-            show_message(view_name(view_mode_), 1.f);
-            save_choices();
-        }
-        if (input.change_music != 0) {
-            music_ = input.change_music > 0 ? Music::next(music_) : Music::previous(music_);
-            synth_.set_music(music_);
-            show_message(Music::name(music_), 1.5f);
-            save_choices();
-        }
-        if (!update_pause(input)) break;
-
-        crashed_ = false;
-        passed_ = false;
-        if (paused_) {
-            accumulator = 0.f;
-        } else {
-            accumulator += dt;
-            while (accumulator >= fixed_dt_) {
-                fixed_update(input, fixed_dt_);
-                accumulator -= fixed_dt_;
-            }
-            update_rumble();
-        }
-
-        render();
-        if (paused_) draw_pause_menu(fb_, menu_, track_.zones[static_cast<size_t>(menu_.zone)].country);
-        display_->present(fb_.pixels());
-
+    prev_counter_ = SDL_GetPerformanceCounter();
+#ifdef __EMSCRIPTEN__
+    // The browser calls a frame per display refresh; nothing to quit to.
+    emscripten_set_main_loop_arg([](void* game) { static_cast<Game*>(game)->frame(); }, this, 0, true);
+#else
+    while (frame()) {
         if (!display_->vsync()) SDL_Delay(1);
     }
+#endif
+}
+
+bool Game::frame() {
+    const Uint64 now = SDL_GetPerformanceCounter();
+    const double freq = static_cast<double>(SDL_GetPerformanceFrequency());
+    const float dt = std::min(static_cast<float>((now - prev_counter_) / freq), 0.25f);
+    prev_counter_ = now;
+
+    InputState& input = input_state_;
+    input_.poll(input);
+    if (input.quit && !web) return false;
+    if (input.toggle_fullscreen) display_->toggle_fullscreen();
+    if (input.toggle_mute) muted_ = !muted_;
+    if (input.change_view && !paused_) {
+        view_mode_ = static_cast<ViewMode>((static_cast<int>(view_mode_) + 1) % view_modes);
+        show_message(view_name(view_mode_), 1.f);
+        save_choices();
+    }
+    if (input.change_music != 0) {
+        music_ = input.change_music > 0 ? Music::next(music_) : Music::previous(music_);
+        synth_.set_music(music_);
+        show_message(Music::name(music_), 1.5f);
+        save_choices();
+    }
+    if (!update_pause(input)) return false;
+
+    crashed_ = false;
+    passed_ = false;
+    if (paused_) {
+        accumulator_ = 0.f;
+    } else {
+        accumulator_ += dt;
+        while (accumulator_ >= fixed_dt_) {
+            fixed_update(input, fixed_dt_);
+            accumulator_ -= fixed_dt_;
+        }
+        update_rumble();
+    }
+
+    render();
+    if (paused_) draw_pause_menu(fb_, menu_, track_.zones[static_cast<size_t>(menu_.zone)].country);
+    display_->present(fb_.pixels());
+    return true;
+}
+
+void Game::pause() {
+    if (paused_) return;
+    paused_ = true;
+    menu_.open(zone_, static_cast<int>(track_.zones.size()), !web);
+    SynthParams quiet = sound_;
+    quiet.volume = 0.f;
+    synth_.set_params(quiet);
 }
 
 bool Game::update_pause(const InputState& input) {
     if (!paused_) {
-        if (input.escape) return false;
+        // In a web page Esc pauses: there is nothing to quit to.
+        if (input.escape && !web) return false;
         if (input.restart) reset();
-        if (input.pause) {
-            paused_ = true;
-            menu_.open(zone_, static_cast<int>(track_.zones.size()));
-            SynthParams quiet = sound_;
-            quiet.volume = 0.f;
-            synth_.set_params(quiet);
-        }
+        if (input.pause || (input.escape && web)) pause();
         return true;
     }
     switch (input.pause ? MenuAction::Resume : menu_.update(input.menu)) {

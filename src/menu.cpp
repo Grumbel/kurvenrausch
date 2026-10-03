@@ -5,16 +5,18 @@
 
 namespace racer {
 
-void PauseMenu::open(int current_zone, int zone_count) {
+void PauseMenu::open(int current_zone, int zone_count, bool allow_quit) {
     selected = Resume;
+    can_quit = allow_quit;
     zones = zone_count > 0 ? zone_count : 1;
     zone = current_zone >= 0 ? current_zone % zones : 0;
 }
 
 MenuAction PauseMenu::update(const MenuInput& in) {
     if (in.back) return MenuAction::Resume;
-    if (in.up) selected = (selected + items - 1) % items;
-    if (in.down) selected = (selected + 1) % items;
+    const int n = item_count();
+    if (in.up) selected = (selected + n - 1) % n;
+    if (in.down) selected = (selected + 1) % n;
     if (selected == StartZone) {
         if (in.left) zone = (zone + zones - 1) % zones;
         if (in.right) zone = (zone + 1) % zones;

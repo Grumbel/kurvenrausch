@@ -233,7 +233,7 @@ void draw_pause_menu(Framebuffer& fb, const PauseMenu& menu, const std::string& 
     const int top = fb.height() / 2 - 50;
     text_center(fb, top, "PAUSED", Value, 3);
     const std::string items[PauseMenu::items] = {"RESUME", "RESTART", "START IN < " + country + " >", "QUIT"};
-    for (int i = 0; i < PauseMenu::items; ++i) {
+    for (int i = 0; i < menu.item_count(); ++i) {
         const bool on = i == menu.selected;
         const std::string line = on ? "> " + items[i] + " <" : items[i];
         text_center(fb, top + 36 + 16 * i, line, on ? Label : Value);

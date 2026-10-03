@@ -884,6 +884,13 @@ void test_pause_menu() {
     CHECK(m.update(back) == MenuAction::Resume);
     m.open(-1, 16);
     CHECK(m.zone == 0 && m.selected == PauseMenu::Resume);
+    // Without Quit (in a web page) the selection wraps round the other three.
+    m.open(0, 16, false);
+    CHECK(m.item_count() == 3);
+    m.update(up);
+    CHECK(m.selected == PauseMenu::StartZone);
+    m.update(down);
+    CHECK(m.selected == PauseMenu::Resume);
 }
 
 void test_steer_rate() {

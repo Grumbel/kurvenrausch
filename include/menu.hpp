@@ -18,17 +18,21 @@ struct MenuInput {
 enum class MenuAction { None, Resume, Restart, StartZone, Quit };
 
 // The pause menu: resume, restart at the start line, start in a chosen
-// country (picked with left and right on its line) or quit.
+// country (picked with left and right on its line) or quit, where there is
+// something to quit to (not in a web page).
 struct PauseMenu {
     enum Item { Resume, Restart, StartZone, Quit, items };
 
     int selected = Resume;
     int zone = 0;  // the country to start in
     int zones = 1; // how many there are to choose from
+    bool can_quit = true;
 
     // Opens the menu on "Resume", with the country the car is in as the
     // start choice.
-    void open(int current_zone, int zone_count);
+    void open(int current_zone, int zone_count, bool allow_quit = true);
+    // The items shown: all of them, or all but Quit.
+    int item_count() const { return can_quit ? items : Quit; }
     // Moves the selection and returns what the player chose, if anything.
     MenuAction update(const MenuInput& in);
 };

@@ -72,7 +72,15 @@ public:
 
     // Interactive mode: opens a window.
     bool init();
+    // Runs until the player quits; in a web page the browser drives the loop
+    // and this returns at once (the Game must then outlive main(): allocate
+    // it on the heap and let it be).
     void run();
+    // One frame: input, simulation, picture. False once the player quits.
+    bool frame();
+    // Opens the pause menu, as Start does (the web page calls this when the
+    // tab is hidden).
+    void pause();
 
     // Headless mode: simulates with an autopilot, renders one frame and
     // writes it as a BMP. No window is opened.
@@ -250,6 +258,10 @@ private:
     float banner_time_ = 0.f;
 
     static constexpr float fixed_dt_ = 1.f / 60.f;
+    // The interactive loop's state between frames.
+    InputState input_state_;
+    Uint64 prev_counter_ = 0;
+    float accumulator_ = 0.f;
 };
 
 } // namespace racer
