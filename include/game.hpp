@@ -58,6 +58,7 @@ struct ScreenshotOptions {
     int signal = 0;          // indicators for the headless run: -1 left, +1 right, 2 the hazard lights
     bool headlights = false; // headlights on for the headless run
     float hour = -1.f;       // if >= 0, the time of day the headless run starts at (0 .. 24)
+    bool attract = false;    // the headless run shows the attract mode
     float dirt = -1.f;       // if >= 0, start this dirty (mud and oil, 0 .. 1)
 };
 
@@ -117,6 +118,11 @@ private:
     void update_indicators(const InputState& input, float dt);
     // The indicators as the car's sprite shows them now (see hazard_signal).
     int shown_signal() const;
+    // The attract mode: following the traffic, waiting for a player.
+    void start_attract();
+    void leave_attract();
+    void follow_next_car();
+    void update_attract(float dt);
     // Adds what the fingers press to the input.
     void apply_touch(InputState& input, const std::vector<Finger>& fingers);
     void end_chase();
@@ -199,6 +205,14 @@ private:
     ViewMode view_mode_ = ViewMode::Chase;
     bool map_zoomed_ = true; // the mini map shows the stretch around the car, not the whole lap
     float hour_ = start_hour;  // the time of day, 0 .. 24 (see daylight.hpp)
+    // The attract mode: the camera follows a car of the traffic, a new one
+    // every so often, until somebody presses something.
+    bool attract_ = false;
+    Entity attract_car_ = INVALID_ENTITY;
+    float attract_switch_ = 0.f;  // seconds until the next car
+    int attract_cars_ = 0;        // followed so far: the view alternates
+    ViewMode played_view_ = ViewMode::Chase; // the player's view, back after the attract mode
+    float idle_ = 0.f;            // seconds without any input
     std::vector<uint32_t> day_picture_; // the picture before nightfall, for the headlights' beam
     // The light switches.
     bool headlights_ = false;

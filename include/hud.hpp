@@ -47,6 +47,8 @@ struct HudState {
     std::string fork_left;       // a fork ahead: the left route's name
     std::string fork_right;      // ... and the right one's
     float nitro_burn = 0.f;      // fraction left of the canister burning now, 0 for none
+    bool attract = false;        // the attract mode: the title and a prompt instead of the dashboard
+    bool attract_prompt = false; // the prompt, in this moment of its blinking
     std::string banner;          // country, shown when entering a new zone
     std::string banner_sub;      // region below it
 };

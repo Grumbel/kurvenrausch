@@ -46,6 +46,10 @@ struct InputState {
     // now, and those that came down since the last poll.
     std::vector<Finger> fingers;
     std::vector<Finger> taps;
+
+    // Anything at all since the last poll: a key or button pressed, the
+    // screen touched, a stick or trigger pushed (ends the attract mode).
+    bool any_input = false;
 };
 
 // A normalised reading of one game controller (SDL's standard layout, which

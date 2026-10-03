@@ -83,6 +83,8 @@ constexpr bool web = true; // running in a web page
 constexpr bool web = false;
 #endif
 constexpr float refuel_speed = 0.08f;
+constexpr float attract_idle_seconds = 120.f;  // without input, back to the attract mode
+constexpr float attract_follow_seconds = 20.f; // each car followed this long
 
 // The cars a lot sells.
 CarRange lot_range(Lot lot) {
@@ -258,6 +260,8 @@ bool Game::init(bool fullscreen) {
     input_.init(); // not fatal: the keyboard always works
     audio_.init(synth_); // nor is a missing audio device
 
+    start_attract(); // until somebody presses something
+
     std::cout << "Kurvenrausch: " << track_.segments.size() << " segments, "
               << track_.length() << " units.\n"
               << "Controls: Arrows / WASD or gamepad to drive, P / Start to pause,\n"
@@ -378,6 +382,29 @@ bool Game::frame() {
     if (input.toggle_fullscreen) display_->toggle_fullscreen();
     if (input.toggle_mute) muted_ = !muted_;
     if (input.toggle_map) map_zoomed_ = !map_zoomed_;
+
+    // The attract mode until somebody presses something; and back to it
+    // after a while without anybody at the controls.
+    if (attract_) {
+        if (input.any_input) {
+            leave_attract();
+        } else {
+            accumulator_ += dt;
+            while (accumulator_ >= fixed_dt_) {
+                update_attract(fixed_dt_);
+                accumulator_ -= fixed_dt_;
+            }
+        }
+        render();
+        display_->present(fb_.pixels());
+        return true;
+    }
+    idle_ = input.any_input ? 0.f : idle_ + dt;
+    if (idle_ > attract_idle_seconds) {
+        start_attract();
+        return true;
+    }
+
     if (!paused_) switch_lights(input); // paused, the D-pad moves the menu
     if (input.change_view && !paused_) {
         view_mode_ = static_cast<ViewMode>((static_cast<int>(view_mode_) + 1) % view_modes);
@@ -463,6 +490,81 @@ void Game::update_indicators(const InputState& input, float dt) {
 int Game::shown_signal() const {
     if (!blink_on_) return 0;
     return hazards_ ? hazard_signal : signal_;
+}
+
+void Game::start_attract() {
+    reset();
+    attract_ = true;
+    paused_ = false;
+    played_view_ = view_mode_;
+    attract_cars_ = 0;
+    attract_car_ = INVALID_ENTITY;
+    follow_next_car();
+}
+
+void Game::leave_attract() {
+    attract_ = false;
+    view_mode_ = played_view_;
+    idle_ = 0.f;
+    reset(); // at the start line
+}
+
+// A regular car of the traffic (a car, van or truck), not the one followed
+// so far; the view alternates between chase and far.
+void Game::follow_next_car() {
+    std::vector<Entity> cars;
+    world_.view<Traffic>([&](Entity e, Traffic& t) {
+        if (e != attract_car_ && (t.kind == Vehicle::Car || t.kind == Vehicle::Van || t.kind == Vehicle::Truck)) {
+            cars.push_back(e);
+        }
+    });
+    if (cars.empty()) return;
+    rng_ = rng_ * 1664525u + 1013904223u;
+    attract_car_ = cars[(rng_ >> 8) % cars.size()];
+    view_mode_ = attract_cars_++ % 2 ? ViewMode::Far : ViewMode::Chase;
+    attract_switch_ = attract_follow_seconds;
+    zone_ = -1; // announce where it is
+}
+
+// The world goes on without the player: the traffic drives, the camera (the
+// player's car, hidden) stays behind the followed car, the weather and the
+// time of day move on. No laps, no police, no collisions.
+void Game::update_attract(float dt) {
+    attract_switch_ -= dt;
+    if (attract_switch_ <= 0.f || attract_car_ == INVALID_ENTITY || !world_.has<Transform>(attract_car_)) {
+        follow_next_car();
+    }
+    if (attract_car_ == INVALID_ENTITY) return;
+    update_traffic(dt);
+    const auto& t = world_.get<Transform>(attract_car_);
+    const float speed = world_.get<Velocity>(attract_car_).speed;
+    auto& tr = world_.get<Transform>(player_);
+    auto& vel = world_.get<Velocity>(player_);
+    const float player_z = world_.get<Camera>(camera_).player_z();
+    const float prev_z = tr.z;
+    tr.z = track_.wrap(t.z - player_z);
+    tr.x = t.x;
+    vel.speed = speed;
+    tr.y = track_.height_at(t.z);
+    place_on_road(vertical_, tr.y);
+
+    const Segment& seg = track_.segment_at(t.z);
+    const RoadTheme look = look_at(t.z);
+    const float speed_pct = speed / base_max_speed_;
+    background_.update(seg.curve, track_.wrap(tr.z - prev_z) / track_.segment_length, dt);
+    weather_.update(look.rain, look.snowfall, -seg.curve * 25.f * speed_pct, speed_pct, dt);
+    front_.update(dt);
+    clock_ += dt;
+    hour_ = advance_hour(hour_, dt);
+    const int zone = track_.zone_number_at(t.z);
+    if (zone != zone_) {
+        zone_ = zone;
+        banner_time_ = 4.f;
+    }
+    if (banner_time_ > 0.f) banner_time_ -= dt;
+    InputState cruising;
+    cruising.throttle = 0.5f;
+    update_audio(cruising, dt);
 }
 
 void Game::apply_touch(InputState& input, const std::vector<Finger>& fingers) {
@@ -559,6 +661,7 @@ bool Game::screenshot(const ScreenshotOptions& opts) {
         in.horn = opts.horn;
         in.nitro = i == opts.nitro_frame;
         in.handbrake = opts.handbrake_from >= 0 && i >= opts.handbrake_from;
+        if (i == 0 && opts.attract) start_attract();
         if (i == opts.police_frame) start_chase();
         if (i == 0) {
             if (opts.hour >= 0.f) hour_ = opts.hour;
@@ -566,6 +669,10 @@ bool Game::screenshot(const ScreenshotOptions& opts) {
             hazards_ = opts.signal == hazard_signal;
             signal_ = opts.signal == hazard_signal ? 0 : opts.signal;
             signal_x_ = world_.get<Transform>(player_).x;
+        }
+        if (attract_) {
+            update_attract(fixed_dt_);
+            continue;
         }
         if (!opts.touches.empty()) {
             touch_seen_ = true;
@@ -1307,7 +1414,9 @@ void Game::update_traffic(float dt) {
     std::vector<Mover> movers;
     const auto& ptr = world_.get<Transform>(player_);
     const float player_world_z = ptr.z + world_.get<Camera>(camera_).player_z();
-    movers.push_back({player_, ptr.x, player_world_z, world_.get<Velocity>(player_).speed});
+    // (In the attract mode the player's car is where the followed car is:
+    // not in anybody's way.)
+    if (!attract_) movers.push_back({player_, ptr.x, player_world_z, world_.get<Velocity>(player_).speed});
     world_.view<Transform, Velocity, Traffic>([&](Entity e, Transform& t, Velocity& v, Traffic&) {
         movers.push_back({e, t.x, t.z, v.speed});
     });
@@ -1582,7 +1691,7 @@ void Game::render() {
             1.f + bounce_;
     me.sy -= std::min(40.f, (1.f - camera_air_share) * air * scale * height / width);
     if (landing_time_ > 0.f) me.sy += 3.f; // squashed by a hard landing
-    bool car_visible = setup.car;
+    bool car_visible = setup.car && !attract_;
     if (crash_time_ >= 0.f && setup.car) {
         const CrashPose pose = crash_pose(crash_time_, crash_side_);
         me.angle = pose.angle;
@@ -1734,12 +1843,14 @@ void Game::render() {
     hud.map_zoom = map_zoomed_ ? 3.f : 1.f;
     hud.fuel_warning = fuel_.level() < Fuel::low && std::fmod(clock_, 0.5f) < 0.3f;
     hud.nitro_burn = nitro_.burn_left();
+    hud.attract = attract_;
+    hud.attract_prompt = std::fmod(clock_, 1.f) < 0.65f;
     if (banner_time_ > 0.f && zone_ >= 0 && !paused_) {
         hud.banner = track_.zones[static_cast<size_t>(zone_)].country;
         hud.banner_sub = track_.zones[static_cast<size_t>(zone_)].region;
     }
     draw_hud(fb_, hud);
-    if (touch_seen_ && !paused_) touch_.draw(fb_);
+    if (touch_seen_ && !paused_ && !attract_) touch_.draw(fb_);
 }
 
 // The road behind the car, drawn into its own small framebuffer and set into

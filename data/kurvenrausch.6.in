@@ -138,6 +138,10 @@ hazard lights.
 .B \-\-headlights
 Switch the headlights on for the headless run.
 .TP
+.B \-\-attract
+Show the attract mode in the screenshot: the camera following a car of the
+traffic, as the game does when it starts and when nobody plays.
+.TP
 .BI \-\-hour " H"
 Start the headless run at
 .I H

@@ -2,7 +2,8 @@
 
 ## Current tip
 
-Tip is Round 15 (Android min SDK 22), rebased on `4cab353` (lights).
+Tip is Round 16 (attract mode), after the day and night cycle and the
+drivable cars (`693e2bc`).
 Work is committed directly to `master`; Grok still delivers cumulative git
 bundles (see AGENTS.md).
 
@@ -23,6 +24,22 @@ Upstream master has since been fast-forwarded to `64fda32`, the tip of 002.1, so
 003.1 applied on top of it as a plain fast-forward.
 The rebase notes: upstream's rename is kept, its rendering fix is superseded by
 the road/framebuffer rewrite, `Color::to_u32()` became `Color::argb()`.
+
+## Round 16: day and night, drivable cars, attract mode
+
+The owner's list: day/night cycle (`4e64766`), every car drivable with
+sports and everyday dealers (`693e2bc`), touch fix (`5d9543f`), controller
+remap without chords (`79c5e8f`), and the attract mode:
+- `Game::start_attract()` at start-up and after `attract_idle_seconds` (120)
+  without `InputState::any_input` (a key, button, tap, a held finger, a
+  stick or trigger pushed well over); any input leaves it with `reset()`
+- `update_attract()`: only the traffic, background, weather, clock and
+  audio run; the hidden player car sits `player_z` behind the followed car
+  (`attract_car_`, a Car/Van/Truck, a new one every 20 s, alternating the
+  Chase and Far views; the player's view comes back afterwards). No laps,
+  police or collisions; `update_traffic` leaves the player out of the movers
+- HUD: zone banner, title, blinking prompt (`HudState::attract`)
+- `--attract` for headless screenshots
 
 ## Round 15: Android min SDK 22 (Android 5.1)
 

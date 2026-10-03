@@ -45,6 +45,7 @@ void usage(const char* argv0) {
               << "  --signal N          indicators on in the headless run: -1 left, 1 right, 2 hazard lights\n"
               << "  --headlights        headlights on in the headless run\n"
               << "  --hour H            start the headless run at H o'clock (0 to 24)\n"
+              << "  --attract           show the attract mode (following the traffic) in the screenshot\n"
               << "  --dirt L            start the headless run this dirty (0 to 1)\n"
               << "  --wash              pull in at the next car wash during the headless run\n"
               << "  --visit KIND        pull in at the next lot of KIND (gas, dealer, sports, wash, motel, hospital, truckstop)\n"
@@ -103,6 +104,8 @@ int main(int argc, char* argv[]) {
             }
         } else if (arg == "--signal" && i + 1 < argc) {
             shot.signal = std::atoi(argv[++i]);
+        } else if (arg == "--attract") {
+            shot.attract = true;
         } else if (arg == "--hour" && i + 1 < argc) {
             shot.hour = static_cast<float>(std::atof(argv[++i]));
         } else if (arg == "--headlights") {

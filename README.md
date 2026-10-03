@@ -51,6 +51,10 @@ weather and road markings, fading smoothly into one another:
   counter): sunrise and sunset redden the sky, at night the picture darkens
   to blue with stars overhead while tail lights, indicators and headlights
   keep shining; the headlights (L) light the road ahead
+- **Attract mode**: the game starts, as in an arcade, following the cars of
+  the traffic around the world (a new one every 20 seconds), and goes back
+  to it after two minutes without anybody at the controls; any key, button,
+  stick or tap starts a race
 - **Wet spots**: puddles on the road in the rainy and snowy zones; hit one
   fast and the car aquaplanes, throwing up spray. Rarely, an **oil slick**:
   hardly any grip at all
@@ -284,6 +288,7 @@ made and how rendering changes are checked without a display:
 ./build/kurvenrausch --screenshot shot.bmp --frames 640 --steer -1 --steer-from 600  # crash
 ./build/kurvenrausch --screenshot shot.bmp --zone 1 --frames 300 --car 2   # another car
 ./build/kurvenrausch --screenshot shot.bmp --zone 5 --frames 1400 --dealer # visit a dealer
+./build/kurvenrausch --screenshot shot.bmp --frames 1500 --attract   # the attract mode
 ```
 
 It simulates the given number of 60 Hz steps with a simple autopilot that also

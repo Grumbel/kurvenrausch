@@ -101,6 +101,7 @@ void Input::poll(InputState& state) {
     state.toggle_headlights = state.signal_left = state.signal_right = state.toggle_hazards = false;
     state.change_music = 0;
     state.taps.clear();
+    state.any_input = false;
 
     SDL_Event e;
     while (SDL_PollEvent(&e)) {
@@ -110,6 +111,7 @@ void Input::poll(InputState& state) {
                 break;
             case SDL_KEYDOWN:
                 if (e.key.repeat) break;
+                state.any_input = true;
                 switch (e.key.keysym.sym) {
                     case SDLK_ESCAPE: state.escape = true; state.menu.back = true; break;
                     case SDLK_p: state.pause = true; break;
@@ -140,6 +142,7 @@ void Input::poll(InputState& state) {
                 }
                 break;
             case SDL_FINGERDOWN:
+                state.any_input = true;
                 fingers_[e.tfinger.fingerId] = Finger{static_cast<int64_t>(e.tfinger.fingerId), e.tfinger.x, e.tfinger.y};
                 state.taps.push_back(fingers_[e.tfinger.fingerId]);
                 break;
@@ -156,6 +159,7 @@ void Input::poll(InputState& state) {
                 close_controller(e.cdevice.which);
                 break;
             case SDL_CONTROLLERBUTTONDOWN:
+                state.any_input = true;
                 switch (e.cbutton.button) {
                     case SDL_CONTROLLER_BUTTON_START: state.pause = true; break;
                     case SDL_CONTROLLER_BUTTON_BACK: state.change_view = true; break;
@@ -228,6 +232,12 @@ void Input::poll(InputState& state) {
         p.left_shoulder = button(pad, SDL_CONTROLLER_BUTTON_LEFTSHOULDER);
         p.right_shoulder = button(pad, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER);
         merge_pad(state, p);
+    }
+    // Sticks and triggers pushed well over count too, as do fingers held on
+    // the screen.
+    if (std::abs(state.steer) > 0.5f || state.throttle > 0.5f || state.brake > 0.5f || std::abs(right_x) > 0.6f ||
+        std::abs(right_y) > 0.6f || !state.fingers.empty()) {
+        state.any_input = true;
     }
 }
 

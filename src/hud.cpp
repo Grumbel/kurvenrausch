@@ -189,6 +189,19 @@ void draw_hud(Framebuffer& fb, const HudState& hud) {
     const int w = fb.width();
     const int h = fb.height();
 
+    // The attract mode: the country, the title, and how to play.
+    if (hud.attract) {
+        if (!hud.banner.empty()) {
+            text_center(fb, 48, hud.banner, Value, 2);
+            text_center(fb, 65, hud.banner_sub, Label);
+        }
+        // Above the road, clear of the followed car.
+        text_center(fb, 84, "KURVENRAUSCH", Label, 3);
+        if (hud.attract_prompt) text_center(fb, 112, "PRESS ANY BUTTON", Value, 2);
+        text_center(fb, 130, "OR TAP THE SCREEN", Value);
+        return;
+    }
+
     // Top left: current lap time.
     text(fb, 6, 5, "TIME", Label);
     text(fb, 6, 14, format_lap_time(hud.lap_time), Value, 2);
