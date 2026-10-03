@@ -20,7 +20,10 @@ public:
 
     // `app_id` names the application to the desktop (X11 window class,
     // Wayland app ID), so it can be matched to its desktop entry.
-    bool init(const char* title, const char* app_id, int fb_width, int fb_height, int window_scale);
+    // Opens a window of the framebuffer's size times window_scale, or
+    // covering the screen; the framebuffer is scaled to fit either way.
+    bool init(const char* title, const char* app_id, int fb_width, int fb_height, int window_scale,
+              bool fullscreen = false);
     // The window's icon, an ARGB8888 image.
     void set_icon(const uint32_t* argb_pixels, int width, int height);
     void present(const uint32_t* argb_pixels);

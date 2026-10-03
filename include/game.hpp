@@ -70,8 +70,8 @@ public:
 
     Game();
 
-    // Interactive mode: opens a window.
-    bool init();
+    // Interactive mode: opens a window, or covers the screen.
+    bool init(bool fullscreen = false);
     // Runs until the player quits; in a web page the browser drives the loop
     // and this returns at once (the Game must then outlive main(): allocate
     // it on the heap and let it be).
@@ -95,6 +95,7 @@ public:
 
 private:
     void reset();
+    static std::string user_state_dir();
     // Puts the car, standing, at camera position `position`.
     void start_at(float position);
     // Opens and drives the pause menu; false when the player chose to quit.

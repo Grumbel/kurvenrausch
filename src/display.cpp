@@ -14,7 +14,8 @@ Display::~Display() {
     if (SDL_WasInit(SDL_INIT_VIDEO)) SDL_QuitSubSystem(SDL_INIT_VIDEO);
 }
 
-bool Display::init(const char* title, const char* app_id, int fb_width, int fb_height, int window_scale) {
+bool Display::init(const char* title, const char* app_id, int fb_width, int fb_height, int window_scale,
+                   bool fullscreen) {
     fb_w_ = fb_width;
     fb_h_ = fb_height;
 
@@ -38,7 +39,8 @@ bool Display::init(const char* title, const char* app_id, int fb_width, int fb_h
     window_ = SDL_CreateWindow(title,
                                SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
                                fb_width * window_scale, fb_height * window_scale,
-                               SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
+                               SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE |
+                                   (fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0));
     if (!window_) {
         std::cerr << "Window creation failed: " << SDL_GetError() << "\n";
         return false;

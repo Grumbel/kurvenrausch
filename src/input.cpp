@@ -110,6 +110,10 @@ void Input::poll(InputState& state) {
                 switch (e.key.keysym.sym) {
                     case SDLK_ESCAPE: state.escape = true; state.menu.back = true; break;
                     case SDLK_p: state.pause = true; break;
+                    case SDLK_AC_BACK: // Android's back button: pause, or back out of the menu
+                        state.pause = true;
+                        state.menu.back = true;
+                        break;
                     case SDLK_r: state.restart = true; break;
                     case SDLK_UP: case SDLK_w: state.menu.up = true; break;
                     case SDLK_DOWN: case SDLK_s: state.menu.down = true; break;

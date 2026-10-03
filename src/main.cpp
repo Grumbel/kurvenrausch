@@ -20,6 +20,7 @@ racer::Game* web_game = nullptr; // for the web page's hooks
 
 void usage(const char* argv0) {
     std::cout << "Usage: " << argv0 << " [OPTIONS]\n"
+              << "  --fullscreen        start covering the whole screen\n"
               << "  --screenshot FILE   render headless and save a BMP, then exit\n"
               << "  --frames N          simulation steps (60/s) before the screenshot (default 0)\n"
               << "  --position Z        start distance along the track for the screenshot\n"
@@ -53,6 +54,7 @@ void usage(const char* argv0) {
 int main(int argc, char* argv[]) {
     racer::ScreenshotOptions shot;
     bool print_zones = false;
+    bool fullscreen = false;
 
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
@@ -68,6 +70,8 @@ int main(int argc, char* argv[]) {
             shot.zone = std::atoi(argv[++i]);
         } else if (arg == "--print-zones") {
             print_zones = true;
+        } else if (arg == "--fullscreen") {
+            fullscreen = true;
         } else if (arg == "--steer" && i + 1 < argc) {
             shot.force_steer = true;
             shot.steer = static_cast<float>(std::atof(argv[++i]));
@@ -144,7 +148,7 @@ int main(int argc, char* argv[]) {
         return game->screenshot(shot) ? 0 : 1;
     }
 
-    if (!game->init()) {
+    if (!game->init(fullscreen)) {
         std::cerr << "Failed to initialize game.\n";
         return 1;
     }

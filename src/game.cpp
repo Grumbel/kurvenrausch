@@ -228,14 +228,14 @@ void Game::spawn_traffic() {
     }
 }
 
-bool Game::init() {
+bool Game::init(bool fullscreen) {
     display_ = std::make_unique<Display>();
-    if (!display_->init("Kurvenrausch", app_id, width, height, window_scale)) return false;
+    if (!display_->init("Kurvenrausch", app_id, width, height, window_scale, fullscreen)) return false;
     const Bitmap icon = make_app_icon();
     display_->set_icon(icon.px.data(), icon.w, icon.h);
 
     // Last run's choices and the lap record.
-    store_ = Store(state_dir(std::getenv("XDG_STATE_HOME"), std::getenv("HOME")));
+    store_ = Store(user_state_dir());
     if (const std::optional<Choices> c = store_.load_choices()) {
         const auto wrap = [](int i, int n) { return ((i % n) + n) % n; };
         car_model_ = wrap(c->car, car_models);
@@ -300,6 +300,22 @@ void Game::reset() {
     dirt_.reset();
     washing_ = false;
     bandaged_ = false;
+}
+
+// Where lap times and choices are kept: the XDG state directory, except on
+// systems without one (Windows, Android), where SDL knows the place for an
+// application's files (AppData, the app's internal storage).
+std::string Game::user_state_dir() {
+#if defined(_WIN32) || defined(__ANDROID__)
+    char* path = SDL_GetPrefPath("grumbel", "kurvenrausch");
+    if (!path) return {};
+    std::string dir = path;
+    SDL_free(path);
+    while (!dir.empty() && (dir.back() == '/' || dir.back() == '\\')) dir.pop_back();
+    return dir;
+#else
+    return state_dir(std::getenv("XDG_STATE_HOME"), std::getenv("HOME"));
+#endif
 }
 
 void Game::update_rumble() {

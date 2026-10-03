@@ -31,6 +31,10 @@ it runs headless instead: an autopilot drives for the given number of steps,
 one frame is rendered and saved, and no window is opened.
 .SH OPTIONS
 .TP
+.B \-\-fullscreen
+Start covering the whole screen instead of in a window (F11 or Alt+Enter
+switches between the two).
+.TP
 .BI \-\-screenshot " FILE"
 Render headless and save the frame as a BMP image to
 .IR FILE ,
