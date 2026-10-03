@@ -97,6 +97,7 @@ void Input::poll(InputState& state) {
     state.toggle_fullscreen = false;
     state.toggle_mute = false;
     state.change_view = false;
+    state.toggle_map = false;
     state.change_music = 0;
     state.taps.clear();
 
@@ -124,6 +125,7 @@ void Input::poll(InputState& state) {
                     case SDLK_F11: state.toggle_fullscreen = true; break;
                     case SDLK_m: state.toggle_mute = true; break;
                     case SDLK_c: state.change_view = true; break;
+                    case SDLK_TAB: state.toggle_map = true; break;
                     case SDLK_n: state.change_music = 1; break;
                     case SDLK_RETURN:
                         if (e.key.keysym.mod & KMOD_ALT) state.toggle_fullscreen = true;
@@ -152,6 +154,7 @@ void Input::poll(InputState& state) {
                 switch (e.cbutton.button) {
                     case SDL_CONTROLLER_BUTTON_START: state.pause = true; break;
                     case SDL_CONTROLLER_BUTTON_BACK: state.change_view = true; break;
+                    case SDL_CONTROLLER_BUTTON_RIGHTSTICK: state.toggle_map = true; break;
                     case SDL_CONTROLLER_BUTTON_DPAD_UP: state.menu.up = true; break;
                     case SDL_CONTROLLER_BUTTON_DPAD_DOWN: state.menu.down = true; break;
                     case SDL_CONTROLLER_BUTTON_DPAD_LEFT: state.menu.left = true; break;

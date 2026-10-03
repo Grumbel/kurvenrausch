@@ -184,6 +184,7 @@ P	Start	pause menu: resume, restart, start in a country, quit
 R		restart
 C	Back	camera view: chase, far, bumper, cockpit
 N	right stick	radio: the next (or previous) track, or off
+Tab	right stick click	mini map: around the car or the whole lap
 M		mute the sound
 F11, Alt+Enter		toggle fullscreen
 Esc		quit; in the pause menu, back to the race

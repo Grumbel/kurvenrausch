@@ -187,6 +187,7 @@ private:
     int car_before_truck_ = 0; // the car left at the truck stop, to take back
     bool bandaged_ = false;
     ViewMode view_mode_ = ViewMode::Chase;
+    bool map_zoomed_ = true; // the mini map shows the stretch around the car, not the whole lap
     int music_ = 0;          // the radio's track (see Music), -1 off
     Entity police_ = INVALID_ENTITY; // the police car in a chase
     Chase chase_;

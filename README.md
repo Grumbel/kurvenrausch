@@ -219,6 +219,7 @@ browser Esc pauses, and the pause menu has no Quit.
 | R                |                          | Restart            |
 | C                | Back                     | Camera view: chase, far, bumper, cockpit |
 | N                | Right stick, flicked     | Radio: next (or previous) track, or off |
+| Tab              | Right stick, clicked     | Mini map: zoomed in around the car, or the whole lap |
 | M                |                          | Mute sound         |
 | F11 / Alt+Enter  |                          | Toggle fullscreen  |
 | Esc              |                          | Quit (in the pause menu: back to the race) |

@@ -370,6 +370,7 @@ bool Game::frame() {
     if (input.quit && !web) return false;
     if (input.toggle_fullscreen) display_->toggle_fullscreen();
     if (input.toggle_mute) muted_ = !muted_;
+    if (input.toggle_map) map_zoomed_ = !map_zoomed_;
     if (input.change_view && !paused_) {
         view_mode_ = static_cast<ViewMode>((static_cast<int>(view_mode_) + 1) % view_modes);
         show_message(view_name(view_mode_), 1.f);
@@ -1654,6 +1655,7 @@ void Game::render() {
     hud.map_start = track_.index_at(track_.start_z);
     hud.map_lots = &lots_;
     hud.map_blink = std::fmod(clock_, 0.4f) < 0.2f;
+    hud.map_zoom = map_zoomed_ ? 3.f : 1.f;
     hud.fuel_warning = fuel_.level() < Fuel::low && std::fmod(clock_, 0.5f) < 0.3f;
     hud.nitro_burn = nitro_.burn_left();
     if (banner_time_ > 0.f && zone_ >= 0 && !paused_) {

@@ -59,12 +59,18 @@ void draw_minimap(Framebuffer& fb, int x, int y, int size, const HudState& hud) 
     for (int j = y; j < y + size; ++j)
         for (int i = x; i < x + size; ++i) fb.blend_pixel(i, j, Shadow, 0.45f);
 
-    const float inner = static_cast<float>(size - 6);
+    // The whole lap fits the box at zoom 1; zoomed in, the box follows the
+    // car and cuts off the rest.
+    const float inner = static_cast<float>(size - 6) * hud.map_zoom;
+    const MapPoint& here = map[static_cast<size_t>(((hud.map_player % n) + n) % n)];
+    const float cx0 = hud.map_zoom > 1.f ? static_cast<float>(size) / 2.f - here.x * inner : 3.f;
+    const float cy0 = hud.map_zoom > 1.f ? static_cast<float>(size) / 2.f - here.y * inner : 3.f;
     auto px = [&](int seg) {
         const MapPoint& p = map[static_cast<size_t>(((seg % n) + n) % n)];
-        return std::make_pair(x + 3 + static_cast<int>(std::lround(p.x * inner)),
-                              y + 3 + static_cast<int>(std::lround(p.y * inner)));
+        return std::make_pair(x + static_cast<int>(std::lround(cx0 + p.x * inner)),
+                              y + static_cast<int>(std::lround(cy0 + p.y * inner)));
     };
+    fb.set_clip(x, y, x + size, y + size);
     const int step = std::max(1, n / 240);
     for (int pass = 0; pass < 2; ++pass) {
         for (int i = 0; i < n; i += step) {
@@ -110,6 +116,7 @@ void draw_minimap(Framebuffer& fb, int x, int y, int size, const HudState& hud) 
     }
     const Color car{0xf0, 0x30, 0x20};
     dot(hud.map_player, car, hud.map_blink ? Value : car);
+    fb.reset_clip();
 }
 
 // Fuel gauge: a pump symbol and a bar, red and blinking when low.

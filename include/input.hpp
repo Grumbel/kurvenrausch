@@ -32,6 +32,7 @@ struct InputState {
     bool toggle_fullscreen = false;
     bool toggle_mute = false;
     bool change_view = false; // C or Back: the next camera view
+    bool toggle_map = false;  // Tab or the right stick clicked: zoom the mini map in or out
     int change_music = 0;     // N, or the right stick flicked: +1 the next track, -1 the previous
 
     // The touch screen, in window coordinates from 0 to 1: the fingers down

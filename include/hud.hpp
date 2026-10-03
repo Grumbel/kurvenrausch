@@ -39,6 +39,7 @@ struct HudState {
     bool offer_stats = false;
     float offer_values[3] = {1.f, 1.f, 1.f};
     bool map_blink = false;      // the player's dot blinks
+    float map_zoom = 1.f;        // 1 the whole lap; more zooms in around the car
     std::string fork_left;       // a fork ahead: the left route's name
     std::string fork_right;      // ... and the right one's
     float nitro_burn = 0.f;      // fraction left of the canister burning now, 0 for none
