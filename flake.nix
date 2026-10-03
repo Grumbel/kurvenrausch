@@ -59,7 +59,9 @@
         };
 
         # The ports, built on Linux hosts: the web page (Emscripten), Windows
-        # (MinGW) and Android (the SDK and NDK, which are unfree).
+        # (MinGW), the R36S handheld (ArkOS) and Android (the SDK and NDK,
+        # which are unfree).
+        r36s = import ./nix/r36s.nix { inherit pkgs version date; };
         androidPkgs = import nixpkgs {
           inherit system;
           config.allowUnfree = true;
@@ -111,6 +113,10 @@
           kurvenrausch-win32-zip = windows.win32Zip;
           kurvenrausch-android = android.apk;
           sdl2-android = android.sdlAndroidLibs;
+          arkos-sysroot = r36s.sysroot;
+          kurvenrausch-r36s = r36s.r36s;
+          kurvenrausch-r36s-portmaster = r36s.portmaster;
+          kurvenrausch-r36s-portmaster-zip = r36s.portmasterZip;
         };
 
         apps = nixpkgs.lib.optionalAttrs isLinux {

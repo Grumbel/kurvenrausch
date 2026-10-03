@@ -23,3 +23,10 @@ path = ["mk/android/keystore/debug.keystore"]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 Ingo Ruhnke <grumbel@gmail.com>"
 SPDX-License-Identifier = "GPL-3.0-or-later"
+
+# PortMaster's metadata (JSON has no comments) and screenshot.
+[[annotations]]
+path = ["mk/r36s/port.json", "mk/r36s/screenshot.png"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Ingo Ruhnke <grumbel@gmail.com>"
+SPDX-License-Identifier = "GPL-3.0-or-later"

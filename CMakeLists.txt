@@ -38,7 +38,9 @@ if(EMSCRIPTEN)
         set(SDL2_LIBRARIES "")
     endif()
     set(BUILD_TESTING OFF CACHE BOOL "No tests in the WebAssembly build" FORCE)
-else()
+elseif(NOT SDL2_LIBRARIES)
+    # (Unless given: a cross build whose SDL2 CMake files name the target's
+    # own paths passes SDL2_INCLUDE_DIRS and SDL2_LIBRARIES, see nix/r36s.nix.)
     find_package(SDL2 REQUIRED)
 endif()
 

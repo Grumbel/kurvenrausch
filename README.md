@@ -175,6 +175,19 @@ Built with the NDK and SDL2 2.30.3's Java side (`nix/android.nix`,
 work, the back button pauses. Signed with the debug key in
 `mk/android/keystore/`.
 
+### R36S and other PortMaster handhelds (ArkOS)
+
+```bash
+nix build .#kurvenrausch-r36s-portmaster-zip   # for PortMaster's autoinstall
+nix build .#kurvenrausch-r36s-portmaster       # or copy its contents to /roms/ports/
+```
+
+A native aarch64 build for ArkOS (Ubuntu 19.10 underneath), made with
+nixpkgs' cross compiler against a sysroot of Ubuntu 19.10's own packages
+(`nix/r36s.nix`), so it runs on the device's glibc, libstdc++ and SDL2. The
+320x240 picture fills the 640x480 screen at exactly twice the size; the
+controls are in `mk/r36s/README.md`.
+
 ### Web (WebAssembly)
 
 ```bash

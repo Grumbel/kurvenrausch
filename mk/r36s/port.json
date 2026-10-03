@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "name": "kurvenrausch.zip",
+  "items": ["Kurvenrausch.sh", "kurvenrausch"],
+  "items_opt": null,
+  "attr": {
+    "title": "Kurvenrausch",
+    "desc": "A classic pseudo-3D racer in the spirit of OutRun and Lotus: one lap around the world through sixteen countries, with traffic, forks in the road, weather, police chases and a radio.",
+    "inst": "Ready to run. Version @version@.",
+    "genres": ["racing", "arcade"],
+    "porter": ["Ingo Ruhnke"],
+    "image": {},
+    "rtr": true,
+    "runtime": null,
+    "reqs": [],
+    "arch": ["aarch64"]
+  }
+}
