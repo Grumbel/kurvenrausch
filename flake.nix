@@ -58,8 +58,32 @@
           ];
         };
 
-        # The ports, built on Linux hosts: the web page (Emscripten) and
-        # Windows (MinGW).
+        # The ports, built on Linux hosts: the web page (Emscripten), Windows
+        # (MinGW) and Android (the SDK and NDK, which are unfree).
+        androidPkgs = import nixpkgs {
+          inherit system;
+          config.allowUnfree = true;
+          config.android_sdk.accept_license = true;
+        };
+        android = import ./nix/android.nix {
+          pkgs = androidPkgs;
+          sdlSrc = sdl2-src;
+          sdlVersion = "2.30.3";
+          buildToolsVersion = "30.0.3";
+          packagePlatform = "24";
+          compilePlatform = "33";
+          targetAbis = [ "armeabi-v7a" "arm64-v8a" "x86_64" ];
+          androidSdk = (androidPkgs.androidenv.composeAndroidPackages {
+            platformVersions = [ "24" "33" ];
+            buildToolsVersions = [ "30.0.3" ];
+            includeNDK = true;
+            ndkVersion = "29.0.14206865";
+            includeEmulator = false;
+            includeSources = false;
+          }).androidsdk;
+          inherit version;
+          versionCode = self.revCount or 1;
+        };
         windows = import ./nix/windows.nix {
           inherit pkgs version date;
           sdl2Win64 = SDL2-win32.packages.${system}.SDL2-win64;
@@ -85,10 +109,13 @@
           kurvenrausch-win64-zip = windows.win64Zip;
           kurvenrausch-win32 = windows.win32;
           kurvenrausch-win32-zip = windows.win32Zip;
+          kurvenrausch-android = android.apk;
+          sdl2-android = android.sdlAndroidLibs;
         };
 
         apps = nixpkgs.lib.optionalAttrs isLinux {
           kurvenrausch-wasm = wasm.serveApp;
+          install-android-kurvenrausch = android.installApp;
         };
 
         devShells.default = pkgs.mkShell {

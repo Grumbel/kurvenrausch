@@ -32,6 +32,11 @@ bool Display::init(const char* title, const char* app_id, int fb_width, int fb_h
 #endif
     (void)app_id;
 
+#ifdef __ANDROID__
+    // A resizable window lets SDL turn with the phone either way; the
+    // picture is landscape.
+    SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight");
+#endif
     if (SDL_InitSubSystem(SDL_INIT_VIDEO) != 0) {
         std::cerr << "SDL video init failed: " << SDL_GetError() << "\n";
         return false;

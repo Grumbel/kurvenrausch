@@ -16,3 +16,10 @@ path = ["data/icons/**/*.png", "data/icons/*.ico", "mk/android/app/res/**/*.png"
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 Ingo Ruhnke <grumbel@gmail.com>"
 SPDX-License-Identifier = "GPL-3.0-or-later"
+
+# The Android debug signing key (a keystore cannot carry a header).
+[[annotations]]
+path = ["mk/android/keystore/debug.keystore"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Ingo Ruhnke <grumbel@gmail.com>"
+SPDX-License-Identifier = "GPL-3.0-or-later"
