@@ -2,14 +2,16 @@
 # SPDX-FileCopyrightText: 2026 Ingo Ruhnke <grumbel@gmail.com>
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Regenerates the desktop icons from the game's own 32x32 pixel-art icon.
+"""Regenerates the icons from the game's own 32x32 pixel-art icon.
 
 The game draws the icon (make_app_icon(), also its window icon) and writes it
 with --icon; this scales it to the hicolor theme's sizes (whole multiples, so
 the pixels stay crisp, and 16 by averaging) and writes a scalable SVG made of
-one rectangle per run of equal pixels:
+one rectangle per run of equal pixels, a Windows .ico for the executable and
+the Android launcher icons:
 
     tools/make_icons.py [--binary build/kurvenrausch] [--out data/icons]
+                        [--android mk/android/app/res]
 """
 
 import argparse
@@ -22,6 +24,14 @@ from PIL import Image
 
 APP_ID = "io.github.grumbel.kurvenrausch"
 SIZES = [16, 32, 64, 128, 256]
+ICO_SIZES = [16, 32, 48, 64, 128, 256]
+# Android launcher icons per screen density.
+ANDROID_SIZES = {"mdpi": 48, "hdpi": 72, "xhdpi": 96, "xxhdpi": 144, "xxxhdpi": 192}
+
+
+def scaled(icon, size):
+    """The icon at `size`: nearest neighbour up (crisp pixels), averaged down."""
+    return icon.resize((size, size), Image.NEAREST if size >= icon.width else Image.BOX)
 
 SVG_HEADER = """<?xml version="1.0" encoding="UTF-8"?>
 <!--
@@ -54,6 +64,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--binary", default="build/kurvenrausch")
     parser.add_argument("--out", default="data/icons")
+    parser.add_argument("--android", default="mk/android/app/res")
     args = parser.parse_args()
 
     binary = Path(args.binary)
@@ -68,10 +79,7 @@ def main():
         icon.load()
 
     for size in SIZES:
-        if size >= icon.width:
-            image = icon.resize((size, size), Image.NEAREST)
-        else:
-            image = icon.resize((size, size), Image.BOX)
+        image = scaled(icon, size)
         target = out / f"{size}x{size}" / "apps" / f"{APP_ID}.png"
         target.parent.mkdir(parents=True, exist_ok=True)
         image.save(target, optimize=True)
@@ -80,6 +88,18 @@ def main():
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(svg(icon))
     print(f"wrote {len(SIZES)} PNG sizes and an SVG to {out}")
+
+    # Windows: one .ico with every size, each scaled here (Pillow would smooth).
+    ico = Path(args.out) / "kurvenrausch.ico"
+    images = [scaled(icon, size) for size in ICO_SIZES]
+    images[-1].save(ico, format="ICO", sizes=[(s, s) for s in ICO_SIZES], append_images=images[:-1])
+    print(f"wrote {ico}")
+
+    for density, size in ANDROID_SIZES.items():
+        target = Path(args.android) / f"mipmap-{density}" / "ic_launcher.png"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        scaled(icon, size).save(target, optimize=True)
+    print(f"wrote {len(ANDROID_SIZES)} Android launcher icons to {args.android}")
 
 
 if __name__ == "__main__":
