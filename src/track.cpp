@@ -440,7 +440,7 @@ private:
 };
 
 // Road length / curve / hill vocabulary in the classic style.
-namespace Len { constexpr int None = 0, Short = 25, Medium = 50, Long = 100; }
+namespace Len { constexpr int Short = 25, Medium = 50, Long = 100; }
 namespace Bend { constexpr float None = 0.f, Easy = 2.f, Medium = 4.f, Hard = 6.f; }
 namespace Hill { constexpr float None = 0.f, Low = 20.f, Medium = 40.f, High = 60.f; }
 
