@@ -381,6 +381,22 @@ bool Game::frame() {
         show_message(Music::name(music_), 1.5f);
         save_choices();
     }
+    // The touch screen: fingers onto the framebuffer, the controls into the
+    // input (the menu takes the taps when paused).
+    std::vector<Finger> fingers;
+    for (const Finger& f : input.fingers) {
+        Finger p = f;
+        display_->window_to_framebuffer(f.x, f.y, p.x, p.y);
+        fingers.push_back(p);
+    }
+    touch_taps_.clear();
+    for (const Finger& f : input.taps) {
+        Finger p = f;
+        display_->window_to_framebuffer(f.x, f.y, p.x, p.y);
+        touch_taps_.push_back(p);
+    }
+    if (!fingers.empty() || !touch_taps_.empty()) touch_seen_ = true;
+    if (!paused_) apply_touch(input, fingers);
     if (!update_pause(input)) return false;
 
     crashed_ = false;
@@ -402,8 +418,20 @@ bool Game::frame() {
     return true;
 }
 
+void Game::apply_touch(InputState& input, const std::vector<Finger>& fingers) {
+    const TouchInput t = touch_.update(fingers);
+    input.steer = std::clamp(input.steer + t.steer, -1.f, 1.f);
+    input.throttle = std::max(input.throttle, t.throttle);
+    input.brake = std::max(input.brake, t.brake);
+    input.nitro = input.nitro || t.nitro;
+    input.horn = input.horn || t.horn;
+    input.handbrake = input.handbrake || t.handbrake;
+    input.pause = input.pause || t.pause;
+}
+
 void Game::pause() {
     if (paused_) return;
+    touch_.release();
     paused_ = true;
     menu_.open(zone_, static_cast<int>(track_.zones.size()), !web);
     SynthParams quiet = sound_;
@@ -419,7 +447,13 @@ bool Game::update_pause(const InputState& input) {
         if (input.pause || (input.escape && web)) pause();
         return true;
     }
-    switch (input.pause ? MenuAction::Resume : menu_.update(input.menu)) {
+    MenuAction action = input.pause ? MenuAction::Resume : menu_.update(input.menu);
+    for (const Finger& tap : touch_taps_) {
+        if (action != MenuAction::None) break;
+        const MenuTap where = menu_tap(menu_, tap.x, tap.y, width, height);
+        action = menu_.choose(where.item, where.side);
+    }
+    switch (action) {
         case MenuAction::None: return true;
         case MenuAction::Quit: return false;
         case MenuAction::Restart: reset(); break;
@@ -480,6 +514,10 @@ bool Game::screenshot(const ScreenshotOptions& opts) {
         in.nitro = i == opts.nitro_frame;
         in.handbrake = opts.handbrake_from >= 0 && i >= opts.handbrake_from;
         if (i == opts.police_frame) start_chase();
+        if (!opts.touches.empty()) {
+            touch_seen_ = true;
+            apply_touch(in, opts.touches);
+        }
         // Brake to a stop, let go a moment, then hold it again: reverse.
         if (opts.brake_from >= 0 && i >= opts.brake_from) {
             if (stopped_at < 0 && world_.get<Velocity>(player_).speed <= 0.f) stopped_at = i;
@@ -1623,6 +1661,7 @@ void Game::render() {
         hud.banner_sub = track_.zones[static_cast<size_t>(zone_)].region;
     }
     draw_hud(fb_, hud);
+    if (touch_seen_ && !paused_) touch_.draw(fb_);
 }
 
 // The road behind the car, drawn into its own small framebuffer and set into

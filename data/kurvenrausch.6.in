@@ -127,6 +127,12 @@ or
 .B \-\-pause
 Show the pause menu in the screenshot.
 .TP
+.BI \-\-touch " X,Y"
+Hold a finger on the touch screen at
+.IR X , Y
+(framebuffer pixels, 320\(mu240) all through the headless run; may be given
+several times. The touch controls show in the screenshot.
+.TP
 .BI \-\-police " N"
 Start a police chase at step
 .I N

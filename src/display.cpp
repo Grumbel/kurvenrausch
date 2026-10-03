@@ -3,6 +3,7 @@
 
 #include "display.hpp"
 
+#include <algorithm>
 #include <iostream>
 
 namespace racer {
@@ -94,6 +95,17 @@ void Display::set_icon(const uint32_t* argb_pixels, int width, int height) {
     if (!surface) return;
     SDL_SetWindowIcon(window_, surface);
     SDL_FreeSurface(surface);
+}
+
+void Display::window_to_framebuffer(float wx, float wy, float& x, float& y) const {
+    int w = 1, h = 1;
+    SDL_GetWindowSize(window_, &w, &h);
+    const float scale = std::min(static_cast<float>(w) / static_cast<float>(fb_w_),
+                                 static_cast<float>(h) / static_cast<float>(fb_h_));
+    const float off_x = (static_cast<float>(w) - static_cast<float>(fb_w_) * scale) / 2.f;
+    const float off_y = (static_cast<float>(h) - static_cast<float>(fb_h_) * scale) / 2.f;
+    x = (wx * static_cast<float>(w) - off_x) / scale;
+    y = (wy * static_cast<float>(h) - off_y) / scale;
 }
 
 void Display::toggle_fullscreen() {

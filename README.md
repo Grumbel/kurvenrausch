@@ -184,6 +184,12 @@ browser Esc pauses, and the pause menu has no Quit.
 | F11 / Alt+Enter  |                          | Toggle fullscreen  |
 | Esc              |                          | Quit (in the pause menu: back to the race) |
 
+On a touch screen (phones, tablets, the web page on them) controls appear
+once you touch it: drag sideways on the left to steer, GAS and BRK
+(brake, and reverse) on the right with NOS, HB (handbrake) and H (horn), the
+pause button right of the mirror; in the pause menu tap a line, on the
+country line its left or right end to pick the country.
+
 Any controller SDL knows (Xbox, PlayStation, Switch Pro, most generic pads) works
 and can be plugged in at any time; analog sticks and triggers steer and
 accelerate proportionally, and the pad rumbles on crashes, scraping, close

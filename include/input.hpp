@@ -4,8 +4,10 @@
 #pragma once
 
 #include "menu.hpp"
+#include "touch.hpp"
 
 #include <SDL2/SDL.h>
+#include <map>
 #include <vector>
 
 namespace racer {
@@ -31,6 +33,11 @@ struct InputState {
     bool toggle_mute = false;
     bool change_view = false; // C or Back: the next camera view
     int change_music = 0;     // N, or the right stick flicked: +1 the next track, -1 the previous
+
+    // The touch screen, in window coordinates from 0 to 1: the fingers down
+    // now, and those that came down since the last poll.
+    std::vector<Finger> fingers;
+    std::vector<Finger> taps;
 };
 
 // A normalised reading of one game controller (SDL's standard layout, which
@@ -85,6 +92,7 @@ private:
     void close_controller(SDL_JoystickID instance);
 
     std::vector<SDL_GameController*> pads_;
+    std::map<SDL_FingerID, Finger> fingers_; // down now, window coordinates 0 .. 1
     int music_stick_ = 0; // where the right stick was flicked last: -1, 0 or +1
 };
 

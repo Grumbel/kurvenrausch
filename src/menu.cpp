@@ -12,6 +12,18 @@ void PauseMenu::open(int current_zone, int zone_count, bool allow_quit) {
     zone = current_zone >= 0 ? current_zone % zones : 0;
 }
 
+MenuAction PauseMenu::choose(int item, int side) {
+    if (item < 0 || item >= item_count()) return MenuAction::None;
+    selected = item;
+    if (item == StartZone && side != 0) {
+        zone = (zone + side + zones) % zones;
+        return MenuAction::None;
+    }
+    MenuInput confirm;
+    confirm.confirm = true;
+    return update(confirm);
+}
+
 MenuAction PauseMenu::update(const MenuInput& in) {
     if (in.back) return MenuAction::Resume;
     const int n = item_count();

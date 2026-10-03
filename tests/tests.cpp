@@ -12,6 +12,7 @@
 #include "climate.hpp"
 #include "music.hpp"
 #include "police.hpp"
+#include "touch.hpp"
 #include "components.hpp"
 #include "road.hpp"
 #include "synth.hpp"
@@ -852,6 +853,58 @@ void test_police() {
     const Bitmap& dark = sheet.vehicle(Vehicle::Police, 0, 0);
     CHECK(red.px != blue.px && red.px != dark.px && blue.px != dark.px);
     CHECK(sheet.vehicle_front(Vehicle::Police, 0, -1).px != sheet.vehicle_front(Vehicle::Police, 0, 1).px);
+}
+
+void test_touch() {
+    using namespace racer;
+    TouchControls t;
+    const auto at = [](TouchControls::Button b, int64_t id) {
+        const TouchControls::Circle c = TouchControls::circle(b);
+        return Finger{id, c.x, c.y};
+    };
+    // Nothing touched, nothing pressed.
+    TouchInput in = t.update({});
+    CHECK(in.throttle == 0.f && in.brake == 0.f && in.steer == 0.f && !in.nitro && !in.pause);
+    // Buttons press while held; several at once.
+    in = t.update({at(TouchControls::Gas, 1), at(TouchControls::Nitro, 2)});
+    CHECK(in.throttle == 1.f && in.nitro && in.brake == 0.f);
+    in = t.update({at(TouchControls::Brake, 3), at(TouchControls::Handbrake, 4), at(TouchControls::Horn, 5)});
+    CHECK(in.brake == 1.f && in.handbrake && in.horn && in.throttle == 0.f);
+    // The pause button acts once per press.
+    CHECK(t.update({at(TouchControls::Pause, 6)}).pause);
+    CHECK(!t.update({at(TouchControls::Pause, 6)}).pause);
+    CHECK(!t.update({}).pause);
+    CHECK(t.update({at(TouchControls::Pause, 7)}).pause);
+    // Steering: sideways from where the finger came down, full lock at
+    // steer_travel, and the finger keeps steering wherever it goes.
+    CHECK(t.update({Finger{8, 60.f, 170.f}}).steer == 0.f);
+    CHECK(std::abs(t.update({Finger{8, 60.f + TouchControls::steer_travel / 2.f, 170.f}}).steer - 0.5f) < 1e-5f);
+    CHECK(t.update({Finger{8, 60.f - 100.f, 170.f}}).steer == -1.f);
+    CHECK(t.update({Finger{8, 250.f, 170.f}}).steer == 1.f); // dragged far right, over the buttons
+    CHECK(t.update({}).steer == 0.f);                          // let go
+    // A finger landing elsewhere (top, or right of the pad) does not steer.
+    CHECK(t.update({Finger{9, 60.f, 10.f}}).steer == 0.f);
+    CHECK(t.update({Finger{9, 70.f, 10.f}}).steer == 0.f);
+    // Released when the game pauses.
+    t.update({Finger{10, 60.f, 170.f}});
+    t.release();
+    CHECK(t.update({Finger{10, 90.f, 170.f}}).steer == 0.f); // a new origin
+
+    // Taps on the pause menu choose the line tapped; on the country line
+    // the outer thirds change the country.
+    PauseMenu m;
+    m.open(3, 16, false);
+    const float first = 240.f / 2.f - 50.f + 36.f + 3.f;
+    CHECK(menu_tap(m, 160.f, 20.f, 320, 240).item == -1);
+    const MenuTap restart = menu_tap(m, 160.f, first + 16.f, 320, 240);
+    CHECK(restart.item == PauseMenu::Restart && restart.side == 0);
+    CHECK(m.choose(restart.item, restart.side) == MenuAction::Restart);
+    const MenuTap left = menu_tap(m, 20.f, first + 32.f, 320, 240);
+    CHECK(left.item == PauseMenu::StartZone && left.side == -1);
+    CHECK(m.choose(left.item, left.side) == MenuAction::None && m.zone == 2);
+    CHECK(menu_tap(m, 300.f, first + 32.f, 320, 240).side == 1);
+    CHECK(m.choose(PauseMenu::StartZone, 0) == MenuAction::StartZone);
+    CHECK(menu_tap(m, 160.f, first + 48.f, 320, 240).item == -1); // no Quit line in a web page
 }
 
 void test_pause_menu() {
@@ -2040,6 +2093,7 @@ int main() {
     test_follow_speed();
     test_steer_rate();
     test_pause_menu();
+    test_touch();
     test_police();
     test_climate();
     test_music();

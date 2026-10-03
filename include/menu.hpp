@@ -35,6 +35,9 @@ struct PauseMenu {
     int item_count() const { return can_quit ? items : Quit; }
     // Moves the selection and returns what the player chose, if anything.
     MenuAction update(const MenuInput& in);
+    // A tap on line `item`: it is chosen at once; on the country line `side`
+    // -1 or +1 picks the previous or next country instead.
+    MenuAction choose(int item, int side = 0);
 };
 
 } // namespace racer

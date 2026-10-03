@@ -18,6 +18,7 @@
 #include "state.hpp"
 #include "sprites.hpp"
 #include "synth.hpp"
+#include "touch.hpp"
 #include "weather.hpp"
 #include "track.hpp"
 #include "views.hpp"
@@ -52,6 +53,7 @@ struct ScreenshotOptions {
     float storm = -1.f;      // if >= 0, hold the weather front at this level (0 clear .. 1 storm)
     int music = -1;          // the radio's track in the --wav recording, -1 off
     int police_frame = -1;   // if >= 0, a police chase starts at this step
+    std::vector<Finger> touches; // fingers held on the touch screen all run (framebuffer pixels)
     float dirt = -1.f;       // if >= 0, start this dirty (mud and oil, 0 .. 1)
 };
 
@@ -106,6 +108,8 @@ private:
     // Police chases: one may start, the police car chases, and the chase ends.
     void start_chase();
     void update_police(float dt);
+    // Adds what the fingers press to the input.
+    void apply_touch(InputState& input, const std::vector<Finger>& fingers);
     void end_chase();
     void update_laps(float prev_z, float z, float dt);
     void show_message(std::string text, float seconds);
@@ -261,6 +265,9 @@ private:
     static constexpr float fixed_dt_ = 1.f / 60.f;
     // The interactive loop's state between frames.
     InputState input_state_;
+    TouchControls touch_;
+    bool touch_seen_ = false;          // the touch screen was used: show its controls
+    std::vector<Finger> touch_taps_;   // taps this frame, framebuffer pixels
     Uint64 prev_counter_ = 0;
     float accumulator_ = 0.f;
 };

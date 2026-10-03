@@ -98,6 +98,7 @@ void Input::poll(InputState& state) {
     state.toggle_mute = false;
     state.change_view = false;
     state.change_music = 0;
+    state.taps.clear();
 
     SDL_Event e;
     while (SDL_PollEvent(&e)) {
@@ -130,6 +131,16 @@ void Input::poll(InputState& state) {
                         break;
                     default: break;
                 }
+                break;
+            case SDL_FINGERDOWN:
+                fingers_[e.tfinger.fingerId] = Finger{static_cast<int64_t>(e.tfinger.fingerId), e.tfinger.x, e.tfinger.y};
+                state.taps.push_back(fingers_[e.tfinger.fingerId]);
+                break;
+            case SDL_FINGERMOTION:
+                fingers_[e.tfinger.fingerId] = Finger{static_cast<int64_t>(e.tfinger.fingerId), e.tfinger.x, e.tfinger.y};
+                break;
+            case SDL_FINGERUP:
+                fingers_.erase(e.tfinger.fingerId);
                 break;
             case SDL_CONTROLLERDEVICEADDED:
                 open_controller(e.cdevice.which);
@@ -166,6 +177,8 @@ void Input::poll(InputState& state) {
     state.horn = keys[SDL_SCANCODE_H];
     state.nitro = keys[SDL_SCANCODE_SPACE];
     state.handbrake = keys[SDL_SCANCODE_LCTRL] || keys[SDL_SCANCODE_RCTRL];
+    state.fingers.clear();
+    for (const auto& [id, finger] : fingers_) state.fingers.push_back(finger);
 
     // The right stick changes the radio's track: one step per flick, the
     // stick has to come back to the middle before the next.
