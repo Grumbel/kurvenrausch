@@ -699,6 +699,7 @@ void test_lots() {
         Scenery building, sign;
     } expected[] = {
         {Lot::Dealer, 2, Scenery::Showroom, Scenery::DealerSign},
+        {Lot::SportsDealer, 3, Scenery::SportsShowroom, Scenery::SportsSign},
         {Lot::Wash, 3, Scenery::CarWash, Scenery::WashSign},
         {Lot::Motel, 2, Scenery::Motel, Scenery::MotelSign},
         {Lot::Hospital, 2, Scenery::Hospital, Scenery::HospitalSign},
@@ -739,9 +740,11 @@ void test_state() {
     CHECK(state_dir(nullptr, "home").empty());
 
     // Choices round-trip; garbage and unknown keys are skipped.
-    const Choices c{3, 1, 4, 2};
+    const Choices c{3, 4, 2};
     const Choices back = parse_choices(format_choices(c));
-    CHECK(back.car == 3 && back.car_before_truck == 1 && back.driver == 4 && back.passenger == 2);
+    CHECK(back.car == 3 && back.driver == 4 && back.passenger == 2);
+    // Older files with a car_before_truck line still load.
+    CHECK(parse_choices("car 3\ncar_before_truck 1\ndriver 4\n").driver == 4);
     const Choices junk = parse_choices("car\nfoo 7\ndriver x\npassenger 2\n\n");
     CHECK(junk.car == 0 && junk.driver == 0 && junk.passenger == 2);
 
@@ -801,7 +804,7 @@ void test_views() {
     CHECK(!cockpit.car && cockpit.cockpit);
     CHECK(view_setup(ViewMode::Cockpit, cam.height, cam.depth, true).height > cockpit.height);
     for (int v = 0; v < view_modes; ++v) CHECK(std::string(view_name(static_cast<ViewMode>(v))).size() > 0);
-    CHECK(parse_choices(format_choices(Choices{0, 0, 0, 0, 3})).view == 3);
+    CHECK(parse_choices(format_choices(Choices{0, 0, 0, 3})).view == 3);
     // The cockpit's pictures.
     const SpriteSheet sheet;
     CHECK(sheet.dashboard(0).w == 320 && sheet.dashboard(0).h == dashboard_height);
@@ -1440,7 +1443,7 @@ void test_car_models() {
     for (int a = 0; a < car_models; ++a) {
         const CarModel& m = car_model(a);
         CHECK(m.name != nullptr && m.name[0] != '\0');
-        CHECK(m.top_speed > 0.8f && m.top_speed < 1.2f);
+        CHECK(m.top_speed > 0.75f && m.top_speed < 1.2f);
         for (int b = 0; b < car_models; ++b) {
             if (a == b) continue;
             const CarModel& o = car_model(b);
@@ -1448,6 +1451,23 @@ void test_car_models() {
         }
     }
     CHECK(car_model(0).top_speed == 1.f && car_model(0).acceleration == 1.f && car_model(0).grip == 1.f);
+    // The saved choices' numbering stays: the first five as they were.
+    CHECK(std::string(car_model(0).name) == "SPIDER" && std::string(car_model(4).name) == "BIG RIG");
+    // Every range has a choice of cars, and its lots cycle through it only.
+    for (CarRange r : {CarRange::Regular, CarRange::Sports, CarRange::Trucks}) {
+        int count = 0;
+        for (int m = 0; m < car_models; ++m) count += car_model(m).range == r;
+        CHECK(count >= 3);
+        int m = next_car_in_range(0, r, 1);
+        CHECK(car_model(m).range == r);
+        for (int i = 0; i < count; ++i) {
+            const int next = next_car_in_range(m, r, 1);
+            CHECK(car_model(next).range == r && next != m && next_car_in_range(next, r, -1) == m);
+            m = next;
+        }
+    }
+    // Wider bodies are as wide as the traffic's.
+    CHECK(car_model(next_car_in_range(0, CarRange::Trucks, -1)).width > 600.f);
     CHECK(&car_model(car_models) == &car_model(0)); // wraps around
     CHECK(&car_model(-1) == &car_model(car_models - 1));
 }
@@ -1502,7 +1522,10 @@ void test_vehicles() {
     }
     CHECK(sheet.player(0, 0, false, 0).px != sheet.player(0, 0, false, 1).px);
     // Each car model looks different.
-    for (int m = 1; m < car_models; ++m) CHECK(sheet.player(m, 0).px != sheet.player(0, 0).px);
+    // Every model looks different from every other.
+    for (int m = 0; m < car_models; ++m) {
+        for (int n = m + 1; n < car_models; ++n) CHECK(sheet.player(m, 0).px != sheet.player(n, 0).px);
+    }
     // The people: drawn over the car, the same size; each passenger and each
     // driver looks different; a wave raises an arm into the headroom.
     const Bitmap& base = sheet.occupants(0, 0, 0, 0, 0, 0);
@@ -1918,7 +1941,7 @@ void test_music() {
     synth.set_music(-1);
     synth.render(without.data(), static_cast<int>(without.size()));
     CHECK(rms(with, 0, with.size()) > 5.0 * rms(without, 0, without.size()) + 0.01);
-    CHECK(parse_choices(format_choices(Choices{0, 0, 0, 0, 0, -1})).music == -1);
+    CHECK(parse_choices(format_choices(Choices{0, 0, 0, 0, -1})).music == -1);
 }
 
 void test_synth_effects() {

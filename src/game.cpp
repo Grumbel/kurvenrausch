@@ -83,6 +83,11 @@ constexpr bool web = true; // running in a web page
 constexpr bool web = false;
 #endif
 constexpr float refuel_speed = 0.08f;
+
+// The cars a lot sells.
+CarRange lot_range(Lot lot) {
+    return lot == Lot::SportsDealer ? CarRange::Sports : lot == Lot::Truckstop ? CarRange::Trucks : CarRange::Regular;
+}
 // Stranded with an empty tank this long, the driver pours in a spare can.
 constexpr float stranded_seconds = 3.f;
 constexpr float spare_can = 0.15f;
@@ -239,7 +244,6 @@ bool Game::init(bool fullscreen) {
     if (const std::optional<Choices> c = store_.load_choices()) {
         const auto wrap = [](int i, int n) { return ((i % n) + n) % n; };
         car_model_ = wrap(c->car, car_models);
-        car_before_truck_ = wrap(c->car_before_truck, dealer_models);
         driver_ = wrap(c->driver, drivers);
         passenger_ = wrap(c->passenger, passengers);
         view_mode_ = static_cast<ViewMode>(wrap(c->view, view_modes));
@@ -539,7 +543,6 @@ bool Game::screenshot(const ScreenshotOptions& opts) {
     if (opts.fuel >= 0.f) fuel_.set(opts.fuel);
     if (opts.car >= 0) {
         car_model_ = opts.car % car_models;
-        car_before_truck_ = car_model_ == truck_model ? 0 : car_model_;
         apply_car();
     }
     if (opts.visit >= 0) autopilot_visit_ = static_cast<Lot>(opts.visit);
@@ -846,7 +849,7 @@ void Game::fixed_update(const InputState& driver_input, float dt) {
 // The player's car takes its model's top speed and acceleration (grip is
 // applied where the road's grip is).
 void Game::save_choices() const {
-    store_.save_choices({car_model_, car_before_truck_, driver_, passenger_, static_cast<int>(view_mode_), music_});
+    store_.save_choices({car_model_, driver_, passenger_, static_cast<int>(view_mode_), music_});
 }
 
 // Into another car: it comes clean and with a full tank.
@@ -862,6 +865,7 @@ void Game::apply_car() {
     Player& p = world_.get<Player>(player_);
     p.max_speed = standard.max_speed * m.top_speed;
     p.accel = standard.accel * m.acceleration;
+    p.car_width = m.width;
 }
 
 // Standing on the forecourt of a lot with a choice, it is on offer: at a car
@@ -872,7 +876,8 @@ void Game::apply_car() {
 void Game::visit_lot(const InputState& input) {
     const float speed_pct = std::abs(world_.get<Velocity>(player_).speed) / world_.get<Player>(player_).max_speed;
     const std::optional<Lot> here = speed_pct < refuel_speed ? lot_here() : std::nullopt;
-    const bool choice = here == Lot::Dealer || here == Lot::Motel || here == Lot::Hospital || here == Lot::Truckstop;
+    const bool choice = here == Lot::Dealer || here == Lot::SportsDealer || here == Lot::Motel ||
+                        here == Lot::Hospital || here == Lot::Truckstop;
     offer_ = choice ? here : std::nullopt;
     if (here == Lot::Hospital && bandaged_) {
         bandaged_ = false;
@@ -882,21 +887,11 @@ void Game::visit_lot(const InputState& input) {
     const int push = input.steer > 0.5f ? 1 : input.steer < -0.5f ? -1 : 0;
     if (offer_ && push != 0 && lot_steer_ == 0) {
         switch (*offer_) {
-            case Lot::Dealer: {
-                // Driving up in the truck, the cars start from the one left behind.
-                const int from = car_model_ == truck_model ? car_before_truck_ : car_model_;
-                car_model_ = (from + push + dealer_models) % dealer_models;
-                change_car();
-                break;
-            }
+            case Lot::Dealer:
+            case Lot::SportsDealer:
             case Lot::Truckstop:
-                // Either way: the truck, or back into the car left here.
-                if (car_model_ == truck_model) {
-                    car_model_ = car_before_truck_;
-                } else {
-                    car_before_truck_ = car_model_;
-                    car_model_ = truck_model;
-                }
+                // The lot's range of cars, in turn.
+                car_model_ = next_car_in_range(car_model_, lot_range(*offer_), push);
                 change_car();
                 break;
             case Lot::Motel:
@@ -1526,7 +1521,7 @@ void Game::render() {
 
     // The camera of the chosen view, placed relative to the car; the car's
     // own reference (the chase camera, see Camera) stays where it is.
-    const ViewSetup setup = view_setup(view_mode_, cam.height, cam.depth, car_model_ == truck_model);
+    const ViewSetup setup = view_setup(view_mode_, cam.height, cam.depth, body_is_tall(car_model(car_model_).body));
     RoadView view;
     // In the air the camera rises with most of the car's height, and the car
     // lifts on screen by the rest, so the road visibly falls away beneath it;
@@ -1567,8 +1562,12 @@ void Game::render() {
                                               static_cast<int>(clock_ / 0.15f) & 1, car_model_, bandaged_);
     player_bitmap_ = body;
     apply_dirt(player_bitmap_, dirt_.mud(), dirt_.oil());
-    for (size_t i = 0; i < people.px.size() && i < player_bitmap_.px.size(); ++i) {
-        if (people.px[i] >> 24) player_bitmap_.px[i] = people.px[i];
+    // Seen over the seats or through the rear window; vans, box trucks and
+    // the racer show nobody from behind.
+    if (body_shows_people(car_model(car_model_).body)) {
+        for (size_t i = 0; i < people.px.size() && i < player_bitmap_.px.size(); ++i) {
+            if (people.px[i] >> 24) player_bitmap_.px[i] = people.px[i];
+        }
     }
     const Bitmap& car = player_bitmap_;
     const float scale = setup.car ? cam.depth / setup.distance * (width / 2.f) : 1.f;
@@ -1639,7 +1638,10 @@ void Game::render() {
     }
     if (nitro_.burning() && setup.car) {
         for (int side = -1; side <= 1; side += 2) {
-            draw_flame(fb_, me.sx + SpriteSheet::exhaust_x(steer_, side), me.sy + SpriteSheet::exhaust_y,
+            // The pipes at a quarter and three quarters across, low on the
+            // body, whatever the car and the view.
+            draw_flame(fb_, me.sx + me.sw * (side < 0 ? 0.25f : 0.75f) + static_cast<float>(steer_),
+                       me.sy + me.sh * 0.9f,
                        side, nitro_.intensity(), rng_);
         }
     }
@@ -1690,7 +1692,7 @@ void Game::render() {
     hud.headlights = headlights_;
     if (offer_) {
         hud.offer_title = lot_name(*offer_);
-        if (*offer_ == Lot::Dealer || *offer_ == Lot::Truckstop) {
+        if (*offer_ == Lot::Dealer || *offer_ == Lot::SportsDealer || *offer_ == Lot::Truckstop) {
             const CarModel& m = car_model(car_model_);
             hud.offer_name = m.name;
             hud.offer_stats = true;

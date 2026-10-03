@@ -73,6 +73,8 @@ const SceneryInfo& scenery_info(Scenery kind) {
         /* HospitalSign*/{ 700.f, true, false, false},
         /* Truckstop */ {4800.f, true,  false, false},
         /* TruckSign */ { 700.f, true,  false, false},
+        /* SportsShowroom*/{4800.f, true, false, false},
+        /* SportsSign*/ { 700.f, true,  false, false},
     };
     static_assert(sizeof(infos) / sizeof(infos[0]) == static_cast<size_t>(Scenery::Count),
                   "scenery_info() needs an entry for every Scenery kind");
@@ -159,6 +161,7 @@ const LotNames& lot_names(Lot kind) {
         {"MOTEL", "motel"},
         {"HOSPITAL", "hospital"},
         {"TRUCK STOP", "truckstop"},
+        {"SPORTS CARS", "sports"},
     };
     static_assert(sizeof(names) / sizeof(names[0]) == static_cast<size_t>(lot_kinds), "every lot needs its names");
     return names[static_cast<size_t>(kind)];
@@ -535,6 +538,7 @@ public:
     // A car dealer, laid out like a gas station: a showroom beyond the
     // forecourt, a sign ahead of it.
     void car_dealer() { forecourt_lot(Lot::Dealer); }
+    void sports_dealer() { forecourt_lot(Lot::SportsDealer); }
 
     // A car wash, laid out the same way: the wash bay beyond the forecourt.
     void car_wash() { forecourt_lot(Lot::Wash); }
@@ -581,6 +585,10 @@ public:
             case Lot::Truckstop:
                 scenery(from + 1, Scenery::TruckSign, 1.25f);
                 scenery(from + start + 26, Scenery::Truckstop, forecourt_width + 0.1f);
+                break;
+            case Lot::SportsDealer:
+                scenery(from + 1, Scenery::SportsSign, 1.25f);
+                scenery(from + start + 26, Scenery::SportsShowroom, forecourt_width + 0.1f);
                 break;
         }
     }
@@ -1317,6 +1325,7 @@ Track build_demo_track() {
     b.curve(Len::Short, Bend::Hard, Hill::Low);
     b.curve(Len::Short, -Bend::Medium, -Hill::Low);
     b.car_wash(); // after the muddy lanes
+    b.car_dealer();
 
     b.begin_zone(zone_netherlands());
     // Dead straight and flat, along a canal for a while.
@@ -1372,7 +1381,7 @@ Track build_demo_track() {
     b.low_rolling_hills();
     b.gas_station();
     b.curve(Len::Medium, Bend::Medium, Hill::Low);
-    b.car_dealer();
+    b.sports_dealer(); // Italian sports cars
     b.curve(Len::Medium, -Bend::Medium, -Hill::Low);
     b.curve(Len::Long, Bend::Easy, -Hill::Low);
 
@@ -1403,12 +1412,14 @@ Track build_demo_track() {
     b.gas_station();
     b.curve(Len::Medium, -Bend::Hard, -Hill::Medium);
     b.hospital();
+    b.car_dealer();
 
     b.begin_zone(zone_japan());
     // Past the cherry trees towards the mountain.
     b.curve(Len::Medium, Bend::Medium, Hill::Low);
     b.gas_station();
     b.curve(Len::Medium, -Bend::Medium, -Hill::Low);
+    b.sports_dealer();
 
     b.begin_zone(zone_australia());
     // Dead straight through the red outback.
@@ -1450,7 +1461,7 @@ Track build_demo_track() {
     b.curve(Len::Medium, -Bend::Easy, Hill::None);
     b.gas_station();
     b.straight(Len::Short);
-    b.car_dealer();
+    b.sports_dealer(); // on the coast road
 
     b.begin_zone(zone_san_francisco());
     // Up from the waterfront, block after block, each street steeper than the

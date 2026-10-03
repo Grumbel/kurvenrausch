@@ -32,15 +32,40 @@ Vehicle traffic_vehicle(float roll) {
 }
 
 const CarModel& car_model(int index) {
+    // The order is the saved choices' numbering: new models go at the end.
+    using B = Body;
+    using R = CarRange;
     static const CarModel models[car_models] = {
-        // name         top    accel  grip
-        {"SPIDER",      1.00f, 1.00f, 1.00f}, // the red convertible: balanced
-        {"GT COUPE",    1.12f, 0.85f, 0.92f}, // fastest flat out, slow to get there
-        {"HOT HATCH",   0.88f, 1.30f, 1.12f}, // quick away and sure-footed
-        {"MUSCLE",      1.06f, 1.22f, 0.78f}, // brute force, little grip
-        {"BIG RIG",     0.84f, 0.62f, 1.25f}, // the truck: slow, but planted
+        // name         top    accel  grip   body        range       width
+        {"SPIDER",      1.00f, 1.00f, 1.00f, B::Car,      R::Sports,  600.f}, // the red convertible: balanced
+        {"GT COUPE",    1.12f, 0.85f, 0.92f, B::Car,      R::Sports,  600.f}, // fastest flat out, slow to get there
+        {"HOT HATCH",   0.88f, 1.30f, 1.12f, B::Car,      R::Regular, 600.f}, // quick away and sure-footed
+        {"MUSCLE",      1.06f, 1.22f, 0.78f, B::Car,      R::Sports,  600.f}, // brute force, little grip
+        {"BIG RIG",     0.84f, 0.62f, 1.25f, B::Rig,      R::Trucks,  600.f}, // slow, but planted
+        {"SALOON",      0.90f, 0.95f, 1.04f, B::Car,      R::Regular, 600.f}, // the everyday car
+        {"TAXI",        0.92f, 1.04f, 0.98f, B::Car,      R::Regular, 600.f}, // a saloon, tuned a little
+        {"ESTATE",      0.86f, 0.90f, 1.14f, B::Car,      R::Regular, 600.f}, // the family car: steady
+        {"PATROL",      1.02f, 1.05f, 0.95f, B::Police,   R::Regular, 600.f}, // a police car, retired
+        {"RACER",       1.18f, 1.12f, 0.84f, B::Racer,    R::Sports,  620.f}, // the rivals' car: fastest, nervous
+        {"VAN",         0.86f, 0.80f, 1.15f, B::Van,      R::Trucks,  650.f}, // roomy, slow off the line
+        {"BOX TRUCK",   0.78f, 0.55f, 1.30f, B::BoxTruck, R::Trucks,  700.f}, // the slowest of all, and the steadiest
     };
     return models[((index % car_models) + car_models) % car_models];
+}
+
+bool body_shows_people(Body body) { return body == Body::Car || body == Body::Rig || body == Body::Police; }
+
+bool body_is_tall(Body body) { return body == Body::Rig || body == Body::Van || body == Body::BoxTruck; }
+
+int next_car_in_range(int current, CarRange range, int step) {
+    const int dir = step < 0 ? -1 : 1;
+    const bool inside = car_model(current).range == range;
+    int i = inside ? current : (dir > 0 ? car_models - 1 : 0);
+    for (int n = 0; n < car_models; ++n) {
+        i = ((i + dir) % car_models + car_models) % car_models;
+        if (car_model(i).range == range) return i;
+    }
+    return current;
 }
 
 float rival_speed(float cruise, float max_speed, float gap) {

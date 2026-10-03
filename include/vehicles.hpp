@@ -38,18 +38,41 @@ constexpr float rival_race_speed = 0.97f;
 constexpr float rival_race_range = 30.f;
 float rival_speed(float cruise, float max_speed, float gap);
 
-// The cars the player can drive: the first dealer_models from the
-// dealerships, then the truck from the truck stops. The factors are of the
-// standard car, the Spider: top speed, acceleration and grip.
+// What a car the player can drive looks like from behind: one of the
+// player's own cars (a car leaning into bends, the cab-over truck) or a
+// vehicle of the traffic.
+enum class Body : uint8_t {
+    Car,      // make_player_car(): convertible or closed
+    Rig,      // make_player_truck(): the cab-over tractor
+    Van,      // the traffic's van
+    BoxTruck, // the traffic's box truck
+    Racer,    // the rivals' sports car
+    Police,   // the police car (lightbar off)
+};
+// Where a car is sold.
+enum class CarRange : uint8_t { Regular, Sports, Trucks };
+
+// The cars the player can drive. The factors are of the standard car, the
+// Spider: top speed, acceleration and grip; the width is in world units.
 struct CarModel {
     const char* name;
     float top_speed;
     float acceleration;
     float grip;
+    Body body;
+    CarRange range;
+    float width;
 };
-constexpr int dealer_models = 4;
-constexpr int truck_model = dealer_models;
-constexpr int car_models = truck_model + 1;
+constexpr int car_models = 12;
 const CarModel& car_model(int index);
+
+// Seen through: the people show through the rear window (or over the seats).
+bool body_shows_people(Body body);
+// Tall: the cockpit sits high (vans and trucks).
+bool body_is_tall(Body body);
+
+// The next car of `range` from `current` in the direction `step` (+1 or
+// -1); from a car of another range, the first (or last) of this one.
+int next_car_in_range(int current, CarRange range, int step);
 
 } // namespace racer

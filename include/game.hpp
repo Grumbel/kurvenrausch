@@ -195,7 +195,6 @@ private:
     int car_model_ = 0;
     int driver_ = 0;     // see driver(): the hospital changes it
     int passenger_ = 0;  // see passenger(): the motel changes it
-    int car_before_truck_ = 0; // the car left at the truck stop, to take back
     bool bandaged_ = false;
     ViewMode view_mode_ = ViewMode::Chase;
     bool map_zoomed_ = true; // the mini map shows the stretch around the car, not the whole lap

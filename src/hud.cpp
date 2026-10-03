@@ -130,6 +130,7 @@ void draw_minimap(Framebuffer& fb, int x, int y, int size, const HudState& hud) 
             {{0xf0, 0x40, 0x90}, {0xff, 0xc0, 0xe0}}, // motel
             {{0xf0, 0xf0, 0xf0}, {0xe0, 0x20, 0x20}}, // hospital
             {{0xf0, 0x80, 0x20}, {0xff, 0xd0, 0x90}}, // truck stop
+            {{0xe0, 0x20, 0x30}, {0xff, 0xb0, 0xb0}}, // sports car dealer
         };
         static_assert(sizeof(colors) / sizeof(colors[0]) == static_cast<size_t>(lot_kinds), "every lot needs its colours");
         for (size_t k = 0; k < hud.map_lots->size(); ++k) {

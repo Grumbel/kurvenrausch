@@ -481,23 +481,28 @@ void showroom_car(Bitmap& b, int x, int y, Color body, Color light) {
 
 // A car dealer's showroom: a glass front with cars on display, the CARS
 // sign on the roof and strings of pennants.
-Bitmap make_showroom() {
+// A dealer's showroom: four cars (body and highlight colours) behind the
+// glass, the dealer's name in its colour on the roof.
+struct ShowroomLook {
+    const char* name;
+    Color color, light;
+    Color cars[4][2];
+};
+
+Bitmap make_showroom(const ShowroomLook& look) {
     Bitmap b(192, 96);
     const Color wall{0xe4, 0xe8, 0xec}, frame{0x8c, 0x94, 0x9c}, glass{0x9c, 0xc0, 0xdc}, floor{0xc8, 0xcc, 0xd0};
-    const Color blue{0x1c, 0x4c, 0xa8}, white{0xf4, 0xf4, 0xf4};
+    const Color blue = look.color, white{0xf4, 0xf4, 0xf4};
     paint::rect(b, 4, 30, 184, 66, wall);
     paint::rect(b, 12, 40, 168, 50, glass);
     paint::rect(b, 12, 80, 168, 10, floor);
     for (int x = 12; x <= 180; x += 42) paint::rect(b, x, 40, 3, 50, frame);
-    showroom_car(b, 22, 68, Color{0xd0, 0x18, 0x1c}, Color{0xf0, 0x60, 0x50});
-    showroom_car(b, 64, 68, Color{0xf0, 0xc8, 0x20}, Color{0xff, 0xec, 0x80});
-    showroom_car(b, 106, 68, Color{0x1c, 0x34, 0x7c}, Color{0x50, 0x78, 0xc0});
-    showroom_car(b, 148, 68, Color{0x24, 0x24, 0x2a}, Color{0xe0, 0xb0, 0x30});
+    for (int i = 0; i < 4; ++i) showroom_car(b, 22 + 42 * i, 68, look.cars[i][0], look.cars[i][1]);
     for (int x = 20; x < 180; x += 38) paint::stroke(b, static_cast<float>(x), 44.f, static_cast<float>(x) + 10.f, 60.f, 1.f, 1.f, white);
     paint::rect(b, 4, 24, 184, 7, blue);
     paint::rect(b, 56, 4, 80, 22, blue);
-    paint::rect(b, 58, 6, 76, 18, Color{0x2c, 0x60, 0xc8});
-    paint::text(b, (192 - font::text_width("CARS", 2)) / 2, 8, "CARS", white, 2);
+    paint::rect(b, 58, 6, 76, 18, look.light);
+    paint::text(b, (192 - font::text_width(look.name, 2)) / 2, 8, look.name, white, 2);
     // Pennants strung from the roof.
     const Color pennant[3] = {{0xe0, 0x20, 0x30}, {0xf8, 0xd0, 0x20}, {0x30, 0x70, 0xe0}};
     for (int i = 0; i < 23; ++i) {
@@ -508,16 +513,16 @@ Bitmap make_showroom() {
     return b;
 }
 
-// The dealer's tall sign: CARS and a car.
-Bitmap make_dealer_sign() {
+// The dealer's tall sign: its name and a car.
+Bitmap make_dealer_sign(const ShowroomLook& look) {
     Bitmap b(44, 112);
-    const Color blue{0x1c, 0x4c, 0xa8}, white{0xf4, 0xf4, 0xf4};
+    const Color blue = look.color, white{0xf4, 0xf4, 0xf4};
     paint::rect(b, 19, 44, 6, 68, Color{0x9a, 0x9a, 0xa4});
     paint::rect(b, 23, 44, 2, 68, Color{0x6c, 0x6c, 0x74});
     paint::rect(b, 0, 0, 44, 46, blue);
     paint::rect(b, 3, 13, 38, 30, white);
-    paint::text(b, (44 - font::text_width("CARS")) / 2, 3, "CARS", white);
-    showroom_car(b, 10, 20, Color{0xd0, 0x18, 0x1c}, Color{0xf0, 0x60, 0x50});
+    paint::text(b, (44 - font::text_width(look.name)) / 2, 3, look.name, white);
+    showroom_car(b, 10, 20, look.cars[0][0], look.cars[0][1]);
     paint::outline(b, Outline);
     return b;
 }
@@ -1685,6 +1690,29 @@ Bitmap make_police_front(const CarStyle& style, int lights, int tread) {
     return b;
 }
 
+Bitmap make_player_police(const CarStyle& style, int turn, bool brake, int signal, int tread, int headroom) {
+    Bitmap b = make_player_car(style, turn, brake, signal, tread, headroom);
+    // The lightbar on the roof, off: in the headroom, as the roof sits there.
+    Bitmap bar(b.w, 3);
+    lightbar(bar, 0);
+    for (int y = 0; y < 3; ++y) {
+        for (int x = 0; x < b.w; ++x) {
+            const uint32_t p = bar.px[static_cast<size_t>(y) * bar.w + x];
+            if (p >> 24) b.px[static_cast<size_t>(headroom - 1 + y) * b.w + static_cast<size_t>(x + 2 * turn)] = p;
+        }
+    }
+    return b;
+}
+
+void taxi_sign(Bitmap& b, int lean, int headroom) {
+    const int x = 36 + lean, y = headroom - 6;
+    paint::rect(b, x, y, 24, 7, Color{0xf8, 0xe0, 0x40});
+    paint::rect(b, x + 1, y + 1, 22, 5, Color{0x18, 0x18, 0x18});
+    paint::text(b, x + 1, y, "TAXI", Color{0xf8, 0xe0, 0x40});
+    paint::rect(b, x - 1, y - 1, 26, 1, Outline);
+    paint::rect(b, x - 1, y + 7, 26, 1, Outline);
+}
+
 Bitmap make_player_truck(const CarStyle& style, int turn, bool brake, int signal, int tread, int headroom) {
     Bitmap b(96, 44 + headroom);
     const int h = b.h;
@@ -1941,26 +1969,48 @@ SpriteSheet::SpriteSheet() {
     scenery_[static_cast<size_t>(Scenery::BillboardUs)] =
         make_billboard("ROUTE", " 66 ", Color{0xb0, 0x18, 0x28}, Color{0x1c, 0x2c, 0x8c}, Color{0xff, 0xff, 0xff});
 
-    // The player's cars, one per CarModel.
-    const CarStyle player_styles[car_models] = {
-        {{0x88, 0x08, 0x10}, {0xd0, 0x18, 0x1c}, {0xf0, 0x60, 0x50}, true},  // Spider
-        {{0x10, 0x1c, 0x48}, {0x1c, 0x34, 0x7c}, {0x50, 0x78, 0xc0}, false}, // GT Coupe
-        {{0xb0, 0x88, 0x08}, {0xf0, 0xc8, 0x20}, {0xff, 0xec, 0x80}, false}, // Hot Hatch
-        {{0x0c, 0x0c, 0x10}, {0x24, 0x24, 0x2a}, {0xe0, 0xb0, 0x30}, true},  // Muscle
-        {{0xa0, 0x40, 0x08}, {0xe8, 0x78, 0x18}, {0xff, 0xb0, 0x58}, false}, // Big Rig
+    // The player's cars, one per CarModel: its colours, and a sign on the
+    // roof for the taxi (else it would be the yellow Hot Hatch).
+    struct PlayerLook {
+        CarStyle style;
+        bool taxi_sign;
+    };
+    const PlayerLook looks[car_models] = {
+        {{{0x88, 0x08, 0x10}, {0xd0, 0x18, 0x1c}, {0xf0, 0x60, 0x50}, true}, false},  // Spider
+        {{{0x10, 0x1c, 0x48}, {0x1c, 0x34, 0x7c}, {0x50, 0x78, 0xc0}, false}, false}, // GT Coupe
+        {{{0xb0, 0x88, 0x08}, {0xf0, 0xc8, 0x20}, {0xff, 0xec, 0x80}, false}, false}, // Hot Hatch
+        {{{0x0c, 0x0c, 0x10}, {0x24, 0x24, 0x2a}, {0xe0, 0xb0, 0x30}, true}, false},  // Muscle
+        {{{0xa0, 0x40, 0x08}, {0xe8, 0x78, 0x18}, {0xff, 0xb0, 0x58}, false}, false}, // Big Rig
+        {{{0x14, 0x2c, 0x80}, {0x24, 0x50, 0xc8}, {0x70, 0x98, 0xf0}, false}, false}, // Saloon
+        {{{0xa0, 0x80, 0x10}, {0xe8, 0xc0, 0x20}, {0xf8, 0xe8, 0x80}, false}, true},  // Taxi
+        {{{0x14, 0x5c, 0x30}, {0x24, 0x8c, 0x48}, {0x70, 0xc8, 0x88}, false}, false}, // Estate
+        {{{0x10, 0x10, 0x14}, {0xf0, 0xf0, 0xf4}, {0xff, 0xff, 0xff}, false}, false}, // Patrol
+        {{{0x0c, 0x0c, 0x10}, {0x20, 0x20, 0x26}, {0xf0, 0xc0, 0x30}, false}, false}, // Racer
+        {{{0xb8, 0xb8, 0xc0}, {0xf0, 0xf0, 0xf4}, {0xff, 0xff, 0xff}, false}, false}, // Van
+        {{{0x8c, 0x18, 0x18}, {0xc0, 0x28, 0x24}, {0xe8, 0x60, 0x50}, false}, false}, // Box truck
     };
     for (int model = 0; model < car_models; ++model) {
-        player_convertible_[static_cast<size_t>(model)] = player_styles[model].convertible;
-        dashboards_[static_cast<size_t>(model)] = make_dashboard(player_styles[model], 320);
+        const PlayerLook& look = looks[model];
+        const CarStyle& st = look.style;
+        const Body body = car_model(model).body;
+        player_convertible_[static_cast<size_t>(model)] = body == Body::Car && st.convertible;
+        dashboards_[static_cast<size_t>(model)] = make_dashboard(st, 320);
         for (int turn = -1; turn <= 1; ++turn) {
             for (int brake = 0; brake < 2; ++brake) {
                 for (int signal = -1; signal <= hazard_signal; ++signal) {
                     for (int t = 0; t < tyre_frames; ++t) {
+                        Bitmap b;
+                        switch (body) {
+                            case Body::Rig: b = make_player_truck(st, turn, brake, signal, t, player_headroom); break;
+                            case Body::Van: b = make_van(st, signal, brake, t); break;
+                            case Body::BoxTruck: b = make_truck(st, signal, brake, t); break;
+                            case Body::Racer: b = make_rival(st, signal, brake, t); break;
+                            case Body::Police: b = make_player_police(st, turn, brake, signal, t, player_headroom); break;
+                            default: b = make_player_car(st, turn, brake, signal, t, player_headroom); break;
+                        }
+                        if (look.taxi_sign) taxi_sign(b, 2 * turn, player_headroom);
                         player_[static_cast<size_t>(model)][static_cast<size_t>(turn + 1)][static_cast<size_t>(brake)]
-                               [static_cast<size_t>(signal + 1)][static_cast<size_t>(t)] =
-                            model == truck_model
-                                ? make_player_truck(player_styles[model], turn, brake, signal, t, player_headroom)
-                                : make_player_car(player_styles[model], turn, brake, signal, t, player_headroom);
+                               [static_cast<size_t>(signal + 1)][static_cast<size_t>(t)] = std::move(b);
                     }
                 }
             }
@@ -2035,8 +2085,17 @@ SpriteSheet::SpriteSheet() {
     scenery_[static_cast<size_t>(Scenery::CherryTree)] = make_cherry_tree();
     scenery_[static_cast<size_t>(Scenery::Torii)] = make_torii();
     scenery_[static_cast<size_t>(Scenery::StoneLantern)] = make_stone_lantern();
-    scenery_[static_cast<size_t>(Scenery::Showroom)] = make_showroom();
-    scenery_[static_cast<size_t>(Scenery::DealerSign)] = make_dealer_sign();
+    // The everyday cars' dealer in blue, the sports cars' in red.
+    const ShowroomLook regular{"CARS", {0x1c, 0x4c, 0xa8}, {0x2c, 0x60, 0xc8},
+                               {{{0xf0, 0xc8, 0x20}, {0xff, 0xec, 0x80}}, {{0x24, 0x50, 0xc8}, {0x70, 0x98, 0xf0}},
+                                {{0x24, 0x8c, 0x48}, {0x70, 0xc8, 0x88}}, {{0xe8, 0xc0, 0x20}, {0xf8, 0xe8, 0x80}}}};
+    const ShowroomLook sports{"SPORTS", {0xa8, 0x14, 0x20}, {0xd0, 0x28, 0x30},
+                              {{{0xd0, 0x18, 0x1c}, {0xf0, 0x60, 0x50}}, {{0x1c, 0x34, 0x7c}, {0x50, 0x78, 0xc0}},
+                               {{0x24, 0x24, 0x2a}, {0xe0, 0xb0, 0x30}}, {{0x20, 0x20, 0x26}, {0xf0, 0xc0, 0x30}}}};
+    scenery_[static_cast<size_t>(Scenery::Showroom)] = make_showroom(regular);
+    scenery_[static_cast<size_t>(Scenery::DealerSign)] = make_dealer_sign(regular);
+    scenery_[static_cast<size_t>(Scenery::SportsShowroom)] = make_showroom(sports);
+    scenery_[static_cast<size_t>(Scenery::SportsSign)] = make_dealer_sign(sports);
     scenery_[static_cast<size_t>(Scenery::DatePalm)] = make_date_palm();
     scenery_[static_cast<size_t>(Scenery::Pyramid)] = make_pyramid();
     scenery_[static_cast<size_t>(Scenery::Acacia)] = make_acacia();

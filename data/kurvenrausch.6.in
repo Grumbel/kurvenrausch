@@ -92,7 +92,8 @@ Start the headless run with
 .BI \-\-car " N"
 Drive car model
 .I N
-in the headless run: 0 Spider, 1 GT Coupe, 2 Hot Hatch, 3 Muscle, 4 Big Rig (the truck).
+in the headless run: 0 Spider, 1 GT Coupe, 2 Hot Hatch, 3 Muscle, 4 Big Rig,
+5 Saloon, 6 Taxi, 7 Estate, 8 Patrol, 9 Racer, 10 Van, 11 Box Truck.
 .TP
 .B \-\-dealer
 Let the autopilot pull in at the next car dealer during the headless run, and
@@ -117,7 +118,10 @@ Let the autopilot pull in at the next lot of
 during the headless run, and stay there:
 .B gas
 (a gas station),
-.BR dealer ,
+.B dealer
+(everyday cars),
+.B sports
+(sports cars),
 .BR wash ,
 .BR motel ,
 .B hospital

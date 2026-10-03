@@ -88,9 +88,12 @@ weather and road markings, fading smoothly into one another:
   forecourt to pull onto, where the tank fills up while you stand by the
   pumps. Run dry and the engine sputters and dies; stranded, the driver pours
   in a spare can after a few seconds
-- **Car dealers**: stop at one and choose from four cars, the Spider, the GT
-  Coupe, the Hot Hatch and the Muscle car, each with its own top speed,
-  acceleration and grip
+- **Car dealers**: stop on the forecourt and steer left or right to choose
+  a car, each with its own top speed, acceleration and grip. Twelve in all,
+  every vehicle on the road among them: the sports car dealers (red; Italy,
+  Japan, California) sell the Spider, GT Coupe, Muscle car and the rivals'
+  Racer, the everyday dealers (blue; England, Korea) the Hot Hatch, Saloon,
+  Taxi, Estate and a retired police Patrol car
 - **Dirt and car washes**: puddles splash the car with mud, crashes add more,
   oil slicks leave black spots; stop at one of the car washes in England,
   Kenya and the outback to have it washed clean
@@ -101,9 +104,8 @@ weather and road markings, fading smoothly into one another:
 - **Camera views**: the classic chase view, a far one from higher up, the
   bumper, and the cockpit with the dashboard and the wheel turning in the
   driver's hands (higher up in the truck)
-- **Truck stops** (before the Autobahn, in the outback): swap the car for the
-  Big Rig, an orange cab-over tractor, slow but planted; steer again at a
-  truck stop to take your car back
+- **Truck stops** (before the Autobahn, in the outback): the Big Rig, an
+  orange cab-over tractor, the Van and the Box Truck, slow but planted
 - **Mini map** of the lap with your position, the start line, the gas
   stations, the car dealers, car washes, motels, hospitals and truck stops
 - **Police chases**: now and then, driving fast, a police car turns up in

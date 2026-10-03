@@ -18,10 +18,9 @@ namespace racer {
 std::string state_dir(const char* xdg_state_home, const char* home);
 
 // What the player chose last time: indices of car_model(), driver() and
-// passenger(), and the car left at a truck stop.
+// passenger(), the camera view and the radio.
 struct Choices {
     int car = 0;
-    int car_before_truck = 0;
     int driver = 0;
     int passenger = 0;
     int view = 0; // a ViewMode

@@ -71,6 +71,8 @@ enum class Scenery : uint8_t {
     HospitalSign, // the blue H sign announcing it
     Truckstop,    // a diner with a big sign, beyond its forecourt
     TruckSign,    // the tall sign announcing it
+    SportsShowroom, // a sports car dealer's showroom, beyond its forecourt
+    SportsSign,   // the tall sign announcing it
     Count
 };
 
@@ -100,13 +102,14 @@ enum class Patch : uint8_t {
 // What a forecourt belongs to.
 enum class Lot : uint8_t {
     Gas,    // a gas station: refuel
-    Dealer, // a car dealer: change cars
+    Dealer, // a car dealer: change cars (the everyday ones)
     Wash,   // a car wash: clean the car
     Motel,  // a motel: change the passenger
     Hospital, // a hospital: patch up the driver, or change drivers
-    Truckstop, // a truck stop: swap the car for a truck, and back
+    Truckstop, // a truck stop: trucks and vans
+    SportsDealer, // a sports car dealer
 };
-constexpr int lot_kinds = 6;
+constexpr int lot_kinds = 7;
 // The name the HUD shows, and the keyword --visit takes.
 const char* lot_name(Lot kind);
 const char* lot_keyword(Lot kind);

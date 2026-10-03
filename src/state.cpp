@@ -40,7 +40,6 @@ std::string state_dir(const char* xdg_state_home, const char* home) {
 std::string format_choices(const Choices& c) {
     std::ostringstream out;
     out << "car " << c.car << "\n"
-        << "car_before_truck " << c.car_before_truck << "\n"
         << "driver " << c.driver << "\n"
         << "passenger " << c.passenger << "\n"
         << "view " << c.view << "\n"
@@ -58,7 +57,6 @@ Choices parse_choices(std::string_view text) {
         int value = 0;
         if (!(fields >> key >> value)) continue;
         if (key == "car") c.car = value;
-        else if (key == "car_before_truck") c.car_before_truck = value;
         else if (key == "driver") c.driver = value;
         else if (key == "passenger") c.passenger = value;
         else if (key == "view") c.view = value;
