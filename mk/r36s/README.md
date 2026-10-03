@@ -24,7 +24,9 @@ put the zip into `ports/PortMaster/autoinstall/` and start PortMaster once.
 | L1           | handbrake                    |
 | Start        | pause menu                   |
 | Select       | camera view                  |
-| Right stick  | radio (flick left or right)  |
+| D-pad up     | headlights                   |
+| D-pad down   | hazard lights                |
+| Right stick  | flick left / right: indicators; up / down: radio |
 | Select+Start | quit                         |
 
 Lap times and choices are kept in `kurvenrausch/conf/`.

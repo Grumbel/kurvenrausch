@@ -33,14 +33,14 @@ struct InputState {
     bool toggle_mute = false;
     bool change_view = false; // C or Back: the next camera view
     bool toggle_map = false;  // Tab or the right stick clicked: zoom the mini map in or out
-    // The light switches: L or Back + D-pad up the headlights, Q / E or
-    // Back + D-pad left / right the indicators, Z or Back + D-pad down the
-    // hazard lights.
+    // The light switches: L or D-pad up the headlights, Q / E or the right
+    // stick flicked left / right the indicators, Z or D-pad down the hazard
+    // lights. (In the pause menu the D-pad moves the selection instead.)
     bool toggle_headlights = false;
     bool signal_left = false;
     bool signal_right = false;
     bool toggle_hazards = false;
-    int change_music = 0;     // N, or the right stick flicked: +1 the next track, -1 the previous
+    int change_music = 0;     // N, or the right stick flicked up / down: +1 the next track, -1 the previous
 
     // The touch screen, in window coordinates from 0 to 1: the fingers down
     // now, and those that came down since the last poll.
@@ -101,11 +101,11 @@ private:
 
     std::vector<SDL_GameController*> pads_;
     std::map<SDL_FingerID, Finger> fingers_; // down now, window coordinates 0 .. 1
-    // Back is a modifier for the D-pad (the light switches); pressed and
-    // released on its own it changes the view.
-    bool back_held_ = false;
-    bool back_combo_ = false; // the D-pad was used while Back was held
-    int music_stick_ = 0; // where the right stick was flicked last: -1, 0 or +1
+
+    // Where the right stick was flicked last, each way: -1, 0 or +1; a new
+    // flick counts once the stick has come back to the middle.
+    int stick_x_ = 0;
+    int stick_y_ = 0;
 };
 
 } // namespace racer

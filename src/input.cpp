@@ -155,36 +155,16 @@ void Input::poll(InputState& state) {
             case SDL_CONTROLLERDEVICEREMOVED:
                 close_controller(e.cdevice.which);
                 break;
-            case SDL_CONTROLLERBUTTONUP:
-                if (e.cbutton.button == SDL_CONTROLLER_BUTTON_BACK) {
-                    if (back_held_ && !back_combo_) state.change_view = true;
-                    back_held_ = false;
-                }
-                break;
             case SDL_CONTROLLERBUTTONDOWN:
-                if (back_held_) { // Back + D-pad: the light switches
-                    bool used = true;
-                    switch (e.cbutton.button) {
-                        case SDL_CONTROLLER_BUTTON_DPAD_UP: state.toggle_headlights = true; break;
-                        case SDL_CONTROLLER_BUTTON_DPAD_LEFT: state.signal_left = true; break;
-                        case SDL_CONTROLLER_BUTTON_DPAD_RIGHT: state.signal_right = true; break;
-                        case SDL_CONTROLLER_BUTTON_DPAD_DOWN: state.toggle_hazards = true; break;
-                        default: used = false; break;
-                    }
-                    if (used) {
-                        back_combo_ = true;
-                        break;
-                    }
-                }
                 switch (e.cbutton.button) {
                     case SDL_CONTROLLER_BUTTON_START: state.pause = true; break;
-                    case SDL_CONTROLLER_BUTTON_BACK:
-                        back_held_ = true;
-                        back_combo_ = false;
-                        break;
+                    case SDL_CONTROLLER_BUTTON_BACK: state.change_view = true; break;
                     case SDL_CONTROLLER_BUTTON_RIGHTSTICK: state.toggle_map = true; break;
-                    case SDL_CONTROLLER_BUTTON_DPAD_UP: state.menu.up = true; break;
-                    case SDL_CONTROLLER_BUTTON_DPAD_DOWN: state.menu.down = true; break;
+                    // Up and down: the menu's selection, or (driving) the
+                    // headlights and the hazard lights; the game takes
+                    // whichever applies.
+                    case SDL_CONTROLLER_BUTTON_DPAD_UP: state.menu.up = state.toggle_headlights = true; break;
+                    case SDL_CONTROLLER_BUTTON_DPAD_DOWN: state.menu.down = state.toggle_hazards = true; break;
                     case SDL_CONTROLLER_BUTTON_DPAD_LEFT: state.menu.left = true; break;
                     case SDL_CONTROLLER_BUTTON_DPAD_RIGHT: state.menu.right = true; break;
                     case SDL_CONTROLLER_BUTTON_A: state.menu.confirm = true; break;
@@ -211,25 +191,36 @@ void Input::poll(InputState& state) {
     state.fingers.clear();
     for (const auto& [id, finger] : fingers_) state.fingers.push_back(finger);
 
-    // The right stick changes the radio's track: one step per flick, the
-    // stick has to come back to the middle before the next.
-    float right_x = 0.f;
+    // The right stick, flicked: left and right the indicators (like the
+    // stalk), up and down the radio. One step per flick; the stick has to
+    // come back to the middle before the next.
+    float right_x = 0.f, right_y = 0.f;
     for (SDL_GameController* pad : pads_) {
-        const float x = axis(pad, SDL_CONTROLLER_AXIS_RIGHTX);
+        const float x = axis(pad, SDL_CONTROLLER_AXIS_RIGHTX), y = axis(pad, SDL_CONTROLLER_AXIS_RIGHTY);
         if (std::abs(x) > std::abs(right_x)) right_x = x;
+        if (std::abs(y) > std::abs(right_y)) right_y = y;
     }
-    const int flick = right_x > 0.6f ? 1 : right_x < -0.6f ? -1 : 0;
-    if (flick != 0 && music_stick_ == 0) state.change_music = flick;
-    if (flick != 0 || std::abs(right_x) < 0.3f) music_stick_ = flick;
+    const auto flick = [](float v, int& last) {
+        const int now = v > 0.6f ? 1 : v < -0.6f ? -1 : 0;
+        const int fired = now != 0 && last == 0 ? now : 0;
+        if (now != 0 || std::abs(v) < 0.3f) last = now;
+        return fired;
+    };
+    // Only the stronger direction counts, so a diagonal flick does one thing.
+    const bool sideways = std::abs(right_x) >= std::abs(right_y);
+    const int fx = flick(sideways ? right_x : 0.f, stick_x_);
+    const int fy = flick(sideways ? 0.f : right_y, stick_y_);
+    if (fx < 0) state.signal_left = true;
+    if (fx > 0) state.signal_right = true;
+    if (fy != 0) state.change_music = -fy; // up (negative y) is the next track
 
     for (SDL_GameController* pad : pads_) {
         PadState p;
         p.left_x = axis(pad, SDL_CONTROLLER_AXIS_LEFTX);
         p.trigger_left = axis(pad, SDL_CONTROLLER_AXIS_TRIGGERLEFT);
         p.trigger_right = axis(pad, SDL_CONTROLLER_AXIS_TRIGGERRIGHT);
-        // With Back held the D-pad switches lights instead of steering.
-        p.dpad_left = !back_held_ && button(pad, SDL_CONTROLLER_BUTTON_DPAD_LEFT);
-        p.dpad_right = !back_held_ && button(pad, SDL_CONTROLLER_BUTTON_DPAD_RIGHT);
+        p.dpad_left = button(pad, SDL_CONTROLLER_BUTTON_DPAD_LEFT);
+        p.dpad_right = button(pad, SDL_CONTROLLER_BUTTON_DPAD_RIGHT);
         p.a = button(pad, SDL_CONTROLLER_BUTTON_A);
         p.b = button(pad, SDL_CONTROLLER_BUTTON_B);
         p.x = button(pad, SDL_CONTROLLER_BUTTON_X);

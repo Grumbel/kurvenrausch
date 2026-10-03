@@ -189,11 +189,11 @@ H	X	horn
 Space	Y, right shoulder	nitro
 P	Start	pause menu: resume, restart, start in a country, quit
 R		restart
-C	Back (on its own)	camera view: chase, far, bumper, cockpit
-N	right stick	radio: the next (or previous) track, or off
-L	Back + D\-pad up	headlights on or off
-Q E	Back + D\-pad left, right	indicator left, right (again: off)
-Z	Back + D\-pad down	hazard lights
+C	Back	camera view: chase, far, bumper, cockpit
+N	right stick flicked up, down	radio: the next (or previous) track, or off
+L	D\-pad up	headlights on or off
+Q E	right stick flicked left, right	indicator left, right (again: off)
+Z	D\-pad down	hazard lights
 Tab	right stick click	mini map: around the car or the whole lap
 M		mute the sound
 F11, Alt+Enter		toggle fullscreen

@@ -373,7 +373,7 @@ bool Game::frame() {
     if (input.toggle_fullscreen) display_->toggle_fullscreen();
     if (input.toggle_mute) muted_ = !muted_;
     if (input.toggle_map) map_zoomed_ = !map_zoomed_;
-    switch_lights(input);
+    if (!paused_) switch_lights(input); // paused, the D-pad moves the menu
     if (input.change_view && !paused_) {
         view_mode_ = static_cast<ViewMode>((static_cast<int>(view_mode_) + 1) % view_modes);
         show_message(view_name(view_mode_), 1.f);
