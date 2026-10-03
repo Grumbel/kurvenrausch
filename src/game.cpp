@@ -1408,7 +1408,9 @@ void Game::render() {
     // lifts on screen by the rest, so the road visibly falls away beneath it;
     // from inside the car the camera rises with all of it.
     const float air = vertical_.y - tr.y;
-    view.position = tr.z + cam.player_z() - setup.distance;
+    // Wrapped: behind the start line a camera further back than the chase
+    // camera would stand at a negative position.
+    view.position = track_.wrap(tr.z + cam.player_z() - setup.distance);
     view.player_x = tr.x;
     view.player_y = tr.y + (setup.car ? camera_air_share : 1.f) * air;
     view.yaw = view_yaw_;
