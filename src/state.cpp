@@ -111,10 +111,12 @@ void Store::fail(const std::string& what) const {
 }
 
 bool Store::make_dir() const {
-    // Each missing directory on the way, mode 0700 as the spec asks.
+    // Each missing directory on the way, mode 0700 as the spec asks. From
+    // the root (/ or C:\): a bare drive (C:) is no directory to test.
     std::error_code ec;
-    fs::path path;
-    for (const fs::path& part : fs::path(dir_)) {
+    const fs::path dir(dir_);
+    fs::path path = dir.root_path();
+    for (const fs::path& part : dir.relative_path()) {
         path /= part;
         if (fs::is_directory(path, ec)) continue;
         if (!fs::create_directory(path, ec) || ec) {
