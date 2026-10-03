@@ -54,6 +54,8 @@ struct ScreenshotOptions {
     int music = -1;          // the radio's track in the --wav recording, -1 off
     int police_frame = -1;   // if >= 0, a police chase starts at this step
     std::vector<Finger> touches; // fingers held on the touch screen all run (framebuffer pixels)
+    int signal = 0;          // indicators for the headless run: -1 left, +1 right, 2 the hazard lights
+    bool headlights = false; // headlights on for the headless run
     float dirt = -1.f;       // if >= 0, start this dirty (mud and oil, 0 .. 1)
 };
 
@@ -108,6 +110,11 @@ private:
     // Police chases: one may start, the police car chases, and the chase ends.
     void start_chase();
     void update_police(float dt);
+    // The light switches: headlights, indicators, hazard lights.
+    void switch_lights(const InputState& input);
+    void update_indicators(const InputState& input, float dt);
+    // The indicators as the car's sprite shows them now (see hazard_signal).
+    int shown_signal() const;
     // Adds what the fingers press to the input.
     void apply_touch(InputState& input, const std::vector<Finger>& fingers);
     void end_chase();
@@ -188,6 +195,12 @@ private:
     bool bandaged_ = false;
     ViewMode view_mode_ = ViewMode::Chase;
     bool map_zoomed_ = true; // the mini map shows the stretch around the car, not the whole lap
+    // The light switches.
+    bool headlights_ = false;
+    int signal_ = 0;          // the indicator switched on: -1 left, +1 right, 0 none
+    bool hazards_ = false;    // the hazard lights: both indicators
+    float signal_x_ = 0.f;    // where across the road the car was when it was switched on
+    bool blink_on_ = false;   // the indicators lit in this moment of their blinking
     int music_ = 0;          // the radio's track (see Music), -1 off
     Entity police_ = INVALID_ENTITY; // the police car in a chase
     Chase chase_;

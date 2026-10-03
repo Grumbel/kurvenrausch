@@ -127,6 +127,13 @@ or
 .B \-\-pause
 Show the pause menu in the screenshot.
 .TP
+.BI \-\-signal " N"
+Switch the indicators on for the headless run: \-1 left, 1 right, 2 the
+hazard lights.
+.TP
+.B \-\-headlights
+Switch the headlights on for the headless run.
+.TP
 .BI \-\-touch " X,Y"
 Hold a finger on the touch screen at
 .IR X , Y
@@ -176,14 +183,17 @@ l l l.
 Keyboard	Gamepad	Action
 \(ua or W	right trigger, A	accelerate
 \(da or S	left trigger, B	brake; stopped, let go and press again: reverse
-\(<- \(-> or A D	left stick, D-pad	steer
+\(<- \(-> or A D	left stick, D\-pad	steer
 Ctrl	left shoulder	handbrake
 H	X	horn
 Space	Y, right shoulder	nitro
 P	Start	pause menu: resume, restart, start in a country, quit
 R		restart
-C	Back	camera view: chase, far, bumper, cockpit
+C	Back (on its own)	camera view: chase, far, bumper, cockpit
 N	right stick	radio: the next (or previous) track, or off
+L	Back + D\-pad up	headlights on or off
+Q E	Back + D\-pad left, right	indicator left, right (again: off)
+Z	Back + D\-pad down	hazard lights
 Tab	right stick click	mini map: around the car or the whole lap
 M		mute the sound
 F11, Alt+Enter		toggle fullscreen

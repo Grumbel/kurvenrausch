@@ -45,6 +45,11 @@ void Synth::set_params(const SynthParams& p) {
     siren_.store(p.siren, std::memory_order_relaxed);
 }
 
+void Synth::trigger_tick(bool on) {
+    tick_on_.store(on, std::memory_order_relaxed);
+    tick_events_.fetch_add(1, std::memory_order_release);
+}
+
 void Synth::trigger_ding() {
     ding_events_.fetch_add(1, std::memory_order_release);
 }
@@ -103,6 +108,13 @@ void Synth::render(int16_t* out, int frames) {
     }
     const int track = music_track_.load(std::memory_order_relaxed);
     if (track != music_.track()) music_.select(track);
+    const int ticks = tick_events_.load(std::memory_order_acquire);
+    if (ticks != tick_seen_) {
+        tick_seen_ = ticks;
+        tick_age_ = 0.f;
+        tick_level_ = tick_on_.load(std::memory_order_relaxed) ? 1.f : 0.6f;
+        tick_phase_ = 0.0;
+    }
     const int thunders = thunder_events_.load(std::memory_order_acquire);
     if (thunders != thunder_seen_) {
         thunder_seen_ = thunders;
@@ -273,6 +285,15 @@ void Synth::render(int16_t* out, int frames) {
             thump_env *= thump_decay;
         }
 
+        // ---- Indicator relay: a short, dry click --------------------------
+        float tick = 0.f;
+        if (tick_age_ < 0.03f) {
+            tick_phase_ += 1800.0 / sample_rate;
+            tick = static_cast<float>(std::sin(two_pi * tick_phase_)) * tick_level_ * 0.25f *
+                   std::exp(-tick_age_ / 0.004f);
+            tick_age_ += 1.f / sr;
+        }
+
         // ---- Siren: the wail, up and down every second and a half ----------
         s_siren_ += (t_siren - s_siren_) * a_load;
         float siren = 0.f;
@@ -374,7 +395,7 @@ void Synth::render(int16_t* out, int frames) {
         }
 
         const float mix = engine + roar + wind + gravel + rain + skid + scrape + crash + horn + nitro + whoosh + pump + ding +
-                          splash + thunder + siren + 0.55f * music_.sample();
+                          splash + thunder + siren + tick + 0.55f * music_.sample();
         const float x = std::tanh(mix * s_volume_ * 1.1f);
         out[i] = static_cast<int16_t>(std::lround(x * 30000.f));
     }

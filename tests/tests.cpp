@@ -1477,6 +1477,15 @@ void test_vehicles() {
     CHECK(top_row(sheet.occupants(0, 0, 0, -1, 0, 0)) < SpriteSheet::player_headroom);
     CHECK(top_row(base) >= SpriteSheet::player_headroom - 4);
     CHECK(&sheet.occupants(0, 0, 0, 0, 0, 0) == &base); // kept, not made again
+    // The player's indicators: off, left, right and both (hazards) all differ,
+    // for every model.
+    for (int m = 0; m < car_models; ++m) {
+        const auto& off = sheet.player(m, 0, false, 0, 0).px;
+        const auto& left = sheet.player(m, 0, false, 0, -1).px;
+        const auto& right = sheet.player(m, 0, false, 0, 1).px;
+        const auto& both = sheet.player(m, 0, false, 0, hazard_signal).px;
+        CHECK(off != left && off != right && left != right && both != left && both != right);
+    }
     CHECK(sheet.occupants(0, 0, 0, 0, 0, 0, true).px != base.px); // the bandage shows
     CHECK(sheet.occupants(0, 0, 0, 0, 0, 1, true).px != sheet.occupants(0, 0, 0, 0, 0, 1).px);
     // In a closed car the heads only show through the rear window, dimmed.

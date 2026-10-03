@@ -41,6 +41,8 @@ void usage(const char* argv0) {
               << "  --music N           play radio track N (0 to 2) in the --wav recording\n"
               << "  --police N          start a police chase at step N of the headless run\n"
               << "  --touch X,Y         hold a finger at X,Y (framebuffer pixels) all through the headless run\n"
+              << "  --signal N          indicators on in the headless run: -1 left, 1 right, 2 hazard lights\n"
+              << "  --headlights        headlights on in the headless run\n"
               << "  --dirt L            start the headless run this dirty (0 to 1)\n"
               << "  --wash              pull in at the next car wash during the headless run\n"
               << "  --visit KIND        pull in at the next lot of KIND (gas, dealer, wash, motel, hospital, truckstop)\n"
@@ -97,6 +99,10 @@ int main(int argc, char* argv[]) {
                 std::cerr << "Unknown lot for --visit: " << kind << "\n";
                 return 1;
             }
+        } else if (arg == "--signal" && i + 1 < argc) {
+            shot.signal = std::atoi(argv[++i]);
+        } else if (arg == "--headlights") {
+            shot.headlights = true;
         } else if (arg == "--touch" && i + 1 < argc) {
             const std::string at = argv[++i];
             const size_t comma = at.find(',');

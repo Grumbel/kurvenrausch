@@ -17,6 +17,10 @@ namespace {
 
 constexpr Color Outline{0x14, 0x18, 0x14};
 
+// Is the indicator on `side` (-1 left, +1 right) lit for `signal`: -1 or +1
+// that side's, hazard_signal both.
+bool lit(int signal, int side) { return signal == side || signal == hazard_signal; }
+
 Bitmap make_palm() {
     Bitmap b(80, 128);
     const Color bark_dark{0x5c, 0x3c, 0x20}, bark{0x8c, 0x64, 0x3a}, bark_light{0xb0, 0x88, 0x58};
@@ -1243,7 +1247,7 @@ Bitmap make_car(const CarStyle& style, int turn, int signal, bool brake, int tre
     // Indicators at the outer ends of the tail lights.
     for (int side = -1; side <= 1; side += 2) {
         const int x = (side < 0 ? 12 : 80) + s;
-        const bool on = signal == side;
+        const bool on = lit(signal, side);
         paint::rect(b, x, 22, 4, 6, on ? Color{0xff, 0xc0, 0x38} : Color{0xa8, 0x5c, 0x18});
         if (on) paint::rect(b, x + 1, 23, 2, 2, Color{0xff, 0xf4, 0xc0});
     }
@@ -1321,7 +1325,7 @@ Bitmap make_car_front(const CarStyle& style, int signal, int tread_frame) {
     paint::rect(b, 65, 22, 8, 2, lamp_hi);
     for (int side = -1; side <= 1; side += 2) {
         const int x = side < 0 ? 11 : 79;
-        if (signal == side) {
+        if (lit(signal, side)) {
             paint::rect(b, x, 27, 6, 3, Color{0xff, 0xc0, 0x38});
             paint::rect(b, x + 2, 28, 2, 1, Color{0xff, 0xf4, 0xc0});
         } else {
@@ -1355,8 +1359,8 @@ Bitmap make_car_front(const CarStyle& style, int signal, int tread_frame) {
     return b;
 }
 
-Bitmap make_player_car(const CarStyle& style, int turn, bool brake, int tread, int headroom) {
-    const Bitmap car = make_car(style, turn, 0, brake, tread, false);
+Bitmap make_player_car(const CarStyle& style, int turn, bool brake, int signal, int tread, int headroom) {
+    const Bitmap car = make_car(style, turn, signal, brake, tread, false);
     Bitmap b(car.w, car.h + headroom);
     std::copy(car.px.begin(), car.px.end(), b.px.begin() + static_cast<std::ptrdiff_t>(headroom) * car.w);
     return b;
@@ -1529,7 +1533,7 @@ Bitmap make_van(const CarStyle& st, int signal, bool brake, int tread) {
     paint::rect(b, 54, 32, 4, 2, chrome);
     for (int side = -1; side <= 1; side += 2) {
         const int x = side < 0 ? 5 : 93;
-        indicator(b, x, 25, 6, 6, signal == side);
+        indicator(b, x, 25, 6, 6, lit(signal, side));
         tail_lamp(b, x, 31, 6, 14, brake);
     }
     paint::rect(b, 44, 8, 16, 2, brake ? Color{0xff, 0x54, 0x3c} : Color{0x70, 0x14, 0x12}); // third brake light
@@ -1554,7 +1558,7 @@ Bitmap make_van_front(const CarStyle& st, int signal, int tread) {
     paint::rect(b, 4, 30, 96, 3, st.body_dark);
     headlight(b, 8, 35, 18, 7);
     headlight(b, 78, 35, 18, 7);
-    for (int side = -1; side <= 1; side += 2) indicator(b, side < 0 ? 8 : 90, 43, 6, 3, signal == side);
+    for (int side = -1; side <= 1; side += 2) indicator(b, side < 0 ? 8 : 90, 43, 6, 3, lit(signal, side));
     paint::rect(b, 32, 35, 40, 9, Color{0x14, 0x14, 0x18}); // grille
     for (int y = 36; y < 44; y += 2) paint::rect(b, 33, y, 38, 1, Color{0x3a, 0x3a, 0x42});
     paint::rect(b, 3, 49, 98, 6, Color{0x4c, 0x4c, 0x54});
@@ -1586,7 +1590,7 @@ Bitmap make_truck(const CarStyle& st, int signal, bool brake, int tread) {
     paint::rect(b, 24, 93, 64, 1, Color{0x30, 0x30, 0x34}); // under-run bar
     for (int side = -1; side <= 1; side += 2) {
         const int x = side < 0 ? 6 : 88;
-        indicator(b, side < 0 ? x : x + 12, 84, 6, 4, signal == side);
+        indicator(b, side < 0 ? x : x + 12, 84, 6, 4, lit(signal, side));
         tail_lamp(b, side < 0 ? x + 6 : x, 84, 12, 4, brake);
         paint::rect(b, side < 0 ? 26 : 80, 94, 6, 10, Color{0x14, 0x14, 0x14}); // mud flaps
     }
@@ -1613,7 +1617,7 @@ Bitmap make_truck_front(const CarStyle& st, int signal, int tread) {
     for (int y = 52; y < 75; y += 3) paint::rect(b, 32, y, 48, 1, Color{0x50, 0x50, 0x58});
     headlight(b, 12, 66, 14, 7);
     headlight(b, 86, 66, 14, 7);
-    for (int side = -1; side <= 1; side += 2) indicator(b, side < 0 ? 12 : 94, 58, 6, 5, signal == side);
+    for (int side = -1; side <= 1; side += 2) indicator(b, side < 0 ? 12 : 94, 58, 6, 5, lit(signal, side));
     paint::rect(b, 6, 78, 100, 7, Color{0x3c, 0x3c, 0x44});
     paint::rect(b, 46, 79, 20, 5, Color{0xe8, 0xe8, 0xd8});
     paint::outline(b, Outline);
@@ -1644,8 +1648,8 @@ Bitmap make_rival(const CarStyle& st, int signal, bool brake, int tread) {
         paint::ellipse(b, static_cast<float>(x), 21.f, 3.5f, 3.f, lamp);
         if (brake) paint::rect(b, x - 1, 20, 2, 2, Color{0xff, 0xf0, 0xe0});
     }
-    indicator(b, 7, 19, 3, 4, signal < 0);
-    indicator(b, 90, 19, 3, 4, signal > 0);
+    indicator(b, 7, 19, 3, 4, lit(signal, -1));
+    indicator(b, 90, 19, 3, 4, lit(signal, 1));
     paint::rect(b, 20, 30, 60, 5, Color{0x14, 0x14, 0x18}); // diffuser
     for (int x = 24; x < 78; x += 6) paint::rect(b, x, 30, 1, 5, Color{0x40, 0x40, 0x48});
     for (float x : {44.f, 56.f}) paint::ellipse(b, x, 31.f, 2.5f, 2.f, Color{0xb0, 0xb0, 0xbc});
@@ -1681,7 +1685,7 @@ Bitmap make_police_front(const CarStyle& style, int lights, int tread) {
     return b;
 }
 
-Bitmap make_player_truck(const CarStyle& style, int turn, bool brake, int tread, int headroom) {
+Bitmap make_player_truck(const CarStyle& style, int turn, bool brake, int signal, int tread, int headroom) {
     Bitmap b(96, 44 + headroom);
     const int h = b.h;
     const Color frame{0x24, 0x24, 0x28}, steel{0x50, 0x50, 0x58}, chrome{0xb0, 0xb0, 0xbc}, chrome_dark{0x70, 0x70, 0x7c};
@@ -1703,6 +1707,8 @@ Bitmap make_player_truck(const CarStyle& style, int turn, bool brake, int tread,
         if (brake) paint::rect(b, x + 1, h - 13, 8, 2, Color{0xff, 0xf0, 0xe0});
     }
     paint::rect(b, 42, h - 13, 12, 4, Color{0xe8, 0xe8, 0xd8}); // plate
+    indicator(b, 10, h - 14, 4, 5, lit(signal, -1));
+    indicator(b, 82, h - 14, 4, 5, lit(signal, 1));
 
     // The cab, leaning into turns, and its back wall with the window.
     const int u = 2 * turn;
@@ -1812,8 +1818,8 @@ Bitmap make_rival_front(const CarStyle& st, int signal, int tread) {
     for (int x : {42, 54}) paint::rect(b, x, 17, 4, 16, st.body_light);
     headlight(b, 8, 19, 18, 3);
     headlight(b, 74, 19, 18, 3);
-    indicator(b, 8, 23, 6, 2, signal < 0);
-    indicator(b, 86, 23, 6, 2, signal > 0);
+    indicator(b, 8, 23, 6, 2, lit(signal, -1));
+    indicator(b, 86, 23, 6, 2, lit(signal, 1));
     paint::rect(b, 14, 27, 20, 6, Color{0x14, 0x14, 0x18}); // intakes
     paint::rect(b, 66, 27, 20, 6, Color{0x14, 0x14, 0x18});
     paint::rect(b, 38, 28, 24, 5, Color{0x14, 0x14, 0x18});
@@ -1948,11 +1954,14 @@ SpriteSheet::SpriteSheet() {
         dashboards_[static_cast<size_t>(model)] = make_dashboard(player_styles[model], 320);
         for (int turn = -1; turn <= 1; ++turn) {
             for (int brake = 0; brake < 2; ++brake) {
-                for (int t = 0; t < tyre_frames; ++t) {
-                    player_[static_cast<size_t>(model)][static_cast<size_t>(turn + 1)][static_cast<size_t>(brake)]
-                           [static_cast<size_t>(t)] =
-                        model == truck_model ? make_player_truck(player_styles[model], turn, brake, t, player_headroom)
-                                             : make_player_car(player_styles[model], turn, brake, t, player_headroom);
+                for (int signal = -1; signal <= hazard_signal; ++signal) {
+                    for (int t = 0; t < tyre_frames; ++t) {
+                        player_[static_cast<size_t>(model)][static_cast<size_t>(turn + 1)][static_cast<size_t>(brake)]
+                               [static_cast<size_t>(signal + 1)][static_cast<size_t>(t)] =
+                            model == truck_model
+                                ? make_player_truck(player_styles[model], turn, brake, signal, t, player_headroom)
+                                : make_player_car(player_styles[model], turn, brake, signal, t, player_headroom);
+                    }
                 }
             }
         }

@@ -286,6 +286,8 @@ void Game::reset() {
     place_on_road(vertical_, track_.height_at(world_.get<Camera>(camera_).player_z()));
     landing_time_ = 0.f;
     view_yaw_ = view_shift_ = 0.f;
+    headlights_ = hazards_ = blink_on_ = false;
+    signal_ = 0;
     police_ = INVALID_ENTITY; // gone with the traffic
     chase_ = Chase{};
     chase_cooldown_ = chase_cooldown;
@@ -371,6 +373,7 @@ bool Game::frame() {
     if (input.toggle_fullscreen) display_->toggle_fullscreen();
     if (input.toggle_mute) muted_ = !muted_;
     if (input.toggle_map) map_zoomed_ = !map_zoomed_;
+    switch_lights(input);
     if (input.change_view && !paused_) {
         view_mode_ = static_cast<ViewMode>((static_cast<int>(view_mode_) + 1) % view_modes);
         show_message(view_name(view_mode_), 1.f);
@@ -417,6 +420,38 @@ bool Game::frame() {
     if (paused_) draw_pause_menu(fb_, menu_, track_.zones[static_cast<size_t>(menu_.zone)].country);
     display_->present(fb_.pixels());
     return true;
+}
+
+void Game::switch_lights(const InputState& input) {
+    const auto& tr = world_.get<Transform>(player_);
+    if (input.toggle_headlights) headlights_ = !headlights_;
+    if (input.toggle_hazards) hazards_ = !hazards_;
+    // An indicator goes off when pressed again, and over to the other side.
+    for (int side : {-1, 1}) {
+        if (!(side < 0 ? input.signal_left : input.signal_right)) continue;
+        signal_ = signal_ == side ? 0 : side;
+        signal_x_ = tr.x;
+    }
+}
+
+// The indicators blink (and the relay ticks) as long as one is on or the
+// hazard lights are. An indicator switches itself off once the car has
+// moved over (half a road width) its way and the wheel is straight again.
+void Game::update_indicators(const InputState& input, float dt) {
+    (void)dt;
+    const auto& tr = world_.get<Transform>(player_);
+    if (signal_ != 0 && (tr.x - signal_x_) * static_cast<float>(signal_) > 0.5f && std::abs(input.steer) < 0.1f) {
+        signal_ = 0;
+    }
+    const bool blinking = signal_ != 0 || hazards_;
+    const bool on = blinking && std::fmod(clock_, 0.7f) < 0.4f;
+    if (on != blink_on_ && (blinking || blink_on_)) synth_.trigger_tick(on);
+    blink_on_ = on;
+}
+
+int Game::shown_signal() const {
+    if (!blink_on_) return 0;
+    return hazards_ ? hazard_signal : signal_;
 }
 
 void Game::apply_touch(InputState& input, const std::vector<Finger>& fingers) {
@@ -515,6 +550,12 @@ bool Game::screenshot(const ScreenshotOptions& opts) {
         in.nitro = i == opts.nitro_frame;
         in.handbrake = opts.handbrake_from >= 0 && i >= opts.handbrake_from;
         if (i == opts.police_frame) start_chase();
+        if (i == 0) {
+            headlights_ = opts.headlights;
+            hazards_ = opts.signal == hazard_signal;
+            signal_ = opts.signal == hazard_signal ? 0 : opts.signal;
+            signal_x_ = world_.get<Transform>(player_).x;
+        }
         if (!opts.touches.empty()) {
             touch_seen_ = true;
             apply_touch(in, opts.touches);
@@ -656,6 +697,7 @@ void Game::fixed_update(const InputState& driver_input, float dt) {
     const float grip = std::max(look.grip * car_model(car_model_).grip, 0.2f) * (aquaplaning_ ? aquaplane_grip : 1.f) *
                        (oily_ ? oil_grip : 1.f) * (handbraking_ ? handbrake_grip : 1.f);
     steer_ = input.steer > 0.3f ? 1 : input.steer < -0.3f ? -1 : 0;
+    update_indicators(input, dt);
     wheel_angle_ += (input.steer * 1.4f - wheel_angle_) * std::min(1.f, dt * 12.f); // the wheel follows the hands
     braking_ = input.brake > 0.1f && vel.speed >= 0.f; // reversing, it's the reverse gear
     if (!airborne) {
@@ -1510,7 +1552,8 @@ void Game::render() {
     // Twitching after an oil slick, the car flicks from one side to the other.
     const int shown_steer = spin_time_ > 0.f ? (static_cast<int>(clock_ * 16.f) % 2 ? 1 : -1) : steer_;
     // The car with its people drawn over it.
-    const Bitmap& body = sprites_.player(car_model_, shown_steer, braking_, SpriteSheet::tyre_frame(wheel_distance_));
+    const Bitmap& body = sprites_.player(car_model_, shown_steer, braking_, SpriteSheet::tyre_frame(wheel_distance_),
+                                         shown_signal());
     const Bitmap& people = sprites_.occupants(driver_, passenger_, shown_steer, wave_time_ > 0.f ? wave_side_ : 0,
                                               static_cast<int>(clock_ / 0.15f) & 1, car_model_, bandaged_);
     player_bitmap_ = body;
@@ -1620,6 +1663,9 @@ void Game::render() {
     hud.speed_fraction = std::abs(vel.speed) / player.max_speed;
     hud.speed_kmh_fraction = std::abs(vel.speed) / base_max_speed_;
     hud.reverse = vel.speed < 0.f;
+    hud.signal_left = blink_on_ && (signal_ < 0 || hazards_);
+    hud.signal_right = blink_on_ && (signal_ > 0 || hazards_);
+    hud.headlights = headlights_;
     if (offer_) {
         hud.offer_title = lot_name(*offer_);
         if (*offer_ == Lot::Dealer || *offer_ == Lot::Truckstop) {

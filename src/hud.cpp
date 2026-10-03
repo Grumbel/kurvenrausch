@@ -34,6 +34,28 @@ void text_center(Framebuffer& fb, int y, std::string_view s, Color c, int scale 
     text(fb, (fb.width() - font::text_width(s, scale)) / 2, y, s, c, scale);
 }
 
+// The dashboard lamps above the rev counter, shown only while lit: green
+// arrows for the indicators, a blue headlight symbol.
+void draw_lamps(Framebuffer& fb, int x, int y, const HudState& hud) {
+    const Color green{0x40, 0xf0, 0x60}, blue{0x50, 0x90, 0xff};
+    auto arrow = [&](int ax, int dir) { // 9 wide, 7 high, pointing `dir`
+        for (int i = 0; i < 4; ++i) {
+            const int col = dir < 0 ? ax + i : ax + 8 - i;
+            fb.fill_rect(col + 1, y + 3 - i, 1, 2 * i + 1, Shadow);
+            fb.fill_rect(col, y + 3 - i, 1, 2 * i + 1, green);
+        }
+        fb.fill_rect(dir < 0 ? ax + 4 : ax, y + 2, 5, 3, green);
+    };
+    if (hud.signal_left) arrow(x, -1);
+    if (hud.signal_right) arrow(x + 12, 1);
+    if (hud.headlights) {
+        const int hx = x + 26;
+        fb.fill_rect(hx + 4, y, 4, 7, blue);   // the lamp
+        fb.fill_rect(hx + 8, y + 1, 1, 5, blue);
+        for (int r = 0; r < 3; ++r) fb.fill_rect(hx, y + 1 + 2 * r, 3, 1, blue); // its beams
+    }
+}
+
 // Segmented rev counter. Speed is split into virtual gears; the needle
 // climbs through each gear and drops back on the shift.
 void draw_tacho(Framebuffer& fb, int x, int y, float speed_fraction) {
@@ -215,6 +237,7 @@ void draw_hud(Framebuffer& fb, const HudState& hud) {
     text(fb, 56, h - 14, "KM/H", Label);
     if (hud.reverse) text(fb, 86, h - 21, "R", Value, 2);
     draw_tacho(fb, 6, h - 37, hud.speed_fraction);
+    draw_lamps(fb, 6, h - 47, hud);
     draw_fuel(fb, 56, h - 28, hud.fuel, hud.fuel_warning);
 
     // Bottom right: nitro.

@@ -98,6 +98,7 @@ void Input::poll(InputState& state) {
     state.toggle_mute = false;
     state.change_view = false;
     state.toggle_map = false;
+    state.toggle_headlights = state.signal_left = state.signal_right = state.toggle_hazards = false;
     state.change_music = 0;
     state.taps.clear();
 
@@ -126,6 +127,10 @@ void Input::poll(InputState& state) {
                     case SDLK_m: state.toggle_mute = true; break;
                     case SDLK_c: state.change_view = true; break;
                     case SDLK_TAB: state.toggle_map = true; break;
+                    case SDLK_l: state.toggle_headlights = true; break;
+                    case SDLK_q: state.signal_left = true; break;
+                    case SDLK_e: state.signal_right = true; break;
+                    case SDLK_z: state.toggle_hazards = true; break;
                     case SDLK_n: state.change_music = 1; break;
                     case SDLK_RETURN:
                         if (e.key.keysym.mod & KMOD_ALT) state.toggle_fullscreen = true;
@@ -150,10 +155,33 @@ void Input::poll(InputState& state) {
             case SDL_CONTROLLERDEVICEREMOVED:
                 close_controller(e.cdevice.which);
                 break;
+            case SDL_CONTROLLERBUTTONUP:
+                if (e.cbutton.button == SDL_CONTROLLER_BUTTON_BACK) {
+                    if (back_held_ && !back_combo_) state.change_view = true;
+                    back_held_ = false;
+                }
+                break;
             case SDL_CONTROLLERBUTTONDOWN:
+                if (back_held_) { // Back + D-pad: the light switches
+                    bool used = true;
+                    switch (e.cbutton.button) {
+                        case SDL_CONTROLLER_BUTTON_DPAD_UP: state.toggle_headlights = true; break;
+                        case SDL_CONTROLLER_BUTTON_DPAD_LEFT: state.signal_left = true; break;
+                        case SDL_CONTROLLER_BUTTON_DPAD_RIGHT: state.signal_right = true; break;
+                        case SDL_CONTROLLER_BUTTON_DPAD_DOWN: state.toggle_hazards = true; break;
+                        default: used = false; break;
+                    }
+                    if (used) {
+                        back_combo_ = true;
+                        break;
+                    }
+                }
                 switch (e.cbutton.button) {
                     case SDL_CONTROLLER_BUTTON_START: state.pause = true; break;
-                    case SDL_CONTROLLER_BUTTON_BACK: state.change_view = true; break;
+                    case SDL_CONTROLLER_BUTTON_BACK:
+                        back_held_ = true;
+                        back_combo_ = false;
+                        break;
                     case SDL_CONTROLLER_BUTTON_RIGHTSTICK: state.toggle_map = true; break;
                     case SDL_CONTROLLER_BUTTON_DPAD_UP: state.menu.up = true; break;
                     case SDL_CONTROLLER_BUTTON_DPAD_DOWN: state.menu.down = true; break;
@@ -199,8 +227,9 @@ void Input::poll(InputState& state) {
         p.left_x = axis(pad, SDL_CONTROLLER_AXIS_LEFTX);
         p.trigger_left = axis(pad, SDL_CONTROLLER_AXIS_TRIGGERLEFT);
         p.trigger_right = axis(pad, SDL_CONTROLLER_AXIS_TRIGGERRIGHT);
-        p.dpad_left = button(pad, SDL_CONTROLLER_BUTTON_DPAD_LEFT);
-        p.dpad_right = button(pad, SDL_CONTROLLER_BUTTON_DPAD_RIGHT);
+        // With Back held the D-pad switches lights instead of steering.
+        p.dpad_left = !back_held_ && button(pad, SDL_CONTROLLER_BUTTON_DPAD_LEFT);
+        p.dpad_right = !back_held_ && button(pad, SDL_CONTROLLER_BUTTON_DPAD_RIGHT);
         p.a = button(pad, SDL_CONTROLLER_BUTTON_A);
         p.b = button(pad, SDL_CONTROLLER_BUTTON_B);
         p.x = button(pad, SDL_CONTROLLER_BUTTON_X);

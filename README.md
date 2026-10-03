@@ -218,8 +218,11 @@ browser Esc pauses, and the pause menu has no Quit.
 | Space            | Y, right shoulder        | Nitro              |
 | P                | Start                    | Pause menu: resume, restart, start in a chosen country, quit |
 | R                |                          | Restart            |
-| C                | Back                     | Camera view: chase, far, bumper, cockpit |
+| C                | Back, on its own         | Camera view: chase, far, bumper, cockpit |
 | N                | Right stick, flicked     | Radio: next (or previous) track, or off |
+| L                | Back + D-pad up          | Headlights         |
+| Q / E            | Back + D-pad left / right | Indicator left / right (again: off; it also goes off after a lane change) |
+| Z                | Back + D-pad down        | Hazard lights      |
 | Tab              | Right stick, clicked     | Mini map: zoomed in around the car, or the whole lap |
 | M                |                          | Mute sound         |
 | F11 / Alt+Enter  |                          | Toggle fullscreen  |

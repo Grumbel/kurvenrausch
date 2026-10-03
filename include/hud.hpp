@@ -15,6 +15,9 @@ struct HudState {
     float speed_fraction = 0.f;  // 0..1 of the car's top speed: the revs
     float speed_kmh_fraction = 0.f; // of the standard car's top speed: the speedometer
     bool reverse = false;        // in reverse gear
+    bool signal_left = false;    // the indicator lamps, lit in this moment of their blinking
+    bool signal_right = false;
+    bool headlights = false;     // the headlights are on
     int lap = 0;                 // 0 before the start line is crossed
     float lap_time = 0.f;
     float last_lap = 0.f;        // 0 = none yet

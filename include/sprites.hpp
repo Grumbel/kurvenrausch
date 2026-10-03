@@ -14,6 +14,10 @@
 
 namespace racer {
 
+// The `signal` of the vehicle sprites: -1 the left indicator lit, +1 the
+// right one, 0 neither, hazard_signal both (the hazard lights).
+constexpr int hazard_signal = 2;
+
 struct CarStyle {
     Color body_dark;
     Color body;
@@ -48,7 +52,7 @@ Bitmap make_rival_front(const CarStyle& style, int signal, int tread = 0);
 
 // The player's car, without the people, with `headroom` empty rows on top
 // for a raised arm.
-Bitmap make_player_car(const CarStyle& style, int turn, bool brake, int tread, int headroom);
+Bitmap make_player_car(const CarStyle& style, int turn, bool brake, int signal, int tread, int headroom);
 
 // A police car, from behind and from the front (as in the mirror): `lights`
 // -1 flashes the red half of the lightbar, +1 the blue, 0 neither.
@@ -58,7 +62,7 @@ Bitmap make_police_front(const CarStyle& style, int lights, int tread);
 // The player's truck from behind, the same size as make_player_car(): a
 // cab-over tractor whose cab fills the headroom, its rear window where a
 // car's is, so make_occupants() fits it as a closed car.
-Bitmap make_player_truck(const CarStyle& style, int turn, bool brake, int tread, int headroom);
+Bitmap make_player_truck(const CarStyle& style, int turn, bool brake, int signal, int tread, int headroom);
 
 // The cockpit view's dashboard, `width` pixels wide and dashboard_height
 // high: the car's colour along the base of the windscreen, the dash with
@@ -101,9 +105,11 @@ public:
     }
     // The player's car, without its people: model (see car_model()); steer
     // -1 left, 0 straight, +1 right; brake lights; tyre frame.
-    const Bitmap& player(int model, int steer, bool brake = false, int tread = 0) const {
+    // signal: the indicators lit, -1 left, +1 right, hazard_signal both.
+    const Bitmap& player(int model, int steer, bool brake = false, int tread = 0, int signal = 0) const {
         const auto m = static_cast<size_t>(((model % car_models) + car_models) % car_models);
-        return player_[m][static_cast<size_t>(steer + 1)][brake ? 1 : 0][tread_index(tread)];
+        return player_[m][static_cast<size_t>(steer + 1)][brake ? 1 : 0][static_cast<size_t>(signal + 1)]
+                      [tread_index(tread)];
     }
     bool player_convertible(int model) const {
         return player_convertible_[static_cast<size_t>(((model % car_models) + car_models) % car_models)];
@@ -155,7 +161,8 @@ private:
     static size_t tread_index(int tread) { return static_cast<size_t>(((tread % tyre_frames) + tyre_frames) % tyre_frames); }
 
     // [model][steer][brake][tread]
-    std::array<std::array<std::array<std::array<Bitmap, tyre_frames>, 2>, 3>, car_models> player_;
+    // [model][steer][brake][signal + 1][tread]
+    std::array<std::array<std::array<std::array<std::array<Bitmap, tyre_frames>, 4>, 2>, 3>, car_models> player_;
     std::array<bool, car_models> player_convertible_{};
     std::array<Bitmap, car_models> dashboards_;
     std::array<Bitmap, drivers> wheels_;

@@ -49,6 +49,8 @@ public:
     void trigger_whoosh(float intensity);
     // A two-note chime, as when the tank is full.
     void trigger_ding();
+    // The indicator relay: a tick as the lamps go on, a softer one off.
+    void trigger_tick(bool on);
     // Thunder: a crack (the louder the nearer, `intensity` 0 .. 1) and a long,
     // rolling rumble.
     void trigger_thunder(float intensity);
@@ -71,6 +73,8 @@ private:
     std::atomic<float> crash_intensity_{0.f}, whoosh_intensity_{0.f}, thunder_intensity_{0.f};
     std::atomic<int> crash_events_{0}, whoosh_events_{0}, ding_events_{0}, thunder_events_{0};
     std::atomic<int> music_track_{-1};
+    std::atomic<int> tick_events_{0};
+    std::atomic<bool> tick_on_{true};
 
     // Smoothed parameters and DSP state (audio thread only).
     bool primed_ = false;
@@ -107,6 +111,9 @@ private:
     float whoosh_low_ = 0.f, whoosh_band_ = 0.f;
     double pump_phase_ = 0.0;
     float pump_lp_ = 0.f;
+    int tick_seen_ = 0;
+    float tick_age_ = 1.f, tick_level_ = 0.f;
+    double tick_phase_ = 0.0;
     int ding_seen_ = 0;
     float ding_age_ = 10.f;
     double ding_phase_[2] = {0.0, 0.0};
