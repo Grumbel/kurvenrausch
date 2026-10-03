@@ -28,9 +28,8 @@ public:
     void set_icon(const uint32_t* argb_pixels, int width, int height);
     void present(const uint32_t* argb_pixels);
     void toggle_fullscreen();
-    // A point of the window (0 .. 1 each way, as touch events give it) on
-    // the framebuffer, which is scaled to fit and centred.
-    void window_to_framebuffer(float wx, float wy, float& x, float& y) const;
+    // A touch event's point (0 .. 1 each way) on the framebuffer.
+    void touch_to_framebuffer(float tx, float ty, float& x, float& y) const;
 
     // True if presentation is synchronised to the display refresh; if not the
     // caller should throttle its frame rate itself.

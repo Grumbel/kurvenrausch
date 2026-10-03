@@ -391,16 +391,22 @@ bool Game::frame() {
     std::vector<Finger> fingers;
     for (const Finger& f : input.fingers) {
         Finger p = f;
-        display_->window_to_framebuffer(f.x, f.y, p.x, p.y);
+        display_->touch_to_framebuffer(f.x, f.y, p.x, p.y);
         fingers.push_back(p);
     }
     touch_taps_.clear();
     for (const Finger& f : input.taps) {
         Finger p = f;
-        display_->window_to_framebuffer(f.x, f.y, p.x, p.y);
+        display_->touch_to_framebuffer(f.x, f.y, p.x, p.y);
         touch_taps_.push_back(p);
     }
     if (!fingers.empty() || !touch_taps_.empty()) touch_seen_ = true;
+    // A tap that came and went between two frames still presses what it hit.
+    for (const Finger& tap : touch_taps_) {
+        if (std::none_of(fingers.begin(), fingers.end(), [&](const Finger& f) { return f.id == tap.id; })) {
+            fingers.push_back(tap);
+        }
+    }
     if (!paused_) apply_touch(input, fingers);
     if (!update_pause(input)) return false;
 

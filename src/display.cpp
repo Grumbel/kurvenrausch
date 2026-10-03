@@ -102,7 +102,21 @@ void Display::set_icon(const uint32_t* argb_pixels, int width, int height) {
     SDL_FreeSurface(surface);
 }
 
-void Display::window_to_framebuffer(float wx, float wy, float& x, float& y) const {
+void Display::touch_to_framebuffer(float tx, float ty, float& x, float& y) const {
+    // With a logical size set, SDL's renderer already gives touch points
+    // relative to the scaled picture, not the window (its event watch, since
+    // the 2.0.18 era). Mapping them through the letterbox again put touches
+    // off their mark wherever the window is not 4:3, as on phones.
+    SDL_version v;
+    SDL_GetVersion(&v);
+    if (SDL_VERSIONNUM(v.major, v.minor, v.patch) >= SDL_VERSIONNUM(2, 0, 18)) {
+        x = tx * static_cast<float>(fb_w_);
+        y = ty * static_cast<float>(fb_h_);
+        return;
+    }
+    // Older SDL gives window coordinates: the picture is scaled to fit and
+    // centred in the window.
+    const float wx = tx, wy = ty;
     int w = 1, h = 1;
     SDL_GetWindowSize(window_, &w, &h);
     const float scale = std::min(static_cast<float>(w) / static_cast<float>(fb_w_),
