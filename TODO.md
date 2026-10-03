@@ -21,6 +21,34 @@ Upstream master has since been fast-forwarded to `64fda32`, the tip of 002.1, so
 The rebase notes: upstream's rename is kept, its rendering fix is superseded by
 the road/framebuffer rewrite, `Color::to_u32()` became `Color::argb()`.
 
+## Round 14: ports (touch, Windows, Android, R36S), done
+
+All built on Linux from the flake; `nix flake show` lists them.
+- Touch controls (`touch.hpp`): drag-steering pad, GAS/BRK/NOS/HB/H, pause
+  button right of the mirror, taps on the pause menu (`menu_tap`,
+  `PauseMenu::choose`). Shown once the screen is touched; `--touch X,Y`
+  holds fingers headless. Tested in Chromium (touch events) and Android.
+- Windows (`nix/windows.nix`): MinGW cross build with the prebuilt
+  SDL2-win32 flake, GUI subsystem, icon resource (`data/kurvenrausch.rc.in`,
+  `data/icons/kurvenrausch.ico` from `tools/make_icons.py`), zips for win64
+  and win32. Tested under Wine (headless and live with Xvfb + xdotool).
+  State in `%APPDATA%\grumbel\kurvenrausch` (SDL_GetPrefPath).
+- Android (`nix/android.nix`, `mk/android/`): ndk-build after Pingus, SDL2
+  2.30.3, NDK 29, API 24+, three ABIs, landscape via SDL_HINT_ORIENTATIONS,
+  back button pauses. Tested in an API 24 x86_64 emulator without KVM
+  (slow but works). Note: on the rotated emulator `adb input` x
+  coordinates are rescaled; SDL's normalised coordinates were right.
+- R36S / ArkOS (`nix/r36s.nix`, `mk/r36s/`): sysroot from Ubuntu eoan
+  arm64 .debs (hashes from the archive's Packages index), libstdc++ 9
+  headers + nixpkgs GCC 16, SDL2 link stub, `-mno-outline-atomics`,
+  `libgcc_s_asneeded` script. PortMaster zip. Tested under qemu-aarch64 on
+  an eoan userland (`-L` root of libsdl2's 43-package closure). Not tested
+  on real hardware: the pad mapping comes from PortMaster's control.txt.
+- Fixed on the way: `Store::make_dir()` on Windows (bare drive `C:`).
+
+Open: real-device tests (R36S, a phone, Windows); the libc++_shared.so in
+the APK is large (unstripped by the NDK?); an Android release key.
+
 ## Round 13: cliff relief, WebAssembly build, done
 
 - Cliffs: ridges and gullies with lit and shaded flanks, ledges, a ragged
