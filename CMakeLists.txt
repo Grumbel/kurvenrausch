@@ -74,6 +74,19 @@ target_link_libraries(kurvenrausch_core PUBLIC ${SDL2_LIBRARIES})
 
 add_executable(kurvenrausch src/main.cpp)
 target_link_libraries(kurvenrausch PRIVATE kurvenrausch_core)
+if(WIN32)
+    # A windowed program (no console) with the game's icon; the GCC runtime
+    # linked in, so only SDL2.dll (and MinGW's thread library) go along.
+    enable_language(RC)
+    target_compile_definitions(kurvenrausch_core PUBLIC _WIN32_WINNT=0x0601) # Windows 7 and later
+    set(KURVENRAUSCH_ICO ${CMAKE_CURRENT_SOURCE_DIR}/data/icons/kurvenrausch.ico)
+    configure_file(data/kurvenrausch.rc.in ${CMAKE_CURRENT_BINARY_DIR}/kurvenrausch.rc @ONLY)
+    target_sources(kurvenrausch PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/kurvenrausch.rc)
+    set_target_properties(kurvenrausch PROPERTIES WIN32_EXECUTABLE TRUE)
+    if(MINGW)
+        target_link_options(kurvenrausch PRIVATE -static-libgcc -static-libstdc++)
+    endif()
+endif()
 target_compile_definitions(kurvenrausch PRIVATE KURVENRAUSCH_VERSION="${PROJECT_VERSION_FULL}")
 
 # The man page carries the version and the date of the source: that of the
@@ -131,7 +144,7 @@ else()
     install(TARGETS kurvenrausch RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
     install(FILES data/${APP_ID}.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
     install(FILES data/${APP_ID}.metainfo.xml DESTINATION ${CMAKE_INSTALL_DATADIR}/metainfo)
-    install(DIRECTORY data/icons/ DESTINATION ${CMAKE_INSTALL_DATADIR}/icons)
+    install(DIRECTORY data/icons/hicolor DESTINATION ${CMAKE_INSTALL_DATADIR}/icons)
     install(FILES ${CMAKE_CURRENT_BINARY_DIR}/kurvenrausch.6 DESTINATION ${CMAKE_INSTALL_MANDIR}/man6)
 endif()
 

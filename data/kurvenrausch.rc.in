@@ -1,0 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Ingo Ruhnke <grumbel@gmail.com>
+// SPDX-License-Identifier: GPL-3.0-or-later
+//
+// Windows resources: the program's icon in Explorer and the taskbar.
+// CMake fills in the path (configure_file).
+IDI_ICON1 ICON "@KURVENRAUSCH_ICO@"

@@ -149,6 +149,19 @@ hicolor theme (PNGs from 16 to 256 pixels and an SVG) and the man page,
 icon is the game's own pixel art, also its window icon;
 `tools/make_icons.py` regenerates the files from it.
 
+### Windows
+
+```bash
+nix build .#kurvenrausch-win64-zip   # kurvenrausch-<version>-win64.zip
+nix build .#kurvenrausch-win32-zip   # 32-bit Windows
+```
+
+Cross-compiled with MinGW on Linux, with SDL2's official prebuilt MinGW
+package (`nix/windows.nix`); `.#kurvenrausch-win64` is the unzipped folder.
+The zip holds `kurvenrausch.exe` (with the game's icon), `SDL2.dll`, MinGW's
+thread library, the licence and a readme; lap times and choices go to
+`%APPDATA%\grumbel\kurvenrausch`.
+
 ### Web (WebAssembly)
 
 ```bash

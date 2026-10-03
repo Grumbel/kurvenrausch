@@ -8,6 +8,12 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
 
+    # SDL2's official prebuilt MinGW package for the Windows builds
+    # (nix/windows.nix), as Pingus uses it.
+    SDL2-win32.url = "github:grumnix/SDL2-win32";
+    SDL2-win32.inputs.nixpkgs.follows = "nixpkgs";
+    SDL2-win32.inputs.flake-utils.follows = "flake-utils";
+
     # SDL2 sources for the WebAssembly build (nix/wasm.nix).
     sdl2-src = {
       url = "https://github.com/libsdl-org/SDL/releases/download/release-2.30.3/SDL2-2.30.3.tar.gz";
@@ -15,7 +21,7 @@
     };
   };
 
-  outputs = { self, nixpkgs, flake-utils, sdl2-src }:
+  outputs = { self, nixpkgs, flake-utils, SDL2-win32, sdl2-src }:
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs { inherit system; };
@@ -52,7 +58,14 @@
           ];
         };
 
-        # The web page (Linux hosts only, where Emscripten is packaged).
+        # The ports, built on Linux hosts: the web page (Emscripten) and
+        # Windows (MinGW).
+        windows = import ./nix/windows.nix {
+          inherit pkgs version date;
+          sdl2Win64 = SDL2-win32.packages.${system}.SDL2-win64;
+          sdl2Win32 = SDL2-win32.packages.${system}.SDL2-win32;
+        };
+
         # Decided by the name, so listing the outputs for other systems does
         # not need their nixpkgs.
         isLinux = nixpkgs.lib.hasSuffix "-linux" system;
@@ -68,6 +81,10 @@
         } // nixpkgs.lib.optionalAttrs isLinux {
           sdl2-wasm = wasm.sdl2Wasm;
           kurvenrausch-wasm = wasm.kurvenrauschWasm;
+          kurvenrausch-win64 = windows.win64;
+          kurvenrausch-win64-zip = windows.win64Zip;
+          kurvenrausch-win32 = windows.win32;
+          kurvenrausch-win32-zip = windows.win32Zip;
         };
 
         apps = nixpkgs.lib.optionalAttrs isLinux {
