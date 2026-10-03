@@ -149,6 +149,23 @@ hicolor theme (PNGs from 16 to 256 pixels and an SVG) and the man page,
 icon is the game's own pixel art, also its window icon;
 `tools/make_icons.py` regenerates the files from it.
 
+### Web (WebAssembly)
+
+```bash
+nix build .#kurvenrausch-wasm   # the site: index.html, kurvenrausch.{html,js,wasm}
+nix run .#kurvenrausch-wasm     # serve it on 127.0.0.1 and open a browser
+```
+
+Emscripten compiles the game into a web page; the Nix build is offline,
+with SDL2 built from its release tarball (`nix/wasm.nix`,
+`mk/wasm/scripts/`), and `result/` can be put on any static web server.
+Without Nix, with Emscripten installed (it then fetches its SDL2 port):
+`emcmake cmake -B build-wasm && cmake --build build-wasm`. The page
+(`mk/wasm/shell.html`) scales the picture to the window, keeps the lap times
+and choices in the browser's storage (with buttons to download them and to
+load them elsewhere) and pauses the game when the tab is hidden. In the
+browser Esc pauses, and the pause menu has no Quit.
+
 ## Controls
 
 | Keyboard         | Gamepad                  | Action             |

@@ -1,0 +1,240 @@
+<!doctype html>
+<!-- SPDX-FileCopyrightText: 2026 Ingo Ruhnke <grumbel@gmail.com> -->
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!-- Emscripten HTML shell for the WebAssembly build. CMake fills in the
+     @...@ values (configure_file), Emscripten the script below. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>Kurvenrausch @PROJECT_VERSION_FULL@</title>
+  <style>
+    html, body {
+      margin: 0; padding: 0; height: 100%;
+      background: #0b0b16; color: #c8d0e0;
+      font-family: system-ui, sans-serif;
+      overflow: hidden;
+    }
+    #wrap {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      height: 100%; gap: 0.6rem;
+    }
+    /* The game draws 320x240 and scales it up: keep 4:3, keep the pixels
+       chunky. */
+    #slot {
+      width: min(96vw, calc(78vh * 4 / 3));
+      height: min(78vh, calc(96vw * 3 / 4));
+    }
+    #wrap:fullscreen #slot, #wrap:-webkit-full-screen #slot {
+      width: min(100vw, calc(100vh * 4 / 3));
+      height: min(100vh, calc(100vw * 3 / 4));
+    }
+    #wrap:fullscreen > :not(#slot), #wrap:-webkit-full-screen > :not(#slot) { display: none; }
+    canvas.emscripten {
+      display: block; background: #000;
+      width: 100% !important; height: 100% !important;
+      image-rendering: pixelated; image-rendering: crisp-edges;
+      outline: none;
+    }
+    #status { font-size: 0.9rem; opacity: 0.85; min-height: 1.2em; }
+    #progress {
+      width: min(320px, 80vw); height: 6px;
+      background: #1a1a2c; border-radius: 3px; overflow: hidden;
+    }
+    #progress > div { height: 100%; width: 0%; background: #f0a030; transition: width 0.15s ease-out; }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: center; max-width: 96vw; }
+    .toolbar button {
+      background: #22223a; color: #c8d0e0;
+      border: 1px solid #44446a; border-radius: 4px;
+      padding: 0.3rem 0.7rem; cursor: pointer; font-size: 0.8rem;
+    }
+    .toolbar button:hover { background: #30304e; }
+    .toolbar button:disabled { opacity: 0.4; cursor: default; }
+    .toolbar input[type=file] { display: none; }
+    #help, #meta { font-size: 0.75rem; opacity: 0.7; text-align: center; line-height: 1.5; max-width: 96vw; }
+    #meta a { color: #f0b860; }
+    kbd {
+      font-family: inherit; font-size: 0.7rem;
+      border: 1px solid #44446a; border-radius: 3px; padding: 0 0.25rem;
+    }
+  </style>
+</head>
+<body>
+  <div id="wrap">
+    <div id="slot">
+      <canvas class="emscripten" id="canvas" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
+    </div>
+    <div id="status">Loading…</div>
+    <div id="progress"><div id="progress-bar"></div></div>
+    <div class="toolbar">
+      <button type="button" id="btn-fullscreen">Fullscreen</button>
+      <button type="button" id="btn-pause" disabled>Pause</button>
+      <button type="button" id="btn-download" disabled title="Your lap times and choices are kept in this browser; save them to a file">Download records</button>
+      <button type="button" id="btn-upload" disabled title="Bring records saved from another browser">Upload records…</button>
+      <input type="file" id="file-upload" accept=".json,application/json">
+    </div>
+    <div id="help">
+      <kbd>↑</kbd> accelerate · <kbd>↓</kbd> brake / reverse · <kbd>←</kbd> <kbd>→</kbd> steer ·
+      <kbd>Space</kbd> nitro · <kbd>Ctrl</kbd> handbrake · <kbd>H</kbd> horn ·
+      <kbd>C</kbd> view · <kbd>N</kbd> radio · <kbd>P</kbd> / <kbd>Esc</kbd> pause ·
+      <kbd>M</kbd> mute · gamepads work too
+    </div>
+    <div id="meta">
+      Kurvenrausch <strong>@PROJECT_VERSION_FULL@</strong> ·
+      <a href="@KURVENRAUSCH_SOURCE_URL@" target="_blank" rel="noopener">Source</a> ·
+      <a href="@KURVENRAUSCH_SOURCE_URL@/tree/@KURVENRAUSCH_GIT_REV@" target="_blank" rel="noopener">Revision @KURVENRAUSCH_GIT_REV@</a>
+    </div>
+  </div>
+  <script type="text/javascript">
+    var statusElement = document.getElementById('status');
+    var progressBar = document.getElementById('progress-bar');
+
+    /* The game keeps its records in $XDG_STATE_HOME/kurvenrausch, by
+       default under $HOME/.local/state; HOME is /home/web_user here. The
+       directory above is an IndexedDB mount, loaded before the game starts
+       and saved by the game after every write (FS.syncfs). */
+    var STATE_MOUNT = '/home/web_user/.local/state';
+    var STATE_DIR = STATE_MOUNT + '/kurvenrausch';
+
+    function mountState() {
+      FS.mkdirTree(STATE_MOUNT);
+      FS.mount(FS.filesystems.IDBFS, {}, STATE_MOUNT);
+      Module.addRunDependency('kurvenrausch-state');
+      FS.syncfs(true, function(err) {
+        if (err) console.warn('kurvenrausch: loading the records failed', err);
+        Module.removeRunDependency('kurvenrausch-state');
+      });
+    }
+
+    function bytesToBase64(u8) {
+      var s = '';
+      for (var i = 0; i < u8.length; i += 0x8000) {
+        s += String.fromCharCode.apply(null, u8.subarray(i, Math.min(i + 0x8000, u8.length)));
+      }
+      return btoa(s);
+    }
+
+    function base64ToBytes(b64) {
+      var s = atob(b64);
+      var u8 = new Uint8Array(s.length);
+      for (var i = 0; i < s.length; i++) u8[i] = s.charCodeAt(i);
+      return u8;
+    }
+
+    function downloadRecords() {
+      var files = {};
+      var names = [];
+      try { names = FS.readdir(STATE_DIR); } catch (e) {}
+      names.forEach(function(name) {
+        var path = STATE_DIR + '/' + name;
+        try {
+          if (FS.isFile(FS.stat(path).mode)) files[name] = bytesToBase64(FS.readFile(path));
+        } catch (e) {}
+      });
+      var blob = new Blob([JSON.stringify({ format: 'kurvenrausch-records', version: 1, files: files }, null, 2)],
+                          { type: 'application/json' });
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'kurvenrausch-records.json';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(function() { URL.revokeObjectURL(a.href); }, 1000);
+    }
+
+    function uploadRecords(file) {
+      var reader = new FileReader();
+      reader.onload = function() {
+        try {
+          var obj = JSON.parse(reader.result);
+          if (!obj || obj.format !== 'kurvenrausch-records' || !obj.files) {
+            alert('This is not a Kurvenrausch records file.');
+            return;
+          }
+          FS.mkdirTree(STATE_DIR);
+          var names = Object.keys(obj.files).filter(function(n) { return n.indexOf('/') < 0; });
+          names.forEach(function(n) { FS.writeFile(STATE_DIR + '/' + n, base64ToBytes(obj.files[n])); });
+          FS.syncfs(false, function(err) {
+            if (err) alert('Saving the records failed: ' + err);
+            else if (confirm('Records loaded. Reload the page to use them?')) location.reload();
+          });
+        } catch (e) {
+          alert('Loading the records failed: ' + e);
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    function pauseGame() {
+      if (typeof Module._kurvenrausch_pause === 'function') Module._kurvenrausch_pause();
+    }
+
+    function toggleFullscreen() {
+      var wrap = document.getElementById('wrap');
+      if (document.fullscreenElement || document.webkitFullscreenElement) {
+        (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+      } else {
+        (wrap.requestFullscreen || wrap.webkitRequestFullscreen).call(wrap);
+      }
+    }
+
+    function enableControls() {
+      document.getElementById('btn-fullscreen').onclick = toggleFullscreen;
+      var pause = document.getElementById('btn-pause');
+      pause.disabled = false;
+      pause.onclick = pauseGame;
+      /* A hidden tab stops the browser's frames: pause, so the race does
+         not jump on when it comes back. */
+      document.addEventListener('visibilitychange', function() { if (document.hidden) pauseGame(); });
+      var dl = document.getElementById('btn-download');
+      var ul = document.getElementById('btn-upload');
+      var input = document.getElementById('file-upload');
+      dl.disabled = ul.disabled = false;
+      dl.onclick = downloadRecords;
+      ul.onclick = function() { input.click(); };
+      input.onchange = function() {
+        if (input.files && input.files[0]) uploadRecords(input.files[0]);
+        input.value = '';
+      };
+      document.getElementById('canvas').focus();
+    }
+
+    var Module = {
+      preRun: [mountState],
+      postRun: [enableControls],
+      print: function(text) { console.log(text); },
+      printErr: function(text) { console.error(text); },
+      canvas: (function() {
+        var canvas = document.getElementById('canvas');
+        canvas.addEventListener('webglcontextlost', function(e) {
+          alert('The WebGL context was lost. Reload the page.');
+          e.preventDefault();
+        }, false);
+        return canvas;
+      })(),
+      setStatus: function(text) {
+        var m = text.match(/([^(]+)\((\d+(\.\d+)?)\/(\d+)\)/);
+        if (m) {
+          progressBar.style.width = (parseInt(m[2]) / parseInt(m[4]) * 100) + '%';
+          statusElement.textContent = m[1];
+        } else {
+          statusElement.textContent = text;
+          if (!text) document.getElementById('progress').style.display = 'none';
+        }
+      },
+      totalDependencies: 0,
+      monitorRunDependencies: function(left) {
+        this.totalDependencies = Math.max(this.totalDependencies, left);
+        Module.setStatus(left ? 'Preparing… (' + (this.totalDependencies - left) + '/' + this.totalDependencies + ')' : '');
+      }
+    };
+    Module.setStatus('Downloading…');
+    window.onerror = function() {
+      Module.setStatus('Something went wrong, see the JavaScript console');
+      Module.setStatus = function(text) { if (text) console.error('[status] ' + text); };
+    };
+  </script>
+  {{{ SCRIPT }}}
+</body>
+</html>

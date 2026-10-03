@@ -28,7 +28,11 @@ bool Audio::init(Synth& synth) {
     want.freq = Synth::sample_rate;
     want.format = AUDIO_S16SYS;
     want.channels = 1;
+#ifdef __EMSCRIPTEN__
+    want.samples = 2048; // the browser's audio needs a larger buffer to play without gaps
+#else
     want.samples = 512; // about 12 ms of latency
+#endif
     want.callback = &Audio::callback;
     want.userdata = &synth;
 

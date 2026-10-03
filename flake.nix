@@ -7,9 +7,15 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
+
+    # SDL2 sources for the WebAssembly build (nix/wasm.nix).
+    sdl2-src = {
+      url = "https://github.com/libsdl-org/SDL/releases/download/release-2.30.3/SDL2-2.30.3.tar.gz";
+      flake = false;
+    };
   };
 
-  outputs = { self, nixpkgs, flake-utils }:
+  outputs = { self, nixpkgs, flake-utils, sdl2-src }:
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs { inherit system; };
@@ -30,8 +36,8 @@
         # The date of the last change, for the man page (YYYY-MM-DD).
         lastModified = self.lastModifiedDate or "19700101000000";
         date = "${builtins.substring 0 4 lastModified}-${builtins.substring 4 2 lastModified}-${builtins.substring 6 2 lastModified}";
-      in {
-        packages.default = pkgs.stdenv.mkDerivation {
+
+        kurvenrausch = pkgs.stdenv.mkDerivation {
           pname = "kurvenrausch";
           inherit version;
           src = ./.;
@@ -44,6 +50,28 @@
             "-DPROJECT_VERSION_FULL=${version}"
             "-DPROJECT_DATE=${date}"
           ];
+        };
+
+        # The web page (Linux hosts only, where Emscripten is packaged).
+        # Decided by the name, so listing the outputs for other systems does
+        # not need their nixpkgs.
+        isLinux = nixpkgs.lib.hasSuffix "-linux" system;
+        wasm = import ./nix/wasm.nix {
+          inherit pkgs version gitRev date;
+          sdlSrc = sdl2-src;
+          sdlVersion = "2.30.3";
+        };
+      in {
+        packages = {
+          default = kurvenrausch;
+          inherit kurvenrausch;
+        } // nixpkgs.lib.optionalAttrs isLinux {
+          sdl2-wasm = wasm.sdl2Wasm;
+          kurvenrausch-wasm = wasm.kurvenrauschWasm;
+        };
+
+        apps = nixpkgs.lib.optionalAttrs isLinux {
+          kurvenrausch-wasm = wasm.serveApp;
         };
 
         devShells.default = pkgs.mkShell {

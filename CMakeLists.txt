@@ -20,7 +20,27 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-find_package(SDL2 REQUIRED)
+if(EMSCRIPTEN)
+    # WebAssembly. SDL2 is either a static build under SDL2_ROOT (headers
+    # and libSDL2.a, as nix/wasm.nix makes it, offline) or Emscripten's own
+    # port, which it downloads on first use. Emscripten's toolchain limits
+    # find_*() to its sysroot, so SDL2_ROOT is used directly.
+    if(SDL2_ROOT)
+        if(NOT EXISTS "${SDL2_ROOT}/lib/libSDL2.a" OR NOT EXISTS "${SDL2_ROOT}/include/SDL2/SDL.h")
+            message(FATAL_ERROR "SDL2_ROOT=${SDL2_ROOT} has no lib/libSDL2.a or include/SDL2/SDL.h")
+        endif()
+        set(SDL2_INCLUDE_DIRS "${SDL2_ROOT}/include")
+        set(SDL2_LIBRARIES "${SDL2_ROOT}/lib/libSDL2.a")
+    else()
+        add_compile_options(-sUSE_SDL=2)
+        add_link_options(-sUSE_SDL=2)
+        set(SDL2_INCLUDE_DIRS "")
+        set(SDL2_LIBRARIES "")
+    endif()
+    set(BUILD_TESTING OFF CACHE BOOL "No tests in the WebAssembly build" FORCE)
+else()
+    find_package(SDL2 REQUIRED)
+endif()
 
 # Everything except main() lives in a library so the tests can link it too.
 add_library(kurvenrausch_core STATIC
@@ -69,13 +89,50 @@ if(NOT DEFINED PROJECT_DATE)
 endif()
 configure_file(data/kurvenrausch.6.in ${CMAKE_CURRENT_BINARY_DIR}/kurvenrausch.6 @ONLY)
 
-# Desktop integration: the program, its desktop entry, AppStream metadata,
-# icons (tools/make_icons.py regenerates them) and the man page.
-install(TARGETS kurvenrausch RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
-install(FILES data/${APP_ID}.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
-install(FILES data/${APP_ID}.metainfo.xml DESTINATION ${CMAKE_INSTALL_DATADIR}/metainfo)
-install(DIRECTORY data/icons/ DESTINATION ${CMAKE_INSTALL_DATADIR}/icons)
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/kurvenrausch.6 DESTINATION ${CMAKE_INSTALL_MANDIR}/man6)
+if(EMSCRIPTEN)
+    # The web page: kurvenrausch.html (also as index.html) with its .js and
+    # .wasm, installed at the top of the prefix, ready to serve as a site.
+    # The shell carries the version and the source revision (pass
+    # -DKURVENRAUSCH_GIT_REV=..., as Nix does).
+    if(NOT DEFINED KURVENRAUSCH_GIT_REV)
+        execute_process(COMMAND git rev-parse --short HEAD
+                        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+                        OUTPUT_VARIABLE KURVENRAUSCH_GIT_REV OUTPUT_STRIP_TRAILING_WHITESPACE
+                        RESULT_VARIABLE _git_status ERROR_QUIET)
+        if(NOT _git_status EQUAL 0 OR KURVENRAUSCH_GIT_REV STREQUAL "")
+            set(KURVENRAUSCH_GIT_REV "unknown")
+        endif()
+    endif()
+    set(KURVENRAUSCH_SOURCE_URL "https://github.com/Grumbel/kurvenrausch")
+    configure_file(mk/wasm/shell.html ${CMAKE_CURRENT_BINARY_DIR}/shell.html @ONLY)
+
+    set_target_properties(kurvenrausch PROPERTIES SUFFIX ".html")
+    target_link_options(kurvenrausch PRIVATE
+        --shell-file ${CMAKE_CURRENT_BINARY_DIR}/shell.html
+        -sALLOW_MEMORY_GROWTH=1
+        # Emscripten 6 makes growable memory a resizable ArrayBuffer, which
+        # TextDecoder rejects (a black page at startup); grow the classic way.
+        -sGROWABLE_ARRAYBUFFERS=0
+        # The page keeps the state directory in IndexedDB (IDBFS).
+        -sFORCE_FILESYSTEM=1
+        -lidbfs.js
+        -sEXPORTED_RUNTIME_METHODS=FS,addRunDependency,removeRunDependency
+        -sEXPORTED_FUNCTIONS=_main,_kurvenrausch_pause
+        -sENVIRONMENT=web)
+    set_property(TARGET kurvenrausch APPEND PROPERTY LINK_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/mk/wasm/shell.html)
+
+    set(_web ${CMAKE_CURRENT_BINARY_DIR}/kurvenrausch)
+    install(FILES ${_web}.html ${_web}.js ${_web}.wasm DESTINATION .)
+    install(FILES ${_web}.html DESTINATION . RENAME index.html)
+else()
+    # Desktop integration: the program, its desktop entry, AppStream metadata,
+    # icons (tools/make_icons.py regenerates them) and the man page.
+    install(TARGETS kurvenrausch RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+    install(FILES data/${APP_ID}.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
+    install(FILES data/${APP_ID}.metainfo.xml DESTINATION ${CMAKE_INSTALL_DATADIR}/metainfo)
+    install(DIRECTORY data/icons/ DESTINATION ${CMAKE_INSTALL_DATADIR}/icons)
+    install(FILES ${CMAKE_CURRENT_BINARY_DIR}/kurvenrausch.6 DESTINATION ${CMAKE_INSTALL_MANDIR}/man6)
+endif()
 
 include(CTest)
 if(BUILD_TESTING)

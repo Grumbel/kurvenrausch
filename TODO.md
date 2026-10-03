@@ -21,6 +21,22 @@ Upstream master has since been fast-forwarded to `64fda32`, the tip of 002.1, so
 The rebase notes: upstream's rename is kept, its rendering fix is superseded by
 the road/framebuffer rewrite, `Color::to_u32()` became `Color::argb()`.
 
+## Round 13: cliff relief, WebAssembly build, done
+
+- Cliffs: ridges and gullies with lit and shaded flanks, ledges, a ragged
+  top (`cliff_relief` in `road.cpp`).
+- WebAssembly, after Pingus and SuperTux Origins: `nix build
+  .#kurvenrausch-wasm` makes the site, `nix run .#kurvenrausch-wasm` serves
+  it. SDL2 2.30.3 is a flake input built offline (`sdl2-wasm`); the game
+  builds with `emcmake`, the CMake `EMSCRIPTEN` branch adds the link flags
+  and the shell and installs the site. `Game::frame()` is one frame, driven
+  by `emscripten_set_main_loop` in the browser; the `Game` lives on the heap.
+  The state directory (`/home/web_user/.local/state`) is an IDBFS mount,
+  synced after every write. Verified in headless Chromium over the DevTools
+  protocol: driving, pause from the page, Esc, records surviving a reload.
+- Open: touch controls for phones; the gamepad in the browser is untested;
+  `ScriptProcessorNode` audio (SDL2's) is deprecated in browsers.
+
 ## Round 12: the owner's list, done
 
 Requested (the owner's untracked `TODO` file in the repo root, which stays

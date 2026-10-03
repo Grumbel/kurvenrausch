@@ -10,10 +10,26 @@
 #include <fstream>
 #include <iostream>
 #include <sstream>
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
 
 namespace racer {
 
 namespace fs = std::filesystem;
+
+namespace {
+
+// In a web page the state directory is an IndexedDB mount (see
+// mk/wasm/shell.html); written files only reach the browser's storage when
+// the file system is synced.
+void persist() {
+#ifdef __EMSCRIPTEN__
+    emscripten_run_script("FS.syncfs(false, function(err) { if (err) console.warn('kurvenrausch: saving state failed', err); });");
+#endif
+}
+
+} // namespace
 
 std::string state_dir(const char* xdg_state_home, const char* home) {
     if (xdg_state_home && xdg_state_home[0] == '/') return (fs::path(xdg_state_home) / "kurvenrausch").string();
@@ -134,6 +150,7 @@ void Store::save_choices(const Choices& c) const {
     std::error_code ec;
     fs::rename(temp, file, ec);
     if (ec) fail("Cannot write the choices");
+    else persist();
 }
 
 std::vector<LapRecord> Store::load_laps() const {
@@ -153,6 +170,7 @@ void Store::add_lap(const LapRecord& lap) const {
     out << format_lap(lap) << "\n";
     out.flush();
     if (!out) fail("Cannot write the lap times");
+    else persist();
 }
 
 } // namespace racer
