@@ -81,6 +81,10 @@ private:
     float s_rpm_ = 0.f, s_throttle_ = 0.f, s_speed_ = 0.f, s_skid_ = 0.f;
     float s_gravel_ = 0.f, s_scrape_ = 0.f, s_rain_ = 0.f, s_volume_ = 1.f;
     float s_horn_ = 0.f, s_nitro_ = 0.f, s_engine_ = 1.f, s_pump_ = 0.f, s_splash_ = 0.f, s_siren_ = 0.f;
+    // The radio playing (0 .. 1, eased), and the engine's low band: while
+    // it plays the engine makes room for it in the middle (see render()).
+    float s_radio_ = 0.f;
+    float engine_low_ = 0.f;
     double siren_phase_ = 0.0, siren_sweep_ = 0.0;
     float siren_lp_ = 0.f;
     uint32_t rng_ = 0x2545f491u;

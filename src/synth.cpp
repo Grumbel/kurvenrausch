@@ -160,6 +160,7 @@ void Synth::render(int16_t* out, int frames) {
         s_horn_ += (t_horn - s_horn_) * a_horn;
         s_nitro_ += (t_nitro - s_nitro_) * a_nitro;
         s_engine_ += (t_engine - s_engine_) * a_load;
+        s_radio_ += ((music_.track() >= 0 ? 1.f : 0.f) - s_radio_) * a_vol;
         s_pump_ += (t_pump - s_pump_) * a_vol;
         s_splash_ += (t_splash - s_splash_) * a_fast;
 
@@ -222,8 +223,15 @@ void Synth::render(int16_t* out, int frames) {
         const float intake = intake_ * (0.08f + 0.5f * s_throttle_ * (0.4f + s_rpm_));
         // Louder as it revs, and with the load; a surge when the throttle opens.
         const float level = (0.5f + 0.55f * s_rpm_) * (1.f + 2.2f * surge);
-        const float engine = ((e * (0.4f + 0.4f * s_throttle_) + pipe + body * (0.6f + 0.4f * s_throttle_) + intake) * level +
-                              pops) * 0.27f * s_engine_;
+        const float engine_full = ((e * (0.4f + 0.4f * s_throttle_) + pipe + body * (0.6f + 0.4f * s_throttle_) + intake) *
+                                       level + pops) * 0.27f * s_engine_;
+        // With the radio on, the engine keeps its rumble below 400 Hz but
+        // gives up much of the middle and top, where the music's lead and pad
+        // play, and steps back a little: they no longer mask each other, nor
+        // drive the final limiter together.
+        engine_low_ += (engine_full - engine_low_) * lowpass_coeff(400.f);
+        const float engine = (engine_low_ + (engine_full - engine_low_) * (1.f - 0.55f * s_radio_)) *
+                             (1.f - 0.2f * s_radio_);
 
         // ---- Road, wind, gravel, rain ----------------------------------------
         const float n = noise();
