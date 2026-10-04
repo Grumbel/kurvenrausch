@@ -45,6 +45,20 @@ constexpr float follow_width = 0.3f;
 constexpr float traffic_brake = 0.6f;
 constexpr float traffic_accel = 0.15f;
 
+// Stuck behind something slower with no lane of its own free to pass in, a car
+// overtakes in the oncoming lane when that is clear far enough ahead for the
+// whole manoeuvre: it needs to gain overtake_length segments on the vehicle, at
+// overtake_boost of top speed over it at most (and overtake_top in all), against
+// oncoming traffic at up to overtake_oncoming. It doesn't bother for less than
+// overtake_min_gain of top speed, and heads back early with oncoming traffic
+// overtake_abort segments away.
+constexpr float overtake_length = 2.f * follow_gap + 8.f;
+constexpr float overtake_boost = 0.15f;
+constexpr float overtake_top = 0.75f;
+constexpr float overtake_oncoming = 0.6f;
+constexpr float overtake_min_gain = 0.05f;
+constexpr float overtake_abort = 80.f;
+
 // Above the top speed (after nitro or a pass boost) the car loses this much
 // of the top speed per second until it is back down.
 constexpr float overspeed_drag = 0.15f;
@@ -2120,8 +2134,13 @@ void Game::update_traffic(float dt) {
             // swerves out and slows down.
             traffic.target_x = lane_center(lanes, against);
             const float towards = distance_ahead(t.z, player_world_z, -1);
-            const bool alarm = !attract_ && towards < oncoming_alarm * track_.segment_length &&
-                               std::abs(ptr.x - t.x) < 0.6f;
+            bool alarm = !attract_ && towards < oncoming_alarm * track_.segment_length &&
+                         std::abs(ptr.x - t.x) < 0.6f;
+            // So does an overtaker heading at it.
+            nearby(t.z, oncoming_alarm * track_.segment_length, 0.f, [&](const Mover& m) {
+                if (m.dir > 0 && m.e != player_ && std::abs(m.x - t.x) < 0.5f) alarm = true;
+                return !alarm;
+            });
             if (alarm) traffic.target_x += (look.left_hand ? 1.f : -1.f) * oncoming_dodge;
             float wanted = alarm ? 0.6f * traffic.cruise : traffic.cruise;
             nearby(t.z, follow_ahead, 0.f, [&](const Mover& m) {
@@ -2141,7 +2160,27 @@ void Game::update_traffic(float dt) {
             t.z = track_.wrap(t.z - v.speed * dt);
             return;
         }
-        traffic.target_x = lane_center(lanes, nearest_own_lane(lanes, look.left_hand, traffic.target_x));
+        // Is nothing coming the other way for `range` ahead? (In any lane:
+        // where traffic changes sides, it crosses over.)
+        auto oncoming_clear = [&](float range) {
+            bool clear = true;
+            nearby(t.z, 0.f, range, [&](const Mover& m) {
+                clear = m.dir >= 0;
+                return clear;
+            });
+            return clear;
+        };
+        // Where traffic changes sides the oncoming lane is another one: an
+        // overtaker there is suddenly in its own.
+        if (traffic.passing && traffic.pass_lane != against) traffic.passing = false;
+        const int own = nearest_own_lane(lanes, look.left_hand, traffic.passing ? t.x : traffic.target_x);
+        if (traffic.passing) {
+            // Back in once well past whatever it overtook, or early with
+            // traffic coming.
+            const bool past = !lane_busy(e, t.z, lane_center(lanes, own), 2.f * follow_gap * track_.segment_length);
+            if (past || !oncoming_clear(overtake_abort * track_.segment_length)) traffic.passing = false;
+        }
+        traffic.target_x = lane_center(lanes, traffic.passing ? against : own);
 
         // Honked at from behind while in the player's way: pull over to the
         // nearest free lane out of the player's line, in a hurry.
@@ -2160,20 +2199,39 @@ void Game::update_traffic(float dt) {
         }
         if (traffic.startled > 0.f) traffic.startled -= dt;
 
-        // Blocked by something slower ahead in this lane? Pull out if the
+        // Held up by something slower than it would like to go, ahead in
+        // this lane? (Slower than its cruising speed, not its speed: once it
+        // has slowed down behind, it still wants past.) Pull out if the
         // neighbouring lane is clear.
         bool blocked = false;
+        float lead_speed = 0.f;
         nearby(t.z, 0.f, follow_ahead, [&](const Mover& m) {
-            blocked = m.e != e && m.dir >= 0 && std::abs(m.x - t.x) <= 0.5f && m.speed < v.speed &&
-                      distance_ahead(t.z, m.z) < follow_ahead;
+            blocked = m.e != e && m.dir >= 0 && std::abs(m.x - t.x) <= 0.5f &&
+                      m.speed < traffic.cruise - overtake_min_gain * max_speed && distance_ahead(t.z, m.z) < follow_ahead;
+            lead_speed = m.speed;
             return !blocked;
         });
-        if (blocked && std::abs(t.x - traffic.target_x) < 0.05f) {
-            for (int i = 0; i < lanes; ++i) {
-                if (i == against) continue; // never overtakes into the oncoming lane
+        if (blocked && !traffic.passing && std::abs(t.x - traffic.target_x) < 0.05f) {
+            bool moved = false;
+            for (int i = 0; i < lanes && !moved; ++i) {
+                if (i == against) continue;
                 const float lane = lane_center(lanes, i);
                 if (std::abs(lane - t.x) < 0.15f * spacing || std::abs(lane - t.x) > 1.1f * spacing) continue;
-                if (!lane_busy(e, t.z, lane, look_ahead)) { traffic.target_x = lane; break; }
+                if (!lane_busy(e, t.z, lane, look_ahead)) { traffic.target_x = lane; moved = true; }
+            }
+            // No lane of its own to pass in: the oncoming one, when nothing
+            // comes for as long as the pass takes.
+            const float pass = std::min(overtake_top * max_speed, lead_speed + overtake_boost * max_speed);
+            const float gain = pass - lead_speed;
+            const float clear = overtake_length / gain * (pass + overtake_oncoming * max_speed) + overtake_abort;
+            const float lane = lane_center(lanes, against);
+            if (!moved && traffic.startled <= 0.f && gain > overtake_min_gain * max_speed &&
+                std::abs(lane - t.x) <= 1.1f * spacing && !lane_busy(e, t.z, lane, look_ahead) &&
+                oncoming_clear(clear * track_.segment_length)) {
+                traffic.passing = true;
+                traffic.pass_lane = against;
+                traffic.pass_speed = std::max(traffic.cruise, pass);
+                traffic.target_x = lane;
             }
         }
 
@@ -2187,7 +2245,7 @@ void Game::update_traffic(float dt) {
         float wanted = traffic.kind == Vehicle::Rival
                            ? rival_speed(traffic.cruise, max_speed,
                                          signed_gap(t.z, player_world_z, track_.length()) / track_.segment_length)
-                           : traffic.cruise;
+                           : traffic.passing ? traffic.pass_speed : traffic.cruise;
         nearby(t.z, 0.f, follow_ahead, [&](const Mover& m) {
             if (m.e == e || m.dir < 0 || std::abs(m.x - t.x) > follow_width) return true;
             const float d = distance_ahead(t.z, m.z);

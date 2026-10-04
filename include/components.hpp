@@ -58,6 +58,9 @@ struct Traffic {
     float startled = 0.f;   // seconds of hurried swerving left after a honk
     int dir = 1;            // +1 the player's way, -1 oncoming
     bool ramp = false;      // the black truck with its ramp down (see Game::update_movie_cars)
+    bool passing = false;   // out in the oncoming lane, overtaking ...
+    int pass_lane = 0;      // ... which was this one
+    float pass_speed = 0.f; // the speed it overtakes at
 };
 
 struct Camera {

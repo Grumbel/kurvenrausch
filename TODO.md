@@ -60,9 +60,15 @@ the road/framebuffer rewrite, `Color::to_u32()` became `Color::argb()`.
   spawn, never rivals or the police). Every road has one oncoming lane
   (`oncoming_lane()`: leftmost, or rightmost where `RoadTheme::left_hand`,
   set for England, Japan, Australia, India, Kenya and their cities); the
-  others go the player's way (`nearest_own_lane()`), and traffic going
-  that way never overtakes into it. Oncoming cars follow each other, swerve
-  `oncoming_dodge` out and slow down when the player is in their lane,
+  others go the player's way (`nearest_own_lane()`). Traffic held up below
+  its cruising speed (not its current speed, or it gives up once it has
+  slowed down behind) passes in a free lane of its own, or else in the
+  oncoming one when nothing comes far enough ahead for the whole pass
+  (`Traffic::passing`, `overtake_*`); it heads back early with traffic
+  coming, and where traffic changes sides. This keeps the long queues
+  behind trucks rare (some 10% of the traffic held up, from over 60%).
+  Oncoming cars follow each other, swerve
+  `oncoming_dodge` out and slow down when the player or an overtaker is in their lane,
   show `vehicle_front` (the mirror their back), and a head-on meeting
   (`check_close_passes`) is a crash. The autopilot keeps to its side
 - More vehicles: traffic kinds Hatch, Pickup, Bus (appended after Police
