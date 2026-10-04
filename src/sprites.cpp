@@ -1737,6 +1737,149 @@ Bitmap make_van_front(const CarStyle& st, int signal, int tread) {
     return b;
 }
 
+// A small hatchback: short and rounded, a big tailgate window with its
+// wiper, tall tail lights up the corners.
+Bitmap make_hatch(const CarStyle& st, int signal, bool brake, int tread) {
+    Bitmap b(86, 46);
+    paint::ellipse(b, 43.f, 43.f, 41.f, 3.f, Color{0x22, 0x22, 0x22});
+    tyre(b, 5, 32, 13, 14, tread);
+    tyre(b, 68, 32, 13, 14, tread);
+    paint::ellipse(b, 43.f, 14.f, 36.f, 13.f, st.body); // the roof's curve
+    paint::rect(b, 4, 14, 78, 24, st.body);
+    paint::rect(b, 10, 2, 66, 2, st.body_light);
+    paint::rect(b, 13, 6, 60, 13, Color{0x2c, 0x3c, 0x54}); // tailgate window
+    paint::stroke(b, 43.f, 18.f, 62.f, 9.f, 1.f, 1.f, Color{0x14, 0x14, 0x18}); // the wiper
+    paint::stroke(b, 18.f, 16.f, 24.f, 8.f, 1.f, 1.f, Color{0x70, 0x88, 0xa8});
+    paint::rect(b, 4, 30, 78, 8, st.body_dark);
+    for (int side = -1; side <= 1; side += 2) {
+        const int x = side < 0 ? 5 : 75;
+        tail_lamp(b, x, 15, 6, 12, brake);
+        indicator(b, x, 27, 6, 3, lit(signal, side));
+    }
+    paint::rect(b, 3, 36, 80, 4, Color{0x4c, 0x4c, 0x54}); // bumper
+    paint::rect(b, 35, 29, 16, 5, Color{0xe8, 0xe8, 0xd8}); // number plate
+    paint::outline(b, Outline);
+    return b;
+}
+
+Bitmap make_hatch_front(const CarStyle& st, int signal, int tread) {
+    Bitmap b(86, 46);
+    paint::ellipse(b, 43.f, 43.f, 41.f, 3.f, Color{0x22, 0x22, 0x22});
+    tyre(b, 5, 32, 13, 14, tread);
+    tyre(b, 68, 32, 13, 14, tread);
+    paint::ellipse(b, 43.f, 14.f, 36.f, 13.f, st.body);
+    paint::rect(b, 4, 14, 78, 24, st.body);
+    paint::rect(b, 12, 5, 62, 14, Color{0x2c, 0x3c, 0x54}); // windscreen
+    driver(b, 30.f, 13.f);
+    paint::stroke(b, 56.f, 17.f, 62.f, 8.f, 1.f, 1.f, Color{0x70, 0x88, 0xa8});
+    paint::rect(b, 4, 21, 78, 2, st.body_light);
+    headlight(b, 7, 24, 14, 7);
+    headlight(b, 65, 24, 14, 7);
+    for (int side = -1; side <= 1; side += 2) indicator(b, side < 0 ? 7 : 75, 31, 4, 3, lit(signal, side));
+    paint::rect(b, 28, 25, 30, 6, Color{0x14, 0x14, 0x18}); // grille
+    paint::rect(b, 3, 34, 80, 5, Color{0x4c, 0x4c, 0x54});
+    paint::rect(b, 35, 34, 16, 4, Color{0xe8, 0xe8, 0xd8});
+    paint::outline(b, Outline);
+    return b;
+}
+
+// A pickup: the cab's rear window above the open bed, its tailgate with
+// the maker's name, tall tail lights at the corners.
+Bitmap make_pickup(const CarStyle& st, int signal, bool brake, int tread) {
+    Bitmap b(102, 58);
+    paint::ellipse(b, 51.f, 55.f, 49.f, 3.f, Color{0x22, 0x22, 0x22});
+    tyre(b, 6, 42, 15, 16, tread);
+    tyre(b, 81, 42, 15, 16, tread);
+    paint::rect(b, 18, 2, 66, 18, st.body); // the cab
+    paint::rect(b, 18, 2, 66, 2, st.body_light);
+    paint::rect(b, 24, 6, 54, 11, Color{0x2c, 0x3c, 0x54});
+    paint::rect(b, 32, 8, 38, 2, Color{0x70, 0x88, 0xa8});
+    paint::rect(b, 3, 18, 96, 4, st.body_light); // the bed's rails
+    paint::rect(b, 3, 22, 96, 26, st.body); // the tailgate
+    paint::rect(b, 3, 22, 96, 2, st.body_dark);
+    paint::text(b, 36, 30, "RANCH", st.body_dark);
+    for (int side = -1; side <= 1; side += 2) {
+        const int x = side < 0 ? 4 : 92;
+        tail_lamp(b, x, 22, 6, 14, brake);
+        indicator(b, x, 36, 6, 5, lit(signal, side));
+    }
+    paint::rect(b, 2, 46, 98, 6, Color{0x9a, 0x9a, 0xa8}); // chrome bumper
+    paint::rect(b, 43, 40, 16, 5, Color{0xe8, 0xe8, 0xd8});
+    paint::outline(b, Outline);
+    return b;
+}
+
+Bitmap make_pickup_front(const CarStyle& st, int signal, int tread) {
+    Bitmap b(102, 58);
+    paint::ellipse(b, 51.f, 55.f, 49.f, 3.f, Color{0x22, 0x22, 0x22});
+    tyre(b, 6, 42, 15, 16, tread);
+    tyre(b, 81, 42, 15, 16, tread);
+    paint::rect(b, 14, 2, 74, 22, st.body);
+    paint::rect(b, 18, 5, 66, 16, Color{0x2c, 0x3c, 0x54});
+    driver(b, 34.f, 13.f);
+    paint::stroke(b, 66.f, 19.f, 74.f, 7.f, 1.f, 1.f, Color{0x70, 0x88, 0xa8});
+    paint::rect(b, 3, 22, 96, 26, st.body);
+    paint::rect(b, 3, 22, 96, 2, st.body_light);
+    paint::rect(b, 26, 27, 50, 14, Color{0x9a, 0x9a, 0xa8}); // the big grille
+    for (int y = 29; y < 40; y += 3) paint::rect(b, 28, y, 46, 1, Color{0x44, 0x44, 0x4c});
+    headlight(b, 6, 27, 16, 8);
+    headlight(b, 80, 27, 16, 8);
+    for (int side = -1; side <= 1; side += 2) indicator(b, side < 0 ? 6 : 90, 37, 6, 4, lit(signal, side));
+    paint::rect(b, 2, 46, 98, 6, Color{0x9a, 0x9a, 0xa8});
+    paint::rect(b, 43, 46, 16, 4, Color{0xe8, 0xe8, 0xd8});
+    paint::outline(b, Outline);
+    return b;
+}
+
+// A bus from behind: a tall flat back, a window up top, the engine's
+// louvres, the route number lit, lights low down.
+Bitmap make_bus(const CarStyle& st, int signal, bool brake, int tread) {
+    Bitmap b(115, 116);
+    paint::ellipse(b, 57.f, 113.f, 55.f, 3.f, Color{0x22, 0x22, 0x22});
+    tyre(b, 6, 96, 20, 20, tread);
+    tyre(b, 89, 96, 20, 20, tread);
+    paint::rect(b, 3, 0, 109, 100, st.body);
+    paint::rect(b, 3, 0, 109, 4, st.body_light);
+    paint::rect(b, 3, 40, 109, 6, st.body_dark); // a band round the bus
+    paint::rect(b, 14, 10, 87, 26, Color{0x2c, 0x3c, 0x54}); // the back window
+    paint::stroke(b, 22.f, 32.f, 32.f, 13.f, 1.f, 1.f, Color{0x70, 0x88, 0xa8});
+    paint::rect(b, 44, 2, 28, 7, Color{0x14, 0x14, 0x18}); // route number
+    paint::text(b, 52, 2, "42", Color{0xff, 0xc0, 0x38});
+    for (int y = 52; y < 78; y += 4) paint::rect(b, 30, y, 55, 2, st.body_dark); // engine louvres
+    for (int side = -1; side <= 1; side += 2) {
+        const int x = side < 0 ? 5 : 102;
+        tail_lamp(b, x, 72, 8, 12, brake);
+        indicator(b, x, 64, 8, 6, lit(signal, side));
+    }
+    paint::rect(b, 2, 90, 111, 8, Color{0x3c, 0x3c, 0x44});
+    paint::rect(b, 49, 84, 18, 5, Color{0xe8, 0xe8, 0xd8});
+    paint::outline(b, Outline);
+    return b;
+}
+
+Bitmap make_bus_front(const CarStyle& st, int signal, int tread) {
+    Bitmap b(115, 116);
+    paint::ellipse(b, 57.f, 113.f, 55.f, 3.f, Color{0x22, 0x22, 0x22});
+    tyre(b, 8, 96, 18, 20, tread);
+    tyre(b, 89, 96, 18, 20, tread);
+    paint::rect(b, 3, 0, 109, 100, st.body);
+    paint::rect(b, 12, 2, 91, 10, Color{0x14, 0x14, 0x18}); // destination
+    paint::text(b, 46, 4, "CITY", Color{0xff, 0xc0, 0x38});
+    paint::rect(b, 8, 14, 99, 50, Color{0x2c, 0x3c, 0x54}); // the great windscreen
+    paint::rect(b, 56, 14, 3, 50, st.body);
+    driver(b, 30.f, 46.f);
+    paint::rect(b, 24, 52, 14, 10, Color{0x1c, 0x1c, 0x26});
+    paint::stroke(b, 74.f, 60.f, 86.f, 20.f, 1.f, 1.f, Color{0x70, 0x88, 0xa8});
+    paint::rect(b, 3, 64, 109, 6, st.body_dark);
+    headlight(b, 8, 76, 16, 8);
+    headlight(b, 91, 76, 16, 8);
+    for (int side = -1; side <= 1; side += 2) indicator(b, side < 0 ? 8 : 99, 86, 8, 4, lit(signal, side));
+    paint::rect(b, 2, 90, 111, 8, Color{0x3c, 0x3c, 0x44});
+    paint::rect(b, 49, 90, 18, 5, Color{0xe8, 0xe8, 0xd8});
+    paint::outline(b, Outline);
+    return b;
+}
+
 // A truck from behind: the doors of a ribbed box trailer with lock bars, the
 // company's name, lights low down, an under-run bar, mud flaps, twin tyres.
 Bitmap make_truck(const CarStyle& st, int signal, bool brake, int tread) {
@@ -2153,6 +2296,11 @@ SpriteSheet::SpriteSheet() {
         {{{0x0c, 0x0c, 0x10}, {0x20, 0x20, 0x26}, {0xf0, 0xc0, 0x30}, false}, false}, // Racer
         {{{0xb8, 0xb8, 0xc0}, {0xf0, 0xf0, 0xf4}, {0xff, 0xff, 0xff}, false}, false}, // Van
         {{{0x8c, 0x18, 0x18}, {0xc0, 0x28, 0x24}, {0xe8, 0x60, 0x50}, false}, false}, // Box truck
+        {{{0x18, 0x6c, 0x58}, {0x28, 0xa0, 0x80}, {0x80, 0xd8, 0xc0}, false}, false}, // Mini
+        {{{0x1c, 0x24, 0x40}, {0x30, 0x3c, 0x68}, {0x70, 0x80, 0xa8}, false}, false}, // Pickup
+        {{{0x98, 0x98, 0xa4}, {0xe0, 0xe0, 0xe8}, {0xff, 0xff, 0xff}, false}, false}, // Coach
+        {{{0x8c, 0x6c, 0x20}, {0xd0, 0xa8, 0x40}, {0xf0, 0xd8, 0x90}, true}, false},  // Roadster
+        {{{0x58, 0x6c, 0x08}, {0x9c, 0xc8, 0x10}, {0xf0, 0xf0, 0xf8}, false}, false}, // Supercar
     };
     for (int model = 0; model < car_models; ++model) {
         const PlayerLook& look = looks[model];
@@ -2168,6 +2316,9 @@ SpriteSheet::SpriteSheet() {
                         switch (body) {
                             case Body::Rig: b = make_player_truck(st, turn, brake, signal, t, player_headroom); break;
                             case Body::Van: b = make_van(st, signal, brake, t); break;
+                            case Body::Hatch: b = make_hatch(st, signal, brake, t); break;
+                            case Body::Pickup: b = make_pickup(st, signal, brake, t); break;
+                            case Body::Bus: b = make_bus(st, signal, brake, t); break;
                             case Body::BoxTruck: b = make_truck(st, signal, brake, t); break;
                             case Body::Racer: b = make_rival(st, signal, brake, t); break;
                             case Body::Police: b = make_player_police(st, turn, brake, signal, t, player_headroom); break;
@@ -2189,7 +2340,10 @@ SpriteSheet::SpriteSheet() {
         /* Car */ {{{0x14, 0x2c, 0x80}, {0x24, 0x50, 0xc8}, {0x70, 0x98, 0xf0}, false},
                    {{0xa0, 0x80, 0x10}, {0xe8, 0xc0, 0x20}, {0xf8, 0xe8, 0x80}, false},
                    {{0x98, 0x98, 0xa0}, {0xd8, 0xd8, 0xe0}, {0xf8, 0xf8, 0xff}, false},
-                   {{0x14, 0x5c, 0x30}, {0x24, 0x8c, 0x48}, {0x70, 0xc8, 0x88}, false}},
+                   {{0x14, 0x5c, 0x30}, {0x24, 0x8c, 0x48}, {0x70, 0xc8, 0x88}, false},
+                   {{0x50, 0x10, 0x18}, {0x80, 0x1c, 0x2c}, {0xc0, 0x50, 0x60}, false},
+                   {{0x10, 0x10, 0x14}, {0x30, 0x30, 0x38}, {0x70, 0x70, 0x80}, false},
+                   {{0xa0, 0x48, 0x08}, {0xe0, 0x78, 0x18}, {0xf8, 0xb0, 0x60}, false}},
         /* Van */ {{{0xb8, 0xb8, 0xc0}, {0xf0, 0xf0, 0xf4}, {0xff, 0xff, 0xff}, false},
                    {{0x7c, 0x50, 0x14}, {0xb8, 0x7c, 0x24}, {0xe0, 0xa8, 0x50}, false},
                    {{0x1c, 0x4c, 0x6c}, {0x2c, 0x74, 0x9c}, {0x68, 0xa8, 0xcc}, false}},
@@ -2199,6 +2353,17 @@ SpriteSheet::SpriteSheet() {
         /* Rival */ {{{0x0c, 0x0c, 0x10}, {0x20, 0x20, 0x26}, {0xf0, 0xc0, 0x30}, false},
                      {{0x3c, 0x10, 0x58}, {0x64, 0x20, 0x8c}, {0xf0, 0xf0, 0xf8}, false}},
         /* Police */ {{{0x10, 0x10, 0x14}, {0xf0, 0xf0, 0xf4}, {0xff, 0xff, 0xff}, false}},
+        /* Hatch */ {{{0x18, 0x5c, 0x7c}, {0x2c, 0x90, 0xb8}, {0x80, 0xc8, 0xe0}, false},
+                     {{0x88, 0x10, 0x14}, {0xc8, 0x24, 0x28}, {0xf0, 0x70, 0x68}, false},
+                     {{0x70, 0x78, 0x18}, {0xa8, 0xb4, 0x30}, {0xd8, 0xe0, 0x78}, false},
+                     {{0x98, 0x98, 0xa0}, {0xd8, 0xd8, 0xe0}, {0xf8, 0xf8, 0xff}, false},
+                     {{0x5c, 0x28, 0x70}, {0x88, 0x40, 0xa8}, {0xc0, 0x88, 0xd8}, false}},
+        /* Pickup */ {{{0x6c, 0x14, 0x10}, {0xa0, 0x24, 0x1c}, {0xd0, 0x60, 0x50}, false},
+                      {{0x1c, 0x24, 0x40}, {0x30, 0x3c, 0x68}, {0x70, 0x80, 0xa8}, false},
+                      {{0x8c, 0x84, 0x70}, {0xc8, 0xbc, 0xa0}, {0xe8, 0xe0, 0xcc}, false}},
+        /* Bus */ {{{0x9c, 0x14, 0x14}, {0xd8, 0x28, 0x24}, {0xf0, 0x70, 0x60}, false},   // city bus
+                   {{0x98, 0x98, 0xa4}, {0xe0, 0xe0, 0xe8}, {0xff, 0xff, 0xff}, false},   // coach
+                   {{0xb0, 0x88, 0x08}, {0xf0, 0xc0, 0x10}, {0xff, 0xe8, 0x70}, false}},  // school bus
     };
     static_assert(sizeof(styles) / sizeof(styles[0]) == static_cast<size_t>(Vehicle::Count),
                   "every vehicle kind needs its colours");
@@ -2214,6 +2379,9 @@ SpriteSheet::SpriteSheet() {
                         Bitmap& rear = v.rear[s][static_cast<size_t>(brake)][tf];
                         switch (kind) {
                             case Vehicle::Van: rear = make_van(st, signal, brake, t); break;
+                            case Vehicle::Hatch: rear = make_hatch(st, signal, brake, t); break;
+                            case Vehicle::Pickup: rear = make_pickup(st, signal, brake, t); break;
+                            case Vehicle::Bus: rear = make_bus(st, signal, brake, t); break;
                             case Vehicle::Truck: rear = make_truck(st, signal, brake, t); break;
                             case Vehicle::Rival: rear = make_rival(st, signal, brake, t); break;
                             case Vehicle::Police: rear = make_police(st, signal, brake, t); break;
@@ -2222,6 +2390,9 @@ SpriteSheet::SpriteSheet() {
                     }
                     switch (kind) {
                         case Vehicle::Van: v.front[s][tf] = make_van_front(st, signal, t); break;
+                        case Vehicle::Hatch: v.front[s][tf] = make_hatch_front(st, signal, t); break;
+                        case Vehicle::Pickup: v.front[s][tf] = make_pickup_front(st, signal, t); break;
+                        case Vehicle::Bus: v.front[s][tf] = make_bus_front(st, signal, t); break;
                         case Vehicle::Truck: v.front[s][tf] = make_truck_front(st, signal, t); break;
                         case Vehicle::Rival: v.front[s][tf] = make_rival_front(st, signal, t); break;
                         case Vehicle::Police: v.front[s][tf] = make_police_front(st, signal, t); break;

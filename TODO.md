@@ -65,6 +65,10 @@ the road/framebuffer rewrite, `Color::to_u32()` became `Color::argb()`.
   `oncoming_dodge` out and slow down when the player is in their lane,
   show `vehicle_front` (the mirror their back), and a head-on meeting
   (`check_close_passes`) is a crash. The autopilot keeps to its side
+- More vehicles: traffic kinds Hatch, Pickup, Bus (appended after Police
+  in `Vehicle`; sprites `make_hatch`, `make_pickup`, `make_bus` and their
+  fronts), seven car colours; drivable models 12..16 MINI, PICKUP, COACH,
+  ROADSTER, SUPERCAR (new `Body` values use the traffic's sprites)
 
 ## Round 17: touch controls at screen resolution, the wide screen
 

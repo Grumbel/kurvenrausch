@@ -14,6 +14,9 @@ enum class Vehicle : uint8_t {
     Truck,  // a box trailer, slow
     Rival,  // a rare sports car that races the player
     Police, // never in the traffic: it turns up for a chase (see police.hpp)
+    Hatch,  // a small hatchback
+    Pickup,
+    Bus,    // city buses, coaches and school buses: slow
     Count
 };
 
@@ -48,6 +51,9 @@ enum class Body : uint8_t {
     BoxTruck, // the traffic's box truck
     Racer,    // the rivals' sports car
     Police,   // the police car (lightbar off)
+    Hatch,    // the traffic's hatchback
+    Pickup,   // the traffic's pickup
+    Bus,      // the traffic's bus
 };
 // Where a car is sold.
 enum class CarRange : uint8_t { Regular, Sports, Trucks };
@@ -63,7 +69,7 @@ struct CarModel {
     CarRange range;
     float width;
 };
-constexpr int car_models = 12;
+constexpr int car_models = 17;
 const CarModel& car_model(int index);
 
 // Seen through: the people show through the rear window (or over the seats).

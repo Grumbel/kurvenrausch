@@ -45,6 +45,12 @@ Bitmap make_car_front(const CarStyle& style, int signal = 0, int tread_frame = 0
 // the mirror, like make_car() and make_car_front().
 Bitmap make_van(const CarStyle& style, int signal, bool brake, int tread = 0);      // 104x64
 Bitmap make_van_front(const CarStyle& style, int signal, int tread = 0);
+Bitmap make_hatch(const CarStyle& style, int signal, bool brake, int tread = 0);    // 86x46
+Bitmap make_hatch_front(const CarStyle& style, int signal, int tread = 0);
+Bitmap make_pickup(const CarStyle& style, int signal, bool brake, int tread = 0);   // 102x58
+Bitmap make_pickup_front(const CarStyle& style, int signal, int tread = 0);
+Bitmap make_bus(const CarStyle& style, int signal, bool brake, int tread = 0);      // 115x116
+Bitmap make_bus_front(const CarStyle& style, int signal, int tread = 0);
 Bitmap make_truck(const CarStyle& style, int signal, bool brake, int tread = 0);    // 112x104
 Bitmap make_truck_front(const CarStyle& style, int signal, int tread = 0);
 Bitmap make_rival(const CarStyle& style, int signal, bool brake, int tread = 0);    // 100x40

@@ -587,7 +587,7 @@ void Game::leave_attract() {
 void Game::follow_next_car() {
     std::vector<Entity> cars;
     world_.view<Traffic>([&](Entity e, Traffic& t) {
-        if (e != attract_car_ && t.dir > 0 && (t.kind == Vehicle::Car || t.kind == Vehicle::Van || t.kind == Vehicle::Truck)) {
+        if (e != attract_car_ && t.dir > 0 && t.kind != Vehicle::Rival && t.kind != Vehicle::Police) {
             cars.push_back(e);
         }
     });

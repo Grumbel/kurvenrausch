@@ -10,11 +10,14 @@ namespace racer {
 const VehicleInfo& vehicle_info(Vehicle kind) {
     static const VehicleInfo infos[] = {
         //              width   speeds        styles share
-        /* Car   */ {600.f, 0.25f, 0.60f, 4, 0.55f},
-        /* Van   */ {650.f, 0.25f, 0.45f, 3, 0.22f},
-        /* Truck */ {700.f, 0.20f, 0.35f, 3, 0.17f},
-        /* Rival */ {620.f, 0.78f, 0.90f, 2, 0.06f},
+        /* Car   */ {600.f, 0.25f, 0.60f, 7, 0.35f},
+        /* Van   */ {650.f, 0.25f, 0.45f, 3, 0.14f},
+        /* Truck */ {700.f, 0.20f, 0.35f, 3, 0.13f},
+        /* Rival */ {620.f, 0.78f, 0.90f, 2, 0.05f},
         /* Police*/ {600.f, 0.f,   0.f,   1, 0.f},
+        /* Hatch */ {540.f, 0.25f, 0.55f, 5, 0.16f},
+        /* Pickup*/ {640.f, 0.28f, 0.55f, 3, 0.10f},
+        /* Bus   */ {720.f, 0.18f, 0.30f, 3, 0.07f},
     };
     static_assert(sizeof(infos) / sizeof(infos[0]) == static_cast<size_t>(Vehicle::Count),
                   "vehicle_info() needs an entry for every Vehicle");
@@ -48,14 +51,21 @@ const CarModel& car_model(int index) {
         {"PATROL",      1.02f, 1.05f, 0.95f, B::Police,   R::Regular, 600.f}, // a police car, retired
         {"RACER",       1.18f, 1.12f, 0.84f, B::Racer,    R::Sports,  620.f}, // the rivals' car: fastest, nervous
         {"VAN",         0.86f, 0.80f, 1.15f, B::Van,      R::Trucks,  650.f}, // roomy, slow off the line
-        {"BOX TRUCK",   0.78f, 0.55f, 1.30f, B::BoxTruck, R::Trucks,  700.f}, // the slowest of all, and the steadiest
+        {"BOX TRUCK",   0.78f, 0.55f, 1.30f, B::BoxTruck, R::Trucks,  700.f}, // slow, and steady
+        {"MINI",        0.80f, 1.25f, 1.20f, B::Hatch,    R::Regular, 540.f}, // small, nippy, sticks to the road
+        {"PICKUP",      0.92f, 0.98f, 1.02f, B::Pickup,   R::Trucks,  640.f}, // a workhorse
+        {"COACH",       0.76f, 0.50f, 1.35f, B::Bus,      R::Trucks,  720.f}, // a bus: the slowest and steadiest of all
+        {"ROADSTER",    1.04f, 1.10f, 0.90f, B::Car,      R::Sports,  600.f}, // the golden convertible
+        {"SUPERCAR",    1.19f, 1.00f, 0.88f, B::Racer,    R::Sports,  620.f}, // the fastest flat out
     };
     return models[((index % car_models) + car_models) % car_models];
 }
 
 bool body_shows_people(Body body) { return body == Body::Car || body == Body::Rig || body == Body::Police; }
 
-bool body_is_tall(Body body) { return body == Body::Rig || body == Body::Van || body == Body::BoxTruck; }
+bool body_is_tall(Body body) {
+    return body == Body::Rig || body == Body::Van || body == Body::BoxTruck || body == Body::Bus;
+}
 
 int next_car_in_range(int current, CarRange range, int step) {
     const int dir = step < 0 ? -1 : 1;

@@ -71,7 +71,9 @@ weather and road markings, fading smoothly into one another:
   scrolling at different rates through bends
 - Road markings per region: dashed white lines in Europe, double yellow centre
   line and white edge lines in the USA
-- AI traffic of cars, vans, slow trucks and the rare rival sports car that
+- AI traffic of cars in seven colours, hatchbacks, pickups, vans, slow
+  trucks and buses (city buses, coaches, school buses), and the rare rival
+  sports car that
   races you when you come close; it changes lanes to pass, blinking its
   indicators, or brakes behind slower vehicles (and you) when it can't;
   rear-ending one slows you down
@@ -105,11 +107,13 @@ weather and road markings, fading smoothly into one another:
   pumps. Run dry and the engine sputters and dies; stranded, the driver pours
   in a spare can after a few seconds
 - **Car dealers**: stop on the forecourt and steer left or right to choose
-  a car, each with its own top speed, acceleration and grip. Twelve in all,
-  every vehicle on the road among them: the sports car dealers (red; Italy,
-  Japan, California) sell the Spider, GT Coupe, Muscle car and the rivals'
-  Racer, the everyday dealers (blue; England, Korea) the Hot Hatch, Saloon,
-  Taxi, Estate and a retired police Patrol car
+  a car, each with its own top speed, acceleration and grip. Seventeen in
+  all, every vehicle on the road among them: the sports car dealers (red;
+  Italy, Japan, California) sell the Spider, GT Coupe, Muscle car, Roadster,
+  the rivals' Racer and a Supercar, the everyday dealers (blue; England,
+  Korea) the Hot Hatch, Mini, Saloon, Taxi, Estate and a retired police
+  Patrol car, the truck stops the Big Rig, Van, Box Truck, Pickup and a
+  Coach
 - **Dirt and car washes**: puddles splash the car with mud, crashes add more,
   oil slicks leave black spots; stop at one of the car washes in England,
   Kenya and the outback to have it washed clean
