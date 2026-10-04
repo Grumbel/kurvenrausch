@@ -1585,20 +1585,38 @@ void Game::update_traffic(float dt) {
         movers.push_back({e, t.x, t.z, v.speed, traffic.dir});
     });
 
+    // In order along the track, so each car looks only at its neighbours:
+    // with hundreds of cars on a long track, all against all is too slow.
+    std::sort(movers.begin(), movers.end(), [](const Mover& a, const Mover& b) { return a.z < b.z; });
+    // Calls fn for every mover from `behind` back to `ahead` along the
+    // track around z (wrapping round the lap), and stops when fn says so.
+    auto nearby = [&](float z, float behind, float ahead, auto&& fn) {
+        const float from = track_.wrap(z - behind);
+        size_t i = static_cast<size_t>(std::lower_bound(movers.begin(), movers.end(), from,
+                                                        [](const Mover& m, float v) { return m.z < v; }) -
+                                       movers.begin());
+        for (size_t n = 0; n < movers.size(); ++n, ++i) {
+            const Mover& m = movers[i % movers.size()];
+            if (track_.wrap(m.z - from) > behind + ahead) break;
+            if (!fn(m)) break;
+        }
+    };
+
     const float look_ahead = 6.f * track_.segment_length;
+    const float follow_ahead = follow_range * track_.segment_length;
     // How far `to` is ahead of `from` for someone going `dir`.
     auto distance_ahead = [&](float from, float to, int dir = 1) {
         return track_.wrap((to - from) * static_cast<float>(dir));
     };
-    // Is anyone going the player's way within `range` ahead or behind near
-    // lateral position x?
+    // Is anyone going the player's way within `range` ahead or half of it
+    // behind near lateral position x?
     auto lane_busy = [&](Entity self, float z, float x, float range) {
-        for (const Mover& m : movers) {
-            if (m.e == self || m.dir < 0 || std::abs(m.x - x) > 0.4f) continue;
-            const float d = distance_ahead(z, m.z);
-            if (d < range || track_.length() - d < range * 0.5f) return true;
-        }
-        return false;
+        bool busy = false;
+        nearby(z, range * 0.5f, range, [&](const Mover& m) {
+            busy = m.e != self && m.dir > 0 && std::abs(m.x - x) <= 0.4f;
+            return !busy;
+        });
+        return busy;
     };
 
     const float max_speed = base_max_speed_; // traffic goes by the standard car, whatever the player drives
@@ -1621,14 +1639,15 @@ void Game::update_traffic(float dt) {
                                std::abs(ptr.x - t.x) < 0.6f;
             if (alarm) traffic.target_x += (look.left_hand ? 1.f : -1.f) * oncoming_dodge;
             float wanted = alarm ? 0.6f * traffic.cruise : traffic.cruise;
-            for (const Mover& m : movers) {
-                if (m.e == e || m.dir > 0 || std::abs(m.x - t.x) > follow_width) continue;
+            nearby(t.z, follow_ahead, 0.f, [&](const Mover& m) {
+                if (m.e == e || m.dir > 0 || std::abs(m.x - t.x) > follow_width) return true;
                 const float d = distance_ahead(t.z, m.z, -1);
-                if (d < follow_range * track_.segment_length) {
+                if (d < follow_ahead) {
                     wanted = std::min(wanted, follow_speed(traffic.cruise, m.speed, d,
                                                            follow_gap * track_.segment_length, follow_closing));
                 }
-            }
+                return true;
+            });
             traffic.braking = v.speed - wanted > 0.02f * max_speed;
             if (wanted < v.speed) v.speed = std::max(wanted, v.speed - traffic_brake * max_speed * dt);
             else v.speed = std::min(wanted, v.speed + traffic_accel * max_speed * dt);
@@ -1658,10 +1677,11 @@ void Game::update_traffic(float dt) {
         // Blocked by something slower ahead in this lane? Pull out if the
         // neighbouring lane is clear.
         bool blocked = false;
-        for (const Mover& m : movers) {
-            if (m.e == e || m.dir < 0 || std::abs(m.x - t.x) > 0.5f || m.speed >= v.speed) continue;
-            if (distance_ahead(t.z, m.z) < follow_range * track_.segment_length) { blocked = true; break; }
-        }
+        nearby(t.z, 0.f, follow_ahead, [&](const Mover& m) {
+            blocked = m.e != e && m.dir > 0 && std::abs(m.x - t.x) <= 0.5f && m.speed < v.speed &&
+                      distance_ahead(t.z, m.z) < follow_ahead;
+            return !blocked;
+        });
         if (blocked && std::abs(t.x - traffic.target_x) < 0.05f) {
             for (int i = 0; i < lanes; ++i) {
                 if (i == against) continue; // never overtakes into the oncoming lane
@@ -1682,14 +1702,15 @@ void Game::update_traffic(float dt) {
                            ? rival_speed(traffic.cruise, max_speed,
                                          signed_gap(t.z, player_world_z, track_.length()) / track_.segment_length)
                            : traffic.cruise;
-        for (const Mover& m : movers) {
-            if (m.e == e || m.dir < 0 || std::abs(m.x - t.x) > follow_width) continue;
+        nearby(t.z, 0.f, follow_ahead, [&](const Mover& m) {
+            if (m.e == e || m.dir < 0 || std::abs(m.x - t.x) > follow_width) return true;
             const float d = distance_ahead(t.z, m.z);
-            if (d < follow_range * track_.segment_length) {
+            if (d < follow_ahead) {
                 wanted = std::min(wanted, follow_speed(traffic.cruise, m.speed, d,
                                                        follow_gap * track_.segment_length, follow_closing));
             }
-        }
+            return true;
+        });
         // Small trims while following steadily don't light the brake lights.
         traffic.braking = v.speed - wanted > 0.02f * max_speed;
         if (wanted < v.speed) v.speed = std::max(wanted, v.speed - traffic_brake * max_speed * dt);

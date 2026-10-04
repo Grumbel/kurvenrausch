@@ -69,6 +69,11 @@ the road/framebuffer rewrite, `Color::to_u32()` became `Color::argb()`.
   in `Vehicle`; sprites `make_hatch`, `make_pickup`, `make_bus` and their
   fronts), seven car colours; drivable models 12..16 MINI, PICKUP, COACH,
   ROADSTER, SUPERCAR (new `Body` values use the traffic's sprites)
+- Speed: the traffic update compared every car with every other (O(N^2),
+  some 500 cars on the Grand Tour); it now sorts the movers along the track
+  once a step and looks only at neighbours in range (`nearby`). `World::view`
+  looks each component store up once. 3000 headless steps on the Grand
+  Tour: 5.2 s before, 0.36 s after
 
 ## Round 17: touch controls at screen resolution, the wide screen
 
