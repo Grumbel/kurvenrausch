@@ -1578,6 +1578,67 @@ void draw_head(Bitmap& b, float x, float y, float r, const Person& p) {
 
 } // namespace
 
+Bitmap make_crossing_sign(int lit) {
+    Bitmap b(32, 80);
+    const Color pole{0x9c, 0x9c, 0xa4}, white{0xf4, 0xf4, 0xf0}, red{0xd0, 0x20, 0x24}, black{0x18, 0x18, 0x1c};
+    paint::rect(b, 14, 10, 4, 70, pole);
+    // The crossbuck: two crossed boards, white with red edges.
+    paint::stroke(b, 2.f, 2.f, 30.f, 22.f, 5.f, 5.f, red);
+    paint::stroke(b, 30.f, 2.f, 2.f, 22.f, 5.f, 5.f, red);
+    paint::stroke(b, 2.f, 2.f, 30.f, 22.f, 3.f, 3.f, white);
+    paint::stroke(b, 30.f, 2.f, 2.f, 22.f, 3.f, 3.f, white);
+    // The lamps on their bar, flashing in turn.
+    paint::rect(b, 2, 30, 28, 4, black);
+    for (int side = -1; side <= 1; side += 2) {
+        const float x = side < 0 ? 7.f : 25.f;
+        paint::ellipse(b, x, 38.f, 6.f, 6.f, black);
+        paint::ellipse(b, x, 38.f, 4.f, 4.f, lit == side ? Color{0xff, 0x30, 0x30} : Color{0x58, 0x10, 0x10});
+        if (lit == side) paint::rect(b, static_cast<int>(x) - 1, 36, 2, 2, Color{0xff, 0xf8, 0xf0});
+    }
+    paint::outline(b, Outline);
+    return b;
+}
+
+Bitmap make_train_car(int kind) {
+    Bitmap b(128, 52);
+    const Color wheel{0x20, 0x20, 0x24}, frame{0x30, 0x30, 0x38};
+    for (int x : {14, 30, 96, 112}) paint::ellipse(b, static_cast<float>(x), 46.f, 6.f, 6.f, wheel);
+    paint::rect(b, 2, 38, 124, 5, frame);
+    switch (kind) {
+        case 0: { // the locomotive: a long hood, the cab at the front
+            const Color body{0xc8, 0x28, 0x24}, stripe{0xf0, 0xd0, 0x30};
+            paint::rect(b, 4, 12, 92, 26, body);
+            paint::rect(b, 96, 2, 28, 36, body);
+            paint::rect(b, 100, 6, 20, 12, Color{0x2c, 0x3c, 0x54}); // the cab's window
+            paint::rect(b, 4, 26, 120, 4, stripe);
+            for (int x = 10; x < 92; x += 8) paint::rect(b, x, 15, 4, 8, blend(body, Color{0, 0, 0}, 0.3f)); // vents
+            paint::rect(b, 122, 30, 4, 4, Color{0xff, 0xf4, 0xc0}); // headlight
+            paint::rect(b, 30, 6, 6, 6, frame); // exhaust stack
+            break;
+        }
+        case 1: { // a container wagon
+            const Color box{0x2c, 0x6c, 0xa8};
+            paint::rect(b, 4, 6, 120, 32, box);
+            for (int x = 8; x < 124; x += 6) paint::rect(b, x, 6, 1, 32, blend(box, Color{0, 0, 0}, 0.3f));
+            break;
+        }
+        case 2: { // a tank wagon
+            paint::shaded_ellipse(b, 64.f, 24.f, 58.f, 14.f, Color{0x50, 0x50, 0x58}, Color{0x80, 0x80, 0x88},
+                                  Color{0xb0, 0xb0, 0xb8});
+            paint::rect(b, 60, 8, 8, 4, Color{0x50, 0x50, 0x58});
+            break;
+        }
+        default: { // a boxcar, rust brown
+            const Color box{0x8c, 0x44, 0x24};
+            paint::rect(b, 4, 4, 120, 34, box);
+            paint::rect(b, 52, 10, 24, 26, blend(box, Color{0, 0, 0}, 0.25f)); // the sliding door
+            break;
+        }
+    }
+    paint::outline(b, Outline);
+    return b;
+}
+
 Bitmap make_deer(int frame) {
     Bitmap b(56, 48);
     const Color coat{0xa8, 0x6c, 0x38}, dark{0x70, 0x44, 0x20}, light{0xd8, 0xb0, 0x80}, antler{0x60, 0x48, 0x30};
@@ -2473,6 +2534,10 @@ SpriteSheet::SpriteSheet() {
     }
 
     for (int d = 0; d < drivers; ++d) wheels_[static_cast<size_t>(d)] = make_wheel(driver(d));
+    scenery_[static_cast<size_t>(Scenery::CrossingSign)] = make_crossing_sign(0);
+    crossing_signs_[0] = make_crossing_sign(-1);
+    crossing_signs_[1] = make_crossing_sign(1);
+    for (int k = 0; k <= train_wagon_kinds; ++k) train_cars_[static_cast<size_t>(k)] = make_train_car(k);
     for (int frame = 0; frame < 2; ++frame) {
         const auto f = static_cast<size_t>(frame);
         animals_[static_cast<size_t>(Animal::Cow)][f] = make_cow();

@@ -98,6 +98,15 @@ constexpr float hail_reach = 4.f;
 constexpr float fare_stop_speed = 0.02f;
 constexpr float hail_kerb = 1.06f;
 constexpr float progress_save_seconds = 30.f; // how often the position is saved
+// Trains (see update_train()): decided for a crossing this many segments
+// ahead, this often, at this speed (road half-widths a second); one car is
+// this long (world units); its tail clears the road this long before the
+// car would get there.
+constexpr float train_decide_min = 120.f, train_decide_max = 260.f;
+constexpr float train_chance = 0.6f;
+constexpr float train_speed = 6.f;
+constexpr float train_car_length = 3200.f;
+constexpr float train_margin = 0.4f;
 // Animals (see update_animals()): they turn up this many segments ahead,
 // this far out to the side (road half-widths), and are forgotten this far
 // behind.
@@ -334,6 +343,8 @@ void Game::reset() {
     hails_.clear();
     crossings_.clear();
     crossing_wait_ = animal_min_wait;
+    train_ = Train{};
+    train_decided_ = -1;
     if (fare_zone_ >= 0) passenger_ = nobody;
     fare_zone_ = -1;
     fares_paid_ = 0;
@@ -1144,6 +1155,7 @@ void Game::fixed_update(const InputState& driver_input, float dt) {
 
     update_laps(prev_z + player_z, tr.z + player_z, dt);
     update_animals(dt);
+    update_train(dt);
     update_traffic(dt);
     update_police(dt);
     check_close_passes();
@@ -1382,6 +1394,65 @@ void Game::update_animals(float dt) {
                                                signed_gap(car_z, a.z, track_.length()) < -animal_behind * seg;
                                     }),
                      crossings_.end());
+}
+
+float Game::train_tail() const {
+    return train_.front - static_cast<float>(train_.wagons + 1) * train_.car;
+}
+
+void Game::update_train(float dt) {
+    auto& tr = world_.get<Transform>(player_);
+    const auto& vel = world_.get<Velocity>(player_);
+    const auto& player = world_.get<Player>(player_);
+    const float car_z = tr.z + world_.get<Camera>(camera_).player_z();
+    const float seg = track_.segment_length;
+
+    if (!train_.active) {
+        // The next crossing ahead, once: a train or not, and when.
+        for (int c : track_.crossings()) {
+            const float gap = signed_gap(car_z, (static_cast<float>(c) + 0.5f) * seg, track_.length());
+            if (c == train_decided_ || gap < train_decide_min * seg || gap > train_decide_max * seg) continue;
+            train_decided_ = c;
+            rng_ = rng_ * 1664525u + 1013904223u;
+            const float roll = static_cast<float>(rng_ >> 8) / 16777216.f;
+            if (roll >= train_chance || vel.speed < 0.2f * player.max_speed) break;
+            Train t;
+            t.segment = c;
+            t.dir = (rng_ >> 30) & 1 ? 1 : -1;
+            t.wagons = 4 + static_cast<int>((rng_ >> 4) % 5u);
+            t.car = train_car_length / track_.half_width(c);
+            // At the speed it goes the car gets there in `eta`; the train's
+            // tail clears the far side of the road just before.
+            const float eta = gap / vel.speed;
+            const float length = static_cast<float>(t.wagons + 1) * t.car;
+            t.front = 1.3f + length - train_speed * (eta - train_margin);
+            t.active = t.front - length < -2.f; // too late to come from out of sight
+            train_ = t;
+            break;
+        }
+        return;
+    }
+    // Still out of sight it keeps its time to the car's: should the car
+    // slow down or speed up, the train comes later or sooner; in sight it
+    // runs on.
+    const float gap = signed_gap(car_z, (static_cast<float>(train_.segment) + 0.5f) * seg, track_.length());
+    const float length = static_cast<float>(train_.wagons + 1) * train_.car;
+    if (train_.front < -4.f && gap > 0.f && vel.speed > 0.2f * player.max_speed) {
+        const float desired = 1.3f + length - train_speed * (gap / vel.speed - train_margin);
+        train_.front = std::min(desired, -4.f + train_speed * dt);
+    } else {
+        train_.front += train_speed * dt;
+    }
+    if (train_tail() > 12.f) {
+        train_.active = false;
+        return;
+    }
+    // On the rails when it comes: a crash.
+    if (crash_time_ < 0.f && !vertical_.airborne && track_.index_at(car_z) == train_.segment) {
+        const float car_half = player.car_width / track_.half_width_at(car_z) / 2.f;
+        const float at = static_cast<float>(train_.dir) * tr.x;
+        if (at + car_half > train_tail() && at - car_half < train_.front) start_crash(1.f);
+    }
 }
 
 // Standing on a car wash's forecourt, the car is washed clean: water and
@@ -1811,7 +1882,11 @@ void Game::update_traffic(float dt) {
     // (In the attract mode the player's car is where the followed car is:
     // not in anybody's way.)
     if (!attract_) movers.push_back({player_, ptr.x, player_world_z, world_.get<Velocity>(player_).speed, 1});
-    // Animals on the road stand in everyone's way, whichever way they go.
+    // A train on the crossing stands in everyone's way; so do animals.
+    if (train_.active && train_.front > -1.5f && train_tail() < 1.5f) {
+        const float z = (static_cast<float>(train_.segment) + 0.5f) * track_.segment_length;
+        for (float x : {-0.67f, 0.f, 0.67f}) movers.push_back({INVALID_ENTITY, x, z, 0.f, 0});
+    }
     for (const Crossing& a : crossings_) {
         if (std::abs(a.x) < 1.2f) movers.push_back({INVALID_ENTITY, a.x, a.z, 0.f, 0});
     }
@@ -2112,6 +2187,33 @@ void Game::render() {
         s.world_width = vehicle_info(traffic.kind).width;
         road_sprites_.push_back(s);
     });
+
+    // The train, and the crossing's lamps flashing while it comes.
+    if (train_.active) {
+        const float z = (static_cast<float>(train_.segment) + 0.5f) * track_.segment_length;
+        for (int i = 0; i <= train_.wagons; ++i) {
+            const float along = train_.front - (static_cast<float>(i) + 0.5f) * train_.car;
+            if (std::abs(along) > 14.f) continue;
+            RoadSprite s;
+            s.z = z;
+            s.bitmap = &sprites_.train_car(i == 0 ? 0 : 1 + (i + train_.segment) % train_wagon_kinds);
+            s.offset = static_cast<float>(train_.dir) * along;
+            s.world_width = train_car_length;
+            s.flip = train_.dir < 0;
+            road_sprites_.push_back(s);
+        }
+        const int lit = static_cast<int>(clock_ / 0.4f) % 2 ? 1 : -1;
+        const int sign = train_.segment - 3;
+        const float w = scenery_info(Scenery::CrossingSign).width / track_.half_width(sign);
+        for (float side : {-1.f, 1.f}) {
+            RoadSprite s;
+            s.z = static_cast<float>(sign) * track_.segment_length;
+            s.bitmap = &sprites_.crossing_sign(lit);
+            s.offset = side * (1.15f + w / 2.f);
+            s.world_width = scenery_info(Scenery::CrossingSign).width;
+            road_sprites_.push_back(s);
+        }
+    }
 
     // Animals crossing, facing the way they go.
     for (const Crossing& a : crossings_) {

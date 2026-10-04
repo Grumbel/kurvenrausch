@@ -172,6 +172,13 @@ private:
     // the horn hurries it, the traffic stops for it, hitting it is a bump or
     // a crash.
     void update_animals(float dt);
+    // Trains at the level crossings: approaching one at speed, now and
+    // then a train crosses timed to clear the road just before the car gets
+    // there at the speed it goes; faster, it may not.
+    void update_train(float dt);
+    // Where the train runs across the road, by part: road half-widths along
+    // its way (dir), from the locomotive's front back.
+    float train_tail() const;
     void follow_fork(float prev_car_z);
     int indicator(Entity e, const Transform& t, const Traffic& traffic) const;
     InputState autopilot() const;
@@ -297,6 +304,16 @@ private:
         bool hurried = false;// honked at, or hit: it runs
     };
     std::vector<Crossing> crossings_;
+    struct Train {
+        int segment = -1;    // the level crossing
+        float front = 0.f;   // the locomotive's front, road half-widths along `dir`
+        float car = 1.f;     // one car's length, road half-widths
+        int dir = 1;         // running to the right (+1) or the left (-1)
+        int wagons = 6;
+        bool active = false;
+    };
+    Train train_;
+    int train_decided_ = -1; // the crossing the next train was decided for
     float crossing_wait_ = animal_min_wait; // seconds until the next one
     std::optional<Lot> autopilot_visit_; // headless: the autopilot visits the next lot of this kind
     Dirt dirt_;

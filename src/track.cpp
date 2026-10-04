@@ -75,6 +75,7 @@ const SceneryInfo& scenery_info(Scenery kind) {
         /* TruckSign */ { 700.f, true,  false, false},
         /* SportsShowroom*/{4800.f, true, false, false},
         /* SportsSign*/ { 700.f, true,  false, false},
+        /* CrossingSign*/{ 500.f, true, false, false},
         /* Townhouse */ {2400.f, true,  false, true},
         /* TownhouseB*/ {2400.f, true,  false, true},
         /* Shop      */ {2600.f, true,  false, false},
@@ -177,6 +178,14 @@ const LotNames& lot_names(Lot kind) {
 
 const char* lot_name(Lot kind) { return lot_names(kind).name; }
 const char* lot_keyword(Lot kind) { return lot_names(kind).keyword; }
+
+std::vector<int> Track::crossings() const {
+    std::vector<int> found;
+    for (int i = 0; i < static_cast<int>(segments.size()); ++i) {
+        if (segments[static_cast<size_t>(i)].rails) found.push_back(i);
+    }
+    return found;
+}
 
 std::vector<int> Track::lots(Lot kind) const {
     std::vector<int> starts;
@@ -660,6 +669,17 @@ public:
         br.routes[1] = std::move(routes[1]);
         br.active = 1; // the right route is in the track now
         t_.branches.push_back(std::move(br));
+    }
+
+    // A level crossing: a straight, the railway across it in the middle,
+    // a crossbuck on each side before it.
+    void level_crossing() {
+        const int from = size();
+        straight(Len::Short);
+        const int at = from + Len::Short + Len::Short / 2;
+        t_.segments[static_cast<size_t>(at)].rails = true;
+        scenery(at - 3, Scenery::CrossingSign, 1.15f);
+        scenery(at - 3, Scenery::CrossingSign, -1.15f);
     }
 
     void scenery(int index, Scenery kind, float offset) {
@@ -1376,6 +1396,7 @@ Track build_demo_track() {
     b.begin_zone(zone_netherlands());
     // Dead straight and flat, along a canal for a while.
     b.straight(Len::Medium);
+    b.level_crossing();
     const int canal = b.size();
     b.curve(Len::Medium, Bend::Easy, Hill::None);
     b.straight(Len::Short);
@@ -1392,7 +1413,7 @@ Track build_demo_track() {
     b.curve(Len::Medium, -Bend::Medium, -Hill::Medium);
     b.straight(Len::Medium);
     b.gas_station();
-    b.straight(Len::Short);
+    b.level_crossing();
     b.truckstop(); // before the Autobahn
     // The fast way or the scenic one.
     b.fork("AUTOBAHN", "LANDSTRASSE",
@@ -1450,6 +1471,7 @@ Track build_demo_track() {
     b.curve(Len::Short, Bend::Medium, Hill::Low / 2.f);
     b.gas_station();
     b.curve(Len::Medium, -Bend::Easy, -Hill::Low / 2.f);
+    b.level_crossing();
     b.motel();
 
     b.begin_zone(zone_korea());
@@ -1470,6 +1492,7 @@ Track build_demo_track() {
     b.begin_zone(zone_australia());
     // Dead straight through the red outback.
     b.straight(Len::Long);
+    b.level_crossing();
     b.truckstop(); // where the road trains stop
     b.gas_station();
     b.curve(Len::Long, Bend::Easy, Hill::None);
@@ -1478,6 +1501,7 @@ Track build_demo_track() {
     b.begin_zone(zone_arizona());
     b.hill(Len::Long, Hill::Low);
     b.gas_station();
+    b.level_crossing(); // a freight line across the desert
     b.curve(Len::Long, Bend::Easy, Hill::None);
     // The old highway across the open desert, or through the canyon.
     b.fork("ROUTE 66", "CANYON ROAD",
@@ -1680,6 +1704,7 @@ Track build_track(int index) {
     b.gas_station();
     b.begin_zone(zone_netherlands());
     b.straight(Len::Medium);
+    b.level_crossing();
     const int canal = b.size();
     b.curve(Len::Medium, Bend::Easy, Hill::None);
     b.straight(Len::Medium);
@@ -1700,6 +1725,7 @@ Track build_track(int index) {
     b.bumps();
     b.curve(Len::Medium, -Bend::Medium, -Hill::Medium);
     b.gas_station();
+    b.level_crossing();
     b.fork("AUTOBAHN", "LANDSTRASSE",
            [&] {
                b.straight(Len::Long);
@@ -1783,6 +1809,7 @@ Track build_track(int index) {
     b.curve(Len::Short, Bend::Medium, Hill::Low / 2.f);
     b.gas_station();
     b.curve(Len::Medium, -Bend::Easy, -Hill::Low / 2.f);
+    b.level_crossing();
     b.motel();
     b.begin_zone(city(zone_india(), "DELHI", Scenery::Banyan, TownStyle::Warm));
     streets(1);
@@ -1817,6 +1844,7 @@ Track build_track(int index) {
     b.gas_station();
     b.begin_zone(zone_australia());
     b.straight(Len::Long);
+    b.level_crossing();
     b.truckstop();
     b.gas_station();
     b.curve(Len::Long, Bend::Easy, Hill::None);
@@ -1833,6 +1861,7 @@ Track build_track(int index) {
     b.begin_zone(zone_arizona());
     b.hill(Len::Long, Hill::Low);
     b.gas_station();
+    b.level_crossing();
     b.curve(Len::Long, Bend::Easy, Hill::None);
     b.fork("ROUTE 66", "CANYON ROAD",
            [&] {

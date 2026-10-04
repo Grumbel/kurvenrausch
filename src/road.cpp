@@ -269,6 +269,24 @@ void RoadRenderer::draw_segment(Framebuffer& fb, const Track& track, const Slice
         }
     }
 
+    if (seg.rails) {
+        // A railway across the road and the land on either side: dark
+        // sleepers, two steel rails on them. `t` runs from the near edge (0)
+        // to the far one (1).
+        const auto across = [&](float t0, float t1, Color c) {
+            const float y0 = a.y + (b.y - a.y) * t1, y1 = a.y + (b.y - a.y) * t0;
+            if (y1 - y0 < 1.f) {
+                const int y = pixel_edge(y0);
+                fb.hline(0, fb.width(), y, c);
+                return;
+            }
+            fb.fill_trapezoid(y0, 0.f, wf, y1, 0.f, wf, c);
+        };
+        across(0.15f, 0.85f, fogged(Color{0x3c, 0x30, 0x28}));
+        across(0.28f, 0.36f, fogged(Color{0xb8, 0xbc, 0xc4}));
+        across(0.64f, 0.72f, fogged(Color{0xb8, 0xbc, 0xc4}));
+    }
+
     fb.reset_clip();
 }
 

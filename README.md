@@ -128,6 +128,11 @@ weather and road markings, fading smoothly into one another:
 - **Night lights**: cities glow at night, the sky above them orange, their
   windows lit and their street lamps throwing pools of warm light on the
   road; out in the desert and the outback the night is as dark as it gets
+- **Trains**: railways cross the road in the Netherlands, Germany, India,
+  the outback and Arizona. Now and then a long train comes as you near a
+  crossing, the lamps flashing, timed to clear the road just before you get
+  there at the speed you go: keep it up and it is a near miss, go faster and
+  you may meet it. The traffic waits for it
 - **Animals crossing**: now and then an animal of the countryside walks
   across the road ahead: cows in India, giraffes in Kenya, deer in the
   forests, the Alps and Korea, a flock of sheep in England, kangaroos hopping

@@ -99,6 +99,14 @@ the road/framebuffer rewrite, `Color::to_u32()` became `Color::argb()`.
   `progress_save_seconds` while racing (not in the attract mode, which
   keeps the saved values); the first race after start-up begins there
   (`leave_attract`)
+- Trains: `Segment::rails`, `TrackBuilder::level_crossing()` (a straight,
+  `Scenery::CrossingSign` either side), `Track::crossings()`. `Game::
+  update_train()`: decided `train_chance` once per crossing when the car
+  is `train_decide_min..max` segments away; out of sight the train re-times
+  itself to the car's arrival so its tail clears the road `train_margin`
+  seconds before (a near miss when driving on steadily); in sight it runs
+  on. Hitting it is a crash; the traffic stops for it (movers). Lamps flash
+  (`crossing_sign(lit)` drawn over the sign). No sound for it yet
 
 ## Round 17: touch controls at screen resolution, the wide screen
 

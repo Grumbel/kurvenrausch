@@ -50,6 +50,14 @@ Bitmap make_van_front(const CarStyle& style, int signal, int tread = 0);
 // column cx with its top at row y: `lit` -1 flashes the red, +1 the blue,
 // 0 neither.
 void paint_lightbar(Bitmap& b, int lit, int cx, int y);
+// A railway crossbuck with its two red lamps, `lit` -1 the left, +1 the
+// right, 0 neither; 32x80.
+Bitmap make_crossing_sign(int lit);
+// A train from the side, facing right: the locomotive (0) and its wagons
+// (1 .. train_wagon_kinds), 128 wide.
+constexpr int train_wagon_kinds = 3;
+Bitmap make_train_car(int kind);
+
 // Animals crossing the road, from the side, facing right; two frames of
 // their gait.
 Bitmap make_deer(int frame);     // 56x48
@@ -152,6 +160,13 @@ public:
     const Bitmap& wheel(int driver_index) const {
         return wheels_[static_cast<size_t>(((driver_index % drivers) + drivers) % drivers)];
     }
+    // The crossbuck with a lamp lit (-1 left, +1 right).
+    const Bitmap& crossing_sign(int lit) const { return crossing_signs_[lit < 0 ? 0 : 1]; }
+    // A train's locomotive (0) or a wagon (1 .. train_wagon_kinds).
+    const Bitmap& train_car(int kind) const {
+        return train_cars_[static_cast<size_t>(((kind % (train_wagon_kinds + 1)) + train_wagon_kinds + 1) %
+                                               (train_wagon_kinds + 1))];
+    }
     // An animal crossing the road (see animals.hpp), frame 0 or 1.
     const Bitmap& animal(Animal kind, int frame) const {
         return animals_[static_cast<size_t>(kind) % animal_kinds][static_cast<size_t>(frame & 1)];
@@ -206,6 +221,8 @@ private:
     std::array<Bitmap, car_models> dashboards_;
     std::array<std::array<Bitmap, 2>, fares> pedestrians_;
     std::array<std::array<Bitmap, 2>, animal_kinds> animals_;
+    std::array<Bitmap, 2> crossing_signs_;
+    std::array<Bitmap, train_wagon_kinds + 1> train_cars_;
     std::array<Bitmap, drivers> wheels_;
     mutable std::map<uint32_t, Bitmap> occupants_;
     struct VehicleSprites {

@@ -74,6 +74,7 @@ enum class Scenery : uint8_t {
     TruckSign,    // the tall sign announcing it
     SportsShowroom, // a sports car dealer's showroom, beyond its forecourt
     SportsSign,   // the tall sign announcing it
+    CrossingSign, // a railway crossbuck with its two red lamps
     Townhouse,    // a European town house: plaster, shutters, a tiled roof
     TownhouseB,   // ... in other colours
     Shop,         // a shop with its awning, flats above
@@ -145,6 +146,7 @@ struct Segment {
     float y2 = 0.f;        // world height at the far edge
     bool alt = false;      // alternating colour band (rumble / grass stripes)
     bool checker = false;  // start/finish line
+    bool rails = false;    // a level crossing: a railway crosses the road here
     Edge left = Edge::None;
     Edge right = Edge::None;
     float edge_fade = 1.f; // 0..1, cliffs grow and shrink at the ends of a run
@@ -363,6 +365,8 @@ struct Track {
     // First segments of each forecourt of this kind at full width, in track
     // order.
     std::vector<int> lots(Lot kind) const;
+    // The level crossings, by segment.
+    std::vector<int> crossings() const;
 
     // Half width of a patch at the boundary in front of segment `boundary`
     // (the narrower side, so patches come to a point at both ends), and its

@@ -1850,6 +1850,14 @@ void check_track(const racer::Track& t) {
     CHECK(cliff && rail);
     CHECK(max_rain > 0.5f && max_snow > 0.5f);
 
+    // Level crossings: on the straight, a crossbuck either side before them.
+    CHECK(t.crossings().size() >= 5);
+    for (int c : t.crossings()) {
+        CHECK(t.segment(c).curve == 0.f && t.segment(c).forecourt <= 0.f);
+        int signs = 0;
+        for (const RoadsideObject& o : t.segment(c - 3).scenery) signs += o.kind == Scenery::CrossingSign;
+        CHECK(signs == 2);
+    }
     // The start line and its gantry are on the first straight.
     CHECK(t.segments[8].checker && t.segments[9].checker);
     CHECK(t.zone_number_at(t.start_z) == 0);
