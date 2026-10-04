@@ -4,6 +4,7 @@
 #pragma once
 
 #include "menu.hpp"
+#include "options.hpp"
 #include "overlay.hpp"
 
 #include <cstdint>
@@ -81,5 +82,7 @@ struct MenuTap {
     int side = 0;
 };
 MenuTap menu_tap(const PauseMenu& menu, float x, float y, int fb_width, int fb_height);
+// The same on the OPTIONS page: every setting line has its sides.
+MenuTap options_tap(float x, float y, int fb_width, int fb_height);
 
 } // namespace racer

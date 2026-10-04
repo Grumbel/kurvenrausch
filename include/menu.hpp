@@ -15,15 +15,15 @@ struct MenuInput {
     bool back = false;
 };
 
-enum class MenuAction { None, Resume, Restart, StartZone, ToggleWide, Quit };
+enum class MenuAction { None, Resume, Restart, StartZone, ToggleWide, Options, Quit };
 
 // The pause menu: resume, restart at the start line, start in a chosen
 // country (picked with left and right on its line), the screen's shape (4:3
 // or as wide as the screen; confirm, left or right switch it, and the menu
-// stays open) or quit, where there is something to quit to (not in a web
-// page).
+// stays open), the gameplay options (a page of their own, see options.hpp)
+// or quit, where there is something to quit to (not in a web page).
 struct PauseMenu {
-    enum Item { Resume, Restart, StartZone, Screen, Quit, items };
+    enum Item { Resume, Restart, StartZone, Screen, Options, Quit, items };
 
     int selected = Resume;
     int zone = 0;  // the country to start in

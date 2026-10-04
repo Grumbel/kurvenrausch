@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include "options.hpp"
+
 #include <optional>
 #include <string>
 #include <string_view>
@@ -26,6 +28,7 @@ struct Choices {
     int view = 0; // a ViewMode
     int music = 0; // a Music track, -1 off
     int wide = 0;  // 1: the picture as wide as the screen, 0: 4:3
+    Options options{};
 };
 // As "key value" lines; parsing skips unknown keys and malformed lines and
 // keeps the defaults for what is missing.

@@ -228,7 +228,7 @@ browser Esc pauses, and the pause menu has no Quit.
 | Ctrl             | Left shoulder            | Handbrake          |
 | H                | X                        | Horn               |
 | Space            | Y, right shoulder        | Nitro              |
-| P                | Start                    | Pause menu: resume, restart, start in a chosen country, screen shape, quit |
+| P                | Start                    | Pause menu: resume, restart, start in a chosen country, screen shape, options, quit |
 | R                |                          | Restart            |
 | C                | Back                     | Camera view: chase, far, bumper, cockpit |
 | N                | Right stick, flicked up / down | Radio: next (or previous) track, or off |
@@ -246,6 +246,12 @@ screen: drag sideways on the left to steer, GAS and BRK (brake, and
 reverse) on the right with NOS, HB (handbrake) and H (horn), the pause
 button right of the mirror; in the pause menu tap a line, on the country
 line its left or right end to pick the country.
+
+OPTIONS in the pause menu switches gameplay features, kept for the next
+run: the time of day (the day passing, or held at day, dusk or night),
+fuel, how many nitro canisters each lap brings (0 to 9), police chases,
+the weather (changing, always clear, always stormy) and how much traffic
+there is (none to heavy).
 
 The picture is 4:3 with black bars on wider screens; SCREEN in the pause
 menu switches it to WIDE, as wide as the screen (up to 2:1), showing more

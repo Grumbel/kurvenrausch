@@ -44,7 +44,13 @@ std::string format_choices(const Choices& c) {
         << "passenger " << c.passenger << "\n"
         << "view " << c.view << "\n"
         << "music " << c.music << "\n"
-        << "wide " << c.wide << "\n";
+        << "wide " << c.wide << "\n"
+        << "time " << static_cast<int>(c.options.time) << "\n"
+        << "fuel " << (c.options.fuel ? 1 : 0) << "\n"
+        << "nitros " << c.options.nitros << "\n"
+        << "police " << (c.options.police ? 1 : 0) << "\n"
+        << "weather " << static_cast<int>(c.options.weather) << "\n"
+        << "traffic " << c.options.traffic << "\n";
     return out.str();
 }
 
@@ -63,7 +69,14 @@ Choices parse_choices(std::string_view text) {
         else if (key == "view") c.view = value;
         else if (key == "music") c.music = value;
         else if (key == "wide") c.wide = value;
+        else if (key == "time") c.options.time = static_cast<TimeSetting>(value);
+        else if (key == "fuel") c.options.fuel = value != 0;
+        else if (key == "nitros") c.options.nitros = value;
+        else if (key == "police") c.options.police = value != 0;
+        else if (key == "weather") c.options.weather = static_cast<WeatherSetting>(value);
+        else if (key == "traffic") c.options.traffic = value;
     }
+    c.options = clamped(c.options);
     return c;
 }
 

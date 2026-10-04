@@ -4,6 +4,7 @@
 #pragma once
 #include "framebuffer.hpp"
 #include "menu.hpp"
+#include "options.hpp"
 #include "track.hpp"
 
 #include <array>
@@ -29,7 +30,8 @@ struct HudState {
     bool chase = false;          // the police are after the car: show how near it is to escaping
     float escape = 0.f;          // ... 0 .. 1
     bool chase_red = false;      // ... the lightbar's colour now, red or blue
-    int nitro = 0;               // canisters left
+    int nitro = 0;               // canisters left ...
+    int nitro_capacity = 3;      // ... of this many (none: no nitro shown)
     float fuel = 1.f;            // 0..1
     bool fuel_warning = false;   // low fuel, blinking
     // Mini map: the plan view from track_map(), the segment the player's car
@@ -60,6 +62,8 @@ void draw_hud(Framebuffer& fb, const HudState& hud);
 
 // The pause menu over the dimmed game; `country` is the start choice's name.
 void draw_pause_menu(Framebuffer& fb, const PauseMenu& menu, const std::string& country);
+// The pause menu's OPTIONS page, laid out like the pause menu.
+void draw_options_menu(Framebuffer& fb, const OptionsMenu& menu, const Options& options);
 
 // Formats seconds as m'ss"cc, the classic arcade lap time.
 std::string format_lap_time(float seconds);

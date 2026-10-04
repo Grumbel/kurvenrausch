@@ -215,7 +215,8 @@ void Game::spawn_traffic() {
         seed = seed * 1664525u + 1013904223u;
         return static_cast<float>(seed >> 8) / 16777216.f;
     };
-    const int traffic_count = static_cast<int>(track_.segments.size()) / segments_per_vehicle;
+    const int traffic_count = static_cast<int>(static_cast<float>(track_.segments.size()) / segments_per_vehicle *
+                                               traffic_factor(options_.traffic));
     for (int i = 0; i < traffic_count; ++i) {
         const Entity car = world_.create();
         // Keep the start straight clear.
@@ -251,6 +252,9 @@ bool Game::init(bool fullscreen) {
         view_mode_ = static_cast<ViewMode>(wrap(c->view, view_modes));
         music_ = c->music >= 0 ? c->music % Music::tracks : -1;
         wide_ = c->wide != 0;
+        const Options before = options_;
+        options_ = c->options;
+        apply_options(before);
         apply_car();
     }
     record_lap_ = best_lap(store_.load_laps());
@@ -296,6 +300,7 @@ void Game::reset() {
     landing_time_ = 0.f;
     view_yaw_ = view_shift_ = 0.f;
     hour_ = start_hour;
+    advance_clock(0.f);
     headlights_ = hazards_ = blink_on_ = false;
     signal_ = 0;
     police_ = INVALID_ENTITY; // gone with the traffic
@@ -463,9 +468,31 @@ bool Game::frame() {
 
     set_width(screen_width());
     render();
-    if (paused_) draw_pause_menu(fb_, menu_, track_.zones[static_cast<size_t>(menu_.zone)].country);
+    if (paused_ && options_open_) draw_options_menu(fb_, options_menu_, options_);
+    else if (paused_) draw_pause_menu(fb_, menu_, track_.zones[static_cast<size_t>(menu_.zone)].country);
     present();
     return true;
+}
+
+void Game::apply_options(const Options& before) {
+    nitro_.set_capacity(options_.nitros);
+    front_.force(weather_force(options_.weather));
+    advance_clock(0.f);
+    if (!options_.fuel) fuel_.reset(); // a full tank, for good
+    if ((!options_.police || options_.traffic != before.traffic) && police_ != INVALID_ENTITY) {
+        pulled_over_ = 0.f;
+        end_chase();
+    }
+    if (options_.traffic != before.traffic) spawn_traffic();
+    if (options_.time != before.time || options_.fuel != before.fuel || options_.nitros != before.nitros ||
+        options_.police != before.police || options_.weather != before.weather || options_.traffic != before.traffic) {
+        save_choices();
+    }
+}
+
+void Game::advance_clock(float dt) {
+    const float fixed = fixed_hour(options_.time);
+    hour_ = fixed >= 0.f ? fixed : advance_hour(hour_, dt);
 }
 
 void Game::set_width(int w) {
@@ -591,7 +618,7 @@ void Game::update_attract(float dt) {
     weather_.update(look.rain, look.snowfall, -seg.curve * 25.f * speed_pct, speed_pct, dt);
     front_.update(dt);
     clock_ += dt;
-    hour_ = advance_hour(hour_, dt);
+    advance_clock(dt);
     const int zone = track_.zone_number_at(t.z);
     if (zone != zone_) {
         zone_ = zone;
@@ -633,6 +660,21 @@ bool Game::update_pause(const InputState& input) {
         if (input.pause || (input.escape && web)) pause();
         return true;
     }
+    if (options_open_ && !input.pause) {
+        // The OPTIONS page: each change takes effect at once, and is kept.
+        const Options before = options_;
+        bool close = options_menu_.update(input.menu, options_);
+        for (const Finger& tap : touch_taps_) {
+            float x = 0.f, y = 0.f;
+            display_->screen_to_framebuffer(tap.x, tap.y, x, y);
+            const MenuTap where = options_tap(x, y, width_, height);
+            close = options_menu_.choose(where.item, where.side, options_) || close;
+        }
+        if (close) options_open_ = false;
+        apply_options(before);
+        return true;
+    }
+    options_open_ = false;
     MenuAction action = input.pause ? MenuAction::Resume : menu_.update(input.menu);
     for (const Finger& tap : touch_taps_) {
         if (action != MenuAction::None) break;
@@ -649,6 +691,10 @@ bool Game::update_pause(const InputState& input) {
             reset();
             start_at(zone_start_position(menu_.zone));
             break;
+        case MenuAction::Options:
+            options_open_ = true;
+            options_menu_.open();
+            return true;
         case MenuAction::ToggleWide:
             // Takes effect on the next picture; the menu stays open.
             wide_ = !wide_;
@@ -1010,7 +1056,7 @@ void Game::fixed_update(const InputState& driver_input, float dt) {
 // The player's car takes its model's top speed and acceleration (grip is
 // applied where the road's grip is).
 void Game::save_choices() const {
-    store_.save_choices({car_model_, driver_, passenger_, static_cast<int>(view_mode_), music_, wide_ ? 1 : 0});
+    store_.save_choices({car_model_, driver_, passenger_, static_cast<int>(view_mode_), music_, wide_ ? 1 : 0, options_});
 }
 
 // Into another car: it comes clean and with a full tank.
@@ -1136,7 +1182,7 @@ void Game::update_fuel(const InputState& input, float dt) {
         message_.clear(); // drove off before the tank was full
     }
 
-    fuel_.burn(Fuel::load(input.throttle * (1.f - input.brake), drivetrain::rpm(speed_pct)), dt);
+    if (options_.fuel) fuel_.burn(Fuel::load(input.throttle * (1.f - input.brake), drivetrain::rpm(speed_pct)), dt);
     rng_ = rng_ * 1664525u + 1013904223u;
     const bool sputter = fuel_.level() < 0.03f && (rng_ >> 28) < 4; // a quarter of the time
     engine_on_ = !fuel_.empty() && !sputter;
@@ -1595,7 +1641,7 @@ void Game::update_police(float dt) {
         if (chase_cooldown_ > 0.f) chase_cooldown_ -= dt;
         rng_ = rng_ * 1664525u + 1013904223u;
         const float roll = static_cast<float>(rng_ >> 8) / 16777216.f;
-        if (chase_cooldown_ <= 0.f && race_started_ && crash_time_ < 0.f &&
+        if (options_.police && chase_cooldown_ <= 0.f && race_started_ && crash_time_ < 0.f &&
             chase_starts(roll, vel.speed / base_max_speed_, dt)) {
             start_chase();
         }
@@ -1638,7 +1684,7 @@ void Game::update_police(float dt) {
 
 void Game::update_laps(float prev_z, float z, float dt) {
     clock_ += dt;
-    hour_ = advance_hour(hour_, dt);
+    advance_clock(dt);
 
     // Entering a new zone: announce the country and region for a few seconds.
     const int zone = track_.zone_number_at(z);
@@ -1910,6 +1956,7 @@ void Game::render() {
     hud.message_visible = std::fmod(clock_, 0.5f) < 0.35f;
     hud.muted = muted_;
     hud.nitro = nitro_.canisters();
+    hud.nitro_capacity = nitro_.capacity();
     hud.fuel = fuel_.level();
     hud.map = &map_;
     // A fork coming up: the routes' names, left and right.

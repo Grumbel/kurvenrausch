@@ -159,8 +159,8 @@ void draw_fuel(Framebuffer& fb, int x, int y, float level, bool warning) {
 
 // Nitro canisters, right-aligned at `right`: full ones, the one burning now
 // draining, and the empty ones.
-void draw_nitro(Framebuffer& fb, int right, int y, int full, float burning) {
-    constexpr int count = Nitro::capacity, w = 7, gap = 3, h = 14;
+void draw_nitro(Framebuffer& fb, int right, int y, int count, int full, float burning) {
+    constexpr int w = 7, gap = 3, h = 14;
     const Color glass{0x1c, 0x24, 0x3c}, fill{0x30, 0x90, 0xf0}, shine{0xb0, 0xe0, 0xff}, cap{0xc8, 0xc8, 0xd0};
     for (int i = 0; i < count; ++i) {
         const int x = right - (count - i) * (w + gap) + gap;
@@ -256,8 +256,10 @@ void draw_hud(Framebuffer& fb, const HudState& hud) {
     draw_fuel(fb, 56, h - 28, hud.fuel, hud.fuel_warning);
 
     // Bottom right: nitro.
-    text_right(fb, w - 6, h - 37, "NITRO", Label);
-    draw_nitro(fb, w - 6, h - 27, hud.nitro, hud.nitro_burn);
+    if (hud.nitro_capacity > 0) {
+        text_right(fb, w - 6, h - 37, "NITRO", Label);
+        draw_nitro(fb, w - 6, h - 27, hud.nitro_capacity, hud.nitro, hud.nitro_burn);
+    }
 
     if (hud.muted) text_right(fb, w - 6, h - 9, "MUTE", Label);
 
@@ -290,10 +292,28 @@ void draw_pause_menu(Framebuffer& fb, const PauseMenu& menu, const std::string& 
     const int top = fb.height() / 2 - 50;
     text_center(fb, top, "PAUSED", Value, 3);
     const std::string items[PauseMenu::items] = {"RESUME", "RESTART", "START IN < " + country + " >",
-                                                 menu.wide ? "SCREEN: WIDE" : "SCREEN: 4:3", "QUIT"};
+                                                 menu.wide ? "SCREEN: WIDE" : "SCREEN: 4:3", "OPTIONS", "QUIT"};
     for (int i = 0; i < menu.item_count(); ++i) {
         const bool on = i == menu.selected;
         const std::string line = on ? "> " + items[i] + " <" : items[i];
+        text_center(fb, top + 36 + 16 * i, line, on ? Label : Value);
+    }
+}
+
+void draw_options_menu(Framebuffer& fb, const OptionsMenu& menu, const Options& options) {
+    for (int y = 0; y < fb.height(); ++y) {
+        for (int x = 0; x < fb.width(); ++x) fb.blend_pixel(x, y, Shadow, 0.55f);
+    }
+    const int top = fb.height() / 2 - 50;
+    text_center(fb, top, "OPTIONS", Value, 3);
+    for (int i = 0; i < OptionsMenu::items; ++i) {
+        // The selected setting with arrows round its value, BACK between
+        // the usual marks.
+        const bool on = i == menu.selected;
+        std::string line = OptionsMenu::line(i, options);
+        const size_t colon = line.find(": ");
+        if (on) line = colon == std::string::npos ? "> " + line + " <"
+                                                  : line.substr(0, colon + 2) + "< " + line.substr(colon + 2) + " >";
         text_center(fb, top + 36 + 16 * i, line, on ? Label : Value);
     }
 }

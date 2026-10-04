@@ -40,6 +40,7 @@ MenuAction PauseMenu::update(const MenuInput& in) {
         case Restart: return MenuAction::Restart;
         case StartZone: return MenuAction::StartZone;
         case Screen: return MenuAction::ToggleWide;
+        case Options: return MenuAction::Options;
         default: return MenuAction::Quit;
     }
 }

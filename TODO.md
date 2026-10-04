@@ -39,6 +39,13 @@ the road/framebuffer rewrite, `Color::to_u32()` became `Color::argb()`.
   `beam_spread`, fades over `beam_reach`, turns a little with the
   steering, and lights whatever stands on the ground it reaches (not the
   sky). The car's own pixels are put back after it (`car_night_`).
+- Options (`options.hpp`): `Options` (time of day, fuel, nitros, police,
+  weather, traffic) in the pause menu's OPTIONS page (`OptionsMenu`,
+  `draw_options_menu`, `options_tap`), saved with the choices.
+  `Game::apply_options()` puts a change into effect at once: nitro
+  capacity (`Nitro::set_capacity`), the front held (`weather_force`), the
+  clock held (`advance_clock`), a full tank, the chase ended, the traffic
+  respawned (`traffic_factor`)
 
 ## Round 17: touch controls at screen resolution, the wide screen
 

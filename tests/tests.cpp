@@ -524,12 +524,12 @@ void test_framebuffer_blit() {
 void test_nitro() {
     using namespace racer;
     Nitro n;
-    CHECK(n.canisters() == Nitro::capacity && !n.burning());
+    CHECK(n.canisters() == Nitro::default_capacity && !n.burning());
     CHECK(n.fire());
-    CHECK(n.burning() && n.canisters() == Nitro::capacity - 1);
+    CHECK(n.burning() && n.canisters() == Nitro::default_capacity - 1);
     CHECK_NEAR(n.burn_left(), 1.f, 1e-6f);
     CHECK(!n.fire()); // one burn at a time
-    CHECK(n.canisters() == Nitro::capacity - 1);
+    CHECK(n.canisters() == Nitro::default_capacity - 1);
     n.update(Nitro::burn_seconds / 2.f);
     CHECK_NEAR(n.burn_left(), 0.5f, 1e-5f);
     CHECK_NEAR(n.intensity(), 1.f, 1e-6f);
@@ -544,10 +544,10 @@ void test_nitro() {
     n.update(Nitro::burn_seconds);
     CHECK(n.canisters() == 0 && !n.fire());
     n.refill();
-    CHECK(n.canisters() == Nitro::capacity);
+    CHECK(n.canisters() == Nitro::default_capacity);
     n.fire();
     n.reset();
-    CHECK(n.canisters() == Nitro::capacity && !n.burning());
+    CHECK(n.canisters() == Nitro::default_capacity && !n.burning());
 }
 
 void test_speed_rules() {
@@ -807,6 +807,22 @@ void test_views() {
     CHECK(parse_choices(format_choices(Choices{0, 0, 0, 3})).view == 3);
     CHECK(parse_choices(format_choices(Choices{0, 0, 0, 0, 0, 1})).wide == 1);
     CHECK(parse_choices("car 1\n").wide == 0);
+    // The options round-trip; missing ones keep their defaults, wild ones
+    // are brought into range.
+    Choices opt;
+    opt.options.time = TimeSetting::Night;
+    opt.options.fuel = false;
+    opt.options.nitros = 7;
+    opt.options.police = false;
+    opt.options.weather = WeatherSetting::Stormy;
+    opt.options.traffic = 0;
+    const Options round = parse_choices(format_choices(opt)).options;
+    CHECK(round.time == TimeSetting::Night && !round.fuel && round.nitros == 7 && !round.police &&
+          round.weather == WeatherSetting::Stormy && round.traffic == 0);
+    const Options defaults = parse_choices("car 1\n").options;
+    CHECK(defaults.fuel && defaults.police && defaults.nitros == Nitro::default_capacity && defaults.traffic == 2);
+    const Options wild = parse_choices("nitros 99\ntraffic -4\ntime 9\n").options;
+    CHECK(wild.nitros == max_nitros && wild.traffic == 0 && static_cast<int>(wild.time) < static_cast<int>(TimeSetting::count));
     // The cockpit's pictures.
     const SpriteSheet sheet;
     CHECK(sheet.dashboard(0).w == 320 && sheet.dashboard(0).h == dashboard_height);
@@ -978,12 +994,53 @@ void test_touch() {
     CHECK(m.choose(left.item, left.side) == MenuAction::None && m.zone == 2);
     CHECK(menu_tap(m, 300.f, first + 32.f, 320, 240).side == 1);
     CHECK(m.choose(PauseMenu::StartZone, 0) == MenuAction::StartZone);
-    CHECK(menu_tap(m, 160.f, first + 64.f, 320, 240).item == -1); // no Quit line in a web page
+    CHECK(menu_tap(m, 160.f, first + 64.f, 320, 240).item == PauseMenu::Options);
+    CHECK(menu_tap(m, 160.f, first + 80.f, 320, 240).item == -1); // no Quit line in a web page
     // The screen line switches the shape and keeps the menu open.
     CHECK(m.choose(PauseMenu::Screen) == MenuAction::ToggleWide);
     MenuInput side;
     side.right = true;
     CHECK(m.update(side) == MenuAction::ToggleWide);
+}
+
+void test_options() {
+    using namespace racer;
+    Options o;
+    OptionsMenu m;
+    m.open();
+    // Right and confirm step a setting forward, left back, wrapping round.
+    MenuInput right; right.right = true;
+    MenuInput left; left.left = true;
+    MenuInput down; down.down = true;
+    MenuInput ok; ok.confirm = true;
+    CHECK(!m.update(right, o) && o.time == TimeSetting::Day);
+    CHECK(!m.update(left, o) && !m.update(left, o) && o.time == TimeSetting::Night);
+    m.update(down, o);
+    CHECK(!m.update(ok, o) && !o.fuel);
+    m.update(down, o);
+    for (int i = 0; i < max_nitros; ++i) m.update(right, o);
+    CHECK(o.nitros == 2); // 3 + 9, wrapped over 0 .. 9
+    // A tap's side picks the way; BACK (or the back button) closes the page.
+    CHECK(!m.choose(OptionsMenu::Traffic, -1, o) && o.traffic == 1);
+    CHECK(m.choose(OptionsMenu::Back, 1, o));
+    MenuInput back; back.back = true;
+    CHECK(m.update(back, o));
+    CHECK(OptionsMenu::line(OptionsMenu::Fuel, o) == "FUEL: OFF");
+    // What the settings mean.
+    CHECK(fixed_hour(TimeSetting::Cycle) < 0.f && fixed_hour(TimeSetting::Night) > 20.f);
+    CHECK(weather_force(WeatherSetting::Changing) < 0.f && weather_force(WeatherSetting::Clear) == 0.f);
+    CHECK(traffic_factor(0) == 0.f && traffic_factor(2) == 1.f && traffic_factor(3) > 1.f);
+    // The nitro takes the chosen number of canisters.
+    Nitro n;
+    n.set_capacity(5);
+    n.refill();
+    CHECK(n.canisters() == 5 && n.capacity() == 5);
+    n.set_capacity(0);
+    CHECK(n.canisters() == 0 && !n.fire());
+    // Taps on the page: the line, and its side.
+    const float first = 240.f / 2.f - 50.f + 36.f + 3.f;
+    CHECK(options_tap(20.f, first + 16.f, 320, 240).item == OptionsMenu::Fuel);
+    CHECK(options_tap(20.f, first + 16.f, 320, 240).side == -1 && options_tap(200.f, first, 320, 240).side == 1);
 }
 
 void test_daylight() {
@@ -1074,11 +1131,11 @@ void test_pause_menu() {
     CHECK(m.update(back) == MenuAction::Resume);
     m.open(-1, 16);
     CHECK(m.zone == 0 && m.selected == PauseMenu::Resume);
-    // Without Quit (in a web page) the selection wraps round the other four.
+    // Without Quit (in a web page) the selection wraps round the others.
     m.open(0, 16, false);
-    CHECK(m.item_count() == 4);
+    CHECK(m.item_count() == 5);
     m.update(up);
-    CHECK(m.selected == PauseMenu::Screen);
+    CHECK(m.selected == PauseMenu::Options && m.update(ok) == MenuAction::Options);
     m.update(down);
     CHECK(m.selected == PauseMenu::Resume);
 }
@@ -2261,6 +2318,7 @@ int main() {
     test_pause_menu();
     test_daylight();
     test_touch();
+    test_options();
     test_police();
     test_climate();
     test_music();

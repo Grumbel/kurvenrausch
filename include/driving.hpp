@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <algorithm>
+
 #include <cmath>
 #include <vector>
 
@@ -12,7 +14,7 @@ namespace racer {
 // thrust and lifts the top speed.
 class Nitro {
 public:
-    static constexpr int capacity = 3;
+    static constexpr int default_capacity = 3;
     static constexpr float burn_seconds = 3.f;
     static constexpr float top_speed = 1.3f; // top speed while burning, of the normal one
     static constexpr float thrust = 1.5f;    // extra acceleration, of the normal one
@@ -20,8 +22,11 @@ public:
     // Starts a burn if none is running and a canister is left.
     bool fire();
     void update(float dt);
-    void refill() { canisters_ = capacity; }
-    void reset() { canisters_ = capacity; burn_ = 0.f; }
+    void refill() { canisters_ = capacity_; }
+    void reset() { canisters_ = capacity_; burn_ = 0.f; }
+    // Canisters each lap (an option); the ones left now stay up to it.
+    void set_capacity(int n) { capacity_ = n; canisters_ = std::min(canisters_, n); }
+    int capacity() const { return capacity_; }
     void stop() { burn_ = 0.f; } // cuts the current burn short
 
     bool burning() const { return burn_ > 0.f; }
@@ -32,7 +37,8 @@ public:
     float intensity() const;
 
 private:
-    int canisters_ = capacity;
+    int capacity_ = default_capacity;
+    int canisters_ = default_capacity;
     float burn_ = 0.f;
 };
 

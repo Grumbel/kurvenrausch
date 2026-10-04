@@ -134,4 +134,14 @@ MenuTap menu_tap(const PauseMenu& menu, float x, float y, int fb_width, int fb_h
     return {};
 }
 
+MenuTap options_tap(float x, float y, int fb_width, int fb_height) {
+    const float first = static_cast<float>(fb_height / 2 - 50 + 36);
+    for (int i = 0; i < OptionsMenu::items; ++i) {
+        const float line = first + 16.f * static_cast<float>(i) + 3.f;
+        if (std::abs(y - line) > 8.f) continue;
+        return {i, x < static_cast<float>(fb_width) / 3.f ? -1 : 1};
+    }
+    return {};
+}
+
 } // namespace racer

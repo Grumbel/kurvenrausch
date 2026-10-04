@@ -144,6 +144,10 @@ private:
     void spawn_smoke(float speed_pct);
     void land(float impact);
     void apply_car();
+    // The gameplay options into effect; `before` were the ones in effect.
+    void apply_options(const Options& before);
+    // The clock: the day passing, or held at the chosen time.
+    void advance_clock(float dt);
     void change_car();
     // Remembers the car, driver and passenger for the next run.
     void save_choices() const;
@@ -190,6 +194,9 @@ private:
     bool muted_ = false;
     bool paused_ = false;
     PauseMenu menu_;
+    Options options_;
+    OptionsMenu options_menu_;
+    bool options_open_ = false; // the pause menu shows the OPTIONS page
     SynthParams sound_;  // what the synth was last told
     bool horn_ = false;
     Nitro nitro_;
