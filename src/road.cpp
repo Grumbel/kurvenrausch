@@ -45,6 +45,11 @@ void RoadRenderer::render(Framebuffer& fb, const Track& track, const RoadView& v
     const float horizon = view.horizon > 0.f ? view.horizon : half_h;
     const float y_scale = view.y_scale > 0.f ? view.y_scale : half_h;
     x_scale_ = view.x_scale > 0.f ? view.x_scale : static_cast<float>(fb.width()) / 2.f;
+    y_scale_ = y_scale;
+    float ceiling = 0.f; // rows above this are hidden by the ceiling of a nearer tunnel
+    // Columns outside these are hidden beyond a tunnel's mouth (its rock
+    // face seen from outside, the wall round the exit seen from inside).
+    float mouth_left = 0.f, mouth_right = static_cast<float>(fb.width());
 
     // The camera may sit partway into the base segment, so start the curve
     // accumulation with the part of the curve already passed. Looking back,
@@ -87,6 +92,9 @@ void RoadRenderer::render(Framebuffer& fb, const Track& track, const RoadView& v
         dx += seg.curve;
 
         s.clip = max_y;
+        s.top = ceiling;
+        s.left = mouth_left;
+        s.right = mouth_right;
         s.fog = exponential_fog(static_cast<float>(n) / static_cast<float>(count), view.fog_density);
         // Skip segments behind the camera, facing away (downhill beyond a
         // crest), or fully hidden behind nearer road.
@@ -95,6 +103,33 @@ void RoadRenderer::render(Framebuffer& fb, const Track& track, const RoadView& v
                          s.p2.y < max_y;
         if (s.road_visible) {
             draw_segment(fb, track, s);
+            // In a tunnel its ceiling hides what lies beyond above it.
+            const float far_ceiling = s.p2.y - s.p2.scale * tunnel_height * y_scale;
+            if (seg.tunnel) ceiling = std::max(ceiling, far_ceiling);
+            // At a tunnel's mouth what lies beyond shows only through it: the
+            // way in seen from outside (its rock face, drawn on this
+            // segment, still whole), the way out seen from inside.
+            const bool way_in = seg.tunnel && !track.segment(index - dir).tunnel;
+            const bool way_out = seg.tunnel && !track.segment(index + dir).tunnel;
+            if (way_in || way_out) {
+                const ScreenPoint& mouth = way_out ? s.p2 : s.p1;
+                const float half = mouth.scale * tunnel_half_width * track.road_width * x_scale_;
+                const float x0 = mouth.x - half, x1 = mouth.x + half;
+                const float mouth_top = mouth.y - mouth.scale * tunnel_height * y_scale;
+                if (way_out) {
+                    // The way out, seen from inside: the wall round it.
+                    fb.set_clip(static_cast<int>(mouth_left), std::max(0, pixel_edge(s.top)),
+                                static_cast<int>(mouth_right), clip_row(max_y));
+                    const Color wall = blend(Color{0x6c, 0x68, 0x62}, track.look(index).fog, 1.f - s.fog);
+                    fb.fill_trapezoid(far_ceiling, 0.f, x0, s.p2.y, 0.f, x0, wall);
+                    fb.fill_trapezoid(far_ceiling, x1, static_cast<float>(fb.width()), s.p2.y, x1,
+                                      static_cast<float>(fb.width()), wall);
+                    fb.reset_clip();
+                }
+                ceiling = std::max(ceiling, mouth_top);
+                mouth_left = std::max(mouth_left, x0);
+                mouth_right = std::min(mouth_right, x1);
+            }
             // The rows it shows, near to far: 1/depth goes linearly up the
             // screen.
             const int y0 = std::max(0, pixel_edge(s.p2.y));
@@ -127,12 +162,26 @@ void RoadRenderer::draw_segment(Framebuffer& fb, const Track& track, const Slice
     const ScreenPoint& b = s.p2; // far
     const int lanes = std::max(1, theme.lanes);
 
-    // Only draw rows above the nearer road already on screen.
-    fb.set_clip(0, 0, fb.width(), clip_row(s.clip));
+    // Only draw rows above the nearer road already on screen, and below the
+    // ceiling of a nearer tunnel.
+    fb.set_clip(static_cast<int>(s.left), std::max(0, pixel_edge(s.top)), static_cast<int>(std::ceil(s.right)),
+                clip_row(s.clip));
 
-    // Grass spans the full width.
+    // Grass spans the full width; in a tunnel its walls, and over them the
+    // ceiling with a lamp now and then.
+    const Color wall[2] = {{0x7c, 0x78, 0x72}, {0x70, 0x6c, 0x66}};
     fb.fill_trapezoid(b.y, 0.f, static_cast<float>(fb.width()),
-                      a.y, 0.f, static_cast<float>(fb.width()), fogged(theme.grass[band]));
+                      a.y, 0.f, static_cast<float>(fb.width()), fogged(seg.tunnel ? wall[band] : theme.grass[band]));
+    if (seg.tunnel) {
+        const float ca = a.y - a.scale * tunnel_height * y_scale_, cb = b.y - b.scale * tunnel_height * y_scale_;
+        fb.fill_trapezoid(ca, 0.f, static_cast<float>(fb.width()), cb, 0.f, static_cast<float>(fb.width()),
+                          fogged(Color{0x34, 0x32, 0x30}));
+        if (s.index % 6 == 0) {
+            const float lw = a.w * 0.08f;
+            fb.fill_trapezoid(ca, a.x - lw, a.x + lw, std::max(cb, ca + 1.f), b.x - lw, b.x + lw,
+                              Color{0xff, 0xec, 0xb0});
+        }
+    }
 
     // Ground beyond a rail or cliff: sea or valley, or rock. It is mostly hidden
     // behind the edge feature itself, which is drawn later with the sprites.
@@ -416,7 +465,7 @@ void RoadRenderer::draw_sprites(Framebuffer& fb, const Track& track, const Sprit
         const int clip = clip_row(s.clip);
         const float fog_amount = 1.f - s.fog;
 
-        fb.set_clip(0, 0, fb.width(), clip);
+        fb.set_clip(static_cast<int>(s.left), std::max(0, pixel_edge(s.top)), static_cast<int>(std::ceil(s.right)), clip);
         if (projectable) {
             draw_edge(fb, track, s, -1);
             draw_edge(fb, track, s, +1);
@@ -463,7 +512,7 @@ void RoadRenderer::draw_sprites(Framebuffer& fb, const Track& track, const Sprit
                 fb.reset_clip();
                 if (o.angle != 0.f) fb.blit_rotated(bmp, o.sx + o.sw / 2.f, o.sy + o.sh / 2.f, o.sw, o.sh, o.angle);
                 else fb.blit_scaled(bmp, o.sx, o.sy, o.sw, o.sh);
-                fb.set_clip(0, 0, fb.width(), clip);
+                fb.set_clip(static_cast<int>(s.left), std::max(0, pixel_edge(s.top)), static_cast<int>(std::ceil(s.right)), clip);
                 return;
             }
             if (!projectable) return;

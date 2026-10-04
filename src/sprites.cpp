@@ -1578,6 +1578,87 @@ void draw_head(Bitmap& b, float x, float y, float r, const Person& p) {
 
 } // namespace
 
+// The rock face round a tunnel's mouth, 256x128 for 16000 world units
+// across: the opening, as wide and high as the tunnel's inside, at the
+// bottom in the middle, framed in concrete.
+Bitmap make_tunnel_portal() {
+    Bitmap b(256, 128);
+    const Color rock[3] = {{0x5c, 0x54, 0x4c}, {0x74, 0x6a, 0x5e}, {0x8c, 0x80, 0x70}};
+    const Color concrete{0xa8, 0xa4, 0x9c}, concrete_dark{0x80, 0x7c, 0x74}, grass{0x4c, 0x80, 0x38};
+    uint32_t r = 0x7e11u;
+    for (int y = 0; y < 128; ++y) {
+        // The hillside's top: a rough line, grass on it.
+        for (int x = 0; x < 256; ++x) {
+            const float d = std::abs(static_cast<float>(x) - 128.f) / 128.f;
+            const int crest = static_cast<int>(10.f + 20.f * d * d + 4.f * std::sin(static_cast<float>(x) * 0.3f));
+            if (y < crest) continue;
+            r = r * 1664525u + 1013904223u;
+            const int band = (y / 7 + (x / 23)) % 3;
+            b.set(x, y, y < crest + 3 ? grass : rock[(band + static_cast<int>((r >> 30) & 1u)) % 3]);
+        }
+    }
+    // The opening (transparent), its concrete frame round it.
+    const float cx = 128.f, half = 40.f, top = 128.f - 42.f, arch = 14.f;
+    for (int y = static_cast<int>(top) - 6; y < 128; ++y) {
+        for (int x = 0; x < 256; ++x) {
+            const float dx = std::abs(static_cast<float>(x) + 0.5f - cx);
+            // Straight walls up to the arch, then an elliptical arch.
+            const auto inside = [&](float h, float t) {
+                if (dx > h) return false;
+                const float yy = static_cast<float>(y) + 0.5f;
+                if (yy >= t + arch) return true;
+                const float e = (yy - (t + arch)) / arch;
+                return dx * dx / (h * h) + e * e <= 1.f;
+            };
+            if (inside(half, top)) b.px[static_cast<size_t>(y) * 256 + static_cast<size_t>(x)] = 0;
+            else if (inside(half + 6.f, top - 6.f)) b.set(x, y, dx > half + 3.f ? concrete_dark : concrete);
+        }
+    }
+    paint::outline(b, Outline);
+    return b;
+}
+
+// A steel truss frame spanning a bridge, 256x96 for 5200 world units: the
+// girders up both sides, the top chord across with its bracing.
+Bitmap make_bridge_truss() {
+    Bitmap b(256, 96);
+    const Color steel{0x5c, 0x70, 0x84}, steel_dark{0x3c, 0x4c, 0x5c}, rivet{0x9c, 0xb0, 0xc0};
+    for (int x : {6, 236}) {
+        paint::rect(b, x, 0, 14, 96, steel);
+        paint::rect(b, x + 10, 0, 4, 96, steel_dark);
+    }
+    paint::rect(b, 6, 0, 244, 12, steel);
+    paint::rect(b, 6, 9, 244, 3, steel_dark);
+    for (int x = 20; x < 236; x += 24) {
+        paint::stroke(b, static_cast<float>(x), 12.f, static_cast<float>(x) + 12.f, 26.f, 3.f, 3.f, steel);
+        paint::stroke(b, static_cast<float>(x) + 24.f, 12.f, static_cast<float>(x) + 12.f, 26.f, 3.f, 3.f, steel);
+    }
+    for (int x = 10; x < 250; x += 8) paint::rect(b, x, 2, 1, 1, rivet);
+    // Diagonal braces down into the corners.
+    paint::stroke(b, 20.f, 12.f, 40.f, 0.f, 3.f, 3.f, steel_dark);
+    paint::stroke(b, 236.f, 12.f, 216.f, 0.f, 3.f, 3.f, steel_dark);
+    paint::outline(b, Outline);
+    return b;
+}
+
+// A road bridge crossing over the road, 256x112 for 6400 world units: the
+// deck with its railing on two pillars.
+Bitmap make_overpass() {
+    Bitmap b(256, 112);
+    const Color concrete{0xb0, 0xac, 0xa4}, shade{0x88, 0x84, 0x7c}, dark{0x64, 0x60, 0x5a};
+    for (int x : {10, 222}) {
+        paint::rect(b, x, 30, 24, 82, concrete);
+        paint::rect(b, x + 18, 30, 6, 82, shade);
+    }
+    paint::rect(b, 0, 6, 256, 24, concrete);
+    paint::rect(b, 0, 22, 256, 8, shade);
+    paint::rect(b, 0, 28, 256, 2, dark);
+    for (int x = 2; x < 256; x += 8) paint::rect(b, x, 0, 2, 6, dark); // the railing's posts
+    paint::rect(b, 0, 0, 256, 2, dark);
+    paint::outline(b, Outline);
+    return b;
+}
+
 Bitmap make_crossing_sign(int lit) {
     Bitmap b(32, 80);
     const Color pole{0x9c, 0x9c, 0xa4}, white{0xf4, 0xf4, 0xf0}, red{0xd0, 0x20, 0x24}, black{0x18, 0x18, 0x1c};
@@ -2556,6 +2637,9 @@ SpriteSheet::SpriteSheet() {
 
     for (int d = 0; d < drivers; ++d) wheels_[static_cast<size_t>(d)] = make_wheel(driver(d));
     scenery_[static_cast<size_t>(Scenery::CrossingSign)] = make_crossing_sign(0);
+    scenery_[static_cast<size_t>(Scenery::TunnelPortal)] = make_tunnel_portal();
+    scenery_[static_cast<size_t>(Scenery::BridgeTruss)] = make_bridge_truss();
+    scenery_[static_cast<size_t>(Scenery::Overpass)] = make_overpass();
     for (int t = 0; t < 3; ++t) ramp_trucks_[static_cast<size_t>(t)] = make_ramp_truck(t);
     crossing_signs_[0] = make_crossing_sign(-1);
     crossing_signs_[1] = make_crossing_sign(1);

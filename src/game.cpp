@@ -1327,7 +1327,7 @@ void Game::update_fares() {
         for (int n = 0; n < 60; ++n, ++i) {
             const Segment& s = track_.segment(i);
             const bool left = track_.look(i).left_hand;
-            if (s.forecourt <= 0.f && (left ? s.left : s.right) == Edge::None) break;
+            if (s.forecourt <= 0.f && !s.tunnel && (left ? s.left : s.right) == Edge::None) break;
         }
         rng_ = rng_ * 1664525u + 1013904223u;
         const int fare = static_cast<int>((rng_ >> 8) % static_cast<uint32_t>(fares));
@@ -1371,7 +1371,7 @@ void Game::update_animals(float dt) {
         const float z = track_.wrap(car_z + animal_ahead * seg);
         const Animal kind = zone_animal(track_.zone_at(z).decor);
         const Segment& s = track_.segment_at(z);
-        if (kind != Animal::None && s.left == Edge::None && s.right == Edge::None && s.forecourt <= 0.f) {
+        if (kind != Animal::None && s.left == Edge::None && s.right == Edge::None && s.forecourt <= 0.f && !s.tunnel) {
             const int dir = (rng_ >> 30) & 1 ? 1 : -1;
             const AnimalInfo& info = animal_info(kind);
             for (int i = 0; i < info.herd; ++i) {
@@ -2486,7 +2486,8 @@ void Game::render() {
                        side, nitro_.intensity(), rng_);
         }
     }
-    weather_.render(fb_);
+    // No rain or snow falls in a tunnel.
+    if (!track_.segment_at(tr.z + cam.player_z()).tunnel) weather_.render(fb_);
     if (setup.cockpit) {
         // The dashboard and the wheel, shaking with the car. On a wide
         // screen the dashboard is centred and its outer edges carry on to

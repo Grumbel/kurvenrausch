@@ -90,6 +90,8 @@ private:
         ScreenPoint p1, p2; // near and far edge (the segment's start and end
                             // looking forward, its end and start looking back)
         float clip;         // occlusion line from nearer road: draw only above
+        float top;          // occlusion line from nearer tunnel ceilings: draw only below
+        float left, right;  // seen through a tunnel's mouth: draw only between
         float fog;          // 1 = clear, 0 = fully fogged
         bool road_visible;
     };
@@ -110,6 +112,7 @@ private:
     std::vector<uint32_t> ground_;
     float camera_depth_ = 1.f;
     float x_scale_ = 1.f;
+    float y_scale_ = 1.f;
     int direction_ = 1;
 };
 

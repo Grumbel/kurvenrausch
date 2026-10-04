@@ -133,6 +133,10 @@ weather and road markings, fading smoothly into one another:
 - **Secrets**: a few cars from the movies are hidden in the game, each
   found by doing the right thing in the right place, each with a trick of
   its own. No dealer sells them
+- **Tunnels and bridges**: through the Alps, Korea and Japan in tunnels,
+  their walls and lamps around you and the way out framed ahead; over the
+  Rhine and the Amazon on steel truss bridges; under road bridges on the
+  Autobahn and in the cities
 - **Trains**: railways cross the road in the Netherlands, Germany, India,
   the outback and Arizona. Now and then a long train comes as you near a
   crossing, the lamps flashing, timed to clear the road just before you get

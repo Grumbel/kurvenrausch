@@ -76,6 +76,9 @@ const SceneryInfo& scenery_info(Scenery kind) {
         /* SportsShowroom*/{4800.f, true, false, false},
         /* SportsSign*/ { 700.f, true,  false, false},
         /* CrossingSign*/{ 500.f, true, false, false},
+        /* TunnelPortal*/{16000.f, false, true, false},
+        /* BridgeTruss*/{ 5200.f, false, true,  false},
+        /* Overpass  */ { 6400.f, false, true,  false},
         /* Townhouse */ {2400.f, true,  false, true},
         /* TownhouseB*/ {2400.f, true,  false, true},
         /* Shop      */ {2600.f, true,  false, false},
@@ -682,6 +685,35 @@ public:
         scenery(at - 3, Scenery::CrossingSign, -1.15f);
     }
 
+    // A tunnel through the hill: walls and a ceiling, a portal at each end.
+    void tunnel(int len, float bend, float hill) {
+        const int from = size();
+        road(len, len, len, bend, hill);
+        for (int i = from; i < size(); ++i) {
+            Segment& s = t_.segments[static_cast<size_t>(i)];
+            s.tunnel = true;
+            s.left = s.right = Edge::None;
+        }
+        scenery(from, Scenery::TunnelPortal, 0.f);
+        scenery(size() - 1, Scenery::TunnelPortal, 0.f); // the way out, seen from inside
+    }
+
+    // A bridge over a river: railings and the water beyond them, a truss
+    // frame over the road every few segments.
+    void bridge(int len) {
+        const int from = size();
+        straight(len);
+        mark(from, size(), Edge::Rail, Edge::Rail);
+        for (int i = from + 4; i < size() - 4; i += 6) scenery(i, Scenery::BridgeTruss, 0.f);
+    }
+
+    // A road bridge crossing over this one.
+    void overpass() {
+        const int from = size();
+        straight(Len::Short / 2);
+        scenery(from + Len::Short * 3 / 4, Scenery::Overpass, 0.f);
+    }
+
     void scenery(int index, Scenery kind, float offset) {
         if (index < 0 || index >= static_cast<int>(t_.segments.size())) return;
         t_.segments[static_cast<size_t>(index)].scenery.push_back({kind, offset});
@@ -1138,6 +1170,7 @@ void decorate(Track& track, TrackBuilder& b, int from, int to, uint32_t seed) {
 
     for (int i = std::max(from, 10); i < to; ++i) {
         const Segment& seg = track.segments[static_cast<size_t>(i)];
+        if (seg.tunnel || track.segment(i + 3).tunnel) continue; // nothing grows inside, nor in the portal's way
         const Zone& zone = track.zones[static_cast<size_t>(track.zone_index[static_cast<size_t>(i)])];
         // Nothing grows on a forecourt, nor just before or after one.
         const bool forecourt = track.segment(i - 8).forecourt > 0.f || seg.forecourt > 0.f ||
@@ -1407,6 +1440,7 @@ Track build_demo_track() {
 
     b.begin_zone(zone_germany());
     b.curve(Len::Medium, -Bend::Medium, Hill::Low);
+    b.bridge(Len::Short); // over the Rhine
     b.hill(Len::Medium, Hill::Medium);
     b.curve(Len::Medium, Bend::Hard, -Hill::Low);
     b.bumps();
@@ -1418,7 +1452,9 @@ Track build_demo_track() {
     // The fast way or the scenic one.
     b.fork("AUTOBAHN", "LANDSTRASSE",
            [&] {
-               b.straight(Len::Medium);
+               b.straight(Len::Short);
+               b.overpass();
+               b.straight(Len::Short / 2);
                b.curve(Len::Long, -Bend::Easy, Hill::Low);
                b.curve(Len::Long, Bend::Easy, -Hill::Low);
            },
@@ -1438,6 +1474,7 @@ Track build_demo_track() {
     b.mark(pass, b.size(), Edge::Cliff, Edge::Rail);
     b.curve(Len::Short, Bend::Medium, Hill::None);
     b.gas_station(); // up on the pass
+    b.tunnel(Len::Short, -Bend::Easy, Hill::None); // through the top of the pass
     const int descent = b.size();
     b.curve(Len::Medium, -Bend::Medium, -Hill::High);
     b.hill(Len::Medium, -Hill::High);
@@ -1477,6 +1514,7 @@ Track build_demo_track() {
     b.begin_zone(zone_korea());
     // Up through the autumn forest and down again.
     b.curve(Len::Medium, Bend::Hard, Hill::Medium);
+    b.tunnel(Len::Short, Bend::Easy, Hill::None);
     b.gas_station();
     b.curve(Len::Medium, -Bend::Hard, -Hill::Medium);
     b.hospital();
@@ -1562,6 +1600,7 @@ Track build_demo_track() {
 
     b.begin_zone(zone_brazil());
     // Through the rainforest in a downpour, and down to the start.
+    b.bridge(Len::Short); // over the Amazon
     b.curve(Len::Medium, Bend::Medium, Hill::Low);
     b.gas_station();
     b.curve(Len::Medium, -Bend::Hard, Hill::None);
@@ -1654,6 +1693,7 @@ Track build_track(int index) {
 
     b.begin_zone(city(zone_france(), "PARIS", Scenery::Tree));
     b.straight(Len::Short);
+    b.overpass();
     streets(1);
     b.gas_station();
     streets(-1);
@@ -1720,6 +1760,7 @@ Track build_track(int index) {
     b.gas_station();
     b.begin_zone(zone_germany());
     b.curve(Len::Medium, -Bend::Medium, Hill::Low);
+    b.bridge(Len::Short); // over the Rhine
     b.hill(Len::Medium, Hill::Medium);
     b.curve(Len::Medium, Bend::Hard, -Hill::Low);
     b.bumps();
@@ -1754,6 +1795,7 @@ Track build_track(int index) {
     b.mark(pass, b.size(), Edge::Cliff, Edge::Rail);
     b.curve(Len::Short, Bend::Medium, Hill::None);
     b.gas_station();
+    b.tunnel(Len::Medium, -Bend::Easy, Hill::None); // the long tunnel under the pass
     const int descent = b.size();
     b.curve(Len::Medium, -Bend::Medium, -Hill::High);
     b.hill(Len::Medium, -Hill::High);
@@ -1833,6 +1875,7 @@ Track build_track(int index) {
     b.sports_dealer();
     b.begin_zone(zone_japan());
     b.curve(Len::Medium, Bend::Medium, Hill::Low);
+    b.tunnel(Len::Short, Bend::Easy, Hill::None);
     b.gas_station();
     b.curve(Len::Medium, -Bend::Medium, -Hill::Low);
     b.begin_zone(city(zone_japan(), "KYOTO", Scenery::CherryTree, TownStyle::Modern));
@@ -1879,6 +1922,7 @@ Track build_track(int index) {
            });
     b.motel();
     b.begin_zone(city(zone_california(), "LOS ANGELES", Scenery::Palm, TownStyle::Modern));
+    b.overpass(); // the freeway over the street
     streets(-1);
     b.gas_station();
     streets(1);
@@ -1906,6 +1950,7 @@ Track build_track(int index) {
     streets(1);
     b.gas_station();
     b.begin_zone(zone_brazil());
+    b.bridge(Len::Short);
     b.curve(Len::Medium, Bend::Medium, Hill::Low);
     b.gas_station();
     b.curve(Len::Medium, -Bend::Hard, Hill::None);

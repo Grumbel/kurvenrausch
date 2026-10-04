@@ -125,6 +125,14 @@ the road/framebuffer rewrite, `Color::to_u32()` became `Color::argb()`.
     the outback for 10 s
   Their looks: `movie_car_extras()` draws the scanner light, the coils, the
   blower over the player's car
+- Tunnels: `Segment::tunnel` (`TrackBuilder::tunnel()`); the renderer draws
+  walls for the verges and a ceiling `tunnel_height` up, with lamps; nearer
+  ceilings clip what is beyond from above (`Slice::top`), and past a mouth
+  everything beyond is clipped to the opening (`Slice::left/right`); seen
+  from inside, the wall round the way out is filled in. `TunnelPortal` at
+  both ends (opening = `tunnel_half_width`, `tunnel_height`). No weather,
+  animals or fares inside. Bridges (`bridge()`: rails, water beyond,
+  `BridgeTruss` frames) and `overpass()`
 
 ## Round 17: touch controls at screen resolution, the wide screen
 

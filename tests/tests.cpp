@@ -1830,7 +1830,8 @@ void check_track(const racer::Track& t) {
         CHECK(look.grip > 0.3f && look.grip <= 1.f);
         // Nothing is planted on a side that carries a rail or cliff.
         for (const RoadsideObject& o : s.scenery) {
-            if (o.kind == Scenery::Gantry) continue;
+            // (What spans the road stands over it: the gantry, portals, bridges.)
+            if (scenery_info(o.kind).centered && !scenery_info(o.kind).solid) continue;
             CHECK(!(o.offset < 0.f && s.left != Edge::None));
             CHECK(!(o.offset > 0.f && s.right != Edge::None));
             // Landmarks and solid objects must stay clear of the road itself.
@@ -1850,6 +1851,32 @@ void check_track(const racer::Track& t) {
     }
     CHECK(cliff && rail);
     CHECK(max_rain > 0.5f && max_snow > 0.5f);
+
+    // Tunnels: a portal at each end, nothing else inside; bridges and
+    // overpasses span the road.
+    int tunnels = 0, trusses = 0, overpasses = 0;
+    for (int i = 0; i < n; ++i) {
+        const Segment& s = t.segments[static_cast<size_t>(i)];
+        for (const RoadsideObject& o : s.scenery) {
+            trusses += o.kind == Scenery::BridgeTruss;
+            overpasses += o.kind == Scenery::Overpass;
+            if (s.tunnel) CHECK(o.kind == Scenery::TunnelPortal);
+        }
+        if (s.tunnel && !t.segment(i - 1).tunnel) {
+            ++tunnels;
+            bool portal = false;
+            for (const RoadsideObject& o : s.scenery) portal = portal || o.kind == Scenery::TunnelPortal;
+            CHECK(portal && s.left == Edge::None && s.right == Edge::None);
+        }
+    }
+    for (const Branch& br : t.branches) { // (and on the routes of forks not taken)
+        for (const auto& route : br.routes) {
+            for (const Segment& s : route) {
+                for (const RoadsideObject& o : s.scenery) overpasses += o.kind == Scenery::Overpass;
+            }
+        }
+    }
+    CHECK(tunnels >= 2 && trusses > 0 && overpasses > 0);
 
     // Level crossings: on the straight, a crossbuck either side before them.
     CHECK(t.crossings().size() >= 5);

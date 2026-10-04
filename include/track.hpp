@@ -75,6 +75,9 @@ enum class Scenery : uint8_t {
     SportsShowroom, // a sports car dealer's showroom, beyond its forecourt
     SportsSign,   // the tall sign announcing it
     CrossingSign, // a railway crossbuck with its two red lamps
+    TunnelPortal, // the rock face round a tunnel's mouth, centred over the road
+    BridgeTruss,  // a steel truss frame spanning a bridge
+    Overpass,     // a road bridge crossing over the road
     Townhouse,    // a European town house: plaster, shutters, a tiled roof
     TownhouseB,   // ... in other colours
     Shop,         // a shop with its awning, flats above
@@ -147,6 +150,7 @@ struct Segment {
     bool alt = false;      // alternating colour band (rumble / grass stripes)
     bool checker = false;  // start/finish line
     bool rails = false;    // a level crossing: a railway crosses the road here
+    bool tunnel = false;   // inside a tunnel: walls beside the road, a ceiling over it
     Edge left = Edge::None;
     Edge right = Edge::None;
     float edge_fade = 1.f; // 0..1, cliffs grow and shrink at the ends of a run
@@ -227,6 +231,11 @@ struct RoadTheme {
 inline float lane_center(int lanes, int index) {
     return (2.f * static_cast<float>(index) + 1.f) / static_cast<float>(lanes) - 1.f;
 }
+
+// A tunnel's inside: the ceiling this high over the road, the walls this
+// far out (road half-widths of the standard road), as the portal's opening.
+constexpr float tunnel_height = 2600.f;
+constexpr float tunnel_half_width = 1.25f;
 
 // Every road carries traffic both ways: one lane comes towards the player,
 // the leftmost where traffic keeps to the right, the rightmost where it
