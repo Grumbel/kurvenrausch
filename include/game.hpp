@@ -267,6 +267,7 @@ private:
     std::array<std::vector<int>, lot_kinds> lots_; // first full-width forecourt segment of each lot, per kind
     std::optional<Lot> offer_;  // standing at a lot with a choice: it is on offer
     int lot_steer_ = 0;         // the steering last step, to choose once per push
+    bool hospital_ambulance_ = false; // at the hospital, the ambulance (after the drivers) is chosen
     std::optional<Lot> autopilot_visit_; // headless: the autopilot visits the next lot of this kind
     Dirt dirt_;
     bool washing_ = false;      // standing in a car wash, being cleaned

@@ -1145,6 +1145,7 @@ void Game::visit_lot(const InputState& input) {
     // On offer only while the car stands, and not as it pulls away: steering
     // out of the lot must not pick another car.
     offer_ = choice && speed_pct < offer_speed && input.throttle < 0.1f ? here : std::nullopt;
+    if (here != Lot::Hospital) hospital_ambulance_ = false; // back at a hospital, the drivers first
     if (here == Lot::Hospital && bandaged_) {
         bandaged_ = false;
         synth_.trigger_ding();
@@ -1163,9 +1164,20 @@ void Game::visit_lot(const InputState& input) {
             case Lot::Motel:
                 passenger_ = (passenger_ + push + passengers) % passengers;
                 break;
-            default:
-                driver_ = (driver_ + push + drivers) % drivers;
+            default: {
+                // The drivers, and after the last of them the ambulance.
+                const int pick = (hospital_ambulance_ ? drivers : driver_) + push;
+                const int n = drivers + 1;
+                const int next = (pick % n + n) % n;
+                hospital_ambulance_ = next == drivers;
+                if (hospital_ambulance_) {
+                    car_model_ = ambulance_model;
+                    change_car();
+                } else {
+                    driver_ = next;
+                }
                 break;
+            }
         }
         synth_.trigger_ding();
         save_choices();
@@ -1576,6 +1588,8 @@ void Game::update_audio(const InputState& input, float dt) {
 int Game::indicator(Entity e, const Transform& t, const Traffic& traffic) const {
     // The police car's lightbar flashes red, blue, red, ... until it gives up.
     if (traffic.kind == Vehicle::Police) return chase_.giving_up ? 0 : static_cast<int>(clock_ / 0.12f) % 2 ? 1 : -1;
+    // An ambulance's lightbar: every other one is on a call.
+    if (traffic.kind == Vehicle::Ambulance) return e % 2 ? 0 : static_cast<int>(clock_ / 0.12f) % 2 ? 1 : -1;
     const float d = traffic.target_x - t.x;
     if (traffic.dir < 0 || std::abs(d) < 0.02f) return 0;
     const float phase = static_cast<float>(e % 5) * 0.11f; // they don't all blink in step
@@ -1909,8 +1923,12 @@ void Game::render() {
     }
     if (beacon_) {
         // The lightbar flashing, red and blue in turn.
-        paint_lightbar(player_bitmap_, static_cast<int>(clock_ / 0.12f) % 2 ? 1 : -1, 48 + 2 * shown_steer,
-                       SpriteSheet::player_headroom - 1);
+        const int lit = static_cast<int>(clock_ / 0.12f) % 2 ? 1 : -1;
+        if (car_model(car_model_).body == Body::Ambulance) {
+            paint_lightbar(player_bitmap_, lit, ambulance_lightbar_x, ambulance_lightbar_y);
+        } else {
+            paint_lightbar(player_bitmap_, lit, 48 + 2 * shown_steer, SpriteSheet::player_headroom - 1);
+        }
     }
     const Bitmap& car = player_bitmap_;
     const float scale = setup.car ? cam.depth / setup.distance * x_unit : 1.f;
@@ -2063,7 +2081,8 @@ void Game::render() {
     hud.headlights = headlights_;
     if (offer_) {
         hud.offer_title = lot_name(*offer_);
-        if (*offer_ == Lot::Dealer || *offer_ == Lot::SportsDealer || *offer_ == Lot::Truckstop) {
+        if (*offer_ == Lot::Dealer || *offer_ == Lot::SportsDealer || *offer_ == Lot::Truckstop ||
+            (*offer_ == Lot::Hospital && hospital_ambulance_)) {
             const CarModel& m = car_model(car_model_);
             hud.offer_name = m.name;
             hud.offer_stats = true;

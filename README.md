@@ -119,8 +119,12 @@ weather and road markings, fading smoothly into one another:
   Kenya and the outback to have it washed clean
 - **Motels and hospitals**: stop at a motel (India, Route 66) and steer left
   or right to pick up another passenger, among them a granny and a dog; at a
-  hospital (Holland, Korea) another driver takes the wheel. A crash leaves
-  the driver with a bandage round the head until a hospital patches them up
+  hospital (Holland, Korea) another driver takes the wheel, or, past the
+  last of them, you take an ambulance. A crash leaves the driver with a
+  bandage round the head until a hospital patches them up
+- **Emergency vehicles**: ambulances in the traffic, every other one on a
+  call with its lights flashing; drive the Patrol car or the ambulance and
+  the hazard switch works the lightbar and siren, and the traffic pulls over
 - **Camera views**: the classic chase view, a far one from higher up, the
   bumper, and the cockpit with the dashboard and the wheel turning in the
   driver's hands (higher up in the truck)

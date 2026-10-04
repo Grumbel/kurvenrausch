@@ -10,7 +10,7 @@ namespace racer {
 const VehicleInfo& vehicle_info(Vehicle kind) {
     static const VehicleInfo infos[] = {
         //              width   speeds        styles share
-        /* Car   */ {600.f, 0.25f, 0.60f, 7, 0.35f},
+        /* Car   */ {600.f, 0.25f, 0.60f, 7, 0.33f},
         /* Van   */ {650.f, 0.25f, 0.45f, 3, 0.14f},
         /* Truck */ {700.f, 0.20f, 0.35f, 3, 0.13f},
         /* Rival */ {620.f, 0.78f, 0.90f, 2, 0.05f},
@@ -18,6 +18,7 @@ const VehicleInfo& vehicle_info(Vehicle kind) {
         /* Hatch */ {540.f, 0.25f, 0.55f, 5, 0.16f},
         /* Pickup*/ {640.f, 0.28f, 0.55f, 3, 0.10f},
         /* Bus   */ {720.f, 0.18f, 0.30f, 3, 0.07f},
+        /* Ambulance*/{650.f, 0.35f, 0.70f, 1, 0.02f},
     };
     static_assert(sizeof(infos) / sizeof(infos[0]) == static_cast<size_t>(Vehicle::Count),
                   "vehicle_info() needs an entry for every Vehicle");
@@ -57,16 +58,18 @@ const CarModel& car_model(int index) {
         {"COACH",       0.76f, 0.50f, 1.35f, B::Bus,      R::Trucks,  720.f}, // a bus: the slowest and steadiest of all
         {"ROADSTER",    1.04f, 1.10f, 0.90f, B::Car,      R::Sports,  600.f}, // the golden convertible
         {"SUPERCAR",    1.19f, 1.00f, 0.88f, B::Racer,    R::Sports,  620.f}, // the fastest flat out
+        {"AMBULANCE",   0.89f, 0.84f, 1.08f, B::Ambulance, R::Emergency, 650.f}, // from the hospital
     };
     return models[((index % car_models) + car_models) % car_models];
 }
 
 bool body_shows_people(Body body) { return body == Body::Car || body == Body::Rig || body == Body::Police; }
 
-bool body_has_lightbar(Body body) { return body == Body::Police; }
+bool body_has_lightbar(Body body) { return body == Body::Police || body == Body::Ambulance; }
 
 bool body_is_tall(Body body) {
-    return body == Body::Rig || body == Body::Van || body == Body::BoxTruck || body == Body::Bus;
+    return body == Body::Rig || body == Body::Van || body == Body::BoxTruck || body == Body::Bus ||
+           body == Body::Ambulance;
 }
 
 int next_car_in_range(int current, CarRange range, int step) {

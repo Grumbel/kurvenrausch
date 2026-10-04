@@ -1988,6 +1988,39 @@ void lightbar(Bitmap& b, int lit) { paint_lightbar(b, lit, 48, 0); }
 
 } // namespace
 
+namespace {
+
+// A red cross on white, `r` pixels to each arm's end, centred on (cx, cy).
+void red_cross(Bitmap& b, int cx, int cy, int r) {
+    const Color red{0xd8, 0x20, 0x24};
+    paint::rect(b, cx - r - 1, cy - r - 1, 2 * r + 3, 2 * r + 3, Color{0xf4, 0xf4, 0xf4});
+    paint::rect(b, cx - r, cy - r / 3, 2 * r + 1, 2 * (r / 3) + 1, red);
+    paint::rect(b, cx - r / 3, cy - r, 2 * (r / 3) + 1, 2 * r + 1, red);
+}
+
+} // namespace
+
+Bitmap make_ambulance(const CarStyle& style, int signal, int lights, bool brake, int tread) {
+    Bitmap b = make_van(style, signal, brake, tread);
+    const Color red{0xd8, 0x20, 0x24};
+    paint::rect(b, 4, 38, 96, 6, red); // the stripe round the body
+    for (int x = 4; x < 100; x += 8) paint::rect(b, x, 44, 4, 2, Color{0xf8, 0xd0, 0x20}); // chequers
+    red_cross(b, 31, 32, 4);
+    red_cross(b, 73, 32, 4);
+    paint_lightbar(b, lights, ambulance_lightbar_x, ambulance_lightbar_y);
+    paint::outline(b, Outline);
+    return b;
+}
+
+Bitmap make_ambulance_front(const CarStyle& style, int lights, int tread) {
+    Bitmap b = make_van_front(style, 0, tread);
+    paint::rect(b, 4, 30, 96, 3, Color{0xd8, 0x20, 0x24});
+    paint::text(b, 25, 44, "AMBULANCE", Color{0xd8, 0x20, 0x24});
+    paint_lightbar(b, lights, ambulance_lightbar_x, ambulance_lightbar_y);
+    paint::outline(b, Outline);
+    return b;
+}
+
 Bitmap make_police(const CarStyle& style, int lights, bool brake, int tread) {
     Bitmap b = make_car(style, 0, 0, brake, tread);
     lightbar(b, lights);
@@ -2297,6 +2330,7 @@ SpriteSheet::SpriteSheet() {
         {{{0x98, 0x98, 0xa4}, {0xe0, 0xe0, 0xe8}, {0xff, 0xff, 0xff}, false}, false}, // Coach
         {{{0x8c, 0x6c, 0x20}, {0xd0, 0xa8, 0x40}, {0xf0, 0xd8, 0x90}, true}, false},  // Roadster
         {{{0x58, 0x6c, 0x08}, {0x9c, 0xc8, 0x10}, {0xf0, 0xf0, 0xf8}, false}, false}, // Supercar
+        {{{0xc0, 0xc0, 0xc8}, {0xf4, 0xf4, 0xf8}, {0xff, 0xff, 0xff}, false}, false}, // Ambulance
     };
     for (int model = 0; model < car_models; ++model) {
         const PlayerLook& look = looks[model];
@@ -2315,6 +2349,7 @@ SpriteSheet::SpriteSheet() {
                             case Body::Hatch: b = make_hatch(st, signal, brake, t); break;
                             case Body::Pickup: b = make_pickup(st, signal, brake, t); break;
                             case Body::Bus: b = make_bus(st, signal, brake, t); break;
+                            case Body::Ambulance: b = make_ambulance(st, signal, 0, brake, t); break;
                             case Body::BoxTruck: b = make_truck(st, signal, brake, t); break;
                             case Body::Racer: b = make_rival(st, signal, brake, t); break;
                             case Body::Police: b = make_player_police(st, turn, brake, signal, t, player_headroom); break;
@@ -2360,6 +2395,7 @@ SpriteSheet::SpriteSheet() {
         /* Bus */ {{{0x9c, 0x14, 0x14}, {0xd8, 0x28, 0x24}, {0xf0, 0x70, 0x60}, false},   // city bus
                    {{0x98, 0x98, 0xa4}, {0xe0, 0xe0, 0xe8}, {0xff, 0xff, 0xff}, false},   // coach
                    {{0xb0, 0x88, 0x08}, {0xf0, 0xc0, 0x10}, {0xff, 0xe8, 0x70}, false}},  // school bus
+        /* Ambulance */ {{{0xc0, 0xc0, 0xc8}, {0xf4, 0xf4, 0xf8}, {0xff, 0xff, 0xff}, false}},
     };
     static_assert(sizeof(styles) / sizeof(styles[0]) == static_cast<size_t>(Vehicle::Count),
                   "every vehicle kind needs its colours");
@@ -2378,6 +2414,7 @@ SpriteSheet::SpriteSheet() {
                             case Vehicle::Hatch: rear = make_hatch(st, signal, brake, t); break;
                             case Vehicle::Pickup: rear = make_pickup(st, signal, brake, t); break;
                             case Vehicle::Bus: rear = make_bus(st, signal, brake, t); break;
+                            case Vehicle::Ambulance: rear = make_ambulance(st, 0, signal, brake, t); break;
                             case Vehicle::Truck: rear = make_truck(st, signal, brake, t); break;
                             case Vehicle::Rival: rear = make_rival(st, signal, brake, t); break;
                             case Vehicle::Police: rear = make_police(st, signal, brake, t); break;
@@ -2389,6 +2426,7 @@ SpriteSheet::SpriteSheet() {
                         case Vehicle::Hatch: v.front[s][tf] = make_hatch_front(st, signal, t); break;
                         case Vehicle::Pickup: v.front[s][tf] = make_pickup_front(st, signal, t); break;
                         case Vehicle::Bus: v.front[s][tf] = make_bus_front(st, signal, t); break;
+                        case Vehicle::Ambulance: v.front[s][tf] = make_ambulance_front(st, signal, t); break;
                         case Vehicle::Truck: v.front[s][tf] = make_truck_front(st, signal, t); break;
                         case Vehicle::Rival: v.front[s][tf] = make_rival_front(st, signal, t); break;
                         case Vehicle::Police: v.front[s][tf] = make_police_front(st, signal, t); break;

@@ -17,6 +17,7 @@ enum class Vehicle : uint8_t {
     Hatch,  // a small hatchback
     Pickup,
     Bus,    // city buses, coaches and school buses: slow
+    Ambulance, // some on a call, lights flashing and in a hurry
     Count
 };
 
@@ -54,9 +55,11 @@ enum class Body : uint8_t {
     Hatch,    // the traffic's hatchback
     Pickup,   // the traffic's pickup
     Bus,      // the traffic's bus
+    Ambulance,// the traffic's ambulance
 };
 // Where a car is sold.
-enum class CarRange : uint8_t { Regular, Sports, Trucks };
+// (Emergency: the ambulance, which the hospital hands out, no dealer.)
+enum class CarRange : uint8_t { Regular, Sports, Trucks, Emergency };
 
 // The cars the player can drive. The factors are of the standard car, the
 // Spider: top speed, acceleration and grip; the width is in world units.
@@ -69,7 +72,8 @@ struct CarModel {
     CarRange range;
     float width;
 };
-constexpr int car_models = 17;
+constexpr int car_models = 18;
+constexpr int ambulance_model = 17;
 const CarModel& car_model(int index);
 
 // Seen through: the people show through the rear window (or over the seats).

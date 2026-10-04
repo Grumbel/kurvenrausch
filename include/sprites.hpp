@@ -49,6 +49,12 @@ Bitmap make_van_front(const CarStyle& style, int signal, int tread = 0);
 // column cx with its top at row y: `lit` -1 flashes the red, +1 the blue,
 // 0 neither.
 void paint_lightbar(Bitmap& b, int lit, int cx, int y);
+// An ambulance: the panel van in white, a red stripe and crosses, its
+// lightbar `lights` (as paint_lightbar()) on the roof.
+Bitmap make_ambulance(const CarStyle& style, int signal, int lights, bool brake, int tread = 0); // 104x64
+Bitmap make_ambulance_front(const CarStyle& style, int lights, int tread = 0);
+// Where its lightbar sits.
+constexpr int ambulance_lightbar_x = 52, ambulance_lightbar_y = 1;
 Bitmap make_hatch(const CarStyle& style, int signal, bool brake, int tread = 0);    // 86x46
 Bitmap make_hatch_front(const CarStyle& style, int signal, int tread = 0);
 Bitmap make_pickup(const CarStyle& style, int signal, bool brake, int tread = 0);   // 102x58

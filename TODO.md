@@ -74,6 +74,11 @@ the road/framebuffer rewrite, `Color::to_u32()` became `Color::argb()`.
   once a step and looks only at neighbours in range (`nearby`). `World::view`
   looks each component store up once. 3000 headless steps on the Grand
   Tour: 5.2 s before, 0.36 s after
+- Emergency vehicles: `body_has_lightbar()` (Patrol, Ambulance); the hazard
+  switch toggles `Game::beacon_` instead (lightbar painted over the car with
+  `paint_lightbar`, siren, traffic yields as to the horn). Traffic kind and
+  model AMBULANCE (`ambulance_model`, `CarRange::Emergency`), handed out at
+  the hospital after the drivers (`hospital_ambulance_`)
 
 ## Round 17: touch controls at screen resolution, the wide screen
 
