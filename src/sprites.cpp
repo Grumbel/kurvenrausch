@@ -1599,6 +1599,23 @@ Bitmap make_crossing_sign(int lit) {
     return b;
 }
 
+Bitmap make_ramp_truck(int tread) {
+    const CarStyle black{{0x06, 0x06, 0x08}, {0x14, 0x14, 0x18}, {0x40, 0x40, 0x48}, false};
+    Bitmap b = make_truck(black, 0, false, tread);
+    // The doors swung open against the sides, the lit inside, the ramp.
+    paint::rect(b, 10, 6, 92, 76, Color{0x30, 0x2c, 0x34});
+    paint::rect(b, 14, 10, 84, 70, Color{0x58, 0x54, 0x60});
+    for (int x = 20; x < 96; x += 12) paint::rect(b, x, 12, 6, 3, Color{0xff, 0xf0, 0xc0}); // lamps inside
+    paint::rect(b, 2, 4, 8, 78, Color{0x10, 0x10, 0x14});
+    paint::rect(b, 102, 4, 8, 78, Color{0x10, 0x10, 0x14});
+    for (int y = 80; y < 104; ++y) {
+        const int inset = (104 - y) / 3;
+        paint::rect(b, 30 - inset / 2, y, 52 + inset, 1, (y / 3) % 2 ? Color{0x88, 0x8c, 0x94} : Color{0x6c, 0x70, 0x78});
+    }
+    paint::outline(b, Outline);
+    return b;
+}
+
 Bitmap make_train_car(int kind) {
     Bitmap b(128, 52);
     const Color wheel{0x20, 0x20, 0x24}, frame{0x30, 0x30, 0x38};
@@ -2500,6 +2517,10 @@ SpriteSheet::SpriteSheet() {
         {{{0x8c, 0x6c, 0x20}, {0xd0, 0xa8, 0x40}, {0xf0, 0xd8, 0x90}, true}, false},  // Roadster
         {{{0x58, 0x6c, 0x08}, {0x9c, 0xc8, 0x10}, {0xf0, 0xf0, 0xf8}, false}, false}, // Supercar
         {{{0xc0, 0xc0, 0xc8}, {0xf4, 0xf4, 0xf8}, {0xff, 0xff, 0xff}, false}, false}, // Ambulance
+        {{{0x06, 0x06, 0x08}, {0x16, 0x16, 0x1a}, {0x48, 0x48, 0x52}, false}, false}, // Scanner
+        {{{0x7c, 0x80, 0x88}, {0xb4, 0xb8, 0xc0}, {0xe4, 0xe8, 0xee}, false}, false}, // Time car
+        {{{0x6c, 0x74, 0x6c}, {0xa4, 0xac, 0xa4}, {0xd4, 0xdc, 0xd4}, false}, false}, // Spy car
+        {{{0x0a, 0x0a, 0x0a}, {0x20, 0x1e, 0x1c}, {0x7c, 0x68, 0x28}, false}, false}, // Interceptor
     };
     for (int model = 0; model < car_models; ++model) {
         const PlayerLook& look = looks[model];
@@ -2535,6 +2556,7 @@ SpriteSheet::SpriteSheet() {
 
     for (int d = 0; d < drivers; ++d) wheels_[static_cast<size_t>(d)] = make_wheel(driver(d));
     scenery_[static_cast<size_t>(Scenery::CrossingSign)] = make_crossing_sign(0);
+    for (int t = 0; t < 3; ++t) ramp_trucks_[static_cast<size_t>(t)] = make_ramp_truck(t);
     crossing_signs_[0] = make_crossing_sign(-1);
     crossing_signs_[1] = make_crossing_sign(1);
     for (int k = 0; k <= train_wagon_kinds; ++k) train_cars_[static_cast<size_t>(k)] = make_train_car(k);

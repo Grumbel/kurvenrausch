@@ -53,6 +53,10 @@ void paint_lightbar(Bitmap& b, int lit, int cx, int y);
 // A railway crossbuck with its two red lamps, `lit` -1 the left, +1 the
 // right, 0 neither; 32x80.
 Bitmap make_crossing_sign(int lit);
+// The black truck from behind, its doors open and the ramp down to the
+// road, 112x104.
+Bitmap make_ramp_truck(int tread);
+
 // A train from the side, facing right: the locomotive (0) and its wagons
 // (1 .. train_wagon_kinds), 128 wide.
 constexpr int train_wagon_kinds = 3;
@@ -160,6 +164,8 @@ public:
     const Bitmap& wheel(int driver_index) const {
         return wheels_[static_cast<size_t>(((driver_index % drivers) + drivers) % drivers)];
     }
+    // The black truck with its ramp down, tyre frame `tread`.
+    const Bitmap& ramp_truck(int tread) const { return ramp_trucks_[static_cast<size_t>(((tread % 3) + 3) % 3)]; }
     // The crossbuck with a lamp lit (-1 left, +1 right).
     const Bitmap& crossing_sign(int lit) const { return crossing_signs_[lit < 0 ? 0 : 1]; }
     // A train's locomotive (0) or a wagon (1 .. train_wagon_kinds).
@@ -222,6 +228,7 @@ private:
     std::array<std::array<Bitmap, 2>, fares> pedestrians_;
     std::array<std::array<Bitmap, 2>, animal_kinds> animals_;
     std::array<Bitmap, 2> crossing_signs_;
+    std::array<Bitmap, 3> ramp_trucks_;
     std::array<Bitmap, train_wagon_kinds + 1> train_cars_;
     std::array<Bitmap, drivers> wheels_;
     mutable std::map<uint32_t, Bitmap> occupants_;

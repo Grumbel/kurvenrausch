@@ -98,6 +98,11 @@ constexpr float hail_reach = 4.f;
 constexpr float fare_stop_speed = 0.02f;
 constexpr float hail_kerb = 1.06f;
 constexpr float progress_save_seconds = 30.f; // how often the position is saved
+// The movie cars (see update_movie_cars()).
+constexpr float mph88_low = 139.f, mph88_high = 145.f; // km/h: 88 mph, about
+constexpr float mph88_seconds = 4.f;
+constexpr float night_run_seconds = 10.f;
+constexpr float scanner_jump = 9000.f; // world units a second up
 // Trains (see update_train()): decided for a crossing this many segments
 // ahead, this often, at this speed (road half-widths a second); one car is
 // this long (world units); its tail clears the road this long before the
@@ -266,6 +271,13 @@ void Game::spawn_traffic() {
         traffic.cruise = speed;
         world_.add<Traffic>(car, traffic);
     }
+    // One truck in the USA drives with its ramp down.
+    bool ramp = false;
+    world_.view<Transform, Traffic>([&](Entity, Transform& t, Traffic& traffic) {
+        if (!ramp && traffic.kind == Vehicle::Truck && traffic.dir > 0 && track_.zone_at(t.z).country == "USA") {
+            traffic.ramp = ramp = true;
+        }
+    });
 }
 
 bool Game::init(bool fullscreen) {
@@ -980,7 +992,12 @@ void Game::fixed_update(const InputState& driver_input, float dt) {
     // Horn, nitro and the wave after a close pass.
     horn_ = input.horn;
     nitro_.update(dt);
-    if (input.nitro && !nitro_held_ && !fuel_.empty()) nitro_.fire();
+    if (input.nitro && !nitro_held_ && !fuel_.empty() && nitro_.fire() && car_model_ == scanner_model &&
+        !vertical_.airborne) {
+        // The scanner car's turbo boost: a leap.
+        vertical_.vy = scanner_jump;
+        vertical_.airborne = true;
+    }
     nitro_held_ = input.nitro;
     if (wave_time_ > 0.f) wave_time_ -= dt;
 
@@ -1056,6 +1073,7 @@ void Game::fixed_update(const InputState& driver_input, float dt) {
     update_fuel(input, dt);
     visit_lot(input);
     update_fares();
+    update_movie_cars(input, dt);
     update_wash(dt);
     const float drive = engine_on_ ? input.throttle * (1.f - input.brake) : 0.f;
     reverse_armed_ = reverse_armed(reverse_armed_, vel.speed, input.throttle, input.brake);
@@ -1452,6 +1470,122 @@ void Game::update_train(float dt) {
         const float car_half = player.car_width / track_.half_width_at(car_z) / 2.f;
         const float at = static_cast<float>(train_.dir) * tr.x;
         if (at + car_half > train_tail() && at - car_half < train_.front) start_crash(1.f);
+    }
+}
+
+void Game::update_movie_cars(const InputState& input, float dt) {
+    auto& tr = world_.get<Transform>(player_);
+    auto& vel = world_.get<Velocity>(player_);
+    const auto& player = world_.get<Player>(player_);
+    const float player_z = world_.get<Camera>(camera_).player_z();
+    const float car_z = tr.z + player_z;
+    const bool horn_pressed = input.horn && !movie_horn_;
+    movie_horn_ = input.horn;
+    if (crash_time_ >= 0.f) return;
+    const auto become = [&](int model, const char* message) {
+        if (car_model_ != model) {
+            car_model_ = model;
+            change_car();
+        }
+        synth_.trigger_ding();
+        show_message(message, 2.5f);
+    };
+
+    // Held at 88 mph a while: a flash, sparks, and the clock jumps; the car
+    // becomes the time machine.
+    const float kmh = std::abs(vel.speed) / base_max_speed_ * top_speed_kmh;
+    if (mph88_ < 0.f) mph88_ = std::min(0.f, mph88_ + dt);
+    else if (kmh > mph88_low && kmh < mph88_high && !vertical_.airborne) mph88_ += dt;
+    else mph88_ = std::max(0.f, mph88_ - 0.5f * dt); // drifting off a moment loses a little
+    if (mph88_ > mph88_seconds) {
+        mph88_ = -20.f;
+        flash_time_ = 0.5f;
+        synth_.trigger_whoosh(1.f);
+        if (options_.time == TimeSetting::Cycle) {
+            rng_ = rng_ * 1664525u + 1013904223u;
+            hour_ = advance_hour(hour_, (6.f + 12.f * static_cast<float>(rng_ >> 8) / 16777216.f) / 24.f * day_seconds);
+        }
+        const float x = static_cast<float>(width_) / 2.f;
+        for (int i = 0; i < 30; ++i) {
+            rng_ = rng_ * 1664525u + 1013904223u;
+            const float a = static_cast<float>(rng_ >> 8) / 16777216.f;
+            particles_.push_back({x + (a - 0.5f) * 90.f, ground_y - 4.f, (a - 0.5f) * 400.f, -60.f - 200.f * a, 0.7f, 0.7f,
+                                  1.f, i % 2 ? Color{0xff, 0xa0, 0x30} : Color{0x80, 0xc0, 0xff}, Particle::Kind::Debris});
+        }
+        become(time_car_model, "88 MPH!");
+    }
+
+    // Flat out through the outback at night: the last of the V8s.
+    const bool night = daylight_at(hour_).level < 0.5f;
+    if (night && track_.zone_at(car_z).decor == Decor::Outback && vel.speed >= 0.95f * player.max_speed) {
+        night_run_ += dt;
+    } else {
+        night_run_ = 0.f;
+    }
+    if (night_run_ > night_run_seconds && car_model_ != interceptor_model) {
+        night_run_ = 0.f;
+        become(interceptor_model, "LAST OF THE V8S");
+    }
+
+    // The horn at a sports car dealer orders the special car.
+    if (horn_pressed && offer_ == Lot::SportsDealer) become(spy_car_model, "SPECIAL ORDER");
+
+    // The spy car's horn drops oil on the road behind it.
+    if (horn_pressed && car_model_ == spy_car_model && vel.speed > 0.1f * player.max_speed) {
+        const int at = track_.index_at(car_z) - 4;
+        for (int i = 0; i < 4; ++i) {
+            Segment& s = track_.segments[static_cast<size_t>(((at - i) % static_cast<int>(track_.segments.size()) +
+                                                              static_cast<int>(track_.segments.size())) %
+                                                             static_cast<int>(track_.segments.size()))];
+            s.patch = Patch::Oil;
+            s.patch_x = tr.x;
+            s.patch_w = 0.35f;
+        }
+        show_message("OIL!", 1.f);
+    }
+
+    // Up the ramp into the black truck, slowly and straight: out comes the
+    // scanner car.
+    world_.view<Transform, Velocity, Traffic>([&](Entity, Transform& t, Velocity& v, Traffic& traffic) {
+        if (!traffic.ramp || car_model_ == scanner_model) return;
+        const float gap = signed_gap(car_z, t.z, track_.length());
+        const float closing = vel.speed - v.speed;
+        if (gap > 0.f && gap < 1.5f * track_.segment_length && std::abs(tr.x - t.x) < 0.12f && closing > 0.f &&
+            closing < 0.15f * player.max_speed) {
+            become(scanner_model, "WELCOME BACK");
+            tr.z = track_.wrap(t.z - player_z - 6.f * track_.segment_length);
+            vel.speed = v.speed;
+            place_on_road(vertical_, track_.height_at(tr.z + player_z));
+        }
+    });
+}
+
+void Game::movie_car_extras(Bitmap& car, int turn) const {
+    const int h = SpriteSheet::player_headroom;
+    const int u = 2 * turn;
+    switch (car_model_) {
+        case scanner_model: {
+            // The red light sweeping to and fro across the back.
+            paint::rect(car, 30 + u, h + 25, 36, 3, Color{0x30, 0x04, 0x04});
+            const float t = std::fmod(clock_ * 1.2f, 2.f);
+            const int x = 30 + u + static_cast<int>((t < 1.f ? t : 2.f - t) * 30.f);
+            paint::rect(car, x, h + 25, 6, 3, Color{0xff, 0x30, 0x30});
+            paint::rect(car, x + 2, h + 26, 2, 1, Color{0xff, 0xf8, 0xf0});
+            break;
+        }
+        case time_car_model: {
+            // The glowing coils at the back, pulsing.
+            const bool on = std::fmod(clock_, 0.3f) < 0.15f;
+            for (int x : {22, 68}) paint::rect(car, x + u, h + 6, 6, 4, on ? Color{0x80, 0xc0, 0xff} : Color{0x30, 0x60, 0xa0});
+            break;
+        }
+        case interceptor_model: {
+            // The blower sticking up out of the bonnet, seen over the roof.
+            paint::rect(car, 42 + u, h - 6, 12, 6, Color{0x90, 0x90, 0x98});
+            paint::rect(car, 44 + u, h - 9, 8, 3, Color{0x30, 0x30, 0x34});
+            break;
+        }
+        default: break;
     }
 }
 
@@ -2082,6 +2216,15 @@ void Game::update_police(float dt) {
     v.speed += std::clamp(move.speed - v.speed, -top * dt, 0.6f * top * dt);
     t.z = track_.wrap(t.z + v.speed * dt);
     t.x += std::clamp(move.x - t.x, -1.2f * dt, 1.2f * dt); // pulling out, cutting in
+    // Onto oil (the spy car's), the chase is over: it spins out and drops back.
+    if (!chase_.giving_up && chase_.phase != ChasePhase::Leaving &&
+        track_.patch_under(t.z, t.x, vehicle_info(Vehicle::Police).width / track_.half_width_at(t.z) / 2.f) == Patch::Oil) {
+        chase_.phase = ChasePhase::Leaving;
+        chase_.giving_up = true;
+        v.speed *= 0.3f;
+        synth_.trigger_ding();
+        show_message("ESCAPED!", 3.f);
+    }
     gap = signed_gap(t.z, car_z, track_.length()) / track_.segment_length;
     const bool done = chase_.giving_up || chase_.phase == ChasePhase::Leaving;
     siren_ = done ? 0.f : 1.f / (1.f + std::abs(gap) / 15.f);
@@ -2180,9 +2323,10 @@ void Game::render() {
         s.z = t.z;
         // Going the player's way it shows its back, coming the other way its
         // front and headlights.
-        s.bitmap = traffic.dir > 0 ? &sprites_.vehicle(traffic.kind, traffic.style, indicator(e, t, traffic),
-                                                       traffic.braking, SpriteSheet::tyre_frame(t.z))
-                                   : &sprites_.vehicle_front(traffic.kind, traffic.style, 0, SpriteSheet::tyre_frame(t.z));
+        s.bitmap = traffic.ramp     ? &sprites_.ramp_truck(SpriteSheet::tyre_frame(t.z))
+                   : traffic.dir > 0 ? &sprites_.vehicle(traffic.kind, traffic.style, indicator(e, t, traffic),
+                                                         traffic.braking, SpriteSheet::tyre_frame(t.z))
+                                     : &sprites_.vehicle_front(traffic.kind, traffic.style, 0, SpriteSheet::tyre_frame(t.z));
         s.offset = t.x;
         s.world_width = vehicle_info(traffic.kind).width;
         s.lights = traffic.dir; // their headlights and tail lights at night
@@ -2256,6 +2400,7 @@ void Game::render() {
             if (people.px[i] >> 24) player_bitmap_.px[i] = people.px[i];
         }
     }
+    movie_car_extras(player_bitmap_, shown_steer);
     if (beacon_) {
         // The lightbar flashing, red and blue in turn.
         const int lit = static_cast<int>(clock_ / 0.12f) % 2 ? 1 : -1;

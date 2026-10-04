@@ -112,6 +112,19 @@ the road/framebuffer rewrite, `Color::to_u32()` became `Color::argb()`.
   seconds before (a near miss when driving on steadily); in sight it runs
   on. Hitting it is a crash; the traffic stops for it (movers). Lamps flash
   (`crossing_sign(lit)` drawn over the sign). No sound for it yet
+- Movie cars (`CarRange::Secret`, kept out of the README on purpose), in
+  `Game::update_movie_cars()`:
+  - SCANNER (talking car): drive slowly and straight into the back of the
+    one black truck with its ramp down (`Traffic::ramp`, in the USA); its
+    nitro leaps
+  - TIME CAR: 139..145 km/h (88 mph) held 4 s; a flash, sparks, the clock
+    jumps 6..18 hours, every time
+  - SPY CAR: the horn while a sports dealer offers its cars; its horn drops
+    oil behind it, and a chasing police car that hits oil gives up
+  - INTERCEPTOR: at night, flat out (95% of the car's top speed) through
+    the outback for 10 s
+  Their looks: `movie_car_extras()` draws the scanner light, the coils, the
+  blower over the player's car
 
 ## Round 17: touch controls at screen resolution, the wide screen
 

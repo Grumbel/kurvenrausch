@@ -176,6 +176,11 @@ private:
     // then a train crosses timed to clear the road just before the car gets
     // there at the speed it goes; faster, it may not.
     void update_train(float dt);
+    // The movie cars: found by doing the right thing in the right place (see
+    // vehicles.hpp), each with its trick.
+    void update_movie_cars(const InputState& input, float dt);
+    // Drawn over the player's car: a movie car's lights and parts.
+    void movie_car_extras(Bitmap& car, int turn) const;
     // Where the train runs across the road, by part: road half-widths along
     // its way (dir), from the locomotive's front back.
     float train_tail() const;
@@ -314,6 +319,9 @@ private:
     };
     Train train_;
     int train_decided_ = -1; // the crossing the next train was decided for
+    float mph88_ = 0.f;       // seconds held at 88 mph (negative: cooling down)
+    float night_run_ = 0.f;   // seconds flat out through the outback at night
+    bool movie_horn_ = false; // the horn last step, for presses
     float crossing_wait_ = animal_min_wait; // seconds until the next one
     std::optional<Lot> autopilot_visit_; // headless: the autopilot visits the next lot of this kind
     Dirt dirt_;

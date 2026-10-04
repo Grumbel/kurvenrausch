@@ -57,6 +57,7 @@ struct Traffic {
     float gap = 0.f;        // distance ahead of the player's car at the last step
     float startled = 0.f;   // seconds of hurried swerving left after a honk
     int dir = 1;            // +1 the player's way, -1 oncoming
+    bool ramp = false;      // the black truck with its ramp down (see Game::update_movie_cars)
 };
 
 struct Camera {

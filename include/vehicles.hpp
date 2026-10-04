@@ -58,8 +58,9 @@ enum class Body : uint8_t {
     Ambulance,// the traffic's ambulance
 };
 // Where a car is sold.
-// (Emergency: the ambulance, which the hospital hands out, no dealer.)
-enum class CarRange : uint8_t { Regular, Sports, Trucks, Emergency };
+// (Emergency: the ambulance, which the hospital hands out, no dealer.
+// Secret: the movie cars, found by doing the right thing in the right place.)
+enum class CarRange : uint8_t { Regular, Sports, Trucks, Emergency, Secret };
 
 // The cars the player can drive. The factors are of the standard car, the
 // Spider: top speed, acceleration and grip; the width is in world units.
@@ -72,8 +73,13 @@ struct CarModel {
     CarRange range;
     float width;
 };
-constexpr int car_models = 18;
+constexpr int car_models = 22;
 constexpr int ambulance_model = 17;
+// The movie cars (CarRange::Secret), and how they are found:
+constexpr int scanner_model = 18;     // a talking car's parody: up the ramp into a black truck in the USA
+constexpr int time_car_model = 19;    // a time machine's: held at 88 mph a while
+constexpr int spy_car_model = 20;     // a spy's: the horn at a sports car dealer
+constexpr int interceptor_model = 21; // a road warrior's: flat out through the outback at night
 constexpr int taxi_model = 6; // people hail it
 const CarModel& car_model(int index);
 

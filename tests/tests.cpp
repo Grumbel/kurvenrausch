@@ -1634,7 +1634,8 @@ void test_car_models() {
         CHECK(m.name != nullptr && m.name[0] != '\0');
         CHECK(m.top_speed > 0.75f && m.top_speed < 1.2f);
         for (int b = 0; b < car_models; ++b) {
-            if (a == b) continue;
+            // (The movie cars are rewards: they may simply be better.)
+            if (a == b || m.range == CarRange::Secret || car_model(b).range == CarRange::Secret) continue;
             const CarModel& o = car_model(b);
             CHECK(!(m.top_speed >= o.top_speed && m.acceleration >= o.acceleration && m.grip >= o.grip));
         }

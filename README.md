@@ -130,6 +130,9 @@ weather and road markings, fading smoothly into one another:
   road; out in the desert and the outback the night is as dark as it gets.
   The traffic's headlights light the road ahead of them, their tail lights
   glow red behind
+- **Secrets**: a few cars from the movies are hidden in the game, each
+  found by doing the right thing in the right place, each with a trick of
+  its own. No dealer sells them
 - **Trains**: railways cross the road in the Netherlands, Germany, India,
   the outback and Arizona. Now and then a long train comes as you near a
   crossing, the lamps flashing, timed to clear the road just before you get

@@ -60,6 +60,10 @@ const CarModel& car_model(int index) {
         {"ROADSTER",    1.04f, 1.10f, 0.90f, B::Car,      R::Sports,  600.f}, // the golden convertible
         {"SUPERCAR",    1.19f, 1.00f, 0.88f, B::Racer,    R::Sports,  620.f}, // the fastest flat out
         {"AMBULANCE",   0.89f, 0.84f, 1.08f, B::Ambulance, R::Emergency, 650.f}, // from the hospital
+        {"SCANNER",     1.16f, 1.15f, 0.98f, B::Car,      R::Secret,  600.f}, // black, a red light sweeping; nitro jumps
+        {"TIME CAR",    1.05f, 1.05f, 1.05f, B::Car,      R::Secret,  600.f}, // stainless steel; 88 mph travels in time
+        {"SPY CAR",     1.10f, 1.08f, 1.06f, B::Car,      R::Secret,  600.f}, // silver birch; the horn drops oil
+        {"INTERCEPTOR", 1.19f, 1.20f, 0.85f, B::Car,      R::Secret,  600.f}, // black, a blower on the bonnet
     };
     return models[((index % car_models) + car_models) % car_models];
 }
