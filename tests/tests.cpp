@@ -1016,6 +1016,25 @@ void test_touch() {
     CHECK(m.update(side) == MenuAction::ToggleWide);
 }
 
+void test_oncoming_lanes() {
+    using namespace racer;
+    // Keeping right, the oncoming lane is the leftmost; keeping left, the
+    // rightmost. The rest go the player's way.
+    CHECK(oncoming_lane(2, false) == 0 && oncoming_lane(2, true) == 1);
+    CHECK(oncoming_lane(3, false) == 0 && oncoming_lane(3, true) == 2);
+    CHECK(std::abs(own_side(2, false) - 0.5f) < 1e-5f && std::abs(own_side(2, true) + 0.5f) < 1e-5f);
+    CHECK(std::abs(own_side(3, false) - 1.f / 3.f) < 1e-5f);
+    CHECK(nearest_own_lane(3, false, -1.f) == 1 && nearest_own_lane(3, false, 1.f) == 2);
+    CHECK(nearest_own_lane(3, true, 1.f) == 1 && nearest_own_lane(2, true, 1.f) == 0);
+    // Which countries keep left.
+    const Track t = build_demo_track();
+    for (const Zone& z : t.zones) {
+        const bool left = z.country == "ENGLAND" || z.country == "JAPAN" || z.country == "AUSTRALIA" ||
+                          z.country == "INDIA" || z.country == "KENYA";
+        CHECK(z.theme.left_hand == left);
+    }
+}
+
 void test_options() {
     using namespace racer;
     Options o;
@@ -2369,6 +2388,7 @@ int main() {
     test_daylight();
     test_touch();
     test_options();
+    test_oncoming_lanes();
     test_police();
     test_climate();
     test_music();

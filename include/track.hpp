@@ -4,6 +4,7 @@
 #pragma once
 #include "types.hpp"
 
+#include <cmath>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -214,6 +215,7 @@ struct RoadTheme {
     // Road markings (discrete: the nearer zone wins while blending)
     int lanes = 3;                      // 2 or 3
     bool us_markings = false;           // yellow double centre line, white edge lines
+    bool left_hand = false;             // traffic keeps to the left (England, Japan, ...)
     Color center_line{0xe8, 0xc0, 0x20};
 };
 
@@ -221,6 +223,25 @@ struct RoadTheme {
 // in road half-widths: -2/3, 0, 2/3 for three lanes, -1/2, 1/2 for two.
 inline float lane_center(int lanes, int index) {
     return (2.f * static_cast<float>(index) + 1.f) / static_cast<float>(lanes) - 1.f;
+}
+
+// Every road carries traffic both ways: one lane comes towards the player,
+// the leftmost where traffic keeps to the right, the rightmost where it
+// keeps to the left; the others (one on a two-lane road, two on a
+// three-lane one) go the player's way.
+inline int oncoming_lane(int lanes, bool left_hand) { return left_hand ? lanes - 1 : 0; }
+// The middle of the lanes going the player's way, in road half-widths.
+inline float own_side(int lanes, bool left_hand) {
+    return -lane_center(lanes, oncoming_lane(lanes, left_hand)) / static_cast<float>(lanes - 1);
+}
+// The lane going the player's way nearest to x.
+inline int nearest_own_lane(int lanes, bool left_hand, float x) {
+    int best = -1;
+    for (int i = 0; i < lanes; ++i) {
+        if (i == oncoming_lane(lanes, left_hand)) continue;
+        if (best < 0 || std::abs(lane_center(lanes, i) - x) < std::abs(lane_center(lanes, best) - x)) best = i;
+    }
+    return best;
 }
 
 // Blends two looks: colours and numbers interpolate, anything discrete is

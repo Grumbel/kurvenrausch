@@ -56,6 +56,15 @@ the road/framebuffer rewrite, `Color::to_u32()` became `Color::argb()`.
   TRACK line (`MenuAction::ChangeTrack`); `Choices::track`; lap records
   carry the track (`LapRecord::track`, a sixth field; older lines are the
   small world) and the record is per track. `--track N` headless
+- Oncoming traffic: `Traffic::dir` (-1 oncoming, `oncoming_share` of the
+  spawn, never rivals or the police). Every road has one oncoming lane
+  (`oncoming_lane()`: leftmost, or rightmost where `RoadTheme::left_hand`,
+  set for England, Japan, Australia, India, Kenya and their cities); the
+  others go the player's way (`nearest_own_lane()`), and traffic going
+  that way never overtakes into it. Oncoming cars follow each other, swerve
+  `oncoming_dodge` out and slow down when the player is in their lane,
+  show `vehicle_front` (the mirror their back), and a head-on meeting
+  (`check_close_passes`) is a crash. The autopilot keeps to its side
 
 ## Round 17: touch controls at screen resolution, the wide screen
 

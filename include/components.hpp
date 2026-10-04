@@ -56,6 +56,7 @@ struct Traffic {
     bool braking = false;   // slowing down this step: brake lights on
     float gap = 0.f;        // distance ahead of the player's car at the last step
     float startled = 0.f;   // seconds of hurried swerving left after a honk
+    int dir = 1;            // +1 the player's way, -1 oncoming
 };
 
 struct Camera {

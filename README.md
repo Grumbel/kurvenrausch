@@ -75,6 +75,11 @@ weather and road markings, fading smoothly into one another:
   races you when you come close; it changes lanes to pass, blinking its
   indicators, or brakes behind slower vehicles (and you) when it can't;
   rear-ending one slows you down
+- **Oncoming traffic**: one lane of every road comes towards you, headlights
+  and all, on the country's side of the road: the left lane where traffic
+  keeps right, the right lane in England, Japan, Australia, India and Kenya
+  (three-lane roads are two lanes your way and one against). Meet a car
+  head-on and you crash; it swerves and brakes when it sees you coming
 - Working brake lights, on your car and on the traffic; tyres that roll and
   flicker at speed
 - **Horn**: cars ahead in your line signal and pull over to let you through

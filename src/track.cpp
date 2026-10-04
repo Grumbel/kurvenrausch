@@ -387,7 +387,8 @@ RoadTheme mix_themes(const RoadTheme& a, const RoadTheme& b, float t) {
     r.grip = f(a.grip, b.grip);
     r.road_scale = f(a.road_scale, b.road_scale);
     r.center_line = c(a.center_line, b.center_line);
-    // lanes and us_markings are discrete: they stay those of the nearer theme.
+    // lanes, us_markings and left_hand are discrete: they stay those of the
+    // nearer theme.
     return r;
 }
 
@@ -720,6 +721,7 @@ Zone zone_england() {
     t.lanes = 2;
     t.road_scale = 0.62f; // narrow country lanes
     z.theme.showers = 0.60f;
+    z.theme.left_hand = true;
     return z;
 }
 
@@ -774,6 +776,7 @@ Zone zone_japan() {
     t.lanes = 2;
     t.road_scale = 0.75f;
     z.theme.showers = 0.50f;
+    z.theme.left_hand = true;
     return z;
 }
 
@@ -835,6 +838,7 @@ Zone zone_kenya() {
     t.cloud_tint_amount = 0.5f;
     t.road_scale = 0.85f;
     z.theme.showers = 0.40f;
+    z.theme.left_hand = true;
     return z;
 }
 
@@ -853,6 +857,7 @@ Zone zone_india() {
     t.mountain_scale = 0.4f;
     t.road_scale = 0.8f;
     z.theme.showers = 0.85f; // the monsoon
+    z.theme.left_hand = true;
     return z;
 }
 
@@ -888,6 +893,7 @@ Zone zone_australia() {
     t.hill_scale = 0.3f;
     t.road_scale = 0.85f;
     z.theme.showers = 0.10f;
+    z.theme.left_hand = true;
     return z;
 }
 

@@ -21,6 +21,9 @@ namespace {
 
 // Traffic density: one vehicle per this many segments of the lap.
 constexpr int segments_per_vehicle = 60;
+constexpr float oncoming_share = 0.4f; // of the traffic comes the other way
+constexpr float oncoming_dodge = 0.3f; // an oncoming car meeting the player in its lane swerves this far out ...
+constexpr float oncoming_alarm = 25.f; // ... from this many segments away
 
 // Honking: cars this far ahead (in segments) and this close to the player's
 // line (road half-widths) pull over; they swerve faster for a while.
@@ -221,11 +224,15 @@ void Game::spawn_traffic() {
         const Entity car = world_.create();
         // Keep the start straight clear.
         const float segment = 60.f + rnd() * (n - 80.f);
-        const int lanes = track_.look(static_cast<int>(segment)).lanes;
-        const float lane = lane_center(lanes, static_cast<int>(rnd() * static_cast<float>(lanes)) % lanes);
-        world_.add<Transform>(car, Transform{lane, 0.f, segment * seg_len});
+        const RoadTheme& look = track_.look(static_cast<int>(segment));
         Traffic traffic;
         traffic.kind = traffic_vehicle(rnd());
+        // Some come the other way, in their lane; the rest pick one of the
+        // lanes going the player's way. Rivals race the player's way.
+        if (rnd() < oncoming_share && traffic.kind != Vehicle::Rival) traffic.dir = -1;
+        const int own = nearest_own_lane(look.lanes, look.left_hand, rnd() * 2.f - 1.f);
+        const float lane = lane_center(look.lanes, traffic.dir < 0 ? oncoming_lane(look.lanes, look.left_hand) : own);
+        world_.add<Transform>(car, Transform{lane, 0.f, segment * seg_len});
         const VehicleInfo& info = vehicle_info(traffic.kind);
         const float speed = max_speed * (info.min_speed + (info.max_speed - info.min_speed) * rnd());
         world_.add<Velocity>(car, Velocity{speed});
@@ -580,7 +587,7 @@ void Game::leave_attract() {
 void Game::follow_next_car() {
     std::vector<Entity> cars;
     world_.view<Traffic>([&](Entity e, Traffic& t) {
-        if (e != attract_car_ && (t.kind == Vehicle::Car || t.kind == Vehicle::Van || t.kind == Vehicle::Truck)) {
+        if (e != attract_car_ && t.dir > 0 && (t.kind == Vehicle::Car || t.kind == Vehicle::Van || t.kind == Vehicle::Truck)) {
             cars.push_back(e);
         }
     });
@@ -848,7 +855,10 @@ InputState Game::autopilot() const {
     // Low on fuel with a gas station coming up: move over to the right, slow
     // down, pull onto the forecourt and wait there until the tank is full.
     // Asked to visit another kind of lot (--visit), it does the same there, and stays.
-    float target_x = 0.f;
+    const RoadTheme& side_look = track_.look_at(tr.z + cam.player_z());
+    // The lane going its way nearest the middle of the road.
+    float target_x = lane_center(side_look.lanes, nearest_own_lane(side_look.lanes, side_look.left_hand, 0.f));
+    const float cruise_x = target_x;
     float speed_limit = 1.f;
     const bool fuel = fuel_.level() < 0.45f || (refuelling_ && !fuel_.full());
     if (fuel || autopilot_visit_) {
@@ -868,7 +878,7 @@ InputState Game::autopilot() const {
 
     InputState in;
     in.steer = wanted > 0.3f ? 1.f : wanted < -0.3f ? -1.f : 0.f;
-    const bool coast = std::abs(drift) > 1.f && std::abs(tr.x) > 0.6f && target_x == 0.f;
+    const bool coast = std::abs(drift) > 1.f && std::abs(tr.x - cruise_x) > 0.6f && target_x == cruise_x;
     const bool slow = pct > speed_limit;
     in.throttle = coast || slow || pct > speed_limit * 0.9f ? 0.f : 1.f;
     in.brake = coast || slow ? 1.f : 0.f;
@@ -1053,7 +1063,7 @@ void Game::fixed_update(const InputState& driver_input, float dt) {
     const int car_segment = track_.index_at(tr.z + player_z);
     const float car_w = player.car_width / track_.half_width_at(tr.z + player_z);
     world_.view<Transform, Velocity, Traffic>([&](Entity, Transform& t, Velocity& v, Traffic& traffic) {
-        if (airborne || vel.speed <= v.speed || track_.index_at(t.z) != car_segment) return;
+        if (airborne || traffic.dir < 0 || vel.speed <= v.speed || track_.index_at(t.z) != car_segment) return;
         const float w = vehicle_info(traffic.kind).width / track_.half_width_at(tr.z + player_z);
         if (!overlap(tr.x, car_w, t.x, w * 0.8f)) return;
         vel.speed = v.speed * (v.speed / vel.speed);
@@ -1237,8 +1247,10 @@ void Game::start_crash(float speed_pct) {
     crash_time_ = 0.f;
     crash_side_ = tr.x < 0.f ? -1 : 1;
     crash_x_ = tr.x;
-    const int lanes = track_.look_at(tr.z + world_.get<Camera>(camera_).player_z()).lanes;
-    crash_target_x_ = lane_center(lanes, crash_side_ < 0 ? 0 : lanes - 1);
+    // Back on the road in the outer lane going the player's way on that side.
+    const RoadTheme& look = track_.look_at(tr.z + world_.get<Camera>(camera_).player_z());
+    crash_target_x_ = lane_center(look.lanes, nearest_own_lane(look.lanes, look.left_hand,
+                                                                static_cast<float>(crash_side_) * 2.f));
     crashed_ = true;
     nitro_.stop();
     wave_time_ = 0.f;
@@ -1468,6 +1480,18 @@ void Game::check_close_passes() {
     const float max_step = 4.f * track_.segment_length;
     world_.view<Transform, Traffic>([&](Entity, Transform& t, Traffic& traffic) {
         const float gap = signed_gap(car_z, t.z, track_.length());
+        if (traffic.dir < 0) {
+            // Oncoming: met head-on, a crash; close by, only the whoosh.
+            const float w = vehicle_info(traffic.kind).width / track_.half_width_at(car_z);
+            const bool met = traffic.gap > 0.f && gap <= 0.f && traffic.gap - gap < 2.f * max_step;
+            if (met && crash_time_ < 0.f && !vertical_.airborne && overlap(tr.x, car_w, t.x, w * 0.8f)) {
+                start_crash(std::min(1.f, std::abs(vel.speed) / player.max_speed + 0.5f));
+            } else if (crash_time_ < 0.f && close_pass(traffic.gap, gap, t.x - tr.x, car_w, 2.f * max_step)) {
+                synth_.trigger_whoosh(0.3f + 0.5f * std::min(vel.speed / player.max_speed, 1.f));
+            }
+            traffic.gap = gap;
+            return;
+        }
         if (crash_time_ < 0.f && close_pass(traffic.gap, gap, t.x - tr.x, car_w, max_step)) {
             const float speed_pct = vel.speed / player.max_speed;
             vel.speed = boosted_speed(vel.speed, player.max_speed);
@@ -1535,29 +1559,33 @@ int Game::indicator(Entity e, const Transform& t, const Traffic& traffic) const 
     // The police car's lightbar flashes red, blue, red, ... until it gives up.
     if (traffic.kind == Vehicle::Police) return chase_.giving_up ? 0 : static_cast<int>(clock_ / 0.12f) % 2 ? 1 : -1;
     const float d = traffic.target_x - t.x;
-    if (std::abs(d) < 0.02f) return 0;
+    if (traffic.dir < 0 || std::abs(d) < 0.02f) return 0;
     const float phase = static_cast<float>(e % 5) * 0.11f; // they don't all blink in step
     return std::fmod(clock_ + phase, 0.7f) < 0.4f ? (d < 0.f ? -1 : 1) : 0;
 }
 
 void Game::update_traffic(float dt) {
-    struct Mover { Entity e; float x, z, speed; };
+    struct Mover { Entity e; float x, z, speed; int dir; };
     std::vector<Mover> movers;
     const auto& ptr = world_.get<Transform>(player_);
     const float player_world_z = ptr.z + world_.get<Camera>(camera_).player_z();
     // (In the attract mode the player's car is where the followed car is:
     // not in anybody's way.)
-    if (!attract_) movers.push_back({player_, ptr.x, player_world_z, world_.get<Velocity>(player_).speed});
-    world_.view<Transform, Velocity, Traffic>([&](Entity e, Transform& t, Velocity& v, Traffic&) {
-        movers.push_back({e, t.x, t.z, v.speed});
+    if (!attract_) movers.push_back({player_, ptr.x, player_world_z, world_.get<Velocity>(player_).speed, 1});
+    world_.view<Transform, Velocity, Traffic>([&](Entity e, Transform& t, Velocity& v, Traffic& traffic) {
+        movers.push_back({e, t.x, t.z, v.speed, traffic.dir});
     });
 
     const float look_ahead = 6.f * track_.segment_length;
-    auto distance_ahead = [&](float from, float to) { return track_.wrap(to - from); };
-    // Is anyone within `range` ahead or behind near lateral position x?
+    // How far `to` is ahead of `from` for someone going `dir`.
+    auto distance_ahead = [&](float from, float to, int dir = 1) {
+        return track_.wrap((to - from) * static_cast<float>(dir));
+    };
+    // Is anyone going the player's way within `range` ahead or behind near
+    // lateral position x?
     auto lane_busy = [&](Entity self, float z, float x, float range) {
         for (const Mover& m : movers) {
-            if (m.e == self || std::abs(m.x - x) > 0.4f) continue;
+            if (m.e == self || m.dir < 0 || std::abs(m.x - x) > 0.4f) continue;
             const float d = distance_ahead(z, m.z);
             if (d < range || track_.length() - d < range * 0.5f) return true;
         }
@@ -1568,24 +1596,48 @@ void Game::update_traffic(float dt) {
     world_.view<Transform, Velocity, Traffic>([&](Entity e, Transform& t, Velocity& v, Traffic& traffic) {
         if (traffic.kind == Vehicle::Police) return; // it chases, see update_police()
         // The road may have a different number of lanes here than where the
-        // car was heading: aim for the nearest lane that exists.
-        const int lanes = track_.look_at(t.z).lanes;
+        // car was heading, or keep to the other side: aim for the nearest
+        // lane that exists and goes its way.
+        const RoadTheme& look = track_.look_at(t.z);
+        const int lanes = look.lanes;
+        const int against = oncoming_lane(lanes, look.left_hand);
         const float spacing = 2.f / static_cast<float>(lanes);
-        {
-            float best = lane_center(lanes, 0);
-            for (int i = 1; i < lanes; ++i) {
-                const float lane = lane_center(lanes, i);
-                if (std::abs(lane - traffic.target_x) < std::abs(best - traffic.target_x)) best = lane;
+        const int dir = traffic.dir;
+        if (dir < 0) {
+            // Coming the other way. Meeting the player in its lane, it
+            // swerves out and slows down.
+            traffic.target_x = lane_center(lanes, against);
+            const float towards = distance_ahead(t.z, player_world_z, -1);
+            const bool alarm = !attract_ && towards < oncoming_alarm * track_.segment_length &&
+                               std::abs(ptr.x - t.x) < 0.6f;
+            if (alarm) traffic.target_x += (look.left_hand ? 1.f : -1.f) * oncoming_dodge;
+            float wanted = alarm ? 0.6f * traffic.cruise : traffic.cruise;
+            for (const Mover& m : movers) {
+                if (m.e == e || m.dir > 0 || std::abs(m.x - t.x) > follow_width) continue;
+                const float d = distance_ahead(t.z, m.z, -1);
+                if (d < follow_range * track_.segment_length) {
+                    wanted = std::min(wanted, follow_speed(traffic.cruise, m.speed, d,
+                                                           follow_gap * track_.segment_length, follow_closing));
+                }
             }
-            traffic.target_x = best;
+            traffic.braking = v.speed - wanted > 0.02f * max_speed;
+            if (wanted < v.speed) v.speed = std::max(wanted, v.speed - traffic_brake * max_speed * dt);
+            else v.speed = std::min(wanted, v.speed + traffic_accel * max_speed * dt);
+            const float step = (alarm ? 1.4f : 0.8f) * dt;
+            t.x += std::clamp(traffic.target_x - t.x, -step, step);
+            t.z = track_.wrap(t.z - v.speed * dt);
+            return;
         }
+        traffic.target_x = lane_center(lanes, nearest_own_lane(lanes, look.left_hand, traffic.target_x));
 
         // Honked at from behind while in the player's way: pull over to the
         // nearest free lane out of the player's line, in a hurry.
         if (horn_ && distance_ahead(player_world_z, t.z) < honk_range * track_.segment_length &&
             std::abs(t.x - ptr.x) < honk_clearance && std::abs(traffic.target_x - ptr.x) < honk_clearance) {
             std::vector<bool> busy(static_cast<size_t>(lanes));
-            for (int i = 0; i < lanes; ++i) busy[static_cast<size_t>(i)] = lane_busy(e, t.z, lane_center(lanes, i), look_ahead);
+            for (int i = 0; i < lanes; ++i) {
+                busy[static_cast<size_t>(i)] = i == against || lane_busy(e, t.z, lane_center(lanes, i), look_ahead);
+            }
             const int lane = yield_lane(lanes, t.x, ptr.x, honk_clearance, busy);
             if (lane >= 0) {
                 traffic.target_x = lane_center(lanes, lane);
@@ -1598,11 +1650,12 @@ void Game::update_traffic(float dt) {
         // neighbouring lane is clear.
         bool blocked = false;
         for (const Mover& m : movers) {
-            if (m.e == e || std::abs(m.x - t.x) > 0.5f || m.speed >= v.speed) continue;
+            if (m.e == e || m.dir < 0 || std::abs(m.x - t.x) > 0.5f || m.speed >= v.speed) continue;
             if (distance_ahead(t.z, m.z) < look_ahead) { blocked = true; break; }
         }
         if (blocked && std::abs(t.x - traffic.target_x) < 0.05f) {
             for (int i = 0; i < lanes; ++i) {
+                if (i == against) continue; // never overtakes into the oncoming lane
                 const float lane = lane_center(lanes, i);
                 if (std::abs(lane - t.x) < 0.15f * spacing || std::abs(lane - t.x) > 1.1f * spacing) continue;
                 if (!lane_busy(e, t.z, lane, look_ahead)) { traffic.target_x = lane; break; }
@@ -1621,7 +1674,7 @@ void Game::update_traffic(float dt) {
                                          signed_gap(t.z, player_world_z, track_.length()) / track_.segment_length)
                            : traffic.cruise;
         for (const Mover& m : movers) {
-            if (m.e == e || std::abs(m.x - t.x) > follow_width) continue;
+            if (m.e == e || m.dir < 0 || std::abs(m.x - t.x) > follow_width) continue;
             const float d = distance_ahead(t.z, m.z);
             if (d < follow_range * track_.segment_length) {
                 wanted = std::min(wanted, follow_speed(traffic.cruise, m.speed, d,
@@ -1785,8 +1838,11 @@ void Game::render() {
     world_.view<Transform, Traffic>([&](Entity e, Transform& t, Traffic& traffic) {
         RoadSprite s;
         s.z = t.z;
-        s.bitmap = &sprites_.vehicle(traffic.kind, traffic.style, indicator(e, t, traffic), traffic.braking,
-                                     SpriteSheet::tyre_frame(t.z));
+        // Going the player's way it shows its back, coming the other way its
+        // front and headlights.
+        s.bitmap = traffic.dir > 0 ? &sprites_.vehicle(traffic.kind, traffic.style, indicator(e, t, traffic),
+                                                       traffic.braking, SpriteSheet::tyre_frame(t.z))
+                                   : &sprites_.vehicle_front(traffic.kind, traffic.style, 0, SpriteSheet::tyre_frame(t.z));
         s.offset = t.x;
         s.world_width = vehicle_info(traffic.kind).width;
         road_sprites_.push_back(s);
@@ -2054,8 +2110,10 @@ void Game::render_mirror() {
     world_.view<Transform, Traffic>([&](Entity e, Transform& t, Traffic& traffic) {
         RoadSprite s;
         s.z = t.z;
-        s.bitmap = &sprites_.vehicle_front(traffic.kind, traffic.style, indicator(e, t, traffic),
-                                           SpriteSheet::tyre_frame(t.z));
+        s.bitmap = traffic.dir > 0 ? &sprites_.vehicle_front(traffic.kind, traffic.style, indicator(e, t, traffic),
+                                                             SpriteSheet::tyre_frame(t.z))
+                                   : &sprites_.vehicle(traffic.kind, traffic.style, 0, traffic.braking,
+                                                       SpriteSheet::tyre_frame(t.z));
         s.offset = t.x;
         s.world_width = vehicle_info(traffic.kind).width;
         mirror_sprites_.push_back(s);
