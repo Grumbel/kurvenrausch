@@ -88,6 +88,7 @@ constexpr bool web = true; // running in a web page
 constexpr bool web = false;
 #endif
 constexpr float refuel_speed = 0.08f;
+constexpr float nitro_fill_seconds = 1.f; // a canister filled at the chemical plant
 constexpr float offer_speed = 0.01f; // a lot offers its choice below this speed (of top speed)
 // Fares (see update_fares()): how many wait ahead at a time, how far ahead
 // they turn up and are forgotten behind (segments), how near the car must
@@ -1095,6 +1096,7 @@ void Game::fixed_update(const InputState& driver_input, float dt) {
     update_fares();
     update_movie_cars(input, dt);
     update_wash(dt);
+    update_nitro_fill(dt);
     const float drive = engine_on_ ? input.throttle * (1.f - input.brake) : 0.f;
     reverse_armed_ = reverse_armed(reverse_armed_, vel.speed, input.throttle, input.brake);
     const bool reversing = !airborne && engine_on_ && in_reverse(vel.speed, input.throttle, input.brake, reverse_armed_);
@@ -1611,6 +1613,23 @@ void Game::movie_car_extras(Bitmap& car, int turn) const {
 
 // Standing on a car wash's forecourt, the car is washed clean: water and
 // foam rain down on it until the last of the dirt is gone.
+void Game::update_nitro_fill(float dt) {
+    const float speed_pct = std::abs(world_.get<Velocity>(player_).speed) / world_.get<Player>(player_).max_speed;
+    if (!parked_at(Lot::Chemical) || speed_pct >= refuel_speed || nitro_.canisters() >= nitro_.capacity()) {
+        nitro_fill_ = 0.f;
+        return;
+    }
+    // A canister at a time, while the car stands by the plant.
+    nitro_fill_ += dt;
+    show_message("FILLING NITRO", 0.2f);
+    if (nitro_fill_ >= nitro_fill_seconds) {
+        nitro_fill_ = 0.f;
+        nitro_.add_canister();
+        synth_.trigger_ding();
+        if (nitro_.canisters() >= nitro_.capacity()) show_message("NITRO FULL", 2.f);
+    }
+}
+
 void Game::update_wash(float dt) {
     const float speed_pct = std::abs(world_.get<Velocity>(player_).speed) / world_.get<Player>(player_).max_speed;
     const bool was_washing = washing_;

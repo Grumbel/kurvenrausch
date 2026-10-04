@@ -139,9 +139,11 @@ during the headless run, and stay there:
 (sports cars),
 .BR wash ,
 .BR motel ,
-.B hospital
+.BR hospital ,
+.B truckstop
 or
-.BR truckstop .
+.B chemical
+(nitro).
 .TP
 .B \-\-pause
 Show the pause menu in the screenshot.

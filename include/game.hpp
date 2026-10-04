@@ -167,6 +167,8 @@ private:
     std::optional<Lot> lot_here() const;
     bool parked_at(Lot kind) const { return lot_here() == kind; }
     void update_wash(float dt);
+    // Standing by a chemical plant, the nitro canisters fill up again.
+    void update_nitro_fill(float dt);
     // Driving the taxi: people hail it at the kerb; stopped beside one with
     // the passenger seat empty, they get in and want to go to a zone a little
     // ahead; stopped there, they pay and get out.
@@ -304,6 +306,7 @@ private:
     bool hospital_ambulance_ = false; // at the hospital, the ambulance (after the drivers) is chosen
     int arrived_model_ = -1;          // the car driven onto the lot standing on, -1 none
     bool fuel_warned_ = false;        // the reserve warning was shown for this tank
+    float nitro_fill_ = 0.f;          // seconds into filling the next canister
     struct Hail {
         float z;  // where along the track
         float x;  // at the kerb, road half-widths

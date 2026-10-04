@@ -78,6 +78,8 @@ enum class Scenery : uint8_t {
     TunnelPortal, // the rock face round a tunnel's mouth, centred over the road
     BridgeTruss,  // a steel truss frame spanning a bridge
     Overpass,     // a road bridge crossing over the road
+    ChemicalPlant,// tanks, pipes and a flare stack, beyond its forecourt
+    ChemicalSign, // the sign announcing it: NOS
     Townhouse,    // a European town house: plaster, shutters, a tiled roof
     TownhouseB,   // ... in other colours
     Shop,         // a shop with its awning, flats above
@@ -119,8 +121,9 @@ enum class Lot : uint8_t {
     Hospital, // a hospital: patch up the driver, or change drivers
     Truckstop, // a truck stop: trucks and vans
     SportsDealer, // a sports car dealer
+    Chemical, // a chemical plant: the nitro canisters filled again
 };
-constexpr int lot_kinds = 7;
+constexpr int lot_kinds = 8;
 // The name the HUD shows, and the keyword --visit takes.
 const char* lot_name(Lot kind);
 const char* lot_keyword(Lot kind);

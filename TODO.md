@@ -112,6 +112,9 @@ the road/framebuffer rewrite, `Color::to_u32()` became `Color::argb()`.
   the zone is `left_hand`), set by `forecourt_lot()`, which mirrors the
   buildings and signs; `on_forecourt`, the paving, the decor and the
   autopilot follow it
+- Chemical plants (`Lot::Chemical`, `chemical_plant()`): standing on the
+  forecourt fills a nitro canister every `nitro_fill_seconds`
+  (`update_nitro_fill`, `Nitro::add_canister`); `--visit chemical`
 - Trains: `Segment::rails`, `TrackBuilder::level_crossing()` (a straight,
   `Scenery::CrossingSign` either side), `Track::crossings()`. `Game::
   update_train()`: decided `train_chance` once per crossing when the car

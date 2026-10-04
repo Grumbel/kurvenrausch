@@ -79,6 +79,8 @@ const SceneryInfo& scenery_info(Scenery kind) {
         /* TunnelPortal*/{16000.f, false, true, false},
         /* BridgeTruss*/{ 5200.f, false, true,  false},
         /* Overpass  */ { 6400.f, false, true,  false},
+        /* ChemicalPlant*/{4800.f, true, false, false},
+        /* ChemicalSign*/{ 700.f, true, false, false},
         /* Townhouse */ {2400.f, true,  false, true},
         /* TownhouseB*/ {2400.f, true,  false, true},
         /* Shop      */ {2600.f, true,  false, false},
@@ -173,6 +175,7 @@ const LotNames& lot_names(Lot kind) {
         {"HOSPITAL", "hospital"},
         {"TRUCK STOP", "truckstop"},
         {"SPORTS CARS", "sports"},
+        {"CHEMICAL PLANT", "chemical"},
     };
     static_assert(sizeof(names) / sizeof(names[0]) == static_cast<size_t>(lot_kinds), "every lot needs its names");
     return names[static_cast<size_t>(kind)];
@@ -568,6 +571,8 @@ public:
     void motel() { forecourt_lot(Lot::Motel); }
     void hospital() { forecourt_lot(Lot::Hospital); }
     void truckstop() { forecourt_lot(Lot::Truckstop); }
+    // A chemical plant, where nitro is to be had.
+    void chemical_plant() { forecourt_lot(Lot::Chemical); }
 
     void forecourt_lot(Lot kind) {
         const int from = size();
@@ -616,6 +621,10 @@ public:
             case Lot::SportsDealer:
                 scenery(from + 1, Scenery::SportsSign, 1.25f);
                 scenery(from + start + 26, Scenery::SportsShowroom, forecourt_width + 0.1f);
+                break;
+            case Lot::Chemical:
+                scenery(from + 1, Scenery::ChemicalSign, 1.25f);
+                scenery(from + start + 26, Scenery::ChemicalPlant, forecourt_width + 0.1f);
                 break;
         }
     }
@@ -1456,6 +1465,7 @@ Track build_demo_track() {
     b.straight(Len::Medium);
     b.gas_station();
     b.level_crossing();
+    b.chemical_plant(); // where the Rhine meets industry
     b.truckstop(); // before the Autobahn
     // The fast way or the scenic one.
     b.fork("AUTOBAHN", "LANDSTRASSE",
@@ -1525,6 +1535,7 @@ Track build_demo_track() {
     b.tunnel(Len::Short, Bend::Easy, Hill::None);
     b.gas_station();
     b.curve(Len::Medium, -Bend::Hard, -Hill::Medium);
+    b.chemical_plant();
     b.hospital();
     b.car_dealer();
 
@@ -1548,6 +1559,7 @@ Track build_demo_track() {
     b.hill(Len::Long, Hill::Low);
     b.gas_station();
     b.level_crossing(); // a freight line across the desert
+    b.chemical_plant();
     b.curve(Len::Long, Bend::Easy, Hill::None);
     // The old highway across the open desert, or through the canyon.
     b.fork("ROUTE 66", "CANYON ROAD",
@@ -1762,6 +1774,7 @@ Track build_track(int index) {
     b.begin_zone(city(zone_netherlands(), "ROTTERDAM", Scenery::Tree));
     streets(-1);
     b.truckstop(); // by the port
+    b.chemical_plant();
 
     b.begin_zone(city(zone_germany(), "KOELN", Scenery::Tree));
     streets(1);
@@ -1775,6 +1788,7 @@ Track build_track(int index) {
     b.curve(Len::Medium, -Bend::Medium, -Hill::Medium);
     b.gas_station();
     b.level_crossing();
+    b.chemical_plant();
     b.fork("AUTOBAHN", "LANDSTRASSE",
            [&] {
                b.straight(Len::Long);
@@ -1913,6 +1927,7 @@ Track build_track(int index) {
     b.hill(Len::Long, Hill::Low);
     b.gas_station();
     b.level_crossing();
+    b.chemical_plant();
     b.curve(Len::Long, Bend::Easy, Hill::None);
     b.fork("ROUTE 66", "CANYON ROAD",
            [&] {

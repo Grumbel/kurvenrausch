@@ -863,6 +863,49 @@ Bitmap make_truck_sign() {
     return b;
 }
 
+// A chemical plant: round storage tanks, a tall flare stack with its
+// flame, pipes between them, a hazard sign on the fence.
+Bitmap make_chemical_plant() {
+    Bitmap b(160, 112);
+    const Color steel{0xc0, 0xc4, 0xcc}, steel_dark{0x8c, 0x90, 0x98}, pipe{0x7c, 0x84, 0x60}, green{0x30, 0x90, 0x48};
+    // The flare stack with its flame.
+    paint::rect(b, 128, 8, 8, 104, steel_dark);
+    for (int y = 14; y < 112; y += 12) paint::rect(b, 126, y, 12, 2, Color{0xd0, 0x30, 0x30});
+    paint::ellipse(b, 132.f, 6.f, 4.f, 6.f, Color{0xff, 0x90, 0x20});
+    paint::ellipse(b, 132.f, 7.f, 2.f, 3.f, Color{0xff, 0xf0, 0xa0});
+    // Two tanks, banded, with their ladders.
+    for (int k = 0; k < 2; ++k) {
+        const float cx = 30.f + 52.f * static_cast<float>(k);
+        paint::rect(b, static_cast<int>(cx) - 22, 44, 44, 68, steel);
+        paint::rect(b, static_cast<int>(cx) - 22, 44, 8, 68, steel_dark);
+        paint::shaded_ellipse(b, cx, 44.f, 22.f, 8.f, steel_dark, steel, Color{0xec, 0xee, 0xf2});
+        paint::rect(b, static_cast<int>(cx) - 22, 70, 44, 6, green);
+        paint::rect(b, static_cast<int>(cx) + 14, 46, 2, 66, steel_dark);
+    }
+    // Pipes from the tanks to the stack.
+    paint::rect(b, 50, 88, 80, 4, pipe);
+    paint::rect(b, 52, 98, 76, 4, pipe);
+    paint::rect(b, 0, 104, 160, 8, Color{0x60, 0x60, 0x66}); // the fence's base
+    // The hazard diamond.
+    for (int i = 0; i < 9; ++i) paint::rect(b, 108 - i, 66 + i, 2 * i + 1, 1, Color{0xf8, 0xc8, 0x20});
+    for (int i = 0; i < 9; ++i) paint::rect(b, 100 + i, 75 + i, 17 - 2 * i, 1, Color{0xf8, 0xc8, 0x20});
+    paint::rect(b, 107, 70, 3, 8, Color{0x18, 0x18, 0x18});
+    paint::outline(b, Outline);
+    return b;
+}
+
+Bitmap make_chemical_sign() {
+    Bitmap b(44, 112);
+    paint::rect(b, 19, 40, 6, 72, Color{0x9a, 0x9a, 0xa4});
+    paint::rect(b, 23, 40, 2, 72, Color{0x6c, 0x6c, 0x74});
+    paint::rect(b, 0, 0, 44, 40, Color{0x18, 0x60, 0x30});
+    paint::rect(b, 2, 2, 40, 36, Color{0x30, 0xa0, 0x50});
+    paint::text(b, (44 - font::text_width("NOS")) / 2, 8, "NOS", Color{0xf8, 0xf8, 0xf0}, 1);
+    paint::text(b, (44 - font::text_width("FILL")) / 2, 22, "FILL", Color{0xf8, 0xe0, 0x30});
+    paint::outline(b, Outline);
+    return b;
+}
+
 // A date palm: a tall, ringed trunk under a crown of drooping fronds.
 Bitmap make_date_palm() {
     Bitmap b(64, 112);
@@ -2789,6 +2832,8 @@ SpriteSheet::SpriteSheet() {
     scenery_[static_cast<size_t>(Scenery::HospitalSign)] = make_hospital_sign();
     scenery_[static_cast<size_t>(Scenery::Truckstop)] = make_truckstop();
     scenery_[static_cast<size_t>(Scenery::TruckSign)] = make_truck_sign();
+    scenery_[static_cast<size_t>(Scenery::ChemicalPlant)] = make_chemical_plant();
+    scenery_[static_cast<size_t>(Scenery::ChemicalSign)] = make_chemical_sign();
 }
 
 namespace {

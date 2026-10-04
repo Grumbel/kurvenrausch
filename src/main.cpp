@@ -50,7 +50,7 @@ void usage(const char* argv0) {
               << "  --dirt L            start the headless run this dirty (0 to 1)\n"
               << "  --width W           make the screenshot W pixels wide (320, 4:3, to 640), 240 high\n"
               << "  --wash              pull in at the next car wash during the headless run\n"
-              << "  --visit KIND        pull in at the next lot of KIND (gas, dealer, sports, wash, motel, hospital, truckstop)\n"
+              << "  --visit KIND        pull in at the next lot of KIND (gas, dealer, sports, wash, motel, hospital, truckstop, chemical)\n"
               << "  --nitro N           press nitro at step N of the headless run\n"
               << "  --icon FILE         write the application icon (32x32) as a BMP and exit\n"
               << "  --version           print the version and exit\n"

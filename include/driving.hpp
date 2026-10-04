@@ -26,6 +26,7 @@ public:
     bool fire();
     void update(float dt);
     void refill() { canisters_ = capacity_; }
+    void add_canister() { canisters_ = std::min(canisters_ + 1, capacity_); }
     void reset() { canisters_ = capacity_; burn_ = 0.f; }
     // Canisters each lap (an option); the ones left now stay up to it.
     void set_capacity(int n) { capacity_ = n; canisters_ = std::min(canisters_, n); }
