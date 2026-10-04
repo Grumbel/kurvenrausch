@@ -1586,27 +1586,28 @@ void Game::update_movie_cars(const InputState& input, float dt) {
 
 void Game::movie_car_extras(Bitmap& car, int turn) const {
     const int h = SpriteSheet::player_headroom;
-    const int u = 2 * turn;
+    const int s = turn;
     switch (car_model_) {
         case scanner_model: {
-            // The red light sweeping to and fro across the back.
-            paint::rect(car, 30 + u, h + 25, 36, 3, Color{0x30, 0x04, 0x04});
+            // The red light sweeping to and fro below the tail lights.
+            paint::rect(car, 20 + s, h + 29, 56, 2, Color{0x30, 0x04, 0x04});
             const float t = std::fmod(clock_ * 1.2f, 2.f);
-            const int x = 30 + u + static_cast<int>((t < 1.f ? t : 2.f - t) * 30.f);
-            paint::rect(car, x, h + 25, 6, 3, Color{0xff, 0x30, 0x30});
-            paint::rect(car, x + 2, h + 26, 2, 1, Color{0xff, 0xf8, 0xf0});
+            const int x = 20 + s + static_cast<int>((t < 1.f ? t : 2.f - t) * 50.f);
+            paint::rect(car, x, h + 29, 6, 2, Color{0xff, 0x30, 0x30});
+            paint::rect(car, x + 2, h + 29, 2, 1, Color{0xff, 0xf8, 0xf0});
             break;
         }
         case time_car_model: {
-            // The glowing coils at the back, pulsing.
+            // The coils glowing in the vents, pulsing.
             const bool on = std::fmod(clock_, 0.3f) < 0.15f;
-            for (int x : {22, 68}) paint::rect(car, x + u, h + 6, 6, 4, on ? Color{0x80, 0xc0, 0xff} : Color{0x30, 0x60, 0xa0});
+            const Color glow = on ? Color{0x80, 0xc0, 0xff} : Color{0x30, 0x60, 0xa0};
+            for (int x : {33, 53}) paint::rect(car, x + s, h + 21, 10, 5, glow);
             break;
         }
         case interceptor_model: {
-            // The blower sticking up out of the bonnet, seen over the roof.
-            paint::rect(car, 42 + u, h - 6, 12, 6, Color{0x90, 0x90, 0x98});
-            paint::rect(car, 44 + u, h - 9, 8, 3, Color{0x30, 0x30, 0x34});
+            // The blower sticking up out of the bonnet, seen over the wing.
+            paint::rect(car, 42 + 2 * turn, h - 8, 12, 6, Color{0x90, 0x90, 0x98});
+            paint::rect(car, 44 + 2 * turn, h - 11, 8, 3, Color{0x30, 0x30, 0x34});
             break;
         }
         default: break;

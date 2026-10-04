@@ -60,15 +60,18 @@ const CarModel& car_model(int index) {
         {"ROADSTER",    1.04f, 1.10f, 0.90f, B::Car,      R::Sports,  600.f, static_cast<uint8_t>(region::asia | region::europe)}, // the golden convertible
         {"SUPERCAR",    1.19f, 1.00f, 0.88f, B::Racer,    R::Sports,  620.f, static_cast<uint8_t>(region::europe | region::america)}, // the fastest flat out
         {"AMBULANCE",   0.89f, 0.84f, 1.08f, B::Ambulance, R::Emergency, 650.f}, // from the hospital
-        {"SCANNER",     1.16f, 1.15f, 0.98f, B::Car,      R::Secret,  600.f}, // black, a red light sweeping; nitro jumps
-        {"TIME CAR",    1.05f, 1.05f, 1.05f, B::Car,      R::Secret,  600.f}, // stainless steel; 88 mph travels in time
-        {"SPY CAR",     1.10f, 1.08f, 1.06f, B::Car,      R::Secret,  600.f}, // silver birch; the horn drops oil
-        {"INTERCEPTOR", 1.19f, 1.20f, 0.85f, B::Car,      R::Secret,  600.f}, // black, a blower on the bonnet
+        {"SCANNER",     1.16f, 1.15f, 0.98f, B::Scanner,      R::Secret,  600.f}, // black, a red light sweeping; nitro jumps
+        {"TIME CAR",    1.05f, 1.05f, 1.05f, B::TimeCar,      R::Secret,  600.f}, // stainless steel; 88 mph travels in time
+        {"SPY CAR",     1.10f, 1.08f, 1.06f, B::SpyCar,      R::Secret,  600.f}, // silver birch; the horn drops oil
+        {"INTERCEPTOR", 1.19f, 1.20f, 0.85f, B::Interceptor,      R::Secret,  600.f}, // black, a blower on the bonnet
     };
     return models[((index % car_models) + car_models) % car_models];
 }
 
-bool body_shows_people(Body body) { return body == Body::Car || body == Body::Rig || body == Body::Police; }
+bool body_shows_people(Body body) {
+    return body == Body::Car || body == Body::Rig || body == Body::Police || body == Body::Scanner ||
+           body == Body::TimeCar || body == Body::SpyCar || body == Body::Interceptor;
+}
 
 bool body_has_lightbar(Body body) { return body == Body::Police || body == Body::Ambulance; }
 

@@ -28,6 +28,7 @@ constexpr uint32_t emissive[] = {
     0xffffd888,                                                 // lit windows in town
     0xffffecb0, 0xfffffff0,                                     // street lamps
     0xffff40c0, 0xff40f0ff, 0xffffe060, 0xfff0f4ff,             // neon on the Strip, the pyramid's beam
+    0xff80c0ff,                                                 // the time car's coils
 };
 
 } // namespace

@@ -2242,6 +2242,134 @@ Bitmap make_bus(const CarStyle& st, int signal, bool brake, int tread) {
     return b;
 }
 
+Bitmap make_movie_car(Body body, const CarStyle& st, int turn, bool brake, int signal, int tread, int headroom) {
+    const int h = headroom;
+    Bitmap b(96, 44 + h);
+    const int s = turn, u = 2 * turn; // the body leans, the cabin further
+    const Color glass{0x2c, 0x3c, 0x54}, glint{0x70, 0x88, 0xa8}, chrome{0xc4, 0xc8, 0xd0}, black{0x14, 0x14, 0x18};
+    const Color lamp = brake ? Color{0xff, 0x54, 0x3c} : Color{0x8c, 0x12, 0x12};
+    const Color lamp_hi = brake ? Color{0xff, 0xf0, 0xe0} : Color{0xc8, 0x44, 0x38};
+    const auto at = [h](int y) { return y + h; };
+    paint::ellipse(b, 48.f, static_cast<float>(at(41)), 46.f, 3.f, Color{0x22, 0x22, 0x22});
+    // The cabin's rear window, where the people show: the same for all.
+    const auto cabin = [&](Color roof, int top) {
+        paint::rect(b, 22 + u, at(top), 52, 15 - top, roof);
+        paint::rect(b, 26 + u, at(5), 44, 8, glass);
+        paint::stroke(b, 30.f + u, static_cast<float>(at(12)), 36.f + u, static_cast<float>(at(5)), 1.f, 1.f, glint);
+    };
+    switch (body) {
+        case Body::Scanner: {
+            // Long and low: a wide flat deck with a ducktail, the tail
+            // lights one smoked red band right across, a black bumper.
+            for (int x : {4, 78}) tyre(b, x, at(27), 14, 15, tread);
+            paint::rect(b, 4 + s, at(18), 88, 18, st.body);
+            paint::rect(b, 6 + s, at(16), 84, 3, st.body_light); // the ducktail's lip
+            paint::rect(b, 4 + s, at(19), 88, 1, st.body_dark);
+            paint::rect(b, 8 + s, at(21), 80, 7, Color{0x30, 0x06, 0x08});
+            for (int x = 10; x < 86; x += 10) {
+                paint::rect(b, x + s, at(22), 8, 5, lamp);
+                paint::rect(b, x + 1 + s, at(23), 6, 1, lamp_hi);
+            }
+            indicator(b, 8 + s, at(22), 3, 5, lit(signal, -1));
+            indicator(b, 85 + s, at(22), 3, 5, lit(signal, 1));
+            paint::rect(b, 6 + s, at(29), 84, 4, st.body);
+            paint::rect(b, 40 + s, at(30), 16, 4, Color{0xe8, 0xe8, 0xd8});
+            paint::rect(b, 4 + s, at(34), 88, 3, black);
+            cabin(st.body, 4);
+            paint::rect(b, 47 + u, at(3), 2, 2, st.body_light); // the T-top's bar
+            break;
+        }
+        case Body::TimeCar: {
+            // Brushed steel in vertical grain, a wedge: louvres on the deck,
+            // two vents where the coils glow, black-ribbed tail lights, the
+            // reactor on the engine lid, a black bumper.
+            for (int x : {4, 78}) tyre(b, x, at(27), 14, 15, tread);
+            for (int x = 6; x < 90; ++x) {
+                const Color grain = x % 3 == 0 ? st.body_dark : x % 3 == 1 ? st.body : st.body_light;
+                paint::rect(b, x + s, at(17), 1, 16, grain);
+            }
+            for (int y = 15; y < 18; ++y) paint::rect(b, 18 + u, at(y), 60, 1, y % 2 ? black : st.body_dark); // louvres
+            for (int side = -1; side <= 1; side += 2) {
+                const int x = (side < 0 ? 9 : 69) + s;
+                paint::rect(b, x, at(20), 18, 7, black);
+                for (int i = 1; i < 17; i += 3) paint::rect(b, x + i, at(21), 2, 5, lamp);
+                if (brake) paint::rect(b, x + 1, at(22), 16, 1, lamp_hi);
+                indicator(b, side < 0 ? x : x + 15, at(27), 3, 2, lit(signal, side));
+            }
+            for (int x : {32, 52}) { // the time circuits' vents
+                paint::rect(b, x + s, at(19), 12, 9, black);
+                for (int y = 20; y < 27; y += 2) paint::rect(b, x + 1 + s, at(y), 10, 1, Color{0x30, 0x40, 0x58});
+            }
+            paint::rect(b, 40 + s, at(29), 16, 4, Color{0xe8, 0xe8, 0xd8});
+            paint::rect(b, 5 + s, at(32), 86, 5, Color{0x20, 0x20, 0x24});
+            cabin(st.body, 3);
+            paint::rect(b, 47 + u, at(2), 2, 13, st.body_dark); // where the doors open upwards
+            // The reactor on the lid, white, its cap dark.
+            paint::rect(b, 64 + u, at(9), 8, 8, Color{0xf0, 0xf0, 0xe8});
+            paint::rect(b, 65 + u, at(7), 6, 2, Color{0x40, 0x40, 0x48});
+            break;
+        }
+        case Body::SpyCar: {
+            // Sixties curves: rounded haunches with little fins, round lamps
+            // in clusters, chrome bumper with overriders, wire wheels.
+            for (int x : {5, 77}) {
+                tyre(b, x, at(27), 14, 15, tread);
+                paint::ellipse(b, static_cast<float>(x) + 7.f, static_cast<float>(at(35)), 4.f, 4.f, chrome);
+            }
+            paint::ellipse(b, 16.f + s, static_cast<float>(at(25)), 11.f, 10.f, st.body);
+            paint::ellipse(b, 80.f + s, static_cast<float>(at(25)), 11.f, 10.f, st.body);
+            paint::rect(b, 14 + s, at(17), 68, 15, st.body);
+            paint::ellipse(b, 48.f + s, static_cast<float>(at(18)), 34.f, 4.f, st.body_light);
+            for (int x : {9, 83}) paint::rect(b, x + s, at(14), 4, 6, st.body_light); // the fins
+            for (int side = -1; side <= 1; side += 2) {
+                const float x = (side < 0 ? 14.f : 82.f) + static_cast<float>(s);
+                paint::ellipse(b, x, static_cast<float>(at(20)), 2.5f, 2.5f, lamp);
+                paint::ellipse(b, x, static_cast<float>(at(25)), 2.5f, 2.5f, lamp);
+                paint::ellipse(b, x, static_cast<float>(at(30)), 2.5f, 2.5f,
+                               lit(signal, side) ? Color{0xff, 0xc0, 0x38} : Color{0xa8, 0x5c, 0x18});
+                if (brake) paint::rect(b, static_cast<int>(x) - 1, at(19), 2, 1, lamp_hi);
+            }
+            paint::rect(b, 38 + s, at(24), 20, 5, Color{0xe8, 0xe8, 0xd8}); // the plate
+            paint::rect(b, 8 + s, at(31), 80, 3, chrome);
+            for (int x : {30, 64}) paint::rect(b, x + s, at(28), 3, 8, chrome); // overriders
+            paint::rect(b, 42 + s, at(34), 3, 2, black);                        // the nozzles...
+            paint::rect(b, 52 + s, at(34), 3, 2, black);
+            cabin(st.body, 4);
+            paint::rect(b, 24 + u, at(4), 48, 1, st.body_light);
+            break;
+        }
+        default: { // Interceptor
+            // Fat tyres in flared arches, a wing over the rear window, a lip
+            // on the boot, square lamps in chrome, pipes under the bumper.
+            for (int x : {1, 77}) tyre(b, x, at(26), 18, 16, tread);
+            paint::ellipse(b, 13.f + s, static_cast<float>(at(26)), 13.f, 9.f, st.body);
+            paint::ellipse(b, 83.f + s, static_cast<float>(at(26)), 13.f, 9.f, st.body);
+            paint::rect(b, 8 + s, at(18), 80, 17, st.body);
+            paint::rect(b, 8 + s, at(16), 80, 3, st.body_dark); // the boot's lip
+            for (int side = -1; side <= 1; side += 2) {
+                const int x = (side < 0 ? 13 : 63) + s;
+                paint::rect(b, x - 1, at(20), 22, 8, chrome);
+                tail_lamp(b, x, at(21), 20, 6, brake);
+                indicator(b, side < 0 ? x : x + 16, at(21), 4, 6, lit(signal, side));
+            }
+            paint::rect(b, 36 + s, at(21), 24, 6, Color{0x10, 0x10, 0x10});
+            paint::rect(b, 38 + s, at(23), 20, 2, st.body_light); // a gold stripe
+            paint::rect(b, 40 + s, at(29), 16, 4, Color{0xe8, 0xe8, 0xd8});
+            paint::rect(b, 6 + s, at(33), 84, 3, chrome);
+            for (int x : {20, 28, 66, 74}) paint::ellipse(b, static_cast<float>(x + s), static_cast<float>(at(37)), 2.f, 1.5f, Color{0x50, 0x50, 0x58});
+            cabin(st.body, 4);
+            // The roof wing, on its uprights.
+            paint::rect(b, 24 + u, at(1), 3, 3, st.body);
+            paint::rect(b, 69 + u, at(1), 3, 3, st.body);
+            paint::rect(b, 18 + u, at(-2), 60, 3, st.body);
+            paint::rect(b, 18 + u, at(-2), 60, 1, st.body_light);
+            break;
+        }
+    }
+    paint::outline(b, Outline);
+    return b;
+}
+
 Bitmap make_bus_front(const CarStyle& st, int signal, int tread) {
     Bitmap b(115, 116);
     paint::ellipse(b, 57.f, 113.f, 55.f, 3.f, Color{0x22, 0x22, 0x22});
@@ -2738,6 +2866,12 @@ SpriteSheet::SpriteSheet() {
                             case Body::Hatch: b = make_hatch(st, signal, brake, t); break;
                             case Body::Pickup: b = make_pickup(st, signal, brake, t); break;
                             case Body::Bus: b = make_bus(st, signal, brake, t); break;
+                            case Body::Scanner:
+                            case Body::TimeCar:
+                            case Body::SpyCar:
+                            case Body::Interceptor:
+                                b = make_movie_car(body, st, turn, brake, signal, t, player_headroom);
+                                break;
                             case Body::Ambulance: b = make_ambulance(st, signal, 0, brake, t); break;
                             case Body::BoxTruck: b = make_truck(st, signal, brake, t); break;
                             case Body::Racer: b = make_rival(st, signal, brake, t); break;

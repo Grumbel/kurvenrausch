@@ -77,6 +77,10 @@ Bitmap make_ambulance(const CarStyle& style, int signal, int lights, bool brake,
 Bitmap make_ambulance_front(const CarStyle& style, int lights, int tread = 0);
 // Where its lightbar sits.
 constexpr int ambulance_lightbar_x = 52, ambulance_lightbar_y = 1;
+// A movie car from behind (Body::Scanner .. Interceptor), as
+// make_player_car() lays a car out: 96 wide, `headroom` rows over it, the
+// cabin's window where the people show (see make_occupants()).
+Bitmap make_movie_car(Body body, const CarStyle& style, int turn, bool brake, int signal, int tread, int headroom);
 Bitmap make_hatch(const CarStyle& style, int signal, bool brake, int tread = 0);    // 86x46
 Bitmap make_hatch_front(const CarStyle& style, int signal, int tread = 0);
 Bitmap make_pickup(const CarStyle& style, int signal, bool brake, int tread = 0);   // 102x58
