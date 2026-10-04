@@ -1445,6 +1445,22 @@ void Game::update_fuel(const InputState& input, float dt) {
     }
 
     if (options_.fuel) fuel_.burn(Fuel::load(input.throttle * (1.f - input.brake), drivetrain::rpm(speed_pct)), dt);
+    // Down to the reserve: a warning, once a tank, with the way to the next
+    // gas station, to plan the stop.
+    if (fuel_.level() > Fuel::reserve) {
+        fuel_warned_ = false;
+    } else if (!fuel_warned_ && options_.fuel) {
+        fuel_warned_ = true;
+        const int n = static_cast<int>(track_.segments.size());
+        const int here = track_.index_at(world_.get<Transform>(player_).z + world_.get<Camera>(camera_).player_z());
+        int ahead = n;
+        for (int start : lots_[static_cast<size_t>(Lot::Gas)]) ahead = std::min(ahead, ((start - here) % n + n) % n);
+        const float km = static_cast<float>(ahead) * track_.segment_length / base_max_speed_ * top_speed_kmh / 3600.f;
+        char text[32];
+        std::snprintf(text, sizeof text, "GAS IN %.1f KM", static_cast<double>(km));
+        synth_.trigger_ding();
+        show_message(text, 3.f);
+    }
     rng_ = rng_ * 1664525u + 1013904223u;
     const bool sputter = fuel_.level() < 0.03f && (rng_ >> 28) < 4; // a quarter of the time
     engine_on_ = !fuel_.empty() && !sputter;

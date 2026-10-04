@@ -19,7 +19,6 @@ constexpr Color Label{0xff, 0xd8, 0x30};
 constexpr Color Value{0xf8, 0xf8, 0xf8};
 constexpr Color Shadow{0x10, 0x10, 0x20};
 
-constexpr float top_speed_kmh = 293.f;
 
 void text(Framebuffer& fb, int x, int y, std::string_view s, Color c, int scale = 1) {
     fb.draw_text(x + 1, y + 1, s, Shadow, scale);

@@ -104,7 +104,7 @@ weather and road markings, fading smoothly into one another:
 - **Fuel and gas stations**: the tank drains with the engine's load (about a
   lap and a quarter at full throttle); every zone has a gas station with a
   forecourt to pull onto, where the tank fills up while you stand by the
-  pumps. Run dry and the engine sputters and dies; stranded, the driver pours
+  pumps. Down to the reserve, a message says how far it is to the next one. Run dry and the engine sputters and dies; stranded, the driver pours
   in a spare can after a few seconds
 - **Car dealers**: stop on the forecourt and steer left or right to choose
   a car, each with its own top speed, acceleration and grip. Seventeen in

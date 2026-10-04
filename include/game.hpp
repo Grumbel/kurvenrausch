@@ -281,6 +281,7 @@ private:
     int lot_steer_ = 0;         // the steering last step, to choose once per push
     bool hospital_ambulance_ = false; // at the hospital, the ambulance (after the drivers) is chosen
     int arrived_model_ = -1;          // the car driven onto the lot standing on, -1 none
+    bool fuel_warned_ = false;        // the reserve warning was shown for this tank
     struct Hail {
         float z;  // where along the track
         float x;  // at the kerb, road half-widths

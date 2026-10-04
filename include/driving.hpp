@@ -12,6 +12,9 @@ namespace racer {
 
 // Nitro: a few canisters per lap, each one a burn of a few seconds that adds
 // thrust and lifts the top speed.
+// The standard car's top speed on the speedometer.
+constexpr float top_speed_kmh = 293.f;
+
 class Nitro {
 public:
     static constexpr int default_capacity = 3;
@@ -49,6 +52,7 @@ public:
     static constexpr float tank_seconds = 100.f; // a full tank at full load
     static constexpr float fill_seconds = 4.f;   // empty to full at the pump
     static constexpr float low = 0.2f;           // the gauge warns below this
+    static constexpr float reserve = 0.3f;       // and a message, once, below this
 
     // Engine load 0 .. 1 from the pedal and the revs: idling still burns a little.
     static float load(float throttle, float rpm);
