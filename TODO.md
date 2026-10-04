@@ -2,9 +2,9 @@
 
 ## Current tip
 
-Tip is Round 18 (in progress: headlights, options, tracks, oncoming traffic,
-more cars), after Round 17 (touch at screen resolution, wide screen,
-escapable police).
+Tip is Round 18 (headlights, options, tracks, oncoming traffic, more
+cars), after Round 17 (touch at screen resolution, wide screen, escapable
+police). None of it tested on real hardware or played by hand yet.
 Work is committed directly to `master`; Grok still delivers cumulative git
 bundles (see AGENTS.md).
 
