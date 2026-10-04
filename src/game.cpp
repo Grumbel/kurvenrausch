@@ -314,7 +314,7 @@ void Game::reset() {
     view_yaw_ = view_shift_ = 0.f;
     hour_ = start_hour;
     advance_clock(0.f);
-    headlights_ = hazards_ = blink_on_ = false;
+    headlights_ = hazards_ = blink_on_ = beacon_ = false;
     signal_ = 0;
     police_ = INVALID_ENTITY; // gone with the traffic
     chase_ = Chase{};
@@ -539,7 +539,12 @@ void Game::present() {
 void Game::switch_lights(const InputState& input) {
     const auto& tr = world_.get<Transform>(player_);
     if (input.toggle_headlights) headlights_ = !headlights_;
-    if (input.toggle_hazards) hazards_ = !hazards_;
+    if (input.toggle_hazards) {
+        // On a police car (or an ambulance) the switch works the lightbar
+        // and siren instead.
+        if (body_has_lightbar(car_model(car_model_).body)) beacon_ = !beacon_;
+        else hazards_ = !hazards_;
+    }
     // An indicator goes off when pressed again, and over to the other side.
     for (int side : {-1, 1}) {
         if (!(side < 0 ? input.signal_left : input.signal_right)) continue;
@@ -801,7 +806,10 @@ bool Game::screenshot(const ScreenshotOptions& opts) {
         if (i == 0) {
             if (opts.hour >= 0.f) hour_ = opts.hour;
             headlights_ = opts.headlights;
-            hazards_ = opts.signal == hazard_signal;
+            // The hazards' switch: on a police car its lightbar.
+            const bool lightbar = body_has_lightbar(car_model(car_model_).body);
+            hazards_ = opts.signal == hazard_signal && !lightbar;
+            beacon_ = opts.signal == hazard_signal && lightbar;
             signal_ = opts.signal == hazard_signal ? 0 : opts.signal;
             signal_x_ = world_.get<Transform>(player_).x;
         }
@@ -1110,6 +1118,7 @@ void Game::save_choices() const {
 // Into another car: it comes clean and with a full tank.
 void Game::change_car() {
     apply_car();
+    beacon_ = beacon_ && body_has_lightbar(car_model(car_model_).body);
     fuel_.reset();
     dirt_.reset();
 }
@@ -1534,7 +1543,7 @@ void Game::update_audio(const InputState& input, float dt) {
     p.throttle = shift_cut_ > 0.f || !engine_on_ ? 0.f : input.throttle * (1.f - input.brake);
     p.engine = engine_on_ ? 1.f : 0.f;
     p.pump = refuelling_ ? 1.f : 0.f;
-    p.siren = siren_;
+    p.siren = std::max(siren_, beacon_ ? 0.7f : 0.f);
     p.splash = washing_ ? 0.8f : wet_ ? std::clamp(speed_pct * 1.3f, 0.f, 1.f) : 0.f;
     if (vertical_.airborne) p.rpm = std::min(1.f, p.rpm + 0.25f * input.throttle); // wheels spinning free
     p.speed = speed_pct;
@@ -1660,7 +1669,8 @@ void Game::update_traffic(float dt) {
 
         // Honked at from behind while in the player's way: pull over to the
         // nearest free lane out of the player's line, in a hurry.
-        if (horn_ && distance_ahead(player_world_z, t.z) < honk_range * track_.segment_length &&
+        // (An emergency vehicle's lightbar and siren do the same.)
+        if ((horn_ || beacon_) && distance_ahead(player_world_z, t.z) < honk_range * track_.segment_length &&
             std::abs(t.x - ptr.x) < honk_clearance && std::abs(traffic.target_x - ptr.x) < honk_clearance) {
             std::vector<bool> busy(static_cast<size_t>(lanes));
             for (int i = 0; i < lanes; ++i) {
@@ -1896,6 +1906,11 @@ void Game::render() {
         for (size_t i = 0; i < people.px.size() && i < player_bitmap_.px.size(); ++i) {
             if (people.px[i] >> 24) player_bitmap_.px[i] = people.px[i];
         }
+    }
+    if (beacon_) {
+        // The lightbar flashing, red and blue in turn.
+        paint_lightbar(player_bitmap_, static_cast<int>(clock_ / 0.12f) % 2 ? 1 : -1, 48 + 2 * shown_steer,
+                       SpriteSheet::player_headroom - 1);
     }
     const Bitmap& car = player_bitmap_;
     const float scale = setup.car ? cam.depth / setup.distance * x_unit : 1.f;

@@ -246,6 +246,7 @@ private:
     bool headlights_ = false;
     int signal_ = 0;          // the indicator switched on: -1 left, +1 right, 0 none
     bool hazards_ = false;    // the hazard lights: both indicators
+    bool beacon_ = false;     // an emergency vehicle's lightbar and siren, on the hazards' switch
     float signal_x_ = 0.f;    // where across the road the car was when it was switched on
     bool blink_on_ = false;   // the indicators lit in this moment of their blinking
     int music_ = 0;          // the radio's track (see Music), -1 off

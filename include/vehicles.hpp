@@ -76,6 +76,9 @@ const CarModel& car_model(int index);
 bool body_shows_people(Body body);
 // Tall: the cockpit sits high (vans and trucks).
 bool body_is_tall(Body body);
+// An emergency vehicle: a lightbar on the roof, switched with the hazard
+// lights' switch, and a siren.
+bool body_has_lightbar(Body body);
 
 // The next car of `range` from `current` in the direction `step` (+1 or
 // -1); from a car of another range, the first (or last) of this one.

@@ -63,6 +63,8 @@ const CarModel& car_model(int index) {
 
 bool body_shows_people(Body body) { return body == Body::Car || body == Body::Rig || body == Body::Police; }
 
+bool body_has_lightbar(Body body) { return body == Body::Police; }
+
 bool body_is_tall(Body body) {
     return body == Body::Rig || body == Body::Van || body == Body::BoxTruck || body == Body::Bus;
 }

@@ -1971,18 +1971,20 @@ Bitmap make_rival(const CarStyle& st, int signal, bool brake, int tread) {
     return b;
 }
 
-namespace {
-
-// A police car's lightbar on the roof, red on the left and blue on the
-// right; `lit` -1 flashes the red, +1 the blue, 0 neither.
-void lightbar(Bitmap& b, int lit) {
+void paint_lightbar(Bitmap& b, int lit, int cx, int y) {
     const Color red_off{0x70, 0x10, 0x14}, blue_off{0x10, 0x20, 0x70};
     const Color red{0xff, 0x30, 0x30}, blue{0x40, 0x70, 0xff}, core{0xff, 0xf8, 0xf0};
-    paint::rect(b, 30, 0, 36, 3, Color{0x30, 0x30, 0x34});
-    paint::rect(b, 31, 0, 16, 2, lit < 0 ? red : red_off);
-    paint::rect(b, 49, 0, 16, 2, lit > 0 ? blue : blue_off);
-    if (lit != 0) paint::rect(b, lit < 0 ? 35 : 53, 0, 8, 1, core);
+    const int x = cx - 18;
+    paint::rect(b, x, y, 36, 3, Color{0x30, 0x30, 0x34});
+    paint::rect(b, x + 1, y, 16, 2, lit < 0 ? red : red_off);
+    paint::rect(b, x + 19, y, 16, 2, lit > 0 ? blue : blue_off);
+    if (lit != 0) paint::rect(b, x + (lit < 0 ? 5 : 23), y, 8, 1, core);
 }
+
+namespace {
+
+// A police car's lightbar on the roof of a car of the traffic.
+void lightbar(Bitmap& b, int lit) { paint_lightbar(b, lit, 48, 0); }
 
 } // namespace
 
@@ -2000,15 +2002,9 @@ Bitmap make_police_front(const CarStyle& style, int lights, int tread) {
 
 Bitmap make_player_police(const CarStyle& style, int turn, bool brake, int signal, int tread, int headroom) {
     Bitmap b = make_player_car(style, turn, brake, signal, tread, headroom);
-    // The lightbar on the roof, off: in the headroom, as the roof sits there.
-    Bitmap bar(b.w, 3);
-    lightbar(bar, 0);
-    for (int y = 0; y < 3; ++y) {
-        for (int x = 0; x < b.w; ++x) {
-            const uint32_t p = bar.px[static_cast<size_t>(y) * bar.w + x];
-            if (p >> 24) b.px[static_cast<size_t>(headroom - 1 + y) * b.w + static_cast<size_t>(x + 2 * turn)] = p;
-        }
-    }
+    // The lightbar on the roof, off: in the headroom, as the roof sits there
+    // (see player_lightbar(); the game lights it).
+    paint_lightbar(b, 0, 48 + 2 * turn, headroom - 1);
     return b;
 }
 

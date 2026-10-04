@@ -250,7 +250,7 @@ browser Esc pauses, and the pause menu has no Quit.
 | N                | Right stick, flicked up / down | Radio: next (or previous) track, or off |
 | L                | D-pad up                 | Headlights         |
 | Q / E            | Right stick, flicked left / right | Indicator left / right (again: off; it also goes off after a lane change) |
-| Z                | D-pad down               | Hazard lights      |
+| Z                | D-pad down               | Hazard lights (police car: lightbar and siren) |
 | Tab              | Right stick, clicked     | Mini map: zoomed in around the car, or the whole lap |
 | M                |                          | Mute sound         |
 | F11 / Alt+Enter  |                          | Toggle fullscreen  |
