@@ -81,6 +81,9 @@ const SceneryInfo& scenery_info(Scenery kind) {
         /* Overpass  */ { 6400.f, false, true,  false},
         /* ChemicalPlant*/{4800.f, true, false, false},
         /* ChemicalSign*/{ 700.f, true, false, false},
+        /* Casino    */ { 3600.f, true,  false, false},
+        /* CasinoPyramid*/{5200.f, true, false, false},
+        /* NeonSign  */ { 1100.f, true,  false, false},
         /* Townhouse */ {2400.f, true,  false, true},
         /* TownhouseB*/ {2400.f, true,  false, true},
         /* Shop      */ {2600.f, true,  false, false},
@@ -1279,6 +1282,7 @@ void decorate(Track& track, TrackBuilder& b, int from, int to, uint32_t seed) {
                     {S::Townhouse, S::TownhouseB, S::Shop, S::Apartment, S::Townhouse, S::TownhouseB}, // European
                     {S::Tower, S::Apartment, S::Shop, S::Tower, S::Apartment, S::Tower},                // Modern
                     {S::FlatHouse, S::FlatHouse, S::Shop, S::Apartment, S::FlatHouse, S::Shop},         // Warm
+                    {S::Casino, S::Casino, S::CasinoPyramid, S::Casino, S::Tower, S::Casino},           // Strip
                 };
                 const Scenery* buildings = styles[static_cast<int>(zone.town)];
                 for (int side = -1; side <= 1; side += 2) {
@@ -1286,7 +1290,8 @@ void decorate(Track& track, TrackBuilder& b, int from, int to, uint32_t seed) {
                     if (rng.chance(0.14f)) put(zone.town_tree, side, 1.3f);
                     else put(buildings[static_cast<int>(rng.next() * 6.f) % 6], side, 1.35f);
                 }
-                if (i % 10 == 5) put(Scenery::StreetLamp, i % 20 == 5 ? -1 : 1, 1.12f);
+                if (zone.town == TownStyle::Strip && i % 16 == 9) put(Scenery::NeonSign, i % 32 == 9 ? -1 : 1, 1.15f);
+                else if (i % 10 == 5) put(Scenery::StreetLamp, i % 20 == 5 ? -1 : 1, 1.12f);
                 break;
             }
 
@@ -1944,6 +1949,17 @@ Track build_track(int index) {
                b.mark(canyon, b.size(), Edge::Cliff, Edge::Cliff);
            });
     b.motel();
+    // The Strip: casinos in lights in the middle of the desert.
+    Zone vegas = city(zone_arizona(), "LAS VEGAS", Scenery::Palm, TownStyle::Strip);
+    vegas.theme.night_glow = 1.f;
+    vegas.theme.lanes = 3;
+    b.begin_zone(vegas);
+    b.straight(Len::Medium);
+    b.curve(Len::Short, Bend::Easy, Hill::None);
+    b.gas_station();
+    b.straight(Len::Medium);
+    b.sports_dealer(); // a high roller's cars
+    b.curve(Len::Short, -Bend::Medium, Hill::None);
     b.begin_zone(city(zone_california(), "LOS ANGELES", Scenery::Palm, TownStyle::Modern));
     b.overpass(); // the freeway over the street
     streets(-1);

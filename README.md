@@ -39,7 +39,8 @@ weather and road markings, fading smoothly into one another:
 - **Two tracks**, picked on the pause menu's TRACK line: the Small World
   above, and the Grand Tour, more than twice as long, which stops in two or
   three cities of every country (Paris, London, Amsterdam, Muenchen, Roma,
-  Cairo, Mumbai, Tokyo, Sydney, Los Angeles, Rio de Janeiro, ...): town
+  Cairo, Mumbai, Tokyo, Sydney, Las Vegas, Los Angeles, Rio de Janeiro,
+  ...): town
   houses and shops in Europe, glass towers in Tokyo or Sydney, flat-roofed
   houses in Cairo or Delhi, the country's own trees between them and lit
   windows at night. Each track keeps its own lap record

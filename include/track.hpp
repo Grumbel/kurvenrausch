@@ -80,6 +80,9 @@ enum class Scenery : uint8_t {
     Overpass,     // a road bridge crossing over the road
     ChemicalPlant,// tanks, pipes and a flare stack, beyond its forecourt
     ChemicalSign, // the sign announcing it: NOS
+    Casino,       // a casino hotel tower, its sign in lights
+    CasinoPyramid,// a black glass pyramid, a beam of light from its tip
+    NeonSign,     // a tall neon pylon on the Strip
     Townhouse,    // a European town house: plaster, shutters, a tiled roof
     TownhouseB,   // ... in other colours
     Shop,         // a shop with its awning, flats above
@@ -290,6 +293,7 @@ enum class TownStyle : uint8_t {
     European, // town houses with tiled roofs, shops, some blocks of flats
     Modern,   // office towers and blocks of flats
     Warm,     // flat-roofed houses, shops, blocks of flats
+    Strip,    // casinos in lights, neon signs (Las Vegas)
 };
 
 // A stretch of track with its own country, scenery and atmosphere.

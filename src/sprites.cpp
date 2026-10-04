@@ -865,6 +865,81 @@ Bitmap make_truck_sign() {
 
 // A chemical plant: round storage tanks, a tall flare stack with its
 // flame, pipes between them, a hazard sign on the fence.
+// Neon, the Strip's colours: lights at night (see daylight.cpp).
+constexpr Color NeonPink{0xff, 0x40, 0xc0}, NeonCyan{0x40, 0xf0, 0xff}, Bulb{0xff, 0xe0, 0x60};
+
+// Light bulbs round a rectangle, every other one.
+void bulbs(Bitmap& b, int x, int y, int w, int h) {
+    for (int i = x; i < x + w; i += 3) {
+        paint::rect(b, i, y, 1, 1, Bulb);
+        paint::rect(b, i, y + h - 1, 1, 1, Bulb);
+    }
+    for (int j = y; j < y + h; j += 3) {
+        paint::rect(b, x, j, 1, 1, Bulb);
+        paint::rect(b, x + w - 1, j, 1, 1, Bulb);
+    }
+}
+
+// A casino hotel: a tall tower of windows, its name in lights on top and a
+// marquee of bulbs at its foot.
+Bitmap make_casino(Color wall, Color neon, std::string_view name) {
+    Bitmap b(120, 240);
+    const Color glass{0x34, 0x40, 0x54};
+    paint::rect(b, 14, 30, 92, 170, wall);
+    uint32_t r = wall.argb() ^ 0x5a5au;
+    for (int y = 36; y < 196; y += 8) {
+        for (int x = 20; x < 100; x += 8) {
+            r = r * 1664525u + 1013904223u;
+            paint::rect(b, x, y, 5, 5, (r >> 28) < 7 ? WindowLit : glass);
+        }
+    }
+    // The name on the roof, in neon.
+    paint::rect(b, 6, 6, 108, 22, Color{0x14, 0x10, 0x1c});
+    paint::text(b, 60 - font::text_width(name, 2) / 2, 10, name, neon, 2);
+    bulbs(b, 6, 6, 108, 22);
+    // The marquee over the entrance.
+    paint::rect(b, 0, 200, 120, 18, Color{0x18, 0x14, 0x20});
+    paint::text(b, 60 - font::text_width("CASINO") / 2, 205, "CASINO", Bulb);
+    bulbs(b, 0, 200, 120, 18);
+    paint::rect(b, 30, 218, 60, 22, WindowLit); // the lobby, always lit
+    paint::outline(b, Outline);
+    return b;
+}
+
+// A black glass pyramid with a beam of light rising from its tip.
+Bitmap make_casino_pyramid() {
+    Bitmap b(160, 220);
+    const Color glass{0x16, 0x16, 0x20}, edge{0x50, 0x50, 0x68};
+    for (int i = 0; i < 120; ++i) {
+        const int y = 100 + i, half = i * 80 / 120;
+        paint::rect(b, 80 - half, y, 2 * half + 1, 1, (i / 6) % 2 ? glass : blend(glass, edge, 0.3f));
+        b.set(80 - half, y, edge);
+        b.set(80 + half, y, edge);
+    }
+    paint::rect(b, 79, 0, 3, 100, Color{0xf0, 0xf4, 0xff}); // the beam
+    paint::rect(b, 80, 0, 1, 100, Color{0xff, 0xff, 0xff});
+    paint::rect(b, 60, 200, 40, 20, WindowLit);
+    paint::outline(b, Outline);
+    return b;
+}
+
+// A tall neon pylon: a star, the town's name, a sign full of bulbs.
+Bitmap make_neon_sign() {
+    Bitmap b(40, 120);
+    paint::rect(b, 17, 60, 6, 60, Color{0x8c, 0x8c, 0x94});
+    paint::rect(b, 2, 18, 36, 42, Color{0x18, 0x14, 0x20});
+    paint::text(b, 20 - font::text_width("LAS") / 2, 22, "LAS", NeonCyan);
+    paint::text(b, 20 - font::text_width("VEGAS") / 2, 32, "VEGAS", NeonPink);
+    paint::text(b, 20 - font::text_width("777") / 2, 46, "777", Bulb);
+    bulbs(b, 2, 18, 36, 42);
+    for (int i = 0; i < 7; ++i) { // the star on top
+        paint::rect(b, 20 - i, 9 + i / 2, 2 * i + 1, 1, Bulb);
+        paint::rect(b, 20 - (6 - i), 12 + i, 2 * (6 - i) + 1, 1, Bulb);
+    }
+    paint::outline(b, Outline);
+    return b;
+}
+
 Bitmap make_chemical_plant() {
     Bitmap b(160, 112);
     const Color steel{0xc0, 0xc4, 0xcc}, steel_dark{0x8c, 0x90, 0x98}, pipe{0x7c, 0x84, 0x60}, green{0x30, 0x90, 0x48};
@@ -2834,6 +2909,9 @@ SpriteSheet::SpriteSheet() {
     scenery_[static_cast<size_t>(Scenery::TruckSign)] = make_truck_sign();
     scenery_[static_cast<size_t>(Scenery::ChemicalPlant)] = make_chemical_plant();
     scenery_[static_cast<size_t>(Scenery::ChemicalSign)] = make_chemical_sign();
+    scenery_[static_cast<size_t>(Scenery::Casino)] = make_casino(Color{0xe8, 0xd8, 0xb0}, NeonPink, "LUCKY");
+    scenery_[static_cast<size_t>(Scenery::CasinoPyramid)] = make_casino_pyramid();
+    scenery_[static_cast<size_t>(Scenery::NeonSign)] = make_neon_sign();
 }
 
 namespace {

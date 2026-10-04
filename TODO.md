@@ -119,6 +119,9 @@ the road/framebuffer rewrite, `Color::to_u32()` became `Color::argb()`.
   `region_of(country)`, `next_car_offered(..., regions)`: the range's cars
   at home there (all of the range if fewer than two), plus the car the
   player came in
+- Las Vegas on the grand tour (between Arizona and Los Angeles):
+  `TownStyle::Strip` (Casino, CasinoPyramid, NeonSign pylons), night glow 1;
+  neon colours are emissive
 - Trains: `Segment::rails`, `TrackBuilder::level_crossing()` (a straight,
   `Scenery::CrossingSign` either side), `Track::crossings()`. `Game::
   update_train()`: decided `train_chance` once per crossing when the car
