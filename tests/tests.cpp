@@ -1655,6 +1655,25 @@ void test_car_models() {
             m = next;
         }
     }
+    // At a dealer the car the player came in stays on offer, ahead of the
+    // dealer's own; one of the dealer's range is not offered twice.
+    {
+        const int spider = 0; // a sports car, at an everyday dealer
+        int m = spider;
+        std::set<int> seen;
+        int regular = 0;
+        for (int i = 0; i < car_models; ++i) regular += car_model(i).range == CarRange::Regular;
+        for (int i = 0; i <= regular; ++i) {
+            seen.insert(m);
+            m = next_car_offered(m, spider, CarRange::Regular, 1);
+        }
+        CHECK(m == spider && static_cast<int>(seen.size()) == regular + 1);
+        CHECK(next_car_offered(next_car_offered(spider, spider, CarRange::Regular, 1), spider, CarRange::Regular, -1) == spider);
+        const int saloon = 5;
+        int s = saloon, steps = 0;
+        do { s = next_car_offered(s, saloon, CarRange::Regular, 1); ++steps; } while (s != saloon);
+        CHECK(steps == regular);
+    }
     // Wider bodies are as wide as the traffic's.
     CHECK(car_model(next_car_in_range(0, CarRange::Trucks, -1)).width > 600.f);
     CHECK(&car_model(car_models) == &car_model(0)); // wraps around

@@ -4,6 +4,7 @@
 #include "vehicles.hpp"
 
 #include <algorithm>
+#include <vector>
 
 namespace racer {
 
@@ -81,6 +82,18 @@ int next_car_in_range(int current, CarRange range, int step) {
         if (car_model(i).range == range) return i;
     }
     return current;
+}
+
+int next_car_offered(int current, int arrived, CarRange range, int step) {
+    std::vector<int> offer;
+    if (car_model(arrived).range != range) offer.push_back(((arrived % car_models) + car_models) % car_models);
+    for (int m = 0; m < car_models; ++m) {
+        if (car_model(m).range == range) offer.push_back(m);
+    }
+    const int n = static_cast<int>(offer.size());
+    const auto it = std::find(offer.begin(), offer.end(), ((current % car_models) + car_models) % car_models);
+    const int here = it == offer.end() ? 0 : static_cast<int>(it - offer.begin());
+    return offer[static_cast<size_t>((((here + (step < 0 ? -1 : 1)) % n) + n) % n)];
 }
 
 float rival_speed(float cruise, float max_speed, float gap) {

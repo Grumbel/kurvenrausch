@@ -88,5 +88,9 @@ bool body_has_lightbar(Body body);
 // The next car of `range` from `current` in the direction `step` (+1 or
 // -1); from a car of another range, the first (or last) of this one.
 int next_car_in_range(int current, CarRange range, int step);
+// The next car on offer at a dealer of `range` for someone who came in
+// `arrived`: the dealer's range, and the car they came in, if it is not of
+// that range, ahead of it; so it is never lost by looking around.
+int next_car_offered(int current, int arrived, CarRange range, int step);
 
 } // namespace racer

@@ -1199,6 +1199,9 @@ void Game::visit_lot(const InputState& input) {
     // out of the lot must not pick another car.
     offer_ = choice && speed_pct < offer_speed && input.throttle < 0.1f ? here : std::nullopt;
     if (here != Lot::Hospital) hospital_ambulance_ = false; // back at a hospital, the drivers first
+    // The car the player came in, offered alongside the lot's.
+    if (!here) arrived_model_ = -1;
+    else if (arrived_model_ < 0) arrived_model_ = car_model_;
     if (here == Lot::Hospital && bandaged_) {
         bandaged_ = false;
         synth_.trigger_ding();
@@ -1210,8 +1213,9 @@ void Game::visit_lot(const InputState& input) {
             case Lot::Dealer:
             case Lot::SportsDealer:
             case Lot::Truckstop:
-                // The lot's range of cars, in turn.
-                car_model_ = next_car_in_range(car_model_, lot_range(*offer_), push);
+                // The lot's range of cars, in turn, and the car the player
+                // came in.
+                car_model_ = next_car_offered(car_model_, arrived_model_, lot_range(*offer_), push);
                 change_car();
                 break;
             case Lot::Motel:
@@ -1225,12 +1229,17 @@ void Game::visit_lot(const InputState& input) {
                 const int pick = (hospital_ambulance_ ? drivers : driver_) + push;
                 const int n = drivers + 1;
                 const int next = (pick % n + n) % n;
+                const bool was_ambulance = hospital_ambulance_;
                 hospital_ambulance_ = next == drivers;
                 if (hospital_ambulance_) {
                     car_model_ = ambulance_model;
                     change_car();
                 } else {
                     driver_ = next;
+                    if (was_ambulance && arrived_model_ >= 0 && car_model_ != arrived_model_) {
+                        car_model_ = arrived_model_; // back into the car they came in
+                        change_car();
+                    }
                 }
                 break;
             }
