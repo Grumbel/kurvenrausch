@@ -33,6 +33,10 @@ struct RoadView {
     // 0 means half the framebuffer height for either, as for the main view.
     float horizon = 0.f;
     float y_scale = 0.f;
+    // Horizontal pixels per world unit at scale 1; 0 means half the
+    // framebuffer width. A framebuffer wider than 4:3 keeps the 4:3 scale and
+    // shows more to the sides.
+    float x_scale = 0.f;
 };
 
 struct ScreenPoint {
@@ -88,6 +92,7 @@ private:
 
     std::vector<Slice> slices_;
     float camera_depth_ = 1.f;
+    float x_scale_ = 1.f;
     int direction_ = 1;
 };
 

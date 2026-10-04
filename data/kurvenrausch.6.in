@@ -108,6 +108,12 @@ brake for a moment, then hold it again: the car reverses.
 .BI \-\-dirt " L"
 Start the headless run with the car this dirty, from 0 (clean) to 1.
 .TP
+.BI \-\-width " W"
+Make the screenshot
+.I W
+pixels wide, from 320 (4:3) to 640, at 240 pixels high: the picture as on a
+wide screen.
+.TP
 .B \-\-wash
 Let the autopilot pull in at the next car wash during the headless run, and
 stay there.

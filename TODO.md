@@ -2,8 +2,8 @@
 
 ## Current tip
 
-Tip is Round 17 (touch controls at screen resolution), after Round 16's
-attract mode.
+Tip is Round 17 (touch controls at screen resolution, the wide screen),
+after Round 16's attract mode.
 Work is committed directly to `master`; Grok still delivers cumulative git
 bundles (see AGENTS.md).
 
@@ -25,7 +25,7 @@ Upstream master has since been fast-forwarded to `64fda32`, the tip of 002.1, so
 The rebase notes: upstream's rename is kept, its rendering fix is superseded by
 the road/framebuffer rewrite, `Color::to_u32()` became `Color::argb()`.
 
-## Round 17: touch controls at screen resolution
+## Round 17: touch controls at screen resolution, the wide screen
 
 The touch controls stopped at the 4:3 picture's edge on phones: with
 `SDL_RenderSetLogicalSize` SDL maps finger events onto the picture and
@@ -40,8 +40,17 @@ clamps the ones on the black bars to its edge. Now:
 - `TouchControls::set_layout(TouchLayout)`: the pedals keep to the screen's
   right edge, the steering pad to its left, sizes scale with the screen's
   height (`unit()`); the pause button stays on the picture
-- Open: a menu option to drop 4:3 for the screen's own aspect ratio (a
-  wider framebuffer); not tested on a real phone yet
+- The wide screen: SCREEN in the pause menu (`PauseMenu::Screen`,
+  `MenuAction::ToggleWide`, saved as `wide` in the choices). `Game::width_`
+  follows the screen's shape each frame (`screen_width()`, 240 high, 320 ..
+  `max_width` 640, even) via `set_width()`, which resizes the framebuffer,
+  the display's texture and the weather. The horizontal scale stays
+  `x_unit` (160 pixels per world unit, `RoadView::x_scale`), so a wider
+  picture shows more to the sides; the HUD keeps to the edges, the mirror
+  centres, the cockpit's dashboard is centred with its edges carried on.
+  `--width W` for headless screenshots
+- Not tested on a real phone yet; the live switch only on a 4:3 dummy
+  window (the headless runs cover the wide rendering)
 
 ## Round 16: day and night, drivable cars, attract mode
 

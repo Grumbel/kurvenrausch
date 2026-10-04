@@ -31,6 +31,8 @@ public:
     // The window's icon, an ARGB8888 image.
     void set_icon(const uint32_t* argb_pixels, int width, int height);
     void present(const uint32_t* argb_pixels, const Overlay& overlay);
+    // A framebuffer of another size from now on.
+    bool resize_framebuffer(int fb_width, int fb_height);
     void toggle_fullscreen();
 
     // The screen's size in pixels (the window's, in pixels rather than

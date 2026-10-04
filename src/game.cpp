@@ -185,8 +185,8 @@ bool overlap(float c1, float w1, float c2, float w2) {
 } // namespace
 
 Game::Game()
-    : fb_(width, height), track_(build_demo_track()), mirror_fb_(mirror_width, mirror_height),
-      weather_(width, height) {
+    : fb_(base_width, height), track_(build_demo_track()), mirror_fb_(mirror_width, mirror_height),
+      weather_(base_width, height) {
     for (int k = 0; k < lot_kinds; ++k) lots_[static_cast<size_t>(k)] = track_.lots(static_cast<Lot>(k));
     map_ = track_map(track_);
     player_ = world_.create();
@@ -237,7 +237,7 @@ void Game::spawn_traffic() {
 
 bool Game::init(bool fullscreen) {
     display_ = std::make_unique<Display>();
-    if (!display_->init("Kurvenrausch", app_id, width, height, window_scale, fullscreen)) return false;
+    if (!display_->init("Kurvenrausch", app_id, base_width, height, window_scale, fullscreen)) return false;
     const Bitmap icon = make_app_icon();
     display_->set_icon(icon.px.data(), icon.w, icon.h);
 
@@ -250,6 +250,7 @@ bool Game::init(bool fullscreen) {
         passenger_ = wrap(c->passenger, passengers);
         view_mode_ = static_cast<ViewMode>(wrap(c->view, view_modes));
         music_ = c->music >= 0 ? c->music % Music::tracks : -1;
+        wide_ = c->wide != 0;
         apply_car();
     }
     record_lap_ = best_lap(store_.load_laps());
@@ -395,6 +396,7 @@ bool Game::frame() {
                 accumulator_ -= fixed_dt_;
             }
         }
+        set_width(screen_width());
         render();
         present();
         return true;
@@ -459,10 +461,29 @@ bool Game::frame() {
         update_rumble();
     }
 
+    set_width(screen_width());
     render();
     if (paused_) draw_pause_menu(fb_, menu_, track_.zones[static_cast<size_t>(menu_.zone)].country);
     present();
     return true;
+}
+
+void Game::set_width(int w) {
+    w = std::clamp(w, base_width, max_width);
+    if (w == width_) return;
+    if (display_ && !display_->resize_framebuffer(w, height)) return;
+    width_ = w;
+    fb_ = Framebuffer(width_, height);
+    weather_.resize(width_, height);
+}
+
+int Game::screen_width() const {
+    if (!wide_) return base_width;
+    // Rounded to an even width, so the picture's centre is between pixels
+    // as it is at 4:3.
+    const SDL_Rect s = display_->screen();
+    return 2 * static_cast<int>(std::lround(static_cast<float>(height) * static_cast<float>(s.w) /
+                                            static_cast<float>(s.h) / 2.f));
 }
 
 void Game::draw_touch() {
@@ -598,6 +619,7 @@ void Game::pause() {
     touch_.release();
     paused_ = true;
     menu_.open(zone_, static_cast<int>(track_.zones.size()), !web);
+    menu_.wide = wide_;
     SynthParams quiet = sound_;
     quiet.volume = 0.f;
     synth_.set_params(quiet);
@@ -616,7 +638,7 @@ bool Game::update_pause(const InputState& input) {
         if (action != MenuAction::None) break;
         float x = 0.f, y = 0.f;
         display_->screen_to_framebuffer(tap.x, tap.y, x, y);
-        const MenuTap where = menu_tap(menu_, x, y, width, height);
+        const MenuTap where = menu_tap(menu_, x, y, width_, height);
         action = menu_.choose(where.item, where.side);
     }
     switch (action) {
@@ -627,6 +649,12 @@ bool Game::update_pause(const InputState& input) {
             reset();
             start_at(zone_start_position(menu_.zone));
             break;
+        case MenuAction::ToggleWide:
+            // Takes effect on the next picture; the menu stays open.
+            wide_ = !wide_;
+            menu_.wide = wide_;
+            save_choices();
+            return true;
         case MenuAction::Resume: break;
     }
     paused_ = false;
@@ -657,6 +685,11 @@ void Game::print_zones() const {
 }
 
 bool Game::screenshot(const ScreenshotOptions& opts) {
+    // Headless, the screen is the framebuffer.
+    set_width(opts.width);
+    wide_ = width_ > base_width;
+    touch_.set_layout(TouchLayout{static_cast<float>(width_), static_cast<float>(height), 0.f, 0.f,
+                                  static_cast<float>(width_), static_cast<float>(height)});
     const float start = opts.zone >= 0 ? zone_start_position(opts.zone) : opts.position;
     start_at(start);
     if (opts.fuel >= 0.f) fuel_.set(opts.fuel);
@@ -713,14 +746,14 @@ bool Game::screenshot(const ScreenshotOptions& opts) {
     }
     paused_ = opts.pause;
     render();
-    // Headless, the screen is the framebuffer.
     draw_touch();
     overlay_.draw(fb_);
     if (opts.pause) {
         menu_.open(zone_, static_cast<int>(track_.zones.size()));
+        menu_.wide = wide_;
         draw_pause_menu(fb_, menu_, track_.zones[static_cast<size_t>(menu_.zone)].country);
     }
-    return save_bmp(opts.path, fb_.pixels(), width, height);
+    return save_bmp(opts.path, fb_.pixels(), width_, height);
 }
 
 InputState Game::autopilot() const {
@@ -976,7 +1009,7 @@ void Game::fixed_update(const InputState& driver_input, float dt) {
 // The player's car takes its model's top speed and acceleration (grip is
 // applied where the road's grip is).
 void Game::save_choices() const {
-    store_.save_choices({car_model_, driver_, passenger_, static_cast<int>(view_mode_), music_});
+    store_.save_choices({car_model_, driver_, passenger_, static_cast<int>(view_mode_), music_, wide_ ? 1 : 0});
 }
 
 // Into another car: it comes clean and with a full tank.
@@ -1060,13 +1093,13 @@ void Game::update_wash(float dt) {
     const Color water{0xc8, 0xe0, 0xf4}, foam{0xf8, 0xfc, 0xff};
     for (int i = 0; i < 3; ++i) {
         const float a = random(), b = random();
-        particles_.push_back({static_cast<float>(width) / 2.f + (a - 0.5f) * 100.f, ground_y - 50.f - 10.f * b,
+        particles_.push_back({static_cast<float>(width_) / 2.f + (a - 0.5f) * 100.f, ground_y - 50.f - 10.f * b,
                               (b - 0.5f) * 40.f, 40.f * b, 0.5f, 0.5f, 1.f + b, blend(water, foam, b),
                               Particle::Kind::Spray});
     }
     if (random() < 0.3f) {
         const float a = random();
-        particles_.push_back({static_cast<float>(width) / 2.f + (a - 0.5f) * 80.f, ground_y - 30.f, 0.f, -8.f, 0.6f,
+        particles_.push_back({static_cast<float>(width_) / 2.f + (a - 0.5f) * 80.f, ground_y - 30.f, 0.f, -8.f, 0.6f,
                               0.6f, 3.f + 3.f * a, foam, Particle::Kind::Dust});
     }
     if (dirt_.clean()) {
@@ -1136,7 +1169,7 @@ void Game::start_crash(float speed_pct) {
     bandaged_ = true;
 
     // Bits of car flying off, and a cloud of dust.
-    const float x = static_cast<float>(width) / 2.f;
+    const float x = static_cast<float>(width_) / 2.f;
     const Color chips[] = {{0xd0, 0x18, 0x1c}, {0x88, 0x08, 0x10}, {0x9a, 0x9a, 0xa8}, {0x20, 0x20, 0x24}, {0xa0, 0xc8, 0xe8}};
     for (int i = 0; i < 24; ++i) {
         rng_ = rng_ * 1664525u + 1013904223u;
@@ -1176,7 +1209,7 @@ void Game::update_crash(float dt) {
         // Each touchdown is softer than the one before.
         const float strength = pose.recover > 0.f ? 0.f : 1.f - std::min(crash_time_ / crash_tumble_seconds, 0.8f);
         synth_.trigger_crash(0.3f + 0.4f * strength);
-        spawn_dust(static_cast<float>(width) / 2.f + pose.slide, ground_y, 6, 0.5f + strength);
+        spawn_dust(static_cast<float>(width_) / 2.f + pose.slide, ground_y, 6, 0.5f + strength);
         crashed_ = true;
     }
     scraping_ = false;
@@ -1275,7 +1308,7 @@ void Game::land(float impact) {
     const float strength = std::clamp(impact / 8000.f, 0.f, 1.f);
     if (strength < 0.1f) return;
     synth_.trigger_crash(0.2f + 0.5f * strength);
-    spawn_dust(static_cast<float>(width) / 2.f, ground_y, 3 + static_cast<int>(6.f * strength), 0.4f + strength);
+    spawn_dust(static_cast<float>(width_) / 2.f, ground_y, 3 + static_cast<int>(6.f * strength), 0.4f + strength);
     if (strength > 0.4f) {
         crashed_ = true; // a strong rumble
         landing_time_ = 0.2f;
@@ -1288,7 +1321,7 @@ void Game::spawn_smoke(float speed_pct) {
     for (int side = -1; side <= 1; side += 2) {
         rng_ = rng_ * 1664525u + 1013904223u;
         const float a = static_cast<float>(rng_ >> 8) / 16777216.f;
-        particles_.push_back({static_cast<float>(width) / 2.f + static_cast<float>(side) * (36.f + 8.f * a), ground_y - 3.f,
+        particles_.push_back({static_cast<float>(width_) / 2.f + static_cast<float>(side) * (36.f + 8.f * a), ground_y - 3.f,
                               static_cast<float>(side) * 20.f * speed_pct, -15.f - 20.f * a, 0.6f, 0.6f, 2.f + 2.f * a,
                               Color{0xd8, 0xd8, 0xdc}, Particle::Kind::Dust});
     }
@@ -1306,14 +1339,14 @@ void Game::spawn_spray(float speed_pct) {
         const float sd = static_cast<float>(side);
         for (int i = 0; i < 4; ++i) {
             const float a = random(), b = random();
-            const float x = static_cast<float>(width) / 2.f + sd * (40.f + 6.f * a);
+            const float x = static_cast<float>(width_) / 2.f + sd * (40.f + 6.f * a);
             particles_.push_back({x, ground_y - 2.f, sd * (40.f + 160.f * a) * speed_pct, -(80.f + 200.f * b) * speed_pct,
                                   0.3f + 0.3f * b, 0.3f + 0.3f * b, 1.f + b, blend(water, Color{0xff, 0xff, 0xff}, b),
                                   Particle::Kind::Spray});
         }
         if (random() < 0.5f) {
             const float a = random();
-            particles_.push_back({static_cast<float>(width) / 2.f + sd * (30.f + 14.f * a), ground_y - 4.f,
+            particles_.push_back({static_cast<float>(width_) / 2.f + sd * (30.f + 14.f * a), ground_y - 4.f,
                                   sd * 30.f * speed_pct, -25.f * speed_pct, 0.45f, 0.45f, 3.f + 3.f * a,
                                   blend(water, Color{0xff, 0xff, 0xff}, 0.5f), Particle::Kind::Dust});
         }
@@ -1668,6 +1701,7 @@ void Game::render() {
     view.player_z = setup.distance;
     view.draw_distance = cam.draw_distance;
     view.fog_density = look.fog_density;
+    view.x_scale = x_unit;
     road_sprites_.clear();
     world_.view<Transform, Traffic>([&](Entity e, Transform& t, Traffic& traffic) {
         RoadSprite s;
@@ -1699,17 +1733,17 @@ void Game::render() {
         }
     }
     const Bitmap& car = player_bitmap_;
-    const float scale = setup.car ? cam.depth / setup.distance * (width / 2.f) : 1.f;
+    const float scale = setup.car ? cam.depth / setup.distance * x_unit : 1.f;
     RoadSprite me;
     me.z = tr.z + cam.player_z();
     me.bitmap = &car;
     me.fixed = true;
     me.sw = player.car_width * scale;
     me.sh = me.sw * static_cast<float>(car.h) / static_cast<float>(car.w);
-    me.sx = (width - me.sw) / 2.f;
+    me.sx = (static_cast<float>(width_) - me.sw) / 2.f;
     me.sy = (setup.car ? std::min(contact_row(setup, cam.depth, height), static_cast<float>(height)) : height) - me.sh -
             1.f + bounce_;
-    me.sy -= std::min(40.f, (1.f - camera_air_share) * air * scale * height / width);
+    me.sy -= std::min(40.f, (1.f - camera_air_share) * air * scale * (static_cast<float>(height) / 2.f) / x_unit);
     if (landing_time_ > 0.f) me.sy += 3.f; // squashed by a hard landing
     bool car_visible = setup.car && !attract_;
     if (crash_time_ >= 0.f && setup.car) {
@@ -1725,7 +1759,7 @@ void Game::render() {
 
     if (scraping_ && vel.speed > 0.f && setup.car) {
         // Sparks flying off the side of the car that scrapes the barrier.
-        const float x = static_cast<float>(width) / 2.f + static_cast<float>(scrape_side_) * me.sw / 2.f;
+        const float x = static_cast<float>(width_) / 2.f + static_cast<float>(scrape_side_) * me.sw / 2.f;
         for (int i = 0; i < 16; ++i) {
             rng_ = rng_ * 1664525u + 1013904223u;
             const int dx = static_cast<int>((rng_ >> 8) % 11) - 5 + scrape_side_ * 2;
@@ -1776,18 +1810,22 @@ void Game::render() {
     }
     weather_.render(fb_);
     if (setup.cockpit) {
-        // The dashboard and the wheel, shaking with the car.
+        // The dashboard and the wheel, shaking with the car. On a wide
+        // screen the dashboard is centred and its outer edges carry on to
+        // the sides.
         const Bitmap& dash = sprites_.dashboard(car_model_);
+        const int dash_x = (width_ - dash.w) / 2;
         const int dash_y = height - dashboard_height + static_cast<int>(bounce_);
         for (int y = 0; y < dash.h; ++y) {
-            for (int x = 0; x < dash.w; ++x) {
-                const uint32_t p = dash.px[static_cast<size_t>(y) * dash.w + x];
+            for (int x = 0; x < width_; ++x) {
+                const int dx = std::clamp(x - dash_x, 0, dash.w - 1);
+                const uint32_t p = dash.px[static_cast<size_t>(y) * dash.w + dx];
                 if (p >> 24) fb_.put_pixel(x, dash_y + y, Color{static_cast<uint8_t>(p >> 16), static_cast<uint8_t>(p >> 8),
                                                                 static_cast<uint8_t>(p)});
             }
         }
         const float twitch = spin_time_ > 0.f ? (static_cast<int>(clock_ * 16.f) % 2 ? 0.3f : -0.3f) : 0.f;
-        fb_.blit_rotated(sprites_.wheel(driver_), static_cast<float>(dashboard_wheel_x),
+        fb_.blit_rotated(sprites_.wheel(driver_), static_cast<float>(dash_x + dashboard_wheel_x),
                          static_cast<float>(height) + 6.f + bounce_, wheel_size, wheel_size, wheel_angle_ + twitch);
     }
     render_mirror();
@@ -1796,7 +1834,7 @@ void Game::render() {
     // light the road ahead again, from the car's front up (above the
     // dashboard in the cockpit).
     const Daylight light = daylight_at(hour_);
-    if (headlights_) day_picture_.assign(fb_.pixels(), fb_.pixels() + width * height);
+    if (headlights_) day_picture_.assign(fb_.pixels(), fb_.pixels() + width_ * height);
     apply_daylight(fb_, light);
     if (headlights_) {
         const int beam_bottom = setup.cockpit ? height - dashboard_height
@@ -1808,7 +1846,7 @@ void Game::render() {
         // Lightning lights up everything for a moment.
         const float a = std::min(0.75f, flash_time_ * 5.f);
         for (int y = 0; y < height; ++y) {
-            for (int x = 0; x < width; ++x) fb_.blend_pixel(x, y, Color{0xf0, 0xf4, 0xff}, a);
+            for (int x = 0; x < width_; ++x) fb_.blend_pixel(x, y, Color{0xf0, 0xf4, 0xff}, a);
         }
     }
 
@@ -1883,10 +1921,10 @@ void Game::render_mirror() {
     const RoadTheme look = look_at(car_z);
 
     // Keep the proportions of the main view, which maps a world unit to
-    // width/2 pixels across and height/2 pixels up at scale 1.
+    // x_unit pixels across and height/2 pixels up at scale 1.
     const float half_w = static_cast<float>(mirror_width) / 2.f;
-    const float y_scale = half_w * static_cast<float>(height) / static_cast<float>(width);
-    const float zoom = mirror_depth * half_w / (cam.depth * static_cast<float>(width) / 2.f);
+    const float y_scale = half_w * (static_cast<float>(height) / 2.f) / x_unit;
+    const float zoom = mirror_depth * half_w / (cam.depth * x_unit);
     background_.render(mirror_fb_, look, BackdropView{mirror_horizon, zoom, true});
 
     RoadView view;
@@ -1913,6 +1951,7 @@ void Game::render_mirror() {
     });
     mirror_road_.render(mirror_fb_, track_, view, sprites_, mirror_sprites_);
 
+    const int mirror_x = (width_ - mirror_width) / 2;
     draw_mirror_frame(fb_, mirror_x, mirror_y, mirror_width, mirror_height);
     fb_.blit(mirror_fb_, mirror_x, mirror_y);
     draw_mirror_sheen(fb_, mirror_x, mirror_y, mirror_width, mirror_height);

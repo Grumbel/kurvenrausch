@@ -47,6 +47,7 @@ void usage(const char* argv0) {
               << "  --hour H            start the headless run at H o'clock (0 to 24)\n"
               << "  --attract           show the attract mode (following the traffic) in the screenshot\n"
               << "  --dirt L            start the headless run this dirty (0 to 1)\n"
+              << "  --width W           make the screenshot W pixels wide (320, 4:3, to 640), 240 high\n"
               << "  --wash              pull in at the next car wash during the headless run\n"
               << "  --visit KIND        pull in at the next lot of KIND (gas, dealer, sports, wash, motel, hospital, truckstop)\n"
               << "  --nitro N           press nitro at step N of the headless run\n"
@@ -91,6 +92,8 @@ int main(int argc, char* argv[]) {
             shot.handbrake_from = std::atoi(argv[++i]);
         } else if (arg == "--dirt" && i + 1 < argc) {
             shot.dirt = static_cast<float>(std::atof(argv[++i]));
+        } else if (arg == "--width" && i + 1 < argc) {
+            shot.width = std::atoi(argv[++i]);
         } else if (arg == "--wash") {
             shot.visit = static_cast<int>(racer::Lot::Wash);
         } else if (arg == "--visit" && i + 1 < argc) {

@@ -22,6 +22,8 @@ public:
     Weather(int width, int height);
 
     void reset();
+    // A screen of another size: the drops and flakes spread over it anew.
+    void resize(int width, int height);
 
     // rain and snow are intensities from 0 (none) to 1 (downpour / blizzard);
     // `wind` pushes the precipitation sideways in pixels per second; `speed`
@@ -50,6 +52,7 @@ private:
     float next_random();
     // Moves a particle by its fall `fall` (pixels per second) plus the outflow,
     // and puts it back in when it leaves the screen.
+    void scatter(); // the drops and flakes anywhere on the screen
     void move(Particle& p, float fall_x, float fall_y, float dt);
 
     float w_, h_;

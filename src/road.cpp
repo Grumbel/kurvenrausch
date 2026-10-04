@@ -11,16 +11,16 @@ namespace racer {
 namespace {
 
 // `direction` is +1 looking along the track and -1 looking back; `horizon`
-// is the screen row of eye level and `y_scale` the vertical pixels per unit.
+// is the screen row of eye level, `x_scale` and `y_scale` the pixels per
+// unit across and up.
 void project(ScreenPoint& p, float world_x, float world_y, float world_z,
              float cam_x, float cam_y, float cam_z, float depth, int direction,
-             int screen_w, float horizon, float y_scale, float road_width) {
+             int screen_w, float x_scale, float horizon, float y_scale, float road_width) {
     p.cam_z = (world_z - cam_z) * static_cast<float>(direction);
     p.scale = depth / p.cam_z;
-    const float half_w = static_cast<float>(screen_w) / 2.f;
-    p.x = half_w + p.scale * (world_x - cam_x) * half_w;
+    p.x = static_cast<float>(screen_w) / 2.f + p.scale * (world_x - cam_x) * x_scale;
     p.y = horizon - p.scale * (world_y - cam_y) * y_scale;
-    p.w = p.scale * road_width * half_w;
+    p.w = p.scale * road_width * x_scale;
 }
 
 float exponential_fog(float distance, float density) {
@@ -44,6 +44,7 @@ void RoadRenderer::render(Framebuffer& fb, const Track& track, const RoadView& v
     const float half_h = static_cast<float>(fb.height()) / 2.f;
     const float horizon = view.horizon > 0.f ? view.horizon : half_h;
     const float y_scale = view.y_scale > 0.f ? view.y_scale : half_h;
+    x_scale_ = view.x_scale > 0.f ? view.x_scale : static_cast<float>(fb.width()) / 2.f;
 
     // The camera may sit partway into the base segment, so start the curve
     // accumulation with the part of the curve already passed. Looking back,
@@ -77,9 +78,9 @@ void RoadRenderer::render(Framebuffer& fb, const Track& track, const RoadView& v
         s.index = index;
         const int near = dir > 0 ? index : index + 1; // boundaries at the near and far end
         project(s.p1, x, dir > 0 ? seg.y1 : seg.y2, dir > 0 ? z1 : z2, cam_x, cam_y, cam_z,
-                view.camera_depth, dir, fb.width(), horizon, y_scale, track.half_width(near));
+                view.camera_depth, dir, fb.width(), x_scale_, horizon, y_scale, track.half_width(near));
         project(s.p2, x + dx, dir > 0 ? seg.y2 : seg.y1, dir > 0 ? z2 : z1, cam_x, cam_y, cam_z,
-                view.camera_depth, dir, fb.width(), horizon, y_scale, track.half_width(near + dir));
+                view.camera_depth, dir, fb.width(), x_scale_, horizon, y_scale, track.half_width(near + dir));
         x += dx;
         dx += seg.curve;
 
@@ -308,7 +309,6 @@ void RoadRenderer::draw_edge(Framebuffer& fb, const Track& track, const Slice& s
     if (kind == Edge::None) return;
 
     const RoadTheme& th = track.look(s.index);
-    const float half_w = static_cast<float>(fb.width()) / 2.f;
     const float off = (kind == Edge::Rail ? rail_offset : cliff_offset) * static_cast<float>(side);
     const float fog_amount = 1.f - s.fog;
     const ScreenPoint& a = s.p1;
@@ -320,7 +320,7 @@ void RoadRenderer::draw_edge(Framebuffer& fb, const Track& track, const Slice& s
     const int near = direction_ > 0 ? s.index : s.index + 1;
     const float h1 = track.edge_height(near, side);
     const float h2 = track.edge_height(near + direction_, side);
-    const float ppu_a = a.scale * half_w, ppu_b = b.scale * half_w; // pixels per world unit
+    const float ppu_a = a.scale * x_scale_, ppu_b = b.scale * x_scale_; // pixels per world unit
     const float ta = a.y - h1 * ppu_a, tb = b.y - h2 * ppu_b;
     if (std::abs(xb - xa) < 0.01f) return; // seen edge-on
 
@@ -372,7 +372,6 @@ void RoadRenderer::draw_edge(Framebuffer& fb, const Track& track, const Slice& s
 
 void RoadRenderer::draw_sprites(Framebuffer& fb, const Track& track, const SpriteSheet& sprites,
                                 const std::vector<RoadSprite>& objects) const {
-    const float half_w = static_cast<float>(fb.width()) / 2.f;
     const float seg_len = track.segment_length;
 
     // Far to near so nearer objects overdraw farther ones. Each object is
@@ -396,7 +395,7 @@ void RoadRenderer::draw_sprites(Framebuffer& fb, const Track& track, const Sprit
         // Scenery at `shift` road half-widths from where it belongs.
         auto plant = [&](const RoadsideObject& obj, float shift) {
             const SceneryInfo& info = scenery_info(obj.kind);
-            const float px_per_unit = p0.scale * half_w;
+            const float px_per_unit = p0.scale * x_scale_;
             const float width = info.width * px_per_unit;
             float left = p0.x + (obj.offset + shift) * track.half_width(s.index) * px_per_unit;
             if (info.centered) left -= width / 2.f;
@@ -438,7 +437,7 @@ void RoadRenderer::draw_sprites(Framebuffer& fb, const Track& track, const Sprit
             const float scale = p0.scale + (p1.scale - p0.scale) * t;
             const float x = p0.x + (p1.x - p0.x) * t;
             const float y = p0.y + (p1.y - p0.y) * t;
-            const float px_per_unit = scale * half_w;
+            const float px_per_unit = scale * x_scale_;
             const float width = o.world_width * px_per_unit;
             const float height = width * static_cast<float>(bmp.h) / static_cast<float>(bmp.w);
             const float cx = x + o.offset * track.half_width_at(o.z) * px_per_unit;

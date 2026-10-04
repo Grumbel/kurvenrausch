@@ -33,9 +33,9 @@ TouchControls::Circle TouchControls::circle(Button b) const {
         case Handbrake: return right(196.f, 206.f, 14.f);
         case Horn: return right(248.f, 142.f, 12.f);
         default: {
-            // Pause: on the picture, between the mirror and BEST.
-            const float g = layout_.game_w / 320.f;
-            return {layout_.game_x + 236.f * g, layout_.game_y + 22.f * g, 10.f * g};
+            // Pause: on the picture, between the mirror (centred) and BEST.
+            const float g = layout_.game_h / 240.f;
+            return {layout_.game_x + layout_.game_w / 2.f + 76.f * g, layout_.game_y + 22.f * g, 10.f * g};
         }
     }
 }

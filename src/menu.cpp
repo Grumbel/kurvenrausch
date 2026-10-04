@@ -33,11 +33,13 @@ MenuAction PauseMenu::update(const MenuInput& in) {
         if (in.left) zone = (zone + zones - 1) % zones;
         if (in.right) zone = (zone + 1) % zones;
     }
+    if (selected == Screen && (in.left || in.right)) return MenuAction::ToggleWide;
     if (!in.confirm) return MenuAction::None;
     switch (selected) {
         case Resume: return MenuAction::Resume;
         case Restart: return MenuAction::Restart;
         case StartZone: return MenuAction::StartZone;
+        case Screen: return MenuAction::ToggleWide;
         default: return MenuAction::Quit;
     }
 }

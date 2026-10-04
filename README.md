@@ -226,7 +226,7 @@ browser Esc pauses, and the pause menu has no Quit.
 | Ctrl             | Left shoulder            | Handbrake          |
 | H                | X                        | Horn               |
 | Space            | Y, right shoulder        | Nitro              |
-| P                | Start                    | Pause menu: resume, restart, start in a chosen country, quit |
+| P                | Start                    | Pause menu: resume, restart, start in a chosen country, screen shape, quit |
 | R                |                          | Restart            |
 | C                | Back                     | Camera view: chase, far, bumper, cockpit |
 | N                | Right stick, flicked up / down | Radio: next (or previous) track, or off |
@@ -239,10 +239,15 @@ browser Esc pauses, and the pause menu has no Quit.
 | Esc              |                          | Quit (in the pause menu: back to the race) |
 
 On a touch screen (phones, tablets, the web page on them) controls appear
-once you touch it: drag sideways on the left to steer, GAS and BRK
-(brake, and reverse) on the right with NOS, HB (handbrake) and H (horn), the
-pause button right of the mirror; in the pause menu tap a line, on the
-country line its left or right end to pick the country.
+once you touch it, at the screen's own resolution and across the whole
+screen: drag sideways on the left to steer, GAS and BRK (brake, and
+reverse) on the right with NOS, HB (handbrake) and H (horn), the pause
+button right of the mirror; in the pause menu tap a line, on the country
+line its left or right end to pick the country.
+
+The picture is 4:3 with black bars on wider screens; SCREEN in the pause
+menu switches it to WIDE, as wide as the screen (up to 2:1), showing more
+to the sides.
 
 Any controller SDL knows (Xbox, PlayStation, Switch Pro, most generic pads) works
 and can be plugged in at any time; analog sticks and triggers steer and
@@ -289,6 +294,7 @@ made and how rendering changes are checked without a display:
 ./build/kurvenrausch --screenshot shot.bmp --zone 1 --frames 300 --car 2   # another car
 ./build/kurvenrausch --screenshot shot.bmp --zone 5 --frames 1400 --dealer # visit a dealer
 ./build/kurvenrausch --screenshot shot.bmp --frames 1500 --attract   # the attract mode
+./build/kurvenrausch --screenshot shot.bmp --frames 900 --width 534  # wide screen (20:9)
 ```
 
 It simulates the given number of 60 Hz steps with a simple autopilot that also

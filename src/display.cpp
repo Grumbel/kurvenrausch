@@ -88,6 +88,21 @@ bool Display::init(const char* title, const char* app_id, int fb_width, int fb_h
     return true;
 }
 
+bool Display::resize_framebuffer(int fb_width, int fb_height) {
+    if (fb_width == fb_w_ && fb_height == fb_h_) return true;
+    SDL_Texture* texture = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING,
+                                             fb_width, fb_height);
+    if (!texture) {
+        std::cerr << "Texture creation failed: " << SDL_GetError() << "\n";
+        return false;
+    }
+    SDL_DestroyTexture(texture_);
+    texture_ = texture;
+    fb_w_ = fb_width;
+    fb_h_ = fb_height;
+    return true;
+}
+
 void Display::present(const uint32_t* argb_pixels, const Overlay& overlay) {
     SDL_UpdateTexture(texture_, nullptr, argb_pixels,
                       fb_w_ * static_cast<int>(sizeof(uint32_t)));

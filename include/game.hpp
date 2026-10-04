@@ -60,19 +60,24 @@ struct ScreenshotOptions {
     float hour = -1.f;       // if >= 0, the time of day the headless run starts at (0 .. 24)
     bool attract = false;    // the headless run shows the attract mode
     float dirt = -1.f;       // if >= 0, start this dirty (mud and oil, 0 .. 1)
+    int width = 320;         // the framebuffer's width (320 is 4:3, up to 640)
 };
 
 class Game {
 public:
-    // Native resolution of the software framebuffer.
-    static constexpr int width = 320;
+    // Native resolution of the software framebuffer: 4:3, or as wide as the
+    // screen (up to max_width) when the player chooses the wide screen.
+    static constexpr int base_width = 320;
+    static constexpr int max_width = 640;
     static constexpr int height = 240;
     static constexpr int window_scale = 3;
+    // Horizontal pixels per world unit at scale 1, whatever the width: a
+    // wider picture shows more to the sides.
+    static constexpr float x_unit = base_width / 2.f;
 
     // Rear-view mirror: the glass, centred at the top of the screen.
     static constexpr int mirror_width = 112;
     static constexpr int mirror_height = 30;
-    static constexpr int mirror_x = (width - mirror_width) / 2;
     static constexpr int mirror_y = 6;
 
     Game();
@@ -155,6 +160,10 @@ private:
     void render_mirror();
     // The framebuffer to the screen, the touch controls over it.
     void present();
+    // The framebuffer this wide (clamped to base_width .. max_width), and the
+    // width the screen asks for: 4:3, or as wide as the screen when wide_.
+    void set_width(int w);
+    int screen_width() const;
     // The touch controls into overlay_, if shown.
     void draw_touch();
     // The track's look at z under the weather passing over now.
@@ -306,6 +315,8 @@ private:
     bool touch_seen_ = false;          // the touch screen was used: show its controls
     std::vector<Finger> touch_taps_;   // taps this frame, screen pixels
     Overlay overlay_;                  // drawn over the picture at screen resolution
+    int width_ = base_width;           // the framebuffer's width now
+    bool wide_ = false;                // the player chose a picture as wide as the screen
     Uint64 prev_counter_ = 0;
     float accumulator_ = 0.f;
 };

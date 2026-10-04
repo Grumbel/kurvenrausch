@@ -39,6 +39,16 @@ void Weather::reset() {
     rain_level_ = snow_level_ = 0.f;
     wind_ = 0.f;
     speed_ = 0.f;
+    scatter();
+}
+
+void Weather::resize(int width, int height) {
+    w_ = static_cast<float>(width);
+    h_ = static_cast<float>(height);
+    scatter();
+}
+
+void Weather::scatter() {
     rain_.assign(static_cast<size_t>(max_rain), Particle{});
     snow_.assign(static_cast<size_t>(max_snow), Particle{});
     for (Particle& p : rain_) p = Particle{next_random() * (w_ + 2 * margin) - margin, next_random() * (h_ + 2 * margin) - margin, next_random(), 0.f};

@@ -94,7 +94,7 @@ void headlight_beam(Framebuffer& fb, const std::vector<uint32_t>& day, const Day
         // vanishing point, brightest at mid distance, fading into the dark.
         const float s = static_cast<float>(y - horizon) / static_cast<float>(h - horizon);
         const float reach = smoothstep(0.04f, 0.3f, s) * (1.f - 0.35f * s);
-        const float width = s * static_cast<float>(w) * 0.55f;
+        const float width = s * static_cast<float>(h) * (4.f / 3.f) * 0.55f; // as wide on a wide screen
         for (int x = 0; x < w; ++x) {
             const float across = std::abs(static_cast<float>(x) + 0.5f - half) / std::max(width, 1.f);
             if (across >= 1.f) continue;

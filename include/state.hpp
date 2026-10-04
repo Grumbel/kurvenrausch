@@ -25,6 +25,7 @@ struct Choices {
     int passenger = 0;
     int view = 0; // a ViewMode
     int music = 0; // a Music track, -1 off
+    int wide = 0;  // 1: the picture as wide as the screen, 0: 4:3
 };
 // As "key value" lines; parsing skips unknown keys and malformed lines and
 // keeps the defaults for what is missing.

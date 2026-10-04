@@ -224,7 +224,7 @@ void draw_hud(Framebuffer& fb, const HudState& hud) {
     // strengths.
     int message_y = h / 2 - 42;
     if (!hud.offer_title.empty()) {
-        const int px = 70, py = 68, pw = w - 140, ph = hud.offer_stats ? 70 : 36;
+        const int pw = 180, px = (w - pw) / 2, py = 68, ph = hud.offer_stats ? 70 : 36;
         message_y = py + ph + 6; // below the panel, not over it
         for (int y = py; y < py + ph; ++y)
             for (int x = px; x < px + pw; ++x) fb.blend_pixel(x, y, Shadow, 0.7f);
@@ -277,7 +277,8 @@ void draw_pause_menu(Framebuffer& fb, const PauseMenu& menu, const std::string& 
     }
     const int top = fb.height() / 2 - 50;
     text_center(fb, top, "PAUSED", Value, 3);
-    const std::string items[PauseMenu::items] = {"RESUME", "RESTART", "START IN < " + country + " >", "QUIT"};
+    const std::string items[PauseMenu::items] = {"RESUME", "RESTART", "START IN < " + country + " >",
+                                                 menu.wide ? "SCREEN: WIDE" : "SCREEN: 4:3", "QUIT"};
     for (int i = 0; i < menu.item_count(); ++i) {
         const bool on = i == menu.selected;
         const std::string line = on ? "> " + items[i] + " <" : items[i];

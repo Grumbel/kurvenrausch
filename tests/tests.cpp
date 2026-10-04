@@ -805,6 +805,8 @@ void test_views() {
     CHECK(view_setup(ViewMode::Cockpit, cam.height, cam.depth, true).height > cockpit.height);
     for (int v = 0; v < view_modes; ++v) CHECK(std::string(view_name(static_cast<ViewMode>(v))).size() > 0);
     CHECK(parse_choices(format_choices(Choices{0, 0, 0, 3})).view == 3);
+    CHECK(parse_choices(format_choices(Choices{0, 0, 0, 0, 0, 1})).wide == 1);
+    CHECK(parse_choices("car 1\n").wide == 0);
     // The cockpit's pictures.
     const SpriteSheet sheet;
     CHECK(sheet.dashboard(0).w == 320 && sheet.dashboard(0).h == dashboard_height);
@@ -952,7 +954,12 @@ void test_touch() {
     CHECK(m.choose(left.item, left.side) == MenuAction::None && m.zone == 2);
     CHECK(menu_tap(m, 300.f, first + 32.f, 320, 240).side == 1);
     CHECK(m.choose(PauseMenu::StartZone, 0) == MenuAction::StartZone);
-    CHECK(menu_tap(m, 160.f, first + 48.f, 320, 240).item == -1); // no Quit line in a web page
+    CHECK(menu_tap(m, 160.f, first + 64.f, 320, 240).item == -1); // no Quit line in a web page
+    // The screen line switches the shape and keeps the menu open.
+    CHECK(m.choose(PauseMenu::Screen) == MenuAction::ToggleWide);
+    MenuInput side;
+    side.right = true;
+    CHECK(m.update(side) == MenuAction::ToggleWide);
 }
 
 void test_daylight() {
@@ -1025,11 +1032,11 @@ void test_pause_menu() {
     CHECK(m.update(back) == MenuAction::Resume);
     m.open(-1, 16);
     CHECK(m.zone == 0 && m.selected == PauseMenu::Resume);
-    // Without Quit (in a web page) the selection wraps round the other three.
+    // Without Quit (in a web page) the selection wraps round the other four.
     m.open(0, 16, false);
-    CHECK(m.item_count() == 3);
+    CHECK(m.item_count() == 4);
     m.update(up);
-    CHECK(m.selected == PauseMenu::StartZone);
+    CHECK(m.selected == PauseMenu::Screen);
     m.update(down);
     CHECK(m.selected == PauseMenu::Resume);
 }
