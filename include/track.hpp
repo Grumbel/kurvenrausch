@@ -201,6 +201,7 @@ struct RoadTheme {
     float sun_amount = 0.f;             // 0 = no visible sun
     float stars = 0.f;                  // 0 .. 1, stars in the night sky (see at_daytime())
     float haze = 0.f;                   // extra haze on mountains and hills, 0 .. 1
+    float night_glow = 0.15f;           // light at night: 0 the dark outback .. 1 a big city
     float mountain_scale = 1.f;         // height of the far mountains
     float hill_scale = 1.f;             // height of the near hills
     float snow_line = 40.f;             // mountains are white above this height (pixels)

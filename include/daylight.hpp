@@ -30,6 +30,23 @@ float advance_hour(float hour, float seconds);
 // low and red or gone, stars at night.
 RoadTheme at_daytime(const RoadTheme& look, const Daylight& light);
 
+// The night lit up by a place: towns and cities (glow up to 1) lighten the
+// dark; out in the wilds (glow 0) it stays as dark as it is.
+Daylight lit_by(Daylight light, float glow);
+
+// A street lamp seen from the camera: its foot on screen column x, depth
+// world units ahead; the pool of light it throws on the ground.
+struct LampSpot {
+    float x;
+    float depth;
+};
+constexpr float lamp_reach = 1100.f; // the pool's radius, world units
+// The pools of the lamps: the darkened ground around their feet lit again,
+// warm, from the picture before nightfall (`day`), as headlight_beam() does.
+void street_lights(Framebuffer& fb, const std::vector<uint32_t>& day, const Daylight& light,
+                   const std::vector<float>& row_depth, const std::vector<LampSpot>& lamps, float camera_depth,
+                   float x_scale);
+
 // The picture for the light: darkened (warm at dusk, blue at night), except
 // lamps and stars, which keep shining (night_emissive()).
 void apply_daylight(Framebuffer& fb, const Daylight& light);

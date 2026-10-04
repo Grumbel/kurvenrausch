@@ -2205,9 +2205,12 @@ void Game::render() {
     // Nightfall: the picture darkened but for its lamps; the headlights
     // light the road ahead again, from the car's front up (above the
     // dashboard in the cockpit).
-    const Daylight light = daylight_at(hour_);
-    if (headlights_) day_picture_.assign(fb_.pixels(), fb_.pixels() + width_ * height);
+    const Daylight light = lit_by(daylight_at(hour_), look.night_glow);
+    // (The picture before nightfall, for the light the headlights and the
+    // street lamps bring back.)
+    if (headlights_ || !road_.lamps().empty()) day_picture_.assign(fb_.pixels(), fb_.pixels() + width_ * height);
     apply_daylight(fb_, light);
+    street_lights(fb_, day_picture_, light, road_.row_depth(), road_.lamps(), cam.depth, x_unit);
     if (headlights_) {
         Beam beam;
         beam.start = setup.distance + 450.f; // the lamps, at the car's front

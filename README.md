@@ -123,6 +123,9 @@ weather and road markings, fading smoothly into one another:
   hospital (Holland, Korea) another driver takes the wheel, or, past the
   last of them, you take an ambulance. A crash leaves the driver with a
   bandage round the head until a hospital patches them up
+- **Night lights**: cities glow at night, the sky above them orange, their
+  windows lit and their street lamps throwing pools of warm light on the
+  road; out in the desert and the outback the night is as dark as it gets
 - **Animals crossing**: now and then an animal of the countryside walks
   across the road ahead: cows in India, giraffes in Kenya, deer in the
   forests, the Alps and Korea, a flock of sheep in England, kangaroos hopping

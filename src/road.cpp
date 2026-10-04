@@ -60,6 +60,7 @@ void RoadRenderer::render(Framebuffer& fb, const Track& track, const RoadView& v
     slices_.clear();
     slices_.reserve(static_cast<size_t>(count));
     row_depth_.assign(static_cast<size_t>(fb.height()), 0.f);
+    lamps_.clear();
 
     for (int n = 0; n < count; ++n) {
         const int index = ((base + dir * n) % n_segments + n_segments) % n_segments;
@@ -415,6 +416,11 @@ void RoadRenderer::draw_sprites(Framebuffer& fb, const Track& track, const Sprit
             const bool flip = info.mirrorable && obj.offset < 0.f;
             fb.blit_scaled(bmp, left, p0.y - height, width, height, flip,
                            fog_amount, track.look(s.index).fog);
+            // A lamp's light falls at its foot, a little out over the road.
+            if (obj.kind == Scenery::StreetLamp) {
+                const float toward_road = (obj.offset < 0.f ? 1.f : -1.f) * 0.15f * track.half_width(s.index) * px_per_unit;
+                lamps_.push_back({left + width / 2.f + toward_road, p0.cam_z});
+            }
         };
         if (projectable) {
             // At a fork, the other route's scenery beside its road too, so

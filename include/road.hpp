@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #pragma once
+#include "daylight.hpp"
 #include "framebuffer.hpp"
 #include "sprites.hpp"
 #include "track.hpp"
@@ -73,6 +74,8 @@ public:
     // After render(): how far ahead of the camera (world units) the road or
     // ground seen in each screen row lies; 0 where none is seen (the sky).
     const std::vector<float>& row_depth() const { return row_depth_; }
+    // After render(): the street lamps drawn, where their light falls.
+    const std::vector<LampSpot>& lamps() const { return lamps_; }
 
 private:
     struct Slice {
@@ -96,6 +99,7 @@ private:
 
     std::vector<Slice> slices_;
     std::vector<float> row_depth_;
+    mutable std::vector<LampSpot> lamps_; // found while drawing the scenery
     float camera_depth_ = 1.f;
     float x_scale_ = 1.f;
     int direction_ = 1;

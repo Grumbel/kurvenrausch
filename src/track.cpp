@@ -342,7 +342,7 @@ float barrier_limit(const Segment& seg, int side, float car_half_width) {
 RoadTheme mix_themes(const RoadTheme& a, const RoadTheme& b, float t) {
     // Tripwire: when a field is added to RoadTheme this changes, as a reminder
     // to blend it below and to update the expected size.
-    static_assert(sizeof(RoadTheme) == 188, "RoadTheme changed: update mix_themes()");
+    static_assert(sizeof(RoadTheme) == 192, "RoadTheme changed: update mix_themes()");
 
     RoadTheme r = t < 0.5f ? a : b; // discrete fields come from the nearer theme
     const auto c = [t](Color x, Color y) { return blend(x, y, t); };
@@ -378,6 +378,7 @@ RoadTheme mix_themes(const RoadTheme& a, const RoadTheme& b, float t) {
     r.sun_amount = f(a.sun_amount, b.sun_amount);
     r.stars = f(a.stars, b.stars);
     r.haze = f(a.haze, b.haze);
+    r.night_glow = f(a.night_glow, b.night_glow);
     r.mountain_scale = f(a.mountain_scale, b.mountain_scale);
     r.hill_scale = f(a.hill_scale, b.hill_scale);
     r.snow_line = f(a.snow_line, b.snow_line);
@@ -722,6 +723,7 @@ Zone zone_england() {
     t.road_scale = 0.62f; // narrow country lanes
     z.theme.showers = 0.60f;
     z.theme.left_hand = true;
+    z.theme.night_glow = 0.2f; // villages
     return z;
 }
 
@@ -747,6 +749,7 @@ Zone zone_netherlands() {
     t.rain = 0.1f;
     t.lanes = 2;
     z.theme.showers = 0.60f;
+    z.theme.night_glow = 0.25f; // villages everywhere
     return z;
 }
 
@@ -817,6 +820,7 @@ Zone zone_egypt() {
     t.cloud_tint = Color{0xff, 0xf4, 0xe0};
     t.cloud_tint_amount = 0.2f;
     z.theme.showers = 0.00f;
+    z.theme.night_glow = 0.05f; // the desert by the Nile
     return z;
 }
 
@@ -839,6 +843,7 @@ Zone zone_kenya() {
     t.road_scale = 0.85f;
     z.theme.showers = 0.40f;
     z.theme.left_hand = true;
+    z.theme.night_glow = 0.02f; // the savanna
     return z;
 }
 
@@ -894,6 +899,7 @@ Zone zone_australia() {
     t.road_scale = 0.85f;
     z.theme.showers = 0.10f;
     z.theme.left_hand = true;
+    z.theme.night_glow = 0.f; // the outback: no light for miles
     return z;
 }
 
@@ -915,6 +921,7 @@ Zone zone_brazil() {
     t.rain = 0.9f; // tropical downpour
     t.grip = 0.82f;
     z.theme.showers = 0.10f;
+    z.theme.night_glow = 0.03f; // the rainforest
     return z;
 }
 
@@ -977,6 +984,7 @@ Zone zone_switzerland() {
     t.grip = 0.7f;
     t.lanes = 2;
     z.theme.showers = 0.00f; // it snows harder instead
+    z.theme.night_glow = 0.08f; // the mountains
     return z;
 }
 
@@ -1032,6 +1040,7 @@ Zone zone_arizona() {
     t.lanes = 2;
     t.us_markings = true;
     z.theme.showers = 0.25f; // desert thunderstorms
+    z.theme.night_glow = 0.02f; // the desert
     return z;
 }
 
@@ -1096,6 +1105,7 @@ Zone zone_san_francisco() {
     t.lanes = 2;
     t.us_markings = true;
     z.theme.showers = 0.35f;
+    z.theme.night_glow = 0.7f; // the city
     return z;
 }
 
@@ -1578,6 +1588,7 @@ Zone city(Zone country, const char* name, Scenery tree, TownStyle style = TownSt
     z.decor = Decor::Town;
     z.town_tree = tree;
     z.town = style;
+    z.theme.night_glow = 0.75f; // street lights, windows, the sky aglow
     RoadTheme& t = z.theme;
     t.grass[0] = blend(Color{0xb8, 0xb4, 0xac}, t.grass[0], 0.15f);
     t.grass[1] = blend(Color{0xae, 0xaa, 0xa2}, t.grass[1], 0.15f);

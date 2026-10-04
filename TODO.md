@@ -90,6 +90,11 @@ the road/framebuffer rewrite, `Color::to_u32()` became `Color::argb()`.
   `animal_ahead` segments ahead every `animal_wait()`; they walk across
   (sprites flipped with `RoadSprite::flip`), are obstacles to the traffic
   (movers with dir 0), hurry at the horn, and bump or crash the car
+- Night lights: `RoadTheme::night_glow` (cities 0.75, San Francisco 0.7,
+  the outback 0 ...) lightens the night (`lit_by()`) and turns the sky over
+  cities orange (`at_daytime`); street lamps (found while drawing,
+  `RoadRenderer::lamps()`) throw warm pools of light (`street_lights()`);
+  lit windows and lamp heads are emissive
 
 ## Round 17: touch controls at screen resolution, the wide screen
 

@@ -26,6 +26,7 @@ constexpr uint32_t emissive[] = {
     0xffff3030, 0xff4070ff, 0xfffff8f0,                         // the police lightbar
     0xffe8eeff, 0xffb8c8ff,                                     // stars
     0xffffd888,                                                 // lit windows in town
+    0xffffecb0, 0xfffffff0,                                     // street lamps
 };
 
 } // namespace
@@ -46,8 +47,16 @@ float advance_hour(float hour, float seconds) {
     return h < 0.f ? h + 24.f : h;
 }
 
+Daylight lit_by(Daylight light, float glow) {
+    light.level += (1.f - light.level) * 0.3f * std::clamp(glow, 0.f, 1.f);
+    return light;
+}
+
 RoadTheme at_daytime(const RoadTheme& look, const Daylight& light) {
     RoadTheme r = look;
+    // Over a city the night sky glows orange from its lights.
+    const float dark = std::clamp((1.f - light.level) / (1.f - night_level), 0.f, 1.f);
+    r.sky_horizon = blend(look.sky_horizon, Color{0xe0, 0x90, 0x50}, 0.45f * dark * look.night_glow);
     r.sky_horizon = blend(look.sky_horizon, Color{0xff, 0x90, 0x50}, 0.7f * light.glow);
     r.sky_top = blend(look.sky_top, Color{0x60, 0x40, 0x90}, 0.4f * light.glow);
     r.sun = blend(look.sun, Color{0xff, 0x70, 0x30}, light.glow);
@@ -113,6 +122,42 @@ void headlight_beam(Framebuffer& fb, const std::vector<uint32_t>& day, const Day
             };
             px[i] = 0xff000000u | mix((a >> 16) & 0xff, (o >> 16) & 0xff) << 16 | mix((a >> 8) & 0xff, (o >> 8) & 0xff) << 8 |
                     mix(a & 0xff, o & 0xff);
+        }
+    }
+}
+
+void street_lights(Framebuffer& fb, const std::vector<uint32_t>& day, const Daylight& light,
+                   const std::vector<float>& row_depth, const std::vector<LampSpot>& lamps, float camera_depth,
+                   float x_scale) {
+    const float dark = 1.f - light.level;
+    if (dark <= 0.01f || lamps.empty()) return;
+    uint32_t* px = fb.pixels_mut();
+    const int w = fb.width(), h = std::min(fb.height(), static_cast<int>(row_depth.size()));
+    for (int y = 0; y < h; ++y) {
+        const float depth = row_depth[static_cast<size_t>(y)];
+        if (depth <= 0.f) continue;
+        const float px_per_unit = camera_depth / depth * x_scale;
+        for (const LampSpot& lamp : lamps) {
+            const float dz = depth - lamp.depth;
+            if (std::abs(dz) >= lamp_reach) continue;
+            const float half = std::sqrt(lamp_reach * lamp_reach - dz * dz);
+            const int x0 = std::max(0, static_cast<int>(lamp.x - half * px_per_unit));
+            const int x1 = std::min(w, static_cast<int>(lamp.x + half * px_per_unit) + 1);
+            for (int x = x0; x < x1; ++x) {
+                const float dx = (static_cast<float>(x) + 0.5f - lamp.x) / px_per_unit;
+                const float r2 = (dx * dx + dz * dz) / (lamp_reach * lamp_reach);
+                if (r2 >= 1.f) continue;
+                const float k = 0.9f * dark * (1.f - r2) * (1.f - r2);
+                const size_t i = static_cast<size_t>(y) * static_cast<size_t>(w) + static_cast<size_t>(x);
+                const uint32_t a = px[i], o = day[i];
+                // Warm sodium light: the day's colours, yellowed.
+                const auto mix = [k](uint32_t from, uint32_t to, float tint) {
+                    const float t = static_cast<float>(to) * tint;
+                    return static_cast<uint32_t>(std::min(255.f, static_cast<float>(from) + (t - static_cast<float>(from)) * k));
+                };
+                px[i] = 0xff000000u | mix((a >> 16) & 0xff, (o >> 16) & 0xff, 1.f) << 16 |
+                        mix((a >> 8) & 0xff, (o >> 8) & 0xff, 0.85f) << 8 | mix(a & 0xff, o & 0xff, 0.55f);
+            }
         }
     }
 }
