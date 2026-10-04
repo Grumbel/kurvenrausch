@@ -214,6 +214,9 @@ private:
     OptionsMenu options_menu_;
     bool options_open_ = false; // the pause menu shows the OPTIONS page
     int track_index_ = 0;       // the track driven, see track_name()
+    // Where the last run left off (see Choices), taken up by the first race.
+    int resume_position_ = -1, resume_minutes_ = -1, resume_tank_ = -1;
+    float progress_saved_ = 0.f; // seconds since the position was last saved
     SynthParams sound_;  // what the synth was last told
     bool horn_ = false;
     Nitro nitro_;

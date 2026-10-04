@@ -51,7 +51,10 @@ std::string format_choices(const Choices& c) {
         << "nitros " << c.options.nitros << "\n"
         << "police " << (c.options.police ? 1 : 0) << "\n"
         << "weather " << static_cast<int>(c.options.weather) << "\n"
-        << "traffic " << c.options.traffic << "\n";
+        << "traffic " << c.options.traffic << "\n"
+        << "position " << c.position << "\n"
+        << "minutes " << c.minutes << "\n"
+        << "tank " << c.tank << "\n";
     return out.str();
 }
 
@@ -77,6 +80,9 @@ Choices parse_choices(std::string_view text) {
         else if (key == "police") c.options.police = value != 0;
         else if (key == "weather") c.options.weather = static_cast<WeatherSetting>(value);
         else if (key == "traffic") c.options.traffic = value;
+        else if (key == "position") c.position = value;
+        else if (key == "minutes") c.minutes = value;
+        else if (key == "tank") c.tank = value;
     }
     c.options = clamped(c.options);
     return c;

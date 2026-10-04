@@ -95,6 +95,10 @@ the road/framebuffer rewrite, `Color::to_u32()` became `Color::argb()`.
   cities orange (`at_daytime`); street lamps (found while drawing,
   `RoadRenderer::lamps()`) throw warm pools of light (`street_lights()`);
   lit windows and lamp heads are emissive
+- Resume: `Choices::position/minutes/tank` saved on quitting and every
+  `progress_save_seconds` while racing (not in the attract mode, which
+  keeps the saved values); the first race after start-up begins there
+  (`leave_attract`)
 
 ## Round 17: touch controls at screen resolution, the wide screen
 

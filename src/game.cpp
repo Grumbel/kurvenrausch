@@ -97,6 +97,7 @@ constexpr float hail_ahead_min = 120.f, hail_ahead_max = 260.f, hail_behind = 20
 constexpr float hail_reach = 4.f;
 constexpr float fare_stop_speed = 0.02f;
 constexpr float hail_kerb = 1.06f;
+constexpr float progress_save_seconds = 30.f; // how often the position is saved
 // Animals (see update_animals()): they turn up this many segments ahead,
 // this far out to the side (road half-widths), and are forgotten this far
 // behind.
@@ -275,6 +276,9 @@ bool Game::init(bool fullscreen) {
         view_mode_ = static_cast<ViewMode>(wrap(c->view, view_modes));
         music_ = c->music >= 0 ? c->music % Music::tracks : -1;
         wide_ = c->wide != 0;
+        resume_position_ = c->position;
+        resume_minutes_ = c->minutes;
+        resume_tank_ = c->tank;
         last_track = c->track;
         const Options before = options_;
         options_ = c->options;
@@ -404,6 +408,7 @@ void Game::run() {
     while (frame()) {
         if (!display_->vsync()) SDL_Delay(1);
     }
+    save_choices(); // where the race left off
 #endif
 }
 
@@ -438,6 +443,13 @@ bool Game::frame() {
         return true;
     }
     idle_ = input.any_input ? 0.f : idle_ + dt;
+    // Now and then the position, for going on from there should the game
+    // not be quit properly (a phone closing it, a crash).
+    progress_saved_ += dt;
+    if (progress_saved_ > progress_save_seconds && !paused_) {
+        progress_saved_ = 0.f;
+        save_choices();
+    }
     if (idle_ > attract_idle_seconds) {
         start_attract();
         return true;
@@ -605,7 +617,16 @@ void Game::leave_attract() {
     attract_ = false;
     view_mode_ = played_view_;
     idle_ = 0.f;
-    reset(); // at the start line
+    reset(); // at the start line ...
+    // ... or where the last run left off.
+    if (resume_position_ >= 0) {
+        start_at(static_cast<float>(resume_position_));
+        if (resume_minutes_ >= 0 && options_.time == TimeSetting::Cycle) {
+            hour_ = static_cast<float>(resume_minutes_ % (24 * 60)) / 60.f;
+        }
+        if (resume_tank_ >= 0 && options_.fuel) fuel_.set(static_cast<float>(resume_tank_) / 1000.f);
+        resume_position_ = resume_minutes_ = resume_tank_ = -1;
+    }
 }
 
 // A regular car of the traffic (a car, van or truck), not the one followed
@@ -1132,7 +1153,19 @@ void Game::fixed_update(const InputState& driver_input, float dt) {
 // The player's car takes its model's top speed and acceleration (grip is
 // applied where the road's grip is).
 void Game::save_choices() const {
-    store_.save_choices({car_model_, driver_, passenger_ >= motel_passengers ? nobody : passenger_, static_cast<int>(view_mode_), music_, wide_ ? 1 : 0, track_index_, options_});
+    Choices c{car_model_, driver_, passenger_ >= motel_passengers ? nobody : passenger_, static_cast<int>(view_mode_), music_, wide_ ? 1 : 0, track_index_, options_};
+    // Where the race is, to go on from there next time; following the
+    // traffic in the attract mode, where it was.
+    if (!attract_) {
+        c.position = static_cast<int>(world_.get<Transform>(player_).z);
+        c.minutes = static_cast<int>(hour_ * 60.f);
+        c.tank = static_cast<int>(fuel_.level() * 1000.f);
+    } else {
+        c.position = resume_position_;
+        c.minutes = resume_minutes_;
+        c.tank = resume_tank_;
+    }
+    store_.save_choices(c);
 }
 
 // Into another car: it comes clean and with a full tank.

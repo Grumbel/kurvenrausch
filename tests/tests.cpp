@@ -815,6 +815,14 @@ void test_views() {
     CHECK(parse_choices(format_choices(Choices{0, 0, 0, 3})).view == 3);
     CHECK(parse_choices(format_choices(Choices{0, 0, 0, 0, 0, 1})).wide == 1);
     CHECK(parse_choices("car 1\n").wide == 0);
+    // Where the last run left off; nothing saved, nowhere.
+    Choices where;
+    where.position = 123456;
+    where.minutes = 1290;
+    where.tank = 420;
+    const Choices back_where = parse_choices(format_choices(where));
+    CHECK(back_where.position == 123456 && back_where.minutes == 1290 && back_where.tank == 420);
+    CHECK(parse_choices("car 1\n").position == -1);
     // The options round-trip; missing ones keep their defaults, wild ones
     // are brought into range.
     Choices opt;

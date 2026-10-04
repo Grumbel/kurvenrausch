@@ -30,6 +30,12 @@ struct Choices {
     int wide = 0;  // 1: the picture as wide as the screen, 0: 4:3
     int track = 0; // see track_name()
     Options options{};
+    // Where the last run left off, to go on from there: the position along
+    // the track (world units), the time of day (minutes) and the tank (per
+    // mille); -1 for none.
+    int position = -1;
+    int minutes = -1;
+    int tank = -1;
 };
 // As "key value" lines; parsing skips unknown keys and malformed lines and
 // keeps the defaults for what is missing.
