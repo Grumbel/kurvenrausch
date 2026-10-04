@@ -1033,13 +1033,15 @@ void Game::fixed_update(const InputState& driver_input, float dt) {
                     start_crash(speed_pct);
                     break;
                 }
-                vel.speed = player.max_speed / 5.f;
+                // A bump: the car stops dead, set back just short of the
+                // segment it hit, so it is clear of the object (and can
+                // steer round it) instead of hitting it again next step.
+                vel.speed = std::min(vel.speed, 0.f);
                 crashed_ = true;
                 synth_.trigger_crash(0.55f + 0.45f * speed_pct);
-                // Put the car back to the start of the segment it hit.
                 const float seg_start = static_cast<float>(track_.index_at(tr.z + player_z)) *
                                         track_.segment_length;
-                tr.z = track_.wrap(seg_start - player_z);
+                tr.z = track_.wrap(seg_start - 0.25f * track_.segment_length - player_z);
                 place_on_road(vertical_, track_.height_at(tr.z + player_z));
                 break;
             }
