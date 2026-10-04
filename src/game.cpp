@@ -396,7 +396,7 @@ bool Game::frame() {
             }
         }
         render();
-        display_->present(fb_.pixels());
+        present();
         return true;
     }
     idle_ = input.any_input ? 0.f : idle_ + dt;
@@ -417,18 +417,23 @@ bool Game::frame() {
         show_message(Music::name(music_), 1.5f);
         save_choices();
     }
-    // The touch screen: fingers onto the framebuffer, the controls into the
-    // input (the menu takes the taps when paused).
+    // The touch screen: fingers onto the screen, the controls into the
+    // input (the menu takes the taps when paused). The controls cover the
+    // whole screen, the bars beside the picture too.
+    const SDL_Rect screen = display_->screen(), picture = display_->picture();
+    touch_.set_layout(TouchLayout{static_cast<float>(screen.w), static_cast<float>(screen.h),
+                                  static_cast<float>(picture.x), static_cast<float>(picture.y),
+                                  static_cast<float>(picture.w), static_cast<float>(picture.h)});
     std::vector<Finger> fingers;
     for (const Finger& f : input.fingers) {
         Finger p = f;
-        display_->touch_to_framebuffer(f.x, f.y, p.x, p.y);
+        display_->touch_to_screen(f.x, f.y, p.x, p.y);
         fingers.push_back(p);
     }
     touch_taps_.clear();
     for (const Finger& f : input.taps) {
         Finger p = f;
-        display_->touch_to_framebuffer(f.x, f.y, p.x, p.y);
+        display_->touch_to_screen(f.x, f.y, p.x, p.y);
         touch_taps_.push_back(p);
     }
     if (!fingers.empty() || !touch_taps_.empty()) touch_seen_ = true;
@@ -456,8 +461,18 @@ bool Game::frame() {
 
     render();
     if (paused_) draw_pause_menu(fb_, menu_, track_.zones[static_cast<size_t>(menu_.zone)].country);
-    display_->present(fb_.pixels());
+    present();
     return true;
+}
+
+void Game::draw_touch() {
+    overlay_.clear();
+    if (touch_seen_ && !paused_ && !attract_) touch_.draw(overlay_);
+}
+
+void Game::present() {
+    draw_touch();
+    display_->present(fb_.pixels(), overlay_);
 }
 
 void Game::switch_lights(const InputState& input) {
@@ -599,7 +614,9 @@ bool Game::update_pause(const InputState& input) {
     MenuAction action = input.pause ? MenuAction::Resume : menu_.update(input.menu);
     for (const Finger& tap : touch_taps_) {
         if (action != MenuAction::None) break;
-        const MenuTap where = menu_tap(menu_, tap.x, tap.y, width, height);
+        float x = 0.f, y = 0.f;
+        display_->screen_to_framebuffer(tap.x, tap.y, x, y);
+        const MenuTap where = menu_tap(menu_, x, y, width, height);
         action = menu_.choose(where.item, where.side);
     }
     switch (action) {
@@ -696,6 +713,9 @@ bool Game::screenshot(const ScreenshotOptions& opts) {
     }
     paused_ = opts.pause;
     render();
+    // Headless, the screen is the framebuffer.
+    draw_touch();
+    overlay_.draw(fb_);
     if (opts.pause) {
         menu_.open(zone_, static_cast<int>(track_.zones.size()));
         draw_pause_menu(fb_, menu_, track_.zones[static_cast<size_t>(menu_.zone)].country);
@@ -1850,7 +1870,6 @@ void Game::render() {
         hud.banner_sub = track_.zones[static_cast<size_t>(zone_)].region;
     }
     draw_hud(fb_, hud);
-    if (touch_seen_ && !paused_ && !attract_) touch_.draw(fb_);
 }
 
 // The road behind the car, drawn into its own small framebuffer and set into

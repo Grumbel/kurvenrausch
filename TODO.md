@@ -2,8 +2,8 @@
 
 ## Current tip
 
-Tip is Round 16 (attract mode), after the day and night cycle and the
-drivable cars (`693e2bc`).
+Tip is Round 17 (touch controls at screen resolution), after Round 16's
+attract mode.
 Work is committed directly to `master`; Grok still delivers cumulative git
 bundles (see AGENTS.md).
 
@@ -24,6 +24,24 @@ Upstream master has since been fast-forwarded to `64fda32`, the tip of 002.1, so
 003.1 applied on top of it as a plain fast-forward.
 The rebase notes: upstream's rename is kept, its rendering fix is superseded by
 the road/framebuffer rewrite, `Color::to_u32()` became `Color::argb()`.
+
+## Round 17: touch controls at screen resolution
+
+The touch controls stopped at the 4:3 picture's edge on phones: with
+`SDL_RenderSetLogicalSize` SDL maps finger events onto the picture and
+clamps the ones on the black bars to its edge. Now:
+- `Display` sets no logical size; it scales the framebuffer into
+  `picture()` itself, so fingers stay relative to the whole window
+  (`touch_to_screen()`, `screen_to_framebuffer()` for the menu taps)
+- `Overlay` (`overlay.hpp`): discs, text and rectangles as alpha images,
+  made once per look and cached as textures by `Display::present()`, drawn
+  over the picture at screen resolution; `Overlay::draw()` paints them into
+  the framebuffer for headless screenshots (screen = 320x240 there)
+- `TouchControls::set_layout(TouchLayout)`: the pedals keep to the screen's
+  right edge, the steering pad to its left, sizes scale with the screen's
+  height (`unit()`); the pause button stays on the picture
+- Open: a menu option to drop 4:3 for the screen's own aspect ratio (a
+  wider framebuffer); not tested on a real phone yet
 
 ## Round 16: day and night, drivable cars, attract mode
 

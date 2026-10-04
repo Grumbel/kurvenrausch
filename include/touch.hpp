@@ -3,8 +3,8 @@
 
 #pragma once
 
-#include "framebuffer.hpp"
 #include "menu.hpp"
+#include "overlay.hpp"
 
 #include <cstdint>
 #include <map>
@@ -12,7 +12,7 @@
 
 namespace racer {
 
-// A finger on the screen, in framebuffer pixels.
+// A finger on the screen, in screen pixels.
 struct Finger {
     int64_t id;
     float x, y;
@@ -29,20 +29,34 @@ struct TouchInput {
     bool pause = false;    // the pause button went down this frame
 };
 
-// On-screen controls for phones and tablets, laid out over the 320x240
-// picture: on the left a steering pad, steering by how far the finger has
-// moved sideways from where it came down; on the right the pedals and
-// buttons; at the top, right of the mirror, a pause button.
+// Where the touch controls go: the screen's size, and where on it the
+// game's picture is, all in screen pixels.
+struct TouchLayout {
+    float screen_w = 320.f, screen_h = 240.f;
+    float game_x = 0.f, game_y = 0.f, game_w = 320.f, game_h = 240.f;
+};
+
+// On-screen controls for phones and tablets, laid out over the whole screen
+// at its own resolution, black bars beside the picture included: on the left
+// a steering pad, steering by how far the finger has moved sideways from
+// where it came down; on the right the pedals and buttons; at the top of the
+// picture, right of the mirror, a pause button. Sizes are those on a 320x240
+// screen, scaled with the screen's height.
 class TouchControls {
 public:
     enum Button { Gas, Brake, Nitro, Handbrake, Horn, Pause, buttons };
     struct Circle {
         float x, y, r;
     };
-    static Circle circle(Button b);
-    static constexpr float steer_zone_right = 150.f; // fingers left of this steer ...
-    static constexpr float steer_zone_top = 40.f;    // ... below this
-    static constexpr float steer_travel = 32.f;      // pixels sideways for full lock
+
+    void set_layout(const TouchLayout& layout) { layout_ = layout; }
+    const TouchLayout& layout() const { return layout_; }
+    // Screen pixels per pixel of a 320x240 screen.
+    float unit() const;
+    Circle circle(Button b) const;
+    float steer_zone_right() const { return 150.f * unit(); } // fingers left of this steer ...
+    float steer_zone_top() const { return 40.f * unit(); }    // ... below this
+    float steer_travel() const { return 32.f * unit(); }      // sideways for full lock
 
     // The fingers down now. Keeps track of where each steering finger came
     // down and which buttons are held, for the next frame and for draw().
@@ -50,9 +64,10 @@ public:
     // Forget all fingers (when the game pauses, say).
     void release();
 
-    void draw(Framebuffer& fb) const;
+    void draw(Overlay& overlay) const;
 
 private:
+    TouchLayout layout_;
     std::map<int64_t, float> steer_origin_; // steering fingers: where they came down
     std::map<int64_t, Finger> steering_;    // ... and where they are now
     bool held_[buttons] = {};

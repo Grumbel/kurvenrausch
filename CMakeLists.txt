@@ -60,6 +60,7 @@ add_library(kurvenrausch_core STATIC
     src/input.cpp
     src/menu.cpp
     src/music.cpp
+    src/overlay.cpp
     src/people.cpp
     src/police.cpp
     src/road.cpp

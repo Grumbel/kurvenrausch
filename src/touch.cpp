@@ -16,37 +16,27 @@ bool inside(const TouchControls::Circle& c, float x, float y) {
     return dx * dx + dy * dy <= c.r * c.r;
 }
 
-// A translucent disc with a rim, brighter while pressed.
-void disc(Framebuffer& fb, const TouchControls::Circle& c, bool pressed) {
-    const int r = static_cast<int>(c.r);
-    const Color fill = pressed ? Color{0xff, 0xd8, 0x30} : Color{0x20, 0x20, 0x30};
-    for (int dy = -r; dy <= r; ++dy) {
-        for (int dx = -r; dx <= r; ++dx) {
-            const float d = std::sqrt(static_cast<float>(dx * dx + dy * dy));
-            if (d > c.r) continue;
-            const int x = static_cast<int>(c.x) + dx, y = static_cast<int>(c.y) + dy;
-            if (d > c.r - 1.5f) fb.blend_pixel(x, y, Color{0xf8, 0xf8, 0xf8}, 0.6f);
-            else fb.blend_pixel(x, y, fill, pressed ? 0.45f : 0.35f);
-        }
-    }
-}
-
-void label(Framebuffer& fb, const TouchControls::Circle& c, std::string_view text) {
-    const int w = static_cast<int>(text.size()) * 6 - 1;
-    fb.draw_text(static_cast<int>(c.x) - w / 2 + 1, static_cast<int>(c.y) - 2, text, Color{0x10, 0x10, 0x20});
-    fb.draw_text(static_cast<int>(c.x) - w / 2, static_cast<int>(c.y) - 3, text, Color{0xf8, 0xf8, 0xf8});
-}
-
 } // namespace
 
-TouchControls::Circle TouchControls::circle(Button b) {
+float TouchControls::unit() const {
+    return std::min(layout_.screen_w / 320.f, layout_.screen_h / 240.f);
+}
+
+TouchControls::Circle TouchControls::circle(Button b) const {
+    // The pedals and buttons keep to the screen's right edge.
+    const float u = unit();
+    const auto right = [&](float x, float y, float r) { return Circle{layout_.screen_w - (320.f - x) * u, y * u, r * u}; };
     switch (b) {
-        case Gas: return {288.f, 168.f, 24.f};
-        case Brake: return {238.f, 190.f, 20.f};
-        case Nitro: return {292.f, 120.f, 15.f};
-        case Handbrake: return {196.f, 206.f, 14.f};
-        case Horn: return {248.f, 142.f, 12.f};
-        default: return {236.f, 22.f, 10.f}; // Pause: between the mirror and BEST
+        case Gas: return right(288.f, 168.f, 24.f);
+        case Brake: return right(238.f, 190.f, 20.f);
+        case Nitro: return right(292.f, 120.f, 15.f);
+        case Handbrake: return right(196.f, 206.f, 14.f);
+        case Horn: return right(248.f, 142.f, 12.f);
+        default: {
+            // Pause: on the picture, between the mirror and BEST.
+            const float g = layout_.game_w / 320.f;
+            return {layout_.game_x + 236.f * g, layout_.game_y + 22.f * g, 10.f * g};
+        }
     }
 }
 
@@ -64,7 +54,7 @@ TouchInput TouchControls::update(const std::vector<Finger>& fingers) {
         }
         // A finger that started steering keeps steering wherever it goes.
         const bool steering_already = steer_origin_.count(f.id) > 0;
-        if (steering_already || (!on_button && f.x < steer_zone_right && f.y > steer_zone_top)) {
+        if (steering_already || (!on_button && f.x < steer_zone_right() && f.y > steer_zone_top())) {
             if (!steering_already) steer_origin_[f.id] = f.x;
             steering[f.id] = f;
         }
@@ -75,7 +65,7 @@ TouchInput TouchControls::update(const std::vector<Finger>& fingers) {
     // The newest steering finger wins.
     steer_ = 0.f;
     for (const auto& [id, f] : steering) {
-        steer_ = std::clamp((f.x - steer_origin_[id]) / steer_travel, -1.f, 1.f);
+        steer_ = std::clamp((f.x - steer_origin_[id]) / steer_travel(), -1.f, 1.f);
     }
     steering_ = std::move(steering);
 
@@ -97,32 +87,37 @@ void TouchControls::release() {
     steer_ = 0.f;
 }
 
-void TouchControls::draw(Framebuffer& fb) const {
+void TouchControls::draw(Overlay& overlay) const {
     static constexpr std::string_view names[buttons] = {"GAS", "BRK", "NOS", "HB", "H", ""};
+    const float u = unit();
+    const float rim = 1.5f * u;
+    const int text_scale = std::max(1, static_cast<int>(std::lround(u)));
+    const Color white{0xf8, 0xf8, 0xf8};
     for (int b = 0; b < buttons; ++b) {
         const Circle c = circle(static_cast<Button>(b));
-        disc(fb, c, held_[b]);
+        overlay.disc(c.x, c.y, c.r, rim, held_[b]);
         if (b == Pause) {
-            fb.fill_rect(static_cast<int>(c.x) - 3, static_cast<int>(c.y) - 4, 2, 8, Color{0xf8, 0xf8, 0xf8});
-            fb.fill_rect(static_cast<int>(c.x) + 2, static_cast<int>(c.y) - 4, 2, 8, Color{0xf8, 0xf8, 0xf8});
+            const float g = c.r / 10.f;
+            overlay.rect(c.x - 3.f * g, c.y - 4.f * g, 2.f * g, 8.f * g, white);
+            overlay.rect(c.x + 2.f * g, c.y - 4.f * g, 2.f * g, 8.f * g, white);
         } else {
-            label(fb, c, names[b]);
+            overlay.text(c.x, c.y, names[b], text_scale);
         }
     }
     // The steering pad: arrows where nobody steers, else a ring where the
     // finger came down and a knob as far as it has steered.
     if (steering_.empty()) {
-        const Circle l{40.f, 170.f, 12.f}, r{88.f, 170.f, 12.f};
-        disc(fb, l, false);
-        disc(fb, r, false);
-        label(fb, l, "<");
-        label(fb, r, ">");
+        const Circle l{40.f * u, 170.f * u, 12.f * u}, r{88.f * u, 170.f * u, 12.f * u};
+        overlay.disc(l.x, l.y, l.r, rim, false);
+        overlay.disc(r.x, r.y, r.r, rim, false);
+        overlay.text(l.x, l.y, "<", text_scale);
+        overlay.text(r.x, r.y, ">", text_scale);
         return;
     }
     for (const auto& [id, f] : steering_) {
         const float origin = steer_origin_.at(id);
-        disc(fb, {origin, f.y, steer_travel}, false);
-        disc(fb, {origin + steer_ * steer_travel, f.y, 10.f}, true);
+        overlay.disc(origin, f.y, steer_travel(), rim, false);
+        overlay.disc(origin + steer_ * steer_travel(), f.y, 10.f * u, rim, true);
     }
 }
 

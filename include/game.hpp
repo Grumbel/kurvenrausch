@@ -54,7 +54,7 @@ struct ScreenshotOptions {
     float storm = -1.f;      // if >= 0, hold the weather front at this level (0 clear .. 1 storm)
     int music = -1;          // the radio's track in the --wav recording, -1 off
     int police_frame = -1;   // if >= 0, a police chase starts at this step
-    std::vector<Finger> touches; // fingers held on the touch screen all run (framebuffer pixels)
+    std::vector<Finger> touches; // fingers held on the touch screen all run (screen = framebuffer pixels)
     int signal = 0;          // indicators for the headless run: -1 left, +1 right, 2 the hazard lights
     bool headlights = false; // headlights on for the headless run
     float hour = -1.f;       // if >= 0, the time of day the headless run starts at (0 .. 24)
@@ -153,6 +153,10 @@ private:
     void update_fuel(const InputState& input, float dt);
     void render();
     void render_mirror();
+    // The framebuffer to the screen, the touch controls over it.
+    void present();
+    // The touch controls into overlay_, if shown.
+    void draw_touch();
     // The track's look at z under the weather passing over now.
     RoadTheme look_at(float z) const {
         return at_daytime(weathered(track_.look_at(z), front_.level()), daylight_at(hour_));
@@ -300,7 +304,8 @@ private:
     InputState input_state_;
     TouchControls touch_;
     bool touch_seen_ = false;          // the touch screen was used: show its controls
-    std::vector<Finger> touch_taps_;   // taps this frame, framebuffer pixels
+    std::vector<Finger> touch_taps_;   // taps this frame, screen pixels
+    Overlay overlay_;                  // drawn over the picture at screen resolution
     Uint64 prev_counter_ = 0;
     float accumulator_ = 0.f;
 };

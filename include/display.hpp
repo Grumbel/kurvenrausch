@@ -4,13 +4,17 @@
 #pragma once
 #include <SDL2/SDL.h>
 #include <cstdint>
+#include <map>
 #include <string>
 
 namespace racer {
 
+class Overlay;
+
 // Presents a software ARGB8888 framebuffer in an SDL window. The framebuffer
 // is scaled to the window with nearest-neighbour filtering and letterboxed to
-// keep its aspect ratio.
+// keep its aspect ratio; an overlay goes on top at the screen's own
+// resolution, across the black bars too.
 class Display {
 public:
     Display() = default;
@@ -26,10 +30,19 @@ public:
               bool fullscreen = false);
     // The window's icon, an ARGB8888 image.
     void set_icon(const uint32_t* argb_pixels, int width, int height);
-    void present(const uint32_t* argb_pixels);
+    void present(const uint32_t* argb_pixels, const Overlay& overlay);
     void toggle_fullscreen();
-    // A touch event's point (0 .. 1 each way) on the framebuffer.
-    void touch_to_framebuffer(float tx, float ty, float& x, float& y) const;
+
+    // The screen's size in pixels (the window's, in pixels rather than
+    // points on high-DPI screens).
+    SDL_Rect screen() const;
+    // Where on the screen the framebuffer goes.
+    SDL_Rect picture() const;
+    // A touch event's point (0 .. 1 each way across the window) in screen
+    // pixels.
+    void touch_to_screen(float tx, float ty, float& x, float& y) const;
+    // A point in screen pixels on the framebuffer.
+    void screen_to_framebuffer(float sx, float sy, float& x, float& y) const;
 
     // True if presentation is synchronised to the display refresh; if not the
     // caller should throttle its frame rate itself.
@@ -42,6 +55,7 @@ private:
     SDL_Window* window_ = nullptr;
     SDL_Renderer* renderer_ = nullptr;
     SDL_Texture* texture_ = nullptr;
+    std::map<std::string, SDL_Texture*> overlay_textures_; // by the overlay's image keys
 };
 
 // Writes an ARGB8888 pixel buffer as a BMP file. Works without a window.

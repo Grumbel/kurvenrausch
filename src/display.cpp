@@ -3,12 +3,15 @@
 
 #include "display.hpp"
 
+#include "overlay.hpp"
+
 #include <algorithm>
 #include <iostream>
 
 namespace racer {
 
 Display::~Display() {
+    for (const auto& [key, texture] : overlay_textures_) SDL_DestroyTexture(texture);
     if (texture_) SDL_DestroyTexture(texture_);
     if (renderer_) SDL_DestroyRenderer(renderer_);
     if (window_) SDL_DestroyWindow(window_);
@@ -72,8 +75,10 @@ bool Display::init(const char* title, const char* app_id, int fb_width, int fb_h
         vsync_ = (info.flags & SDL_RENDERER_PRESENTVSYNC) != 0;
     }
 
-    SDL_RenderSetLogicalSize(renderer_, fb_width, fb_height);
-
+    // No logical size: the overlay is drawn at the screen's resolution, and
+    // SDL keeps touch points relative to the whole window only while the
+    // viewport covers it (with a logical size they were clamped to the
+    // picture, so the black bars beside it were dead).
     texture_ = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_ARGB8888,
                                  SDL_TEXTUREACCESS_STREAMING, fb_width, fb_height);
     if (!texture_) {
@@ -83,13 +88,63 @@ bool Display::init(const char* title, const char* app_id, int fb_width, int fb_h
     return true;
 }
 
-void Display::present(const uint32_t* argb_pixels) {
+void Display::present(const uint32_t* argb_pixels, const Overlay& overlay) {
     SDL_UpdateTexture(texture_, nullptr, argb_pixels,
                       fb_w_ * static_cast<int>(sizeof(uint32_t)));
     SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
     SDL_RenderClear(renderer_);
-    SDL_RenderCopy(renderer_, texture_, nullptr, nullptr);
+    const SDL_Rect pic = picture();
+    SDL_RenderCopy(renderer_, texture_, nullptr, &pic);
+
+    // A new window size makes new images; drop the old ones now and then.
+    if (overlay_textures_.size() > 128) {
+        for (const auto& [key, texture] : overlay_textures_) SDL_DestroyTexture(texture);
+        overlay_textures_.clear();
+    }
+    for (const Overlay::Item& item : overlay.items()) {
+        SDL_Texture*& texture = overlay_textures_[*item.key];
+        if (!texture) {
+            texture = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STATIC,
+                                        item.image->w, item.image->h);
+            if (!texture) continue;
+            SDL_UpdateTexture(texture, nullptr, item.image->px.data(),
+                              item.image->w * static_cast<int>(sizeof(uint32_t)));
+            SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
+        }
+        const SDL_Rect dst{item.x, item.y, item.image->w, item.image->h};
+        SDL_RenderCopy(renderer_, texture, nullptr, &dst);
+    }
     SDL_RenderPresent(renderer_);
+}
+
+SDL_Rect Display::screen() const {
+    int w = 0, h = 0;
+    if (SDL_GetRendererOutputSize(renderer_, &w, &h) != 0 || w <= 0 || h <= 0) {
+        SDL_GetWindowSize(window_, &w, &h);
+    }
+    return SDL_Rect{0, 0, std::max(w, 1), std::max(h, 1)};
+}
+
+SDL_Rect Display::picture() const {
+    // As large as fits, centred.
+    const SDL_Rect s = screen();
+    const float scale = std::min(static_cast<float>(s.w) / static_cast<float>(fb_w_),
+                                 static_cast<float>(s.h) / static_cast<float>(fb_h_));
+    const int w = static_cast<int>(static_cast<float>(fb_w_) * scale);
+    const int h = static_cast<int>(static_cast<float>(fb_h_) * scale);
+    return SDL_Rect{(s.w - w) / 2, (s.h - h) / 2, w, h};
+}
+
+void Display::touch_to_screen(float tx, float ty, float& x, float& y) const {
+    const SDL_Rect s = screen();
+    x = tx * static_cast<float>(s.w);
+    y = ty * static_cast<float>(s.h);
+}
+
+void Display::screen_to_framebuffer(float sx, float sy, float& x, float& y) const {
+    const SDL_Rect p = picture();
+    x = (sx - static_cast<float>(p.x)) * static_cast<float>(fb_w_) / static_cast<float>(p.w);
+    y = (sy - static_cast<float>(p.y)) * static_cast<float>(fb_h_) / static_cast<float>(p.h);
 }
 
 void Display::set_icon(const uint32_t* argb_pixels, int width, int height) {
@@ -100,31 +155,6 @@ void Display::set_icon(const uint32_t* argb_pixels, int width, int height) {
     if (!surface) return;
     SDL_SetWindowIcon(window_, surface);
     SDL_FreeSurface(surface);
-}
-
-void Display::touch_to_framebuffer(float tx, float ty, float& x, float& y) const {
-    // With a logical size set, SDL's renderer already gives touch points
-    // relative to the scaled picture, not the window (its event watch, since
-    // the 2.0.18 era). Mapping them through the letterbox again put touches
-    // off their mark wherever the window is not 4:3, as on phones.
-    SDL_version v;
-    SDL_GetVersion(&v);
-    if (SDL_VERSIONNUM(v.major, v.minor, v.patch) >= SDL_VERSIONNUM(2, 0, 18)) {
-        x = tx * static_cast<float>(fb_w_);
-        y = ty * static_cast<float>(fb_h_);
-        return;
-    }
-    // Older SDL gives window coordinates: the picture is scaled to fit and
-    // centred in the window.
-    const float wx = tx, wy = ty;
-    int w = 1, h = 1;
-    SDL_GetWindowSize(window_, &w, &h);
-    const float scale = std::min(static_cast<float>(w) / static_cast<float>(fb_w_),
-                                 static_cast<float>(h) / static_cast<float>(fb_h_));
-    const float off_x = (static_cast<float>(w) - static_cast<float>(fb_w_) * scale) / 2.f;
-    const float off_y = (static_cast<float>(h) - static_cast<float>(fb_h_) * scale) / 2.f;
-    x = (wx * static_cast<float>(w) - off_x) / scale;
-    y = (wy * static_cast<float>(h) - off_y) / scale;
 }
 
 void Display::toggle_fullscreen() {

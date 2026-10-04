@@ -880,8 +880,8 @@ void test_police() {
 void test_touch() {
     using namespace racer;
     TouchControls t;
-    const auto at = [](TouchControls::Button b, int64_t id) {
-        const TouchControls::Circle c = TouchControls::circle(b);
+    const auto at = [&t](TouchControls::Button b, int64_t id) {
+        const TouchControls::Circle c = t.circle(b);
         return Finger{id, c.x, c.y};
     };
     // Nothing touched, nothing pressed.
@@ -900,7 +900,7 @@ void test_touch() {
     // Steering: sideways from where the finger came down, full lock at
     // steer_travel, and the finger keeps steering wherever it goes.
     CHECK(t.update({Finger{8, 60.f, 170.f}}).steer == 0.f);
-    CHECK(std::abs(t.update({Finger{8, 60.f + TouchControls::steer_travel / 2.f, 170.f}}).steer - 0.5f) < 1e-5f);
+    CHECK(std::abs(t.update({Finger{8, 60.f + t.steer_travel() / 2.f, 170.f}}).steer - 0.5f) < 1e-5f);
     CHECK(t.update({Finger{8, 60.f - 100.f, 170.f}}).steer == -1.f);
     CHECK(t.update({Finger{8, 250.f, 170.f}}).steer == 1.f); // dragged far right, over the buttons
     CHECK(t.update({}).steer == 0.f);                          // let go
@@ -911,6 +911,32 @@ void test_touch() {
     t.update({Finger{10, 60.f, 170.f}});
     t.release();
     CHECK(t.update({Finger{10, 90.f, 170.f}}).steer == 0.f); // a new origin
+
+    // On a wide phone (2400x1080, the 4:3 picture 1440 wide in the middle)
+    // the controls cover the bars beside the picture: the pedals keep to the
+    // right edge, steering starts at the left edge, all scaled with the
+    // height; the pause button stays on the picture.
+    TouchControls w;
+    w.set_layout(TouchLayout{2400.f, 1080.f, 480.f, 0.f, 1440.f, 1080.f});
+    CHECK(std::abs(w.unit() - 4.5f) < 1e-5f);
+    const TouchControls::Circle gas = w.circle(TouchControls::Gas);
+    CHECK(std::abs(gas.x - (2400.f - 32.f * 4.5f)) < 1e-3f && std::abs(gas.r - 24.f * 4.5f) < 1e-3f);
+    CHECK(w.update({Finger{1, gas.x, gas.y}}).throttle == 1.f);
+    const TouchControls::Circle pause = w.circle(TouchControls::Pause);
+    CHECK(pause.x > 480.f && pause.x < 480.f + 1440.f);
+    CHECK(w.update({Finger{2, 100.f, 800.f}}).steer == 0.f); // in the left bar
+    CHECK(std::abs(w.update({Finger{2, 100.f + w.steer_travel(), 800.f}}).steer - 1.f) < 1e-5f);
+    w.update({});
+
+    // The overlay makes each look once and places it on every draw.
+    Overlay o;
+    w.draw(o);
+    const size_t shapes = o.items().size();
+    CHECK(shapes > 0);
+    o.clear();
+    w.draw(o);
+    CHECK(o.items().size() == shapes);
+    CHECK(o.items()[0].image->w > 2 * static_cast<int>(gas.r));
 
     // Taps on the pause menu choose the line tapped; on the country line
     // the outer thirds change the country.
