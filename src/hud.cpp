@@ -39,12 +39,17 @@ void text_center(Framebuffer& fb, int y, std::string_view s, Color c, int scale 
 void draw_lamps(Framebuffer& fb, int x, int y, const HudState& hud) {
     const Color green{0x40, 0xf0, 0x60}, blue{0x50, 0x90, 0xff};
     auto arrow = [&](int ax, int dir) { // 9 wide, 7 high, pointing `dir`
-        for (int i = 0; i < 4; ++i) {
-            const int col = dir < 0 ? ax + i : ax + 8 - i;
-            fb.fill_rect(col + 1, y + 3 - i, 1, 2 * i + 1, Shadow);
-            fb.fill_rect(col, y + 3 - i, 1, 2 * i + 1, green);
+        // The whole shape in shadow a pixel down and right, then in green:
+        // drawn column by column, a shadow would cover the green beside it.
+        for (int pass = 0; pass < 2; ++pass) {
+            const int o = pass == 0 ? 1 : 0;
+            const Color c = pass == 0 ? Shadow : green;
+            for (int i = 0; i < 4; ++i) {
+                const int col = dir < 0 ? ax + i : ax + 8 - i;
+                fb.fill_rect(col + o, y + 3 - i + o, 1, 2 * i + 1, c);
+            }
+            fb.fill_rect((dir < 0 ? ax + 4 : ax) + o, y + 2 + o, 5, 3, c);
         }
-        fb.fill_rect(dir < 0 ? ax + 4 : ax, y + 2, 5, 3, green);
     };
     if (hud.signal_left) arrow(x, -1);
     if (hud.signal_right) arrow(x + 12, 1);
