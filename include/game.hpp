@@ -5,6 +5,7 @@
 #include "background.hpp"
 #include "climate.hpp"
 #include "daylight.hpp"
+#include "animals.hpp"
 #include "audio.hpp"
 #include "components.hpp"
 #include "display.hpp"
@@ -167,6 +168,10 @@ private:
     // the passenger seat empty, they get in and want to go to a zone a little
     // ahead; stopped there, they pay and get out.
     void update_fares();
+    // Now and then an animal of the countryside crosses the road ahead;
+    // the horn hurries it, the traffic stops for it, hitting it is a bump or
+    // a crash.
+    void update_animals(float dt);
     void follow_fork(float prev_car_z);
     int indicator(Entity e, const Transform& t, const Traffic& traffic) const;
     InputState autopilot() const;
@@ -280,6 +285,14 @@ private:
     std::vector<Hail> hails_; // people hailing the taxi
     int fare_zone_ = -1;      // where the fare riding wants to go, -1 none
     int fares_paid_ = 0;
+    struct Crossing {
+        Animal kind;
+        float z, x;          // where; x in road half-widths
+        int dir;             // crossing to the right (+1) or the left (-1)
+        bool hurried = false;// honked at, or hit: it runs
+    };
+    std::vector<Crossing> crossings_;
+    float crossing_wait_ = animal_min_wait; // seconds until the next one
     std::optional<Lot> autopilot_visit_; // headless: the autopilot visits the next lot of this kind
     Dirt dirt_;
     bool washing_ = false;      // standing in a car wash, being cleaned

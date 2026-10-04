@@ -97,6 +97,10 @@ constexpr float hail_ahead_min = 120.f, hail_ahead_max = 260.f, hail_behind = 20
 constexpr float hail_reach = 4.f;
 constexpr float fare_stop_speed = 0.02f;
 constexpr float hail_kerb = 1.06f;
+// Animals (see update_animals()): they turn up this many segments ahead,
+// this far out to the side (road half-widths), and are forgotten this far
+// behind.
+constexpr float animal_ahead = 140.f, animal_start = 1.5f, animal_behind = 20.f;
 constexpr float attract_idle_seconds = 120.f;  // without input, back to the attract mode
 constexpr float attract_follow_seconds = 20.f; // each car followed this long
 
@@ -324,6 +328,8 @@ void Game::reset() {
     advance_clock(0.f);
     headlights_ = hazards_ = blink_on_ = beacon_ = false;
     hails_.clear();
+    crossings_.clear();
+    crossing_wait_ = animal_min_wait;
     if (fare_zone_ >= 0) passenger_ = nobody;
     fare_zone_ = -1;
     fares_paid_ = 0;
@@ -1116,6 +1122,7 @@ void Game::fixed_update(const InputState& driver_input, float dt) {
     bounce_ = !airborne && (rng_ >> 31) && shake > 0.25f ? -std::round(shake) : 0.f;
 
     update_laps(prev_z + player_z, tr.z + player_z, dt);
+    update_animals(dt);
     update_traffic(dt);
     update_police(dt);
     check_close_passes();
@@ -1274,6 +1281,65 @@ void Game::update_fares() {
         show_message("TO " + track_.zones[static_cast<size_t>(fare_zone_)].region, 2.5f);
         return;
     }
+}
+
+void Game::update_animals(float dt) {
+    auto& tr = world_.get<Transform>(player_);
+    auto& vel = world_.get<Velocity>(player_);
+    const auto& player = world_.get<Player>(player_);
+    const float player_z = world_.get<Camera>(camera_).player_z();
+    const float car_z = tr.z + player_z;
+    const float seg = track_.segment_length;
+
+    // A new one ahead, where the countryside has animals.
+    crossing_wait_ -= dt;
+    if (crossing_wait_ <= 0.f) {
+        rng_ = rng_ * 1664525u + 1013904223u;
+        crossing_wait_ = animal_wait(static_cast<float>(rng_ >> 8) / 16777216.f);
+        const float z = track_.wrap(car_z + animal_ahead * seg);
+        const Animal kind = zone_animal(track_.zone_at(z).decor);
+        const Segment& s = track_.segment_at(z);
+        if (kind != Animal::None && s.left == Edge::None && s.right == Edge::None && s.forecourt <= 0.f) {
+            const int dir = (rng_ >> 30) & 1 ? 1 : -1;
+            const AnimalInfo& info = animal_info(kind);
+            for (int i = 0; i < info.herd; ++i) {
+                crossings_.push_back({kind, track_.wrap(z + static_cast<float>(i) * 1.5f * seg),
+                                      -static_cast<float>(dir) * (animal_start + 0.35f * static_cast<float>(i)), dir});
+            }
+        }
+    }
+
+    const float car_w = player.car_width / track_.half_width_at(car_z);
+    const int car_segment = track_.index_at(car_z);
+    const float speed_pct = std::abs(vel.speed) / player.max_speed;
+    for (Crossing& a : crossings_) {
+        const float gap = signed_gap(car_z, a.z, track_.length());
+        // The horn hurries those ahead.
+        if (horn_ && gap > 0.f && gap < honk_range * seg) a.hurried = true;
+        a.x += static_cast<float>(a.dir) * animal_info(a.kind).speed * (a.hurried ? 3.f : 1.f) * dt;
+        // Hit: a bump, or at speed a crash; the animal bolts.
+        const float w = animal_info(a.kind).width / track_.half_width_at(car_z);
+        if (crash_time_ < 0.f && !vertical_.airborne && !a.hurried && track_.index_at(a.z) == car_segment &&
+            overlap(tr.x, car_w, a.x, w)) {
+            a.hurried = true;
+            if (speed_pct >= crash_speed) {
+                start_crash(speed_pct);
+            } else {
+                vel.speed = std::min(vel.speed, 0.f);
+                crashed_ = true;
+                synth_.trigger_crash(0.4f + 0.4f * speed_pct);
+                tr.z = track_.wrap(static_cast<float>(car_segment) * seg - 0.25f * seg - player_z);
+                place_on_road(vertical_, track_.height_at(tr.z + player_z));
+            }
+        }
+    }
+    // Gone over the far side, or left behind.
+    crossings_.erase(std::remove_if(crossings_.begin(), crossings_.end(),
+                                    [&](const Crossing& a) {
+                                        return a.x * static_cast<float>(a.dir) > animal_start + 0.5f ||
+                                               signed_gap(car_z, a.z, track_.length()) < -animal_behind * seg;
+                                    }),
+                     crossings_.end());
 }
 
 // Standing on a car wash's forecourt, the car is washed clean: water and
@@ -1687,6 +1753,10 @@ void Game::update_traffic(float dt) {
     // (In the attract mode the player's car is where the followed car is:
     // not in anybody's way.)
     if (!attract_) movers.push_back({player_, ptr.x, player_world_z, world_.get<Velocity>(player_).speed, 1});
+    // Animals on the road stand in everyone's way, whichever way they go.
+    for (const Crossing& a : crossings_) {
+        if (std::abs(a.x) < 1.2f) movers.push_back({INVALID_ENTITY, a.x, a.z, 0.f, 0});
+    }
     world_.view<Transform, Velocity, Traffic>([&](Entity e, Transform& t, Velocity& v, Traffic& traffic) {
         movers.push_back({e, t.x, t.z, v.speed, traffic.dir});
     });
@@ -1719,7 +1789,7 @@ void Game::update_traffic(float dt) {
     auto lane_busy = [&](Entity self, float z, float x, float range) {
         bool busy = false;
         nearby(z, range * 0.5f, range, [&](const Mover& m) {
-            busy = m.e != self && m.dir > 0 && std::abs(m.x - x) <= 0.4f;
+            busy = m.e != self && m.dir >= 0 && std::abs(m.x - x) <= 0.4f;
             return !busy;
         });
         return busy;
@@ -1785,7 +1855,7 @@ void Game::update_traffic(float dt) {
         // neighbouring lane is clear.
         bool blocked = false;
         nearby(t.z, 0.f, follow_ahead, [&](const Mover& m) {
-            blocked = m.e != e && m.dir > 0 && std::abs(m.x - t.x) <= 0.5f && m.speed < v.speed &&
+            blocked = m.e != e && m.dir >= 0 && std::abs(m.x - t.x) <= 0.5f && m.speed < v.speed &&
                       distance_ahead(t.z, m.z) < follow_ahead;
             return !blocked;
         });
@@ -1984,6 +2054,17 @@ void Game::render() {
         s.world_width = vehicle_info(traffic.kind).width;
         road_sprites_.push_back(s);
     });
+
+    // Animals crossing, facing the way they go.
+    for (const Crossing& a : crossings_) {
+        RoadSprite s;
+        s.z = a.z;
+        s.bitmap = &sprites_.animal(a.kind, static_cast<int>(clock_ / (a.hurried ? 0.12f : 0.3f)) & 1);
+        s.offset = a.x;
+        s.world_width = animal_info(a.kind).width;
+        s.flip = a.dir < 0;
+        road_sprites_.push_back(s);
+    }
 
     // People hailing the taxi, waving.
     for (const Hail& h : hails_) {

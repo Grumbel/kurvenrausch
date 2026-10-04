@@ -4,6 +4,7 @@
 #pragma once
 #include "bitmap.hpp"
 #include "track.hpp"
+#include "animals.hpp"
 #include "people.hpp"
 #include "vehicles.hpp"
 
@@ -49,6 +50,12 @@ Bitmap make_van_front(const CarStyle& style, int signal, int tread = 0);
 // column cx with its top at row y: `lit` -1 flashes the red, +1 the blue,
 // 0 neither.
 void paint_lightbar(Bitmap& b, int lit, int cx, int y);
+// Animals crossing the road, from the side, facing right; two frames of
+// their gait.
+Bitmap make_deer(int frame);     // 56x48
+Bitmap make_sheep(int frame);    // 40x30
+Bitmap make_kangaroo(int frame); // 36x48
+
 // Someone standing at the kerb, facing the road, hailing a taxi with a
 // raised arm (two frames), 28x92.
 Bitmap make_pedestrian(const Person& person, int frame);
@@ -145,6 +152,10 @@ public:
     const Bitmap& wheel(int driver_index) const {
         return wheels_[static_cast<size_t>(((driver_index % drivers) + drivers) % drivers)];
     }
+    // An animal crossing the road (see animals.hpp), frame 0 or 1.
+    const Bitmap& animal(Animal kind, int frame) const {
+        return animals_[static_cast<size_t>(kind) % animal_kinds][static_cast<size_t>(frame & 1)];
+    }
     // A fare (0 .. fares - 1) hailing a taxi at the kerb, frame 0 or 1.
     const Bitmap& pedestrian(int fare, int frame) const {
         return pedestrians_[static_cast<size_t>(((fare % fares) + fares) % fares)][static_cast<size_t>(frame & 1)];
@@ -194,6 +205,7 @@ private:
     std::array<bool, car_models> player_convertible_{};
     std::array<Bitmap, car_models> dashboards_;
     std::array<std::array<Bitmap, 2>, fares> pedestrians_;
+    std::array<std::array<Bitmap, 2>, animal_kinds> animals_;
     std::array<Bitmap, drivers> wheels_;
     mutable std::map<uint32_t, Bitmap> occupants_;
     struct VehicleSprites {

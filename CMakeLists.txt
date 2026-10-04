@@ -46,6 +46,7 @@ endif()
 
 # Everything except main() lives in a library so the tests can link it too.
 add_library(kurvenrausch_core STATIC
+    src/animals.cpp
     src/audio.cpp
     src/background.cpp
     src/bitmap.cpp

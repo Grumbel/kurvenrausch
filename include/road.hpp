@@ -55,6 +55,7 @@ struct RoadSprite {
     // Placement on the road, projected: centred on offset (road half-widths).
     float offset = 0.f;
     float world_width = 0.f;
+    bool flip = false; // drawn mirrored (an animal walking the other way)
     // Alternatively a fixed screen rectangle, not clipped by the terrain
     // (the player's car, which the camera always looks over).
     bool fixed = false;

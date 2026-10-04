@@ -123,6 +123,11 @@ weather and road markings, fading smoothly into one another:
   hospital (Holland, Korea) another driver takes the wheel, or, past the
   last of them, you take an ambulance. A crash leaves the driver with a
   bandage round the head until a hospital patches them up
+- **Animals crossing**: now and then an animal of the countryside walks
+  across the road ahead: cows in India, giraffes in Kenya, deer in the
+  forests, the Alps and Korea, a flock of sheep in England, kangaroos hopping
+  across the outback. The traffic stops for them, the horn hurries them,
+  and hitting one is a bump or, at speed, a crash
 - **Taxi fares**: drive the Taxi and people wait at the kerb, waving for
   you. Stop beside one with the passenger seat empty (pick NOBODY at a
   motel) and they get in and name a place a little further on; stop

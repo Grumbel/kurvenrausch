@@ -7,6 +7,7 @@
 #include "drivetrain.hpp"
 #include "driving.hpp"
 #include "input.hpp"
+#include "animals.hpp"
 #include "state.hpp"
 #include "views.hpp"
 #include "climate.hpp"
@@ -1033,6 +1034,22 @@ void test_oncoming_lanes() {
                           z.country == "INDIA" || z.country == "KENYA";
         CHECK(z.theme.left_hand == left);
     }
+}
+
+void test_animals() {
+    using namespace racer;
+    // Each countryside its animal; none in towns.
+    CHECK(zone_animal(Decor::Rajasthan) == Animal::Cow && zone_animal(Decor::Outback) == Animal::Kangaroo);
+    CHECK(zone_animal(Decor::Country) == Animal::Sheep && zone_animal(Decor::Town) == Animal::None);
+    const SpriteSheet sheet;
+    for (int k = 0; k < animal_kinds; ++k) {
+        const AnimalInfo& info = animal_info(static_cast<Animal>(k));
+        CHECK(info.width > 0.f && info.speed > 0.f && info.herd >= 1);
+        CHECK(sheet.animal(static_cast<Animal>(k), 0).w > 0);
+    }
+    CHECK(sheet.animal(Animal::Deer, 0).px != sheet.animal(Animal::Deer, 1).px); // walking
+    CHECK(animal_info(Animal::Sheep).herd > 1);
+    CHECK(animal_wait(0.f) == animal_min_wait && animal_wait(0.999f) < animal_max_wait);
 }
 
 void test_options() {
@@ -2397,6 +2414,7 @@ int main() {
     test_daylight();
     test_touch();
     test_options();
+    test_animals();
     test_oncoming_lanes();
     test_police();
     test_climate();

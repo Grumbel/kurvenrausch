@@ -451,7 +451,7 @@ void RoadRenderer::draw_sprites(Framebuffer& fb, const Track& track, const Sprit
             const float width = o.world_width * px_per_unit;
             const float height = width * static_cast<float>(bmp.h) / static_cast<float>(bmp.w);
             const float cx = x + o.offset * track.half_width_at(o.z) * px_per_unit;
-            fb.blit_scaled(bmp, cx - width / 2.f, y - height, width, height, false,
+            fb.blit_scaled(bmp, cx - width / 2.f, y - height, width, height, o.flip,
                            fog_amount, track.look(s.index).fog);
         };
         if (direction_ > 0) {

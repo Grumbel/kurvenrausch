@@ -85,6 +85,11 @@ the road/framebuffer rewrite, `Color::to_u32()` became `Color::argb()`.
   `hails_waiting` people at the kerb ahead (`make_pedestrian`); stopped
   beside one with the seat empty, they ride to `fare_zone_` (1..3 zones on)
   and pay there; `fares_paid_` on the HUD. Not tested by playing yet
+- Animals (`animals.hpp`): `zone_animal(decor)`; `Game::update_animals()`
+  spawns a crossing (`crossings_`, `animal_info().herd` of them)
+  `animal_ahead` segments ahead every `animal_wait()`; they walk across
+  (sprites flipped with `RoadSprite::flip`), are obstacles to the traffic
+  (movers with dir 0), hurry at the horn, and bump or crash the car
 
 ## Round 17: touch controls at screen resolution, the wide screen
 

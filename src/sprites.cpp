@@ -1578,6 +1578,64 @@ void draw_head(Bitmap& b, float x, float y, float r, const Person& p) {
 
 } // namespace
 
+Bitmap make_deer(int frame) {
+    Bitmap b(56, 48);
+    const Color coat{0xa8, 0x6c, 0x38}, dark{0x70, 0x44, 0x20}, light{0xd8, 0xb0, 0x80}, antler{0x60, 0x48, 0x30};
+    // Legs in two strides.
+    const int swing = frame ? 3 : -3;
+    for (int i = 0; i < 4; ++i) {
+        const int x = (i < 2 ? 14 : 36) + (i % 2) * 5 + (i % 2 ? swing : -swing);
+        paint::stroke(b, static_cast<float>((i < 2 ? 16 : 38) + (i % 2) * 4), 28.f, static_cast<float>(x), 46.f, 2.5f, 2.f, i % 2 ? coat : dark);
+    }
+    paint::shaded_ellipse(b, 27.f, 24.f, 17.f, 8.f, dark, coat, light);
+    paint::rect(b, 9, 20, 4, 4, light); // the white tail
+    paint::stroke(b, 40.f, 22.f, 46.f, 10.f, 4.f, 3.f, coat); // neck
+    paint::shaded_ellipse(b, 48.f, 9.f, 5.f, 3.5f, dark, coat, light);
+    paint::rect(b, 52, 9, 3, 2, Color{0x20, 0x18, 0x14}); // nose
+    paint::rect(b, 46, 4, 2, 3, coat); // ear
+    paint::stroke(b, 47.f, 5.f, 42.f, 0.f, 1.f, 1.f, antler);
+    paint::stroke(b, 47.f, 5.f, 51.f, 0.f, 1.f, 1.f, antler);
+    paint::stroke(b, 44.f, 2.f, 45.f, 0.f, 1.f, 1.f, antler);
+    paint::outline(b, Outline);
+    return b;
+}
+
+Bitmap make_sheep(int frame) {
+    Bitmap b(40, 30);
+    const Color wool{0xec, 0xe8, 0xdc}, wool_shade{0xc4, 0xbc, 0xac}, face{0x2c, 0x28, 0x28};
+    const int swing = frame ? 2 : -2;
+    for (int i = 0; i < 4; ++i) {
+        const int x = (i < 2 ? 9 : 25) + (i % 2) * 4 + (i % 2 ? swing : -swing);
+        paint::rect(b, x, 20, 2, 9, face);
+    }
+    // A fleece of bobbles.
+    for (int i = 0; i < 6; ++i) {
+        paint::shaded_ellipse(b, 8.f + static_cast<float>(i) * 4.5f, 13.f + static_cast<float>(i % 2) * 2.f, 6.f, 6.f,
+                              wool_shade, wool, wool);
+    }
+    paint::shaded_ellipse(b, 34.f, 10.f, 4.f, 4.5f, face, face, Color{0x50, 0x48, 0x44}); // the black face
+    paint::rect(b, 30, 7, 3, 2, face); // ear
+    paint::outline(b, Outline);
+    return b;
+}
+
+Bitmap make_kangaroo(int frame) {
+    Bitmap b(36, 48);
+    const Color fur{0xb8, 0x6c, 0x3c}, dark{0x80, 0x48, 0x24}, light{0xd8, 0x9c, 0x70};
+    // A hop: tucked up (frame 0) or stretched out landing (frame 1).
+    const float lift = frame ? 0.f : 6.f;
+    paint::stroke(b, 8.f, 34.f - lift, 0.f, 44.f - lift, 4.f, 2.f, dark);              // the tail
+    paint::shaded_ellipse(b, 15.f, 30.f - lift, 9.f, 11.f, dark, fur, light);       // body
+    paint::stroke(b, 14.f, 38.f - lift, frame ? 24.f : 18.f, 46.f - lift, 4.f, 2.f, dark); // the big feet
+    paint::stroke(b, 20.f, 26.f - lift, 26.f, 30.f - lift, 2.f, 1.5f, fur);         // forepaw
+    paint::stroke(b, 18.f, 22.f - lift, 24.f, 12.f - lift, 5.f, 4.f, fur);          // neck
+    paint::shaded_ellipse(b, 27.f, 11.f - lift, 6.f, 4.f, dark, fur, light);        // head
+    paint::rect(b, 21, static_cast<int>(1.f - lift + 6.f) - 6, 3, 6, fur);           // ears
+    paint::rect(b, 32, static_cast<int>(11.f - lift), 2, 2, Color{0x20, 0x18, 0x14});
+    paint::outline(b, Outline);
+    return b;
+}
+
 Bitmap make_pedestrian(const Person& p, int frame) {
     Bitmap b(28, 92);
     const Color clothes = p.accent.r + p.accent.g + p.accent.b > 0 ? p.accent : Color{0x50, 0x60, 0x80};
@@ -2415,6 +2473,14 @@ SpriteSheet::SpriteSheet() {
     }
 
     for (int d = 0; d < drivers; ++d) wheels_[static_cast<size_t>(d)] = make_wheel(driver(d));
+    for (int frame = 0; frame < 2; ++frame) {
+        const auto f = static_cast<size_t>(frame);
+        animals_[static_cast<size_t>(Animal::Cow)][f] = make_cow();
+        animals_[static_cast<size_t>(Animal::Giraffe)][f] = make_giraffe();
+        animals_[static_cast<size_t>(Animal::Deer)][f] = make_deer(frame);
+        animals_[static_cast<size_t>(Animal::Sheep)][f] = make_sheep(frame);
+        animals_[static_cast<size_t>(Animal::Kangaroo)][f] = make_kangaroo(frame);
+    }
     for (int f = 0; f < fares; ++f) {
         for (int frame = 0; frame < 2; ++frame) {
             pedestrians_[static_cast<size_t>(f)][static_cast<size_t>(frame)] = make_pedestrian(passenger(first_fare + f), frame);
