@@ -36,7 +36,8 @@ that is scaled up with nearest-neighbour filtering for chunky pixels.
   Exception: work done by Grok is still delivered as cumulative `git bundle`
   files named `kurvenrausch-NNN.M-short-slug-<shortRevOfBase>.bundle`.
 - Commit author: `Ingo Ruhnke <grumbel@gmail.com>`; every commit carries the
-  trailer `Co-authored-by: Claude <noreply@anthropic.com>`.
+  trailer naming the model that actually wrote it, e.g.
+  `Co-authored-by: Claude Opus 5.5 <noreply@anthropic.com>`.
 - Small, task-focused commits; every commit must build warning-free with
   `-Wall -Wextra -Wpedantic`.
 <!-- REUSE-IgnoreStart -->
