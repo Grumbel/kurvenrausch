@@ -36,8 +36,10 @@ constexpr float startled_seconds = 1.5f;
 // units per second per unit of gap above that, and treats anything within
 // follow_width road half-widths as in its lane. Braking and accelerating are
 // fractions of the player's top speed per second.
-constexpr float follow_range = 6.f;
-constexpr float follow_gap = 2.f;
+// Traffic keeps a gap of about a car and a half to the vehicle ahead (a car
+// is some 5 segments long), slowing down from follow_range away.
+constexpr float follow_range = 16.f;
+constexpr float follow_gap = 8.f;
 constexpr float follow_closing = 1.5f;
 constexpr float follow_width = 0.3f;
 constexpr float traffic_brake = 0.6f;
@@ -1658,7 +1660,7 @@ void Game::update_traffic(float dt) {
         bool blocked = false;
         for (const Mover& m : movers) {
             if (m.e == e || m.dir < 0 || std::abs(m.x - t.x) > 0.5f || m.speed >= v.speed) continue;
-            if (distance_ahead(t.z, m.z) < look_ahead) { blocked = true; break; }
+            if (distance_ahead(t.z, m.z) < follow_range * track_.segment_length) { blocked = true; break; }
         }
         if (blocked && std::abs(t.x - traffic.target_x) < 0.05f) {
             for (int i = 0; i < lanes; ++i) {
