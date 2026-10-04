@@ -126,11 +126,11 @@ void headlight_beam(Framebuffer& fb, const std::vector<uint32_t>& day, const Day
     }
 }
 
-void street_lights(Framebuffer& fb, const std::vector<uint32_t>& day, const Daylight& light,
-                   const std::vector<float>& row_depth, const std::vector<LampSpot>& lamps, float camera_depth,
-                   float x_scale) {
+void street_lights(Framebuffer& fb, const std::vector<uint32_t>& day, const std::vector<uint32_t>& ground,
+                   const Daylight& light, const std::vector<float>& row_depth, const std::vector<LampSpot>& lamps,
+                   float camera_depth, float x_scale) {
     const float dark = 1.f - light.level;
-    if (dark <= 0.01f || lamps.empty()) return;
+    if (dark <= 0.01f || lamps.empty() || ground.size() != day.size()) return;
     uint32_t* px = fb.pixels_mut();
     const int w = fb.width(), h = std::min(fb.height(), static_cast<int>(row_depth.size()));
     for (int y = 0; y < h; ++y) {
@@ -139,24 +139,28 @@ void street_lights(Framebuffer& fb, const std::vector<uint32_t>& day, const Dayl
         const float px_per_unit = camera_depth / depth * x_scale;
         for (const LampSpot& lamp : lamps) {
             const float dz = depth - lamp.depth;
-            if (std::abs(dz) >= lamp_reach) continue;
-            const float half = std::sqrt(lamp_reach * lamp_reach - dz * dz);
+            if (std::abs(dz) >= lamp.reach) continue;
+            // Sodium yellow, headlight white, tail light red; the red only a glow.
+            const float tint_g = lamp.glow == Glow::Street ? 0.85f : lamp.glow == Glow::Tail ? 0.25f : 1.f;
+            const float tint_b = lamp.glow == Glow::Street ? 0.55f : lamp.glow == Glow::Tail ? 0.2f : 0.95f;
+            const float strength = lamp.glow == Glow::Tail ? 0.5f : lamp.glow == Glow::Head ? 0.8f : 0.9f;
+            const float half = std::sqrt(lamp.reach * lamp.reach - dz * dz);
             const int x0 = std::max(0, static_cast<int>(lamp.x - half * px_per_unit));
             const int x1 = std::min(w, static_cast<int>(lamp.x + half * px_per_unit) + 1);
             for (int x = x0; x < x1; ++x) {
                 const float dx = (static_cast<float>(x) + 0.5f - lamp.x) / px_per_unit;
-                const float r2 = (dx * dx + dz * dz) / (lamp_reach * lamp_reach);
+                const float r2 = (dx * dx + dz * dz) / (lamp.reach * lamp.reach);
                 if (r2 >= 1.f) continue;
-                const float k = 0.9f * dark * (1.f - r2) * (1.f - r2);
+                const float k = strength * dark * (1.f - r2) * (1.f - r2);
                 const size_t i = static_cast<size_t>(y) * static_cast<size_t>(w) + static_cast<size_t>(x);
+                if (day[i] != ground[i]) continue; // something stands there
                 const uint32_t a = px[i], o = day[i];
-                // Warm sodium light: the day's colours, yellowed.
                 const auto mix = [k](uint32_t from, uint32_t to, float tint) {
                     const float t = static_cast<float>(to) * tint;
                     return static_cast<uint32_t>(std::min(255.f, static_cast<float>(from) + (t - static_cast<float>(from)) * k));
                 };
                 px[i] = 0xff000000u | mix((a >> 16) & 0xff, (o >> 16) & 0xff, 1.f) << 16 |
-                        mix((a >> 8) & 0xff, (o >> 8) & 0xff, 0.85f) << 8 | mix(a & 0xff, o & 0xff, 0.55f);
+                        mix((a >> 8) & 0xff, (o >> 8) & 0xff, tint_g) << 8 | mix(a & 0xff, o & 0xff, tint_b);
             }
         }
     }

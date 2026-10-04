@@ -2185,6 +2185,7 @@ void Game::render() {
                                    : &sprites_.vehicle_front(traffic.kind, traffic.style, 0, SpriteSheet::tyre_frame(t.z));
         s.offset = t.x;
         s.world_width = vehicle_info(traffic.kind).width;
+        s.lights = traffic.dir; // their headlights and tail lights at night
         road_sprites_.push_back(s);
     });
 
@@ -2370,7 +2371,7 @@ void Game::render() {
     // street lamps bring back.)
     if (headlights_ || !road_.lamps().empty()) day_picture_.assign(fb_.pixels(), fb_.pixels() + width_ * height);
     apply_daylight(fb_, light);
-    street_lights(fb_, day_picture_, light, road_.row_depth(), road_.lamps(), cam.depth, x_unit);
+    street_lights(fb_, day_picture_, road_.ground(), light, road_.row_depth(), road_.lamps(), cam.depth, x_unit);
     if (headlights_) {
         Beam beam;
         beam.start = setup.distance + 450.f; // the lamps, at the car's front

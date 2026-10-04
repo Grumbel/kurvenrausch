@@ -127,7 +127,9 @@ weather and road markings, fading smoothly into one another:
   on from the same place, at the same time of day and with the same fuel
 - **Night lights**: cities glow at night, the sky above them orange, their
   windows lit and their street lamps throwing pools of warm light on the
-  road; out in the desert and the outback the night is as dark as it gets
+  road; out in the desert and the outback the night is as dark as it gets.
+  The traffic's headlights light the road ahead of them, their tail lights
+  glow red behind
 - **Trains**: railways cross the road in the Netherlands, Germany, India,
   the outback and Arizona. Now and then a long train comes as you near a
   crossing, the lamps flashing, timed to clear the road just before you get

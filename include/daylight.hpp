@@ -34,18 +34,23 @@ RoadTheme at_daytime(const RoadTheme& look, const Daylight& light);
 // dark; out in the wilds (glow 0) it stays as dark as it is.
 Daylight lit_by(Daylight light, float glow);
 
-// A street lamp seen from the camera: its foot on screen column x, depth
-// world units ahead; the pool of light it throws on the ground.
+// A pool of light on the ground seen from the camera: its middle on screen
+// column x, depth world units ahead, `reach` world units across, of a
+// street lamp (warm), headlights (white) or tail lights (red).
+enum class Glow : uint8_t { Street, Head, Tail };
 struct LampSpot {
     float x;
     float depth;
+    float reach = 1100.f;
+    Glow glow = Glow::Street;
 };
-constexpr float lamp_reach = 1100.f; // the pool's radius, world units
-// The pools of the lamps: the darkened ground around their feet lit again,
-// warm, from the picture before nightfall (`day`), as headlight_beam() does.
-void street_lights(Framebuffer& fb, const std::vector<uint32_t>& day, const Daylight& light,
-                   const std::vector<float>& row_depth, const std::vector<LampSpot>& lamps, float camera_depth,
-                   float x_scale);
+// The pools of light: the darkened ground lit again from the picture before
+// nightfall (`day`), tinted as the light is, as headlight_beam() does; only
+// where `day` still shows the bare ground (`ground`, of the same size), not
+// on what stands on it.
+void street_lights(Framebuffer& fb, const std::vector<uint32_t>& day, const std::vector<uint32_t>& ground,
+                   const Daylight& light, const std::vector<float>& row_depth, const std::vector<LampSpot>& lamps,
+                   float camera_depth, float x_scale);
 
 // The picture for the light: darkened (warm at dusk, blue at night), except
 // lamps and stars, which keep shining (night_emissive()).

@@ -95,6 +95,11 @@ the road/framebuffer rewrite, `Color::to_u32()` became `Color::argb()`.
   cities orange (`at_daytime`); street lamps (found while drawing,
   `RoadRenderer::lamps()`) throw warm pools of light (`street_lights()`);
   lit windows and lamp heads are emissive
+- Traffic at night: `RoadSprite::lights` (+1 back seen, -1 front seen); the
+  road renderer adds a white headlight pool ahead and a red tail glow
+  behind (`LampSpot::glow`). Pools light only bare ground: the renderer
+  keeps the picture before the sprites (`ground()`), lit only where the
+  final picture still shows it
 - Resume: `Choices::position/minutes/tank` saved on quitting and every
   `progress_save_seconds` while racing (not in the attract mode, which
   keeps the saved values); the first race after start-up begins there

@@ -109,6 +109,7 @@ void RoadRenderer::render(Framebuffer& fb, const Track& track, const RoadView& v
         slices_.push_back(s);
     }
 
+    ground_.assign(fb.pixels(), fb.pixels() + static_cast<size_t>(fb.width()) * static_cast<size_t>(fb.height()));
     for (RoadSprite& o : objects) o.z = track.wrap(o.z);
     std::sort(objects.begin(), objects.end(),
               [](const RoadSprite& a, const RoadSprite& b) { return a.z < b.z; });
@@ -437,7 +438,7 @@ void RoadRenderer::draw_sprites(Framebuffer& fb, const Track& track, const Sprit
             // A lamp's light falls at its foot, a little out over the road.
             if (obj.kind == Scenery::StreetLamp) {
                 const float toward_road = (obj.offset < 0.f ? 1.f : -1.f) * 0.15f * track.half_width(s.index) * px_per_unit;
-                lamps_.push_back({left + width / 2.f + toward_road, p0.cam_z});
+                lamps_.push_back({left + width / 2.f + toward_road, p0.cam_z, 1100.f, Glow::Street});
             }
         };
         if (projectable) {
@@ -475,6 +476,13 @@ void RoadRenderer::draw_sprites(Framebuffer& fb, const Track& track, const Sprit
             const float width = o.world_width * px_per_unit;
             const float height = width * static_cast<float>(bmp.h) / static_cast<float>(bmp.w);
             const float cx = x + o.offset * track.half_width_at(o.z) * px_per_unit;
+            if (o.lights != 0 && scale > 0.f) {
+                // The headlights' pool ahead of it, the tail lights' glow behind.
+                const float depth = camera_depth_ / scale;
+                const float ahead = static_cast<float>(o.lights);
+                lamps_.push_back({cx, depth + ahead * 1100.f, 1000.f, Glow::Head});
+                lamps_.push_back({cx, depth - ahead * 350.f, 380.f, Glow::Tail});
+            }
             fb.blit_scaled(bmp, cx - width / 2.f, y - height, width, height, o.flip,
                            fog_amount, track.look(s.index).fog);
         };

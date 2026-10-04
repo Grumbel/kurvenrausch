@@ -57,6 +57,9 @@ struct RoadSprite {
     float offset = 0.f;
     float world_width = 0.f;
     bool flip = false; // drawn mirrored (an animal walking the other way)
+    // Lit at night: headlights shining away from the camera (+1, the car's
+    // back seen) or towards it (-1, its front seen), and tail lights.
+    int lights = 0;
     // Alternatively a fixed screen rectangle, not clipped by the terrain
     // (the player's car, which the camera always looks over).
     bool fixed = false;
@@ -74,8 +77,12 @@ public:
     // After render(): how far ahead of the camera (world units) the road or
     // ground seen in each screen row lies; 0 where none is seen (the sky).
     const std::vector<float>& row_depth() const { return row_depth_; }
-    // After render(): the street lamps drawn, where their light falls.
+    // After render(): the street lamps and the lit vehicles drawn, where
+    // their light falls.
     const std::vector<LampSpot>& lamps() const { return lamps_; }
+    // After render(): the picture with the road and ground drawn but nothing
+    // standing on them, to tell the ground from what stands on it.
+    const std::vector<uint32_t>& ground() const { return ground_; }
 
 private:
     struct Slice {
@@ -100,6 +107,7 @@ private:
     std::vector<Slice> slices_;
     std::vector<float> row_depth_;
     mutable std::vector<LampSpot> lamps_; // found while drawing the scenery
+    std::vector<uint32_t> ground_;
     float camera_depth_ = 1.f;
     float x_scale_ = 1.f;
     int direction_ = 1;
