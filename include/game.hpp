@@ -129,7 +129,10 @@ private:
     // The indicators as the car's sprite shows them now (see hazard_signal).
     int shown_signal() const;
     // The attract mode: following the traffic, waiting for a player.
-    void start_attract();
+    // `keep_race`: the race stays as it is, to go on with when somebody
+    // presses something (the attract mode after a while idle); otherwise
+    // it starts afresh (at start-up).
+    void start_attract(bool keep_race = false);
     void leave_attract();
     void follow_next_car();
     void update_attract(float dt);
@@ -229,6 +232,13 @@ private:
     // Where the last run left off (see Choices), taken up by the first race.
     int resume_position_ = -1, resume_minutes_ = -1, resume_tank_ = -1;
     float progress_saved_ = 0.f; // seconds since the position was last saved
+    // The race the attract mode interrupted, to go on with.
+    struct HeldRace {
+        Transform at;
+        float hour = 0.f;
+        bool held = false;
+    };
+    HeldRace held_race_;
     SynthParams sound_;  // what the synth was last told
     bool horn_ = false;
     Nitro nitro_;

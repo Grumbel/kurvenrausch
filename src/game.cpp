@@ -474,7 +474,7 @@ bool Game::frame() {
         save_choices();
     }
     if (idle_ > attract_idle_seconds) {
-        start_attract();
+        start_attract(true); // the race waits
         return true;
     }
 
@@ -626,8 +626,16 @@ int Game::shown_signal() const {
     return hazards_ ? hazard_signal : signal_;
 }
 
-void Game::start_attract() {
-    reset();
+void Game::start_attract(bool keep_race) {
+    if (keep_race) {
+        // Idle a while: the race waits, saved too, while the attract mode
+        // shows the traffic.
+        save_choices();
+        held_race_ = HeldRace{world_.get<Transform>(player_), hour_, true};
+    } else {
+        held_race_.held = false;
+        reset();
+    }
     attract_ = true;
     paused_ = false;
     played_view_ = view_mode_;
@@ -640,6 +648,17 @@ void Game::leave_attract() {
     attract_ = false;
     view_mode_ = played_view_;
     idle_ = 0.f;
+    if (held_race_.held) {
+        // Back to the race it interrupted, where the car stood.
+        held_race_.held = false;
+        world_.get<Transform>(player_) = held_race_.at;
+        world_.get<Velocity>(player_).speed = 0.f;
+        hour_ = held_race_.hour;
+        const float car_z = held_race_.at.z + world_.get<Camera>(camera_).player_z();
+        place_on_road(vertical_, track_.height_at(car_z));
+        zone_ = -1;
+        return;
+    }
     reset(); // at the start line ...
     // ... or where the last run left off.
     if (resume_position_ >= 0) {

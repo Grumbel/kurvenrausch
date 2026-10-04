@@ -61,7 +61,8 @@ weather and road markings, fading smoothly into one another:
 - **Attract mode**: the game starts, as in an arcade, following the cars of
   the traffic around the world (a new one every 20 seconds), and goes back
   to it after two minutes without anybody at the controls; any key, button,
-  stick or tap starts a race
+  stick or tap starts a race, or, after the break, goes back to the race
+  where it was left
 - **Wet spots**: puddles on the road in the rainy and snowy zones; hit one
   fast and the car aquaplanes, throwing up spray. Rarely, an **oil slick**:
   hardly any grip at all

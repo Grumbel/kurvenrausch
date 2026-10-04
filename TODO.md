@@ -104,6 +104,10 @@ the road/framebuffer rewrite, `Color::to_u32()` became `Color::argb()`.
   `progress_save_seconds` while racing (not in the attract mode, which
   keeps the saved values); the first race after start-up begins there
   (`leave_attract`)
+- The attract mode after a while idle keeps the race (`start_attract(true)`,
+  `held_race_`: where the car was and the time of day, the progress saved);
+  a button goes back to it, the car standing. Only at start-up does the
+  attract mode start the race afresh. Not tested by hand yet
 - Trains: `Segment::rails`, `TrackBuilder::level_crossing()` (a straight,
   `Scenery::CrossingSign` either side), `Track::crossings()`. `Game::
   update_train()`: decided `train_chance` once per crossing when the car
