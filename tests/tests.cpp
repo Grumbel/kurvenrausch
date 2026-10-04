@@ -857,17 +857,41 @@ void test_police() {
     passed.phase = ChasePhase::Blocking;
     update_chase(passed, 1.f, 0.8f, 0.f, dt);
     CHECK(passed.phase == ChasePhase::Closing);
-    // Far enough ahead, the car is away; out of time, the police slow down.
+    // Far enough ahead, the car is away, once; out of time it is away too,
+    // and the police slow down.
     Chase lost;
     CHECK(update_chase(lost, chase_escape_gap + 1.f, 1.f, 0.f, dt) == ChaseOutcome::Escaped);
+    CHECK(update_chase(lost, chase_escape_gap + 1.f, 1.f, 0.f, dt) == ChaseOutcome::Going);
     Chase late;
     late.time = chase_give_up;
-    CHECK(update_chase(late, 3.f, 1.f, 0.f, dt) == ChaseOutcome::Going && late.giving_up);
+    CHECK(update_chase(late, 3.f, 1.f, 0.f, dt) == ChaseOutcome::Escaped && late.giving_up);
     CHECK(police_move(late, top, top, 0.f, 3.f, top, dt).speed < 0.6f * top);
-    // Closing in, it is as fast as the standard car, faster when far behind.
+    // The meter: by the lead or the time.
+    Chase fresh;
+    CHECK(escape_progress(fresh, -5.f) == 0.f);
+    CHECK(std::abs(escape_progress(fresh, chase_escape_gap / 2.f) - 0.5f) < 1e-5f);
+    fresh.time = chase_give_up * 0.75f;
+    CHECK(std::abs(escape_progress(fresh, 10.f) - 0.75f) < 1e-5f);
+    // Closing in near, it is a little slower than the standard car flat out,
+    // faster when far behind.
     const Chase closing;
-    CHECK(police_move(closing, 0.f, top, 0.f, 15.f, top, dt).speed == top);
+    CHECK(police_move(closing, 0.f, top, 0.f, 15.f, top, dt).speed < top);
     CHECK(police_move(closing, 0.f, top, 0.f, 45.f, top, dt).speed > top);
+    // So a car kept flat out is never caught up with: it gets away.
+    Chase flat_out;
+    police_z = 0.f, police_v = top;
+    car_z = chase_start_gap * 200.f;
+    out = ChaseOutcome::Going;
+    for (int i = 0; i < 60 * 60 && out == ChaseOutcome::Going; ++i) {
+        const float gap = (car_z - police_z) / 200.f;
+        const PoliceMove m = police_move(flat_out, police_v, top, car_x, gap, top, dt);
+        police_v += std::clamp(m.speed - police_v, -top * dt, 0.6f * top * dt);
+        police_z += police_v * dt;
+        car_z += top * dt;
+        out = update_chase(flat_out, (car_z - police_z) / 200.f, 1.f, 0.f, dt);
+        CHECK(flat_out.phase == ChasePhase::Closing || out == ChaseOutcome::Escaped);
+    }
+    CHECK(out == ChaseOutcome::Escaped);
     // Chases start only at speed, now and then.
     CHECK(!chase_starts(0.f, 0.5f, dt));
     CHECK(chase_starts(0.f, 0.9f, dt) && !chase_starts(0.5f, 0.9f, dt));

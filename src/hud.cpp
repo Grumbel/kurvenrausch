@@ -261,6 +261,18 @@ void draw_hud(Framebuffer& fb, const HudState& hud) {
 
     if (hud.muted) text_right(fb, w - 6, h - 9, "MUTE", Label);
 
+    // Chased: under the mirror, the police light and how near the car is to
+    // getting away.
+    if (hud.chase) {
+        constexpr int bar_w = 50;
+        const int lw = font::text_width("POLICE"), x = (w - lw - 4 - bar_w) / 2, y = 41;
+        text(fb, x, y, "POLICE", hud.chase_red ? Color{0xff, 0x40, 0x30} : Color{0x40, 0x80, 0xff});
+        const int bx = x + lw + 4;
+        fb.fill_rect(bx - 1, y, bar_w + 2, 7, Shadow);
+        const int filled = static_cast<int>(std::lround(std::clamp(hud.escape, 0.f, 1.f) * static_cast<float>(bar_w)));
+        if (filled > 0) fb.fill_rect(bx, y + 1, filled, 5, Color{0x30, 0xe0, 0x40});
+    }
+
     if (!hud.banner.empty()) {
         text_center(fb, 48, hud.banner, Value, 2);
         text_center(fb, 65, hud.banner_sub, Label);

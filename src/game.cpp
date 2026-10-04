@@ -805,6 +805,7 @@ void Game::fixed_update(const InputState& driver_input, float dt) {
         input.throttle = 0.f;
         input.brake = 1.f;
         input.nitro = false;
+        reverse_armed_ = false; // held on the brake, not backing away
     }
     update_particles(dt);
     wheel_distance_ = std::fmod(wheel_distance_ + world_.get<Velocity>(player_).speed * dt,
@@ -1626,9 +1627,10 @@ void Game::update_police(float dt) {
             show_message("PULLED OVER", pulled_over_seconds);
             break;
         case ChaseOutcome::Escaped:
-            end_chase();
+            // It gives up and drops back, out of sight, unless it already is.
+            if (std::abs(gap) > police_leave_gap) end_chase();
             synth_.trigger_ding();
-            show_message("ESCAPED!", 2.f);
+            show_message("ESCAPED!", 3.f);
             break;
         case ChaseOutcome::Going: break;
     }
@@ -1901,6 +1903,13 @@ void Game::render() {
     hud.map_zoom = map_zoomed_ ? 3.f : 1.f;
     hud.fuel_warning = fuel_.level() < Fuel::low && std::fmod(clock_, 0.5f) < 0.3f;
     hud.nitro_burn = nitro_.burn_left();
+    if (police_ != INVALID_ENTITY && !chase_.giving_up && chase_.phase != ChasePhase::Leaving) {
+        const float gap = signed_gap(world_.get<Transform>(police_).z, tr.z + cam.player_z(), track_.length()) /
+                          track_.segment_length;
+        hud.chase = true;
+        hud.escape = escape_progress(chase_, gap);
+        hud.chase_red = static_cast<int>(clock_ / 0.12f) % 2 == 0;
+    }
     hud.attract = attract_;
     hud.attract_prompt = std::fmod(clock_, 1.f) < 0.65f;
     if (banner_time_ > 0.f && zone_ >= 0 && !paused_) {

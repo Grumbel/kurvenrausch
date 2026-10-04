@@ -17,9 +17,11 @@ PoliceMove police_move(const Chase& chase, float police_speed, float player_spee
     }
     switch (chase.phase) {
         case ChasePhase::Closing:
-            // Flat out, harder when far behind so the chase isn't over
-            // before it began.
-            return {top * (1.f + 0.08f * std::clamp((gap - 20.f) / 25.f, 0.f, 1.f)), player_x};
+            // Harder when far behind so the chase isn't over before it
+            // began; nearer, a car flat out keeps its lead.
+            return {top * (chase_pace + chase_catch_up * std::clamp((gap - chase_near_gap) /
+                                                                     (chase_start_gap - chase_near_gap), 0.f, 1.f)),
+                    player_x};
         case ChasePhase::Overtaking:
             return {std::max(player_speed, 0.f) + 0.15f * top, beside};
         default: {
@@ -35,10 +37,12 @@ PoliceMove police_move(const Chase& chase, float police_speed, float player_spee
 
 ChaseOutcome update_chase(Chase& chase, float gap, float player_speed_pct, float lateral, float dt) {
     chase.time += dt;
-    if (chase.time > chase_give_up && chase.phase != ChasePhase::Leaving) chase.giving_up = true;
     if (chase.phase == ChasePhase::Leaving) return ChaseOutcome::Going;
-    if (gap > chase_escape_gap) return ChaseOutcome::Escaped;
-    if (chase.giving_up) return ChaseOutcome::Going;
+    if (gap > chase_escape_gap || chase.time > chase_give_up) {
+        chase.phase = ChasePhase::Leaving;
+        chase.giving_up = true;
+        return ChaseOutcome::Escaped;
+    }
     switch (chase.phase) {
         case ChasePhase::Closing:
             if (gap < chase_overtake_gap) chase.phase = ChasePhase::Overtaking;
@@ -66,6 +70,10 @@ ChaseOutcome update_chase(Chase& chase, float gap, float player_speed_pct, float
         default: break;
     }
     return ChaseOutcome::Going;
+}
+
+float escape_progress(const Chase& chase, float gap) {
+    return std::clamp(std::max(gap / chase_escape_gap, chase.time / chase_give_up), 0.f, 1.f);
 }
 
 bool chase_starts(float roll, float speed_pct, float dt) {

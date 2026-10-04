@@ -2,8 +2,8 @@
 
 ## Current tip
 
-Tip is Round 17 (touch controls at screen resolution, the wide screen),
-after Round 16's attract mode.
+Tip is Round 17 (touch controls at screen resolution, the wide screen,
+escapable police).
 Work is committed directly to `master`; Grok still delivers cumulative git
 bundles (see AGENTS.md).
 
@@ -51,6 +51,14 @@ clamps the ones on the black bars to its edge. Now:
   `--width W` for headless screenshots
 - Not tested on a real phone yet; the live switch only on a 4:3 dummy
   window (the headless runs cover the wide rendering)
+- Police: escapable by driving well. Closing in near, the police car runs
+  at `chase_pace` (0.97) of the standard car's top speed, up to
+  `chase_catch_up` more when far behind, so a car kept flat out holds it
+  off until it gives up (`chase_give_up`); falling below that pace lets it
+  catch up. Escape (lead or time) is reported once, the police car then
+  drops back (`Leaving`, `giving_up`). HUD: POLICE and an escape meter
+  under the mirror (`escape_progress()`). Pulled over, the forced brake no
+  longer engages reverse (`reverse_armed_` held off)
 
 ## Round 16: day and night, drivable cars, attract mode
 

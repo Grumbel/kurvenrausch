@@ -113,11 +113,13 @@ weather and road markings, fading smoothly into one another:
 - **Mini map** of the lap with your position, the start line, the gas
   stations, the car dealers, car washes, motels, hospitals and truck stops
 - **Police chases**: now and then, driving fast, a police car turns up in
-  the mirror, lights flashing and siren wailing. It is as fast as the standard
-  car and gains whenever you slow down; once it catches up it overtakes, cuts
-  in ahead and slows down to stop you. Brought to a halt behind it, you are
+  the mirror, lights flashing and siren wailing. Close behind it is a little
+  slower than the standard car flat out, so it gains only when you slow down
+  (traffic, the verge, braking); once it catches up it overtakes, cuts in
+  ahead and slows down to stop you. Brought to a halt behind it, you are
   pulled over; swerve past and it starts over; get far enough ahead (nitro, a
-  faster car, clean lines) or hold out until it gives up and you escape
+  faster car, clean lines) or hold out until it gives up and you escape. A
+  meter under the mirror shows how near you are to getting away
 - **Radio**: three synthesised songs (Sunset Cruise, Turbo Breeze, Night
   Drive), each a loop of pads, bass, lead and drums from a step sequencer;
   flick the right stick up or down, or press N, to change the track or switch it off

@@ -26,6 +26,9 @@ struct HudState {
     std::string message;         // centred banner, empty for none
     bool message_visible = false;// for blinking
     bool muted = false;          // sound off
+    bool chase = false;          // the police are after the car: show how near it is to escaping
+    float escape = 0.f;          // ... 0 .. 1
+    bool chase_red = false;      // ... the lightbar's colour now, red or blue
     int nitro = 0;               // canisters left
     float fuel = 1.f;            // 0..1
     bool fuel_warning = false;   // low fuel, blinking

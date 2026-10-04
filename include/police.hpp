@@ -8,8 +8,11 @@ namespace racer {
 // Police chases. Now and then, driving fast, a police car turns up behind,
 // lights flashing, siren wailing. It closes in, overtakes in the next lane,
 // cuts in ahead and slows down to stop the car: brought to a halt behind
-// it, the car is pulled over. Swerve past it and the chase goes on; get far
-// enough ahead, or hold out until it gives up, and the car has escaped.
+// it, the car is pulled over. Close behind, it is faster than any car
+// short of nitro; further back, a little slower than the standard car flat
+// out, so a car kept at full speed, clear of traffic and on the road, is
+// not caught up with. Swerve past it and the chase goes on; get far enough
+// ahead, or hold out until it gives up, and the car has escaped.
 // Gaps are the player's distance ahead of the police car, in segments
 // (negative once the police car is ahead); lateral positions in road
 // half-widths.
@@ -27,11 +30,15 @@ constexpr float chase_stop_seconds = 1.f;  // ... behind the police car for this
 constexpr float pulled_over_seconds = 4.f; // then it waits, and the police drive off
 constexpr float police_leave_gap = 60.f;   // driven off this far, the police car is gone
 
+constexpr float chase_pace = 0.97f;        // closing in, this much of the standard car's top speed ...
+constexpr float chase_catch_up = 0.11f;    // ... and up to this much more when far behind
+constexpr float chase_near_gap = 25.f;     // (from here back to chase_start_gap)
+
 enum class ChasePhase {
     Closing,    // coming up from behind
     Overtaking, // passing in the next lane
     Blocking,   // ahead in the car's lane, slowing to a stop
-    Leaving,    // done (caught): driving off
+    Leaving,    // done (caught, or escaped and giving up): driving off
 };
 
 enum class ChaseOutcome { Going, Escaped, Caught };
@@ -56,7 +63,13 @@ PoliceMove police_move(const Chase& chase, float police_speed, float player_spee
 
 // One step of the chase: the phase moves on with the gap and the car's speed
 // (of top) and lateral distance to the police car; the result says who won.
+// Escaped is reported once, when the car gets chase_escape_gap ahead or the
+// time runs out; the police car then gives up and drops back.
 ChaseOutcome update_chase(Chase& chase, float gap, float player_speed_pct, float lateral, float dt);
+
+// How near the car is to escaping, 0 .. 1: by its lead or by the time, which
+// ever is further along.
+float escape_progress(const Chase& chase, float gap);
 
 // Does a chase start this step? `roll` uniform in [0, 1).
 bool chase_starts(float roll, float speed_pct, float dt);
