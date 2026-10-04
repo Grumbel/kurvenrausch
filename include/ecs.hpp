@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cassert>
 #include <memory>
+#include <tuple>
 #include <typeindex>
 #include <unordered_map>
 #include <vector>
@@ -15,8 +16,9 @@ namespace racer {
 
 // Minimal Entity-Component-System.
 // Entities are IDs. Each component type lives in its own hash map keyed by
-// entity. This is not cache-optimal, but the game only has a handful of
-// entities, so clarity wins.
+// entity. This is not cache-optimal, but clear; view() looks each component
+// type's store up once, which keeps it quick with the hundreds of cars on a
+// long track.
 class World {
 public:
     Entity create() {
@@ -73,10 +75,10 @@ public:
     // Usage: world.view<Pos, Vel>([](Entity e, Pos& p, Vel& v){ ... });
     template <typename... Cs, typename Fn>
     void view(Fn&& fn) {
+        const std::tuple<Store<Cs>*...> stores{&store<Cs>()...};
         for (Entity e : alive_) {
-            if ((has<Cs>(e) && ...)) {
-                fn(e, get<Cs>(e)...);
-            }
+            const std::tuple<Cs*...> found{find_in(std::get<Store<Cs>*>(stores), e)...};
+            if ((std::get<Cs*>(found) && ...)) fn(e, *std::get<Cs*>(found)...);
         }
     }
 
@@ -99,6 +101,12 @@ private:
         auto& slot = stores_[std::type_index(typeid(T))];
         if (!slot) slot = std::make_unique<Store<T>>();
         return static_cast<Store<T>&>(*slot);
+    }
+
+    template <typename T>
+    static T* find_in(Store<T>* s, Entity e) {
+        auto it = s->map.find(e);
+        return it == s->map.end() ? nullptr : &it->second;
     }
 
     template <typename T>
