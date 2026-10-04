@@ -215,6 +215,7 @@ void draw_hud(Framebuffer& fb, const HudState& hud) {
     text(fb, 6, 33, "LAP", Label);
     text(fb, 6, 42, hud.lap > 0 ? std::to_string(hud.lap) : "-", Value, 2);
     if (!hud.time_of_day.empty()) text(fb, 34, 49, hud.time_of_day, Value); // the clock
+    if (!hud.taxi.empty()) text(fb, 6, 62, hud.taxi, Label);
 
     // Top right: last and best laps.
     text_right(fb, w - 6, 5, "BEST", Label);

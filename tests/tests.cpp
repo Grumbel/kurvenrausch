@@ -1696,6 +1696,15 @@ void test_vehicles() {
     CHECK(base.w == sheet.player(0, 0).w && base.h == sheet.player(0, 0).h);
     for (int p = 1; p < passengers; ++p) CHECK(sheet.occupants(0, p, 0, 0, 0, 0).px != base.px);
     for (int d = 1; d < drivers; ++d) CHECK(sheet.occupants(d, 0, 0, 0, 0, 0).px != base.px);
+    // The empty seat: nobody there, nobody waving; the fares stand at the
+    // kerb hailing, in two frames.
+    CHECK(passenger(nobody).style == HeadStyle::None && nobody < motel_passengers && first_fare == motel_passengers);
+    CHECK(sheet.occupants(0, nobody, 0, 1, 0, 0).px == sheet.occupants(0, nobody, 0, 0, 0, 0).px);
+    for (int f = 0; f < fares; ++f) {
+        CHECK(passenger(first_fare + f).style != HeadStyle::None && passenger(first_fare + f).style != HeadStyle::Dog);
+        CHECK(sheet.pedestrian(f, 0).px != sheet.pedestrian(f, 1).px);
+        CHECK(std::abs(static_cast<float>(sheet.pedestrian(f, 0).h) * 6.25f - 575.f) < 20.f); // as tall as a person
+    }
     auto top_row = [](const Bitmap& b) {
         for (int y = 0; y < b.h; ++y)
             for (int x = 0; x < b.w; ++x)

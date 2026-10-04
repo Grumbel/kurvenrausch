@@ -118,10 +118,15 @@ weather and road markings, fading smoothly into one another:
   oil slicks leave black spots; stop at one of the car washes in England,
   Kenya and the outback to have it washed clean
 - **Motels and hospitals**: stop at a motel (India, Route 66) and steer left
-  or right to pick up another passenger, among them a granny and a dog; at a
+  or right to pick up another passenger, among them a granny and a dog, or
+  nobody at all; at a
   hospital (Holland, Korea) another driver takes the wheel, or, past the
   last of them, you take an ambulance. A crash leaves the driver with a
   bandage round the head until a hospital patches them up
+- **Taxi fares**: drive the Taxi and people wait at the kerb, waving for
+  you. Stop beside one with the passenger seat empty (pick NOBODY at a
+  motel) and they get in and name a place a little further on; stop
+  anywhere there and they pay. The fares paid show under the clock
 - **Emergency vehicles**: ambulances in the traffic, every other one on a
   call with its lights flashing; drive the Patrol car or the ambulance and
   the hazard switch works the lightbar and siren, and the traffic pulls over

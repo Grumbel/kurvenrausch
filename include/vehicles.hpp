@@ -74,6 +74,7 @@ struct CarModel {
 };
 constexpr int car_models = 18;
 constexpr int ambulance_model = 17;
+constexpr int taxi_model = 6; // people hail it
 const CarModel& car_model(int index);
 
 // Seen through: the people show through the rear window (or over the seats).

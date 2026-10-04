@@ -79,6 +79,12 @@ the road/framebuffer rewrite, `Color::to_u32()` became `Color::argb()`.
   `paint_lightbar`, siren, traffic yields as to the horn). Traffic kind and
   model AMBULANCE (`ambulance_model`, `CarRange::Emergency`), handed out at
   the hospital after the drivers (`hospital_ambulance_`)
+- Taxi fares: `passenger(nobody)` is the empty seat (the motel cycles
+  `motel_passengers`, nobody among them); after them `fares` people who
+  hail (`first_fare`). `Game::update_fares()`: driving `taxi_model`, keeps
+  `hails_waiting` people at the kerb ahead (`make_pedestrian`); stopped
+  beside one with the seat empty, they ride to `fare_zone_` (1..3 zones on)
+  and pay there; `fares_paid_` on the HUD. Not tested by playing yet
 
 ## Round 17: touch controls at screen resolution, the wide screen
 

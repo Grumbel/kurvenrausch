@@ -163,6 +163,10 @@ private:
     std::optional<Lot> lot_here() const;
     bool parked_at(Lot kind) const { return lot_here() == kind; }
     void update_wash(float dt);
+    // Driving the taxi: people hail it at the kerb; stopped beside one with
+    // the passenger seat empty, they get in and want to go to a zone a little
+    // ahead; stopped there, they pay and get out.
+    void update_fares();
     void follow_fork(float prev_car_z);
     int indicator(Entity e, const Transform& t, const Traffic& traffic) const;
     InputState autopilot() const;
@@ -268,6 +272,14 @@ private:
     std::optional<Lot> offer_;  // standing at a lot with a choice: it is on offer
     int lot_steer_ = 0;         // the steering last step, to choose once per push
     bool hospital_ambulance_ = false; // at the hospital, the ambulance (after the drivers) is chosen
+    struct Hail {
+        float z;  // where along the track
+        float x;  // at the kerb, road half-widths
+        int fare; // who (0 .. fares - 1)
+    };
+    std::vector<Hail> hails_; // people hailing the taxi
+    int fare_zone_ = -1;      // where the fare riding wants to go, -1 none
+    int fares_paid_ = 0;
     std::optional<Lot> autopilot_visit_; // headless: the autopilot visits the next lot of this kind
     Dirt dirt_;
     bool washing_ = false;      // standing in a car wash, being cleaned

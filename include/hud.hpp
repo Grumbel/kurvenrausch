@@ -21,6 +21,7 @@ struct HudState {
     bool headlights = false;     // the headlights are on
     int lap = 0;                 // 0 before the start line is crossed
     float lap_time = 0.f;
+    std::string taxi;            // driving the taxi: where the fare goes, or the fares paid
     std::string time_of_day;     // "HH:MM", empty for none
     float last_lap = 0.f;        // 0 = none yet
     float best_lap = 0.f;

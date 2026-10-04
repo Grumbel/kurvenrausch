@@ -89,6 +89,14 @@ constexpr bool web = false;
 #endif
 constexpr float refuel_speed = 0.08f;
 constexpr float offer_speed = 0.01f; // a lot offers its choice below this speed (of top speed)
+// Fares (see update_fares()): how many wait ahead at a time, how far ahead
+// they turn up and are forgotten behind (segments), how near the car must
+// stop, how slowly (of top speed), and how far out at the kerb they stand.
+constexpr size_t hails_waiting = 2;
+constexpr float hail_ahead_min = 120.f, hail_ahead_max = 260.f, hail_behind = 20.f;
+constexpr float hail_reach = 4.f;
+constexpr float fare_stop_speed = 0.02f;
+constexpr float hail_kerb = 1.06f;
 constexpr float attract_idle_seconds = 120.f;  // without input, back to the attract mode
 constexpr float attract_follow_seconds = 20.f; // each car followed this long
 
@@ -259,7 +267,7 @@ bool Game::init(bool fullscreen) {
         const auto wrap = [](int i, int n) { return ((i % n) + n) % n; };
         car_model_ = wrap(c->car, car_models);
         driver_ = wrap(c->driver, drivers);
-        passenger_ = wrap(c->passenger, passengers);
+        passenger_ = c->passenger >= 0 && c->passenger < motel_passengers ? c->passenger : nobody;
         view_mode_ = static_cast<ViewMode>(wrap(c->view, view_modes));
         music_ = c->music >= 0 ? c->music % Music::tracks : -1;
         wide_ = c->wide != 0;
@@ -315,6 +323,10 @@ void Game::reset() {
     hour_ = start_hour;
     advance_clock(0.f);
     headlights_ = hazards_ = blink_on_ = beacon_ = false;
+    hails_.clear();
+    if (fare_zone_ >= 0) passenger_ = nobody;
+    fare_zone_ = -1;
+    fares_paid_ = 0;
     signal_ = 0;
     police_ = INVALID_ENTITY; // gone with the traffic
     chase_ = Chase{};
@@ -1005,6 +1017,7 @@ void Game::fixed_update(const InputState& driver_input, float dt) {
     // Braking overrides the throttle; without either the car coasts down.
     update_fuel(input, dt);
     visit_lot(input);
+    update_fares();
     update_wash(dt);
     const float drive = engine_on_ ? input.throttle * (1.f - input.brake) : 0.f;
     reverse_armed_ = reverse_armed(reverse_armed_, vel.speed, input.throttle, input.brake);
@@ -1112,7 +1125,7 @@ void Game::fixed_update(const InputState& driver_input, float dt) {
 // The player's car takes its model's top speed and acceleration (grip is
 // applied where the road's grip is).
 void Game::save_choices() const {
-    store_.save_choices({car_model_, driver_, passenger_, static_cast<int>(view_mode_), music_, wide_ ? 1 : 0, track_index_, options_});
+    store_.save_choices({car_model_, driver_, passenger_ >= motel_passengers ? nobody : passenger_, static_cast<int>(view_mode_), music_, wide_ ? 1 : 0, track_index_, options_});
 }
 
 // Into another car: it comes clean and with a full tank.
@@ -1162,7 +1175,10 @@ void Game::visit_lot(const InputState& input) {
                 change_car();
                 break;
             case Lot::Motel:
-                passenger_ = (passenger_ + push + passengers) % passengers;
+                // The motel's people and the empty seat; a fare riding gets out.
+                passenger_ = ((passenger_ >= motel_passengers ? nobody : passenger_) + push + motel_passengers) %
+                             motel_passengers;
+                fare_zone_ = -1;
                 break;
             default: {
                 // The drivers, and after the last of them the ambulance.
@@ -1191,6 +1207,73 @@ std::optional<Lot> Game::lot_here() const {
     if (seg.forecourt < forecourt_width || !track_.on_forecourt(car_z, world_.get<Transform>(player_).x))
         return std::nullopt;
     return seg.lot;
+}
+
+void Game::update_fares() {
+    const auto& tr = world_.get<Transform>(player_);
+    const float car_z = tr.z + world_.get<Camera>(camera_).player_z();
+    const float speed_pct = std::abs(world_.get<Velocity>(player_).speed) / world_.get<Player>(player_).max_speed;
+    const bool stopped = speed_pct < fare_stop_speed;
+    const int zone = track_.zone_number_at(car_z);
+
+    // A fare riding pays at their zone, wherever the car stops there.
+    if (fare_zone_ >= 0 && zone == fare_zone_ && stopped) {
+        fare_zone_ = -1;
+        passenger_ = nobody;
+        ++fares_paid_;
+        synth_.trigger_ding();
+        show_message("FARE PAID", 2.f);
+    }
+
+    if (car_model_ != taxi_model) {
+        hails_.clear(); // nobody hails anything else
+        return;
+    }
+    // Forget those passed by, and keep a couple waiting ahead.
+    const float seg = track_.segment_length;
+    hails_.erase(std::remove_if(hails_.begin(), hails_.end(),
+                                [&](const Hail& h) {
+                                    const float gap = signed_gap(car_z, h.z, track_.length());
+                                    return gap < -hail_behind * seg || gap > 2.f * hail_ahead_max * seg;
+                                }),
+                 hails_.end());
+    while (hails_.size() < hails_waiting) {
+        rng_ = rng_ * 1664525u + 1013904223u;
+        const float t = static_cast<float>(rng_ >> 8) / 16777216.f;
+        const float ahead = hail_ahead_min + (hail_ahead_max - hail_ahead_min) * t +
+                            static_cast<float>(hails_.size()) * (hail_ahead_max - hail_ahead_min) / 2.f;
+        int i = track_.index_at(car_z + ahead * seg);
+        // At the kerb on the side traffic keeps to, clear of forecourts, rails
+        // and cliffs.
+        for (int n = 0; n < 60; ++n, ++i) {
+            const Segment& s = track_.segment(i);
+            const bool left = track_.look(i).left_hand;
+            if (s.forecourt <= 0.f && (left ? s.left : s.right) == Edge::None) break;
+        }
+        rng_ = rng_ * 1664525u + 1013904223u;
+        const int fare = static_cast<int>((rng_ >> 8) % static_cast<uint32_t>(fares));
+        const float side = track_.look(i).left_hand ? -1.f : 1.f;
+        hails_.push_back({track_.wrap((static_cast<float>(i) + 0.5f) * seg), side * hail_kerb, fare});
+    }
+
+    // Stopped beside one: they get in, if the seat is free.
+    if (!stopped) return;
+    for (auto it = hails_.begin(); it != hails_.end(); ++it) {
+        const float gap = signed_gap(car_z, it->z, track_.length());
+        if (std::abs(gap) > hail_reach * seg || std::abs(tr.x - it->x) > 1.2f) continue;
+        if (passenger_ != nobody) {
+            show_message("SEAT TAKEN", 1.f);
+            return;
+        }
+        passenger_ = first_fare + it->fare;
+        rng_ = rng_ * 1664525u + 1013904223u;
+        const int zones = static_cast<int>(track_.zones.size());
+        fare_zone_ = (zone + 1 + static_cast<int>((rng_ >> 8) % 3u)) % zones;
+        hails_.erase(it);
+        synth_.trigger_ding();
+        show_message("TO " + track_.zones[static_cast<size_t>(fare_zone_)].region, 2.5f);
+        return;
+    }
 }
 
 // Standing on a car wash's forecourt, the car is washed clean: water and
@@ -1902,6 +1985,16 @@ void Game::render() {
         road_sprites_.push_back(s);
     });
 
+    // People hailing the taxi, waving.
+    for (const Hail& h : hails_) {
+        RoadSprite s;
+        s.z = h.z;
+        s.bitmap = &sprites_.pedestrian(h.fare, static_cast<int>(clock_ / 0.3f) & 1);
+        s.offset = h.x;
+        s.world_width = static_cast<float>(s.bitmap->w) * 6.25f;
+        road_sprites_.push_back(s);
+    }
+
     // The player's car sits centred, its tyres on the bottom screen row. It
     // is drawn at the projection scale of player_z, which maps car_width to
     // the sprite's native size, so the pixel art is shown 1:1.
@@ -2100,6 +2193,10 @@ void Game::render() {
         char clock[8];
         std::snprintf(clock, sizeof clock, "%02d:%02d", minutes / 60 % 24, minutes % 60);
         hud.time_of_day = clock;
+    }
+    if (car_model_ == taxi_model) {
+        hud.taxi = fare_zone_ >= 0 ? "TO " + track_.zones[static_cast<size_t>(fare_zone_)].region
+                                   : "FARES " + std::to_string(fares_paid_);
     }
     hud.last_lap = last_lap_;
     hud.best_lap = best_lap_;

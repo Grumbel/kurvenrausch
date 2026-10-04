@@ -17,6 +17,7 @@ enum class HeadStyle : uint8_t {
     Mohawk, // a shaved head with a crest
     Bald,
     Dog,    // a dog, with floppy ears
+    None,   // nobody: an empty seat
 };
 
 // Someone in the player's car: the driver or the passenger.
@@ -28,9 +29,15 @@ struct Person {
     Color skin;                        // also the arm that waves
 };
 
-// The drivers (the hospital swaps them) and the passengers (the motel).
+// The drivers (the hospital swaps them) and the passengers: the first
+// motel_passengers are the motel's to choose from, the last of them nobody
+// (an empty seat); after them come the fares, people who hail a taxi.
 constexpr int drivers = 5;
-constexpr int passengers = 5;
+constexpr int motel_passengers = 6;
+constexpr int nobody = motel_passengers - 1;
+constexpr int fares = 4;
+constexpr int passengers = motel_passengers + fares;
+constexpr int first_fare = motel_passengers;
 const Person& driver(int index);
 const Person& passenger(int index);
 

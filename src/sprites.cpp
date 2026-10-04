@@ -1542,6 +1542,7 @@ namespace {
 void draw_head(Bitmap& b, float x, float y, float r, const Person& p) {
     const float ry = p.style == HeadStyle::Long ? r * 1.35f : r;
     switch (p.style) {
+        case HeadStyle::None: break; // an empty seat
         case HeadStyle::Bald:
             paint::shaded_ellipse(b, x, y, r, r, p.hair_dark, p.hair, p.hair_light);
             break;
@@ -1574,6 +1575,54 @@ void draw_head(Bitmap& b, float x, float y, float r, const Person& p) {
             break;
     }
 }
+
+} // namespace
+
+Bitmap make_pedestrian(const Person& p, int frame) {
+    Bitmap b(28, 92);
+    const Color clothes = p.accent.r + p.accent.g + p.accent.b > 0 ? p.accent : Color{0x50, 0x60, 0x80};
+    const Color shade = blend(clothes, Color{0, 0, 0}, 0.3f), legs{0x2c, 0x30, 0x3c}, shoes{0x18, 0x14, 0x14};
+    const Color skin = p.skin, skin_dark = blend(p.skin, Color{0, 0, 0}, 0.25f);
+    paint::ellipse(b, 13.f, 90.f, 9.f, 2.f, Color{0x22, 0x22, 0x22}); // shadow
+    paint::rect(b, 8, 56, 5, 32, legs);
+    paint::rect(b, 15, 56, 5, 32, legs);
+    paint::rect(b, 7, 86, 6, 3, shoes);
+    paint::rect(b, 15, 86, 6, 3, shoes);
+    paint::rect(b, 6, 28, 16, 30, clothes); // the body
+    paint::rect(b, 6, 28, 3, 30, shade);
+    paint::rect(b, 11, 28, 6, 3, skin_dark); // the neck
+    paint::rect(b, 3, 30, 4, 22, clothes); // the arm hanging
+    paint::rect(b, 3, 50, 4, 4, skin);
+    // The other arm raised to hail, waving to and fro.
+    const float hx = frame ? 25.f : 22.f;
+    paint::stroke(b, 20.f, 31.f, hx, 12.f, 3.f, 2.5f, clothes);
+    paint::ellipse(b, hx, 9.f, 2.5f, 3.f, skin);
+    // The head from the front: the face, the hair round it.
+    paint::shaded_ellipse(b, 14.f, 20.f, 6.f, 7.f, skin_dark, skin, blend(skin, Color{255, 255, 255}, 0.25f));
+    switch (p.style) {
+        case HeadStyle::Bald: break;
+        case HeadStyle::Cap:
+            paint::rect(b, 8, 12, 12, 4, p.accent);
+            paint::rect(b, 6, 15, 16, 2, blend(p.accent, Color{0, 0, 0}, 0.3f));
+            break;
+        case HeadStyle::Bun:
+            paint::rect(b, 8, 13, 12, 3, p.hair);
+            paint::ellipse(b, 14.f, 11.f, 3.f, 2.5f, p.hair);
+            break;
+        case HeadStyle::Long:
+            paint::rect(b, 8, 13, 12, 3, p.hair);
+            paint::rect(b, 7, 15, 2, 12, p.hair);
+            paint::rect(b, 19, 15, 2, 12, p.hair);
+            break;
+        default: paint::rect(b, 8, 13, 12, 3, p.hair); break;
+    }
+    paint::rect(b, 11, 20, 1, 1, Color{0x20, 0x18, 0x14}); // eyes
+    paint::rect(b, 16, 20, 1, 1, Color{0x20, 0x18, 0x14});
+    paint::outline(b, Outline);
+    return b;
+}
+
+namespace {
 
 // A bandage wound round a head of radius r at (x, y), a spot of red on it.
 void bandage(Bitmap& b, float x, float y, float r) {
@@ -1626,7 +1675,8 @@ Bitmap make_occupants(const Person& driver, const Person& passenger, int turn, i
         // The glint on the glass stays in front of them.
         paint::stroke(b, 30.f + u, h + 12.f, 36.f + u, h + 5.f, 1.f, 1.f, Color{0x70, 0x88, 0xa8});
     }
-    if (wave == 0) return b;
+    // Nobody in the seat waves no arm.
+    if (wave == 0 || (wave > 0 && passenger.style == HeadStyle::None)) return b;
 
     // A raised arm and open hand (or paw), waving: outlined on its own.
     const Person& waver = wave < 0 ? driver : passenger;
@@ -2365,6 +2415,11 @@ SpriteSheet::SpriteSheet() {
     }
 
     for (int d = 0; d < drivers; ++d) wheels_[static_cast<size_t>(d)] = make_wheel(driver(d));
+    for (int f = 0; f < fares; ++f) {
+        for (int frame = 0; frame < 2; ++frame) {
+            pedestrians_[static_cast<size_t>(f)][static_cast<size_t>(frame)] = make_pedestrian(passenger(first_fare + f), frame);
+        }
+    }
 
     // Colour schemes per vehicle kind: dark, body, light (stripes on the rival).
     const std::vector<CarStyle> styles[] = {

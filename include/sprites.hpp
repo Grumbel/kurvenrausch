@@ -49,6 +49,9 @@ Bitmap make_van_front(const CarStyle& style, int signal, int tread = 0);
 // column cx with its top at row y: `lit` -1 flashes the red, +1 the blue,
 // 0 neither.
 void paint_lightbar(Bitmap& b, int lit, int cx, int y);
+// Someone standing at the kerb, facing the road, hailing a taxi with a
+// raised arm (two frames), 28x92.
+Bitmap make_pedestrian(const Person& person, int frame);
 // An ambulance: the panel van in white, a red stripe and crosses, its
 // lightbar `lights` (as paint_lightbar()) on the roof.
 Bitmap make_ambulance(const CarStyle& style, int signal, int lights, bool brake, int tread = 0); // 104x64
@@ -142,6 +145,10 @@ public:
     const Bitmap& wheel(int driver_index) const {
         return wheels_[static_cast<size_t>(((driver_index % drivers) + drivers) % drivers)];
     }
+    // A fare (0 .. fares - 1) hailing a taxi at the kerb, frame 0 or 1.
+    const Bitmap& pedestrian(int fare, int frame) const {
+        return pedestrians_[static_cast<size_t>(((fare % fares) + fares) % fares)][static_cast<size_t>(frame & 1)];
+    }
     // The people to draw over it (see make_occupants()), made once and kept.
     const Bitmap& occupants(int driver_index, int passenger_index, int steer, int wave, int frame, int model,
                             bool bandaged = false) const;
@@ -186,6 +193,7 @@ private:
     std::array<std::array<std::array<std::array<std::array<Bitmap, tyre_frames>, 4>, 2>, 3>, car_models> player_;
     std::array<bool, car_models> player_convertible_{};
     std::array<Bitmap, car_models> dashboards_;
+    std::array<std::array<Bitmap, 2>, fares> pedestrians_;
     std::array<Bitmap, drivers> wheels_;
     mutable std::map<uint32_t, Bitmap> occupants_;
     struct VehicleSprites {
