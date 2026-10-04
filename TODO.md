@@ -108,6 +108,10 @@ the road/framebuffer rewrite, `Color::to_u32()` became `Color::argb()`.
   `held_race_`: where the car was and the time of day, the progress saved);
   a button goes back to it, the car standing. Only at start-up does the
   attract mode start the race afresh. Not tested by hand yet
+- Lots keep to the side traffic keeps to: `Segment::court_side` (-1 where
+  the zone is `left_hand`), set by `forecourt_lot()`, which mirrors the
+  buildings and signs; `on_forecourt`, the paving, the decor and the
+  autopilot follow it
 - Trains: `Segment::rails`, `TrackBuilder::level_crossing()` (a straight,
   `Scenery::CrossingSign` either side), `Track::crossings()`. `Game::
   update_train()`: decided `train_chance` once per crossing when the car

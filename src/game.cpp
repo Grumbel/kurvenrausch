@@ -961,7 +961,8 @@ InputState Game::autopilot() const {
         for (int start : lots_[static_cast<size_t>(visit)]) {
             const int ahead = ((start - here) % n + n) % n;
             if (!on && ahead > 120) continue;
-            target_x = on || seg.forecourt > 1.3f ? 1.45f : 0.6f;
+            const float side = static_cast<float>(track_.segment(start).court_side);
+            target_x = side * (on || seg.forecourt > 1.3f ? 1.45f : 0.6f);
             // At the pumps it creeps; at any other lot it stops, for the offer.
             speed_limit = on ? (visit != Lot::Gas && lot_here() == visit ? 0.f : refuel_speed * 0.6f)
                              : 0.1f + 0.9f * static_cast<float>(ahead) / 120.f;

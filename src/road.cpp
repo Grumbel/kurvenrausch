@@ -207,15 +207,20 @@ void RoadRenderer::draw_segment(Framebuffer& fb, const Track& track, const Slice
     const bool other_road = !std::isnan(oa) && !std::isnan(ob);
     const float oca = other_road ? a.x + oa * a.w : 0.f, ocb = other_road ? b.x + ob * b.w : 0.f;
 
-    // A gas station's forecourt on the right: paved, with a kerb at its edge.
+    // A lot's forecourt on its side of the road: paved, with a kerb at its edge.
     const float court_a = track.forecourt_at(near), court_b = track.forecourt_at(near + direction_);
     if (court_a > 1.f || court_b > 1.f) {
         const float oa = std::max(court_a, 1.f), ob = std::max(court_b, 1.f);
+        const float side = static_cast<float>(seg.court_side);
         const Color paving = fogged(blend(theme.road[band], Color{0xb4, 0xb0, 0xa8}, 0.3f));
-        fb.fill_trapezoid(b.y, b.x + b.w, b.x + ob * b.w, a.y, a.x + a.w, a.x + oa * a.w, paving);
-        const float ka = a.w / 40.f, kb = b.w / 40.f;
-        fb.fill_trapezoid(b.y, b.x + ob * b.w, b.x + ob * b.w + kb, a.y, a.x + oa * a.w, a.x + oa * a.w + ka,
-                          fogged(theme.rumble[0]));
+        const auto band_at = [&](float in_a, float out_a, float in_b, float out_b, Color c) {
+            // Between `in` and `out` road half-widths out on the court's side.
+            const float a0 = a.x + side * in_a * a.w, a1 = a.x + side * out_a * a.w;
+            const float b0 = b.x + side * in_b * b.w, b1 = b.x + side * out_b * b.w;
+            fb.fill_trapezoid(b.y, std::min(b0, b1), std::max(b0, b1), a.y, std::min(a0, a1), std::max(a0, a1), c);
+        };
+        band_at(1.f, oa, 1.f, ob, paving);
+        band_at(oa, oa + 1.f / 40.f, ob, ob + 1.f / 40.f, fogged(theme.rumble[0]));
     }
 
     // Rumble strips (the other road's too), then the other road's surface.

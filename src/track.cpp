@@ -152,8 +152,9 @@ float Track::forecourt_at(int boundary) const {
 }
 
 bool Track::on_forecourt(float z, float x) const {
-    const float edge = segment_at(z).forecourt;
-    return edge > 1.f && x > 1.f && x < edge;
+    const Segment& s = segment_at(z);
+    const float out = x * static_cast<float>(s.court_side);
+    return s.forecourt > 1.f && out > 1.f && out < s.forecourt;
 }
 
 namespace {
@@ -572,12 +573,18 @@ public:
         const int from = size();
         road(8, 40, 8, Bend::None, Hill::None);
         constexpr int start = 6, taper = 4, length = 44;
+        // On the side traffic keeps to.
+        const int8_t side = !t_.zones.empty() && t_.zones.back().theme.left_hand ? -1 : 1;
         for (int i = 0; i < length; ++i) {
             const float in = std::min(static_cast<float>(i + 1), static_cast<float>(length - i)) / taper;
             Segment& seg = t_.segments[static_cast<size_t>(from + start + i)];
             seg.forecourt = 1.f + (forecourt_width - 1.f) * std::min(1.f, in);
+            seg.court_side = side;
             seg.lot = kind;
         }
+        const auto scenery = [&](int index, Scenery what, float offset) {
+            this->scenery(index, what, offset * static_cast<float>(side));
+        };
         // The sign ahead, the building beyond the forecourt.
         switch (kind) {
             case Lot::Gas:
@@ -1176,7 +1183,8 @@ void decorate(Track& track, TrackBuilder& b, int from, int to, uint32_t seed) {
         const bool forecourt = track.segment(i - 8).forecourt > 0.f || seg.forecourt > 0.f ||
                                track.segment(i + 8).forecourt > 0.f;
         const auto free_side = [&](int side) {
-            return (side < 0 ? seg.left : seg.right) == Edge::None && !(side > 0 && forecourt) &&
+            const int court = track.look(i).left_hand ? -1 : 1;
+            return (side < 0 ? seg.left : seg.right) == Edge::None && !(side == court && forecourt) &&
                    !(side == seg.facing_branch && seg.branch_bend);
         };
         const auto put = [&](Scenery kind, int side, float magnitude) {

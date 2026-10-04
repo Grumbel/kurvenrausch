@@ -158,6 +158,7 @@ struct Segment {
     // (up to forecourt_width), or 0 for none. It widens and narrows at the
     // ends; refuelling works where it is full width.
     float forecourt = 0.f;
+    int8_t court_side = 1;  // the forecourt's side: +1 right, -1 left (where traffic keeps left)
     Lot lot = Lot::Gas;    // whose forecourt it is
     // A patch on the road surface (a puddle or an oil slick): its kind, centre
     // and half width in road half-widths; a half width of 0 means none. It

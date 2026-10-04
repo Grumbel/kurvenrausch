@@ -1359,15 +1359,18 @@ void test_gas_stations() {
         while (t.segment(s + len).forecourt >= forecourt_width) {
             const Segment& seg = t.segment(s + len);
             CHECK(seg.curve == 0.f && seg.y1 == seg.y2);
-            CHECK(seg.right == Edge::None);
+            CHECK((seg.court_side > 0 ? seg.right : seg.left) == Edge::None);
+            CHECK(seg.court_side == (t.look(s).left_hand ? -1 : 1)); // on the side traffic keeps to
             ++len;
         }
         CHECK(len > 30);
         CHECK(t.forecourt_at(s) <= t.segment(s).forecourt); // the boundary takes the narrower side
         // On the forecourt counts as such; beyond it, or on the road, not.
         const float z = (static_cast<float>(s) + 0.5f) * t.segment_length;
-        CHECK(t.on_forecourt(z, 1.5f));
-        CHECK(!t.on_forecourt(z, 0.5f) && !t.on_forecourt(z, forecourt_width + 0.1f) && !t.on_forecourt(z, -1.5f));
+        const float side = static_cast<float>(t.segment(s).court_side);
+        CHECK(t.on_forecourt(z, side * 1.5f));
+        CHECK(!t.on_forecourt(z, side * 0.5f) && !t.on_forecourt(z, side * (forecourt_width + 0.1f)) &&
+              !t.on_forecourt(z, -side * 1.5f));
 
         // Nothing solid in the way of a car (0.15 half-widths each side) pulling in
         // at 1.45 along the forecourt and its tapers, except the pumps and the
@@ -1383,11 +1386,11 @@ void test_gas_stations() {
         CHECK(signs == 1);
         for (int i = s - 5; i < s + len + 5; ++i) {
             for (const RoadsideObject& o : t.segment(i).scenery) {
-                if (o.offset <= 0.f) continue;
+                if (o.offset * side <= 0.f) continue;
                 pumps += o.kind == Scenery::FuelPump;
                 shops += o.kind == Scenery::GasStation;
                 CHECK(o.kind == Scenery::FuelPump || o.kind == Scenery::GasStation);
-                CHECK(!scenery_info(o.kind).centered && o.offset >= 1.6f);
+                CHECK(!scenery_info(o.kind).centered && o.offset * side >= 1.6f);
             }
         }
         CHECK(pumps == 2 && shops == 1);
