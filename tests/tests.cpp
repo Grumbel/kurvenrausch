@@ -32,6 +32,7 @@
 #include <ctime>
 #include <filesystem>
 #include <optional>
+#include <set>
 #include <string>
 #include <vector>
 #include <string>
@@ -757,6 +758,11 @@ void test_state() {
     CHECK(!parse_lap("2026\tabc\tA\tB\tC"));
     CHECK(!parse_lap("2026\t-3\tA\tB\tC"));
     CHECK(!parse_lap("2026\t80\tA\tB"));
+    // Each lap knows its track; older lines are on the small world.
+    CHECK(parsed->track == "SMALL WORLD");
+    CHECK(parse_lap("2026\t80\tA\tB\tC")->track == "SMALL WORLD");
+    CHECK(parse_lap("2026\t80\tA\tB\tC\tGRAND TOUR")->track == "GRAND TOUR");
+    CHECK(parse_choices(format_choices(Choices{0, 0, 0, 0, 0, 0, 1})).track == 1);
     CHECK(utc_timestamp().size() == 20 && utc_timestamp().back() == 'Z');
 
     // The store, in a fresh directory two levels down.
@@ -775,8 +781,9 @@ void test_state() {
     store.add_lap({"2026-10-02T12:05:00Z", 79.5f, "BIG RIG", "PUNK", "GRANNY"});
     const std::vector<LapRecord> laps = store.load_laps();
     CHECK(laps.size() == 2 && laps[1].car == "BIG RIG");
-    CHECK(std::abs(best_lap(laps) - 79.5f) < 0.01f);
-    CHECK(best_lap({}) == 0.f);
+    CHECK(std::abs(best_lap(laps, "SMALL WORLD") - 79.5f) < 0.01f);
+    CHECK(best_lap(laps, "GRAND TOUR") == 0.f);
+    CHECK(best_lap({}, "SMALL WORLD") == 0.f);
     // No directory, no files.
     const Store none;
     none.save_choices(c);
@@ -994,8 +1001,14 @@ void test_touch() {
     CHECK(m.choose(left.item, left.side) == MenuAction::None && m.zone == 2);
     CHECK(menu_tap(m, 300.f, first + 32.f, 320, 240).side == 1);
     CHECK(m.choose(PauseMenu::StartZone, 0) == MenuAction::StartZone);
-    CHECK(menu_tap(m, 160.f, first + 64.f, 320, 240).item == PauseMenu::Options);
-    CHECK(menu_tap(m, 160.f, first + 80.f, 320, 240).item == -1); // no Quit line in a web page
+    CHECK(menu_tap(m, 160.f, first + 80.f, 320, 240).item == PauseMenu::Options);
+    CHECK(menu_tap(m, 160.f, first + 96.f, 320, 240).item == -1); // no Quit line in a web page
+    // The track line picks with its sides, and loads with its middle.
+    m.tracks = 2;
+    const MenuTap track_right = menu_tap(m, 300.f, first + 48.f, 320, 240);
+    CHECK(track_right.item == PauseMenu::Track && track_right.side == 1);
+    CHECK(m.choose(track_right.item, track_right.side) == MenuAction::None && m.track == 1);
+    CHECK(m.choose(PauseMenu::Track) == MenuAction::ChangeTrack);
     // The screen line switches the shape and keeps the menu open.
     CHECK(m.choose(PauseMenu::Screen) == MenuAction::ToggleWide);
     MenuInput side;
@@ -1133,7 +1146,7 @@ void test_pause_menu() {
     CHECK(m.zone == 0 && m.selected == PauseMenu::Resume);
     // Without Quit (in a web page) the selection wraps round the others.
     m.open(0, 16, false);
-    CHECK(m.item_count() == 5);
+    CHECK(m.item_count() == 6);
     m.update(up);
     CHECK(m.selected == PauseMenu::Options && m.update(ok) == MenuAction::Options);
     m.update(down);
@@ -1716,12 +1729,12 @@ void test_start_line() {
 }
 
 // Invariants of the real route that the renderer and the physics rely on.
-void test_demo_track() {
+// What every track must be: zones longer than their blends, a closed lap,
+// scenery off the road and off the rails, cliffs, rails and weather.
+void check_track(const racer::Track& t) {
     using namespace racer;
-    const Track t = build_demo_track();
     const int n = static_cast<int>(t.segments.size());
 
-    CHECK(t.zones.size() == 16);
     CHECK(t.zones.front().first_segment == 0);
     CHECK((int)t.zone_index.size() == n && (int)t.looks.size() == n);
     for (size_t k = 1; k < t.zones.size(); ++k) {
@@ -1768,6 +1781,43 @@ void test_demo_track() {
     // The start line and its gantry are on the first straight.
     CHECK(t.segments[8].checker && t.segments[9].checker);
     CHECK(t.zone_number_at(t.start_z) == 0);
+}
+
+void test_demo_track() {
+    using namespace racer;
+    const Track t = build_demo_track();
+    check_track(t);
+    CHECK(t.zones.size() == 16);
+    CHECK(std::string(track_name(0)) == "SMALL WORLD");
+
+    // The grand tour: far longer, a city at each end of every country, with
+    // its buildings and the country's own trees between them.
+    const Track g = build_track(1);
+    check_track(g);
+    CHECK(std::string(track_name(1)) == "GRAND TOUR");
+    CHECK(g.segments.size() > 2 * t.segments.size());
+    CHECK(g.zones.size() > 2 * t.zones.size());
+    std::set<std::string> countries;
+    int cities = 0;
+    for (const Zone& z : g.zones) {
+        countries.insert(z.country);
+        if (z.decor != Decor::Town) continue;
+        ++cities;
+        bool houses = false, trees = false;
+        const int end = &z == &g.zones.back() ? static_cast<int>(g.segments.size())
+                                              : (&z + 1)->first_segment;
+        for (int i = z.first_segment; i < end; ++i) {
+            for (const RoadsideObject& o : g.segment(i).scenery) {
+                houses = houses || o.kind == Scenery::Townhouse || o.kind == Scenery::Apartment ||
+                         o.kind == Scenery::Tower || o.kind == Scenery::FlatHouse;
+                trees = trees || o.kind == z.town_tree;
+            }
+        }
+        CHECK(houses && trees);
+    }
+    CHECK(cities >= 25);
+    for (const Zone& z : t.zones) CHECK(countries.count(z.country) == 1); // every country of the small world
+    for (int k = 0; k < lot_kinds; ++k) CHECK(!g.lots(static_cast<Lot>(k)).empty());
 }
 
 // ---- Audio -----------------------------------------------------------------

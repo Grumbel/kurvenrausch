@@ -61,6 +61,7 @@ struct ScreenshotOptions {
     bool attract = false;    // the headless run shows the attract mode
     float dirt = -1.f;       // if >= 0, start this dirty (mud and oil, 0 .. 1)
     int width = 320;         // the framebuffer's width (320 is 4:3, up to 640)
+    int track = 0;           // the track to drive, see track_name()
 };
 
 class Game {
@@ -100,6 +101,9 @@ public:
 
     // Lists the zones of the track with their start positions on stdout.
     void print_zones() const;
+
+    // Drives track `index` (see track_name()) from its start line.
+    void load_track(int index);
 
     // Camera position that shows the start of zone `index` once its
     // transition from the previous zone is over.
@@ -148,6 +152,9 @@ private:
     void apply_options(const Options& before);
     // The clock: the day passing, or held at the chosen time.
     void advance_clock(float dt);
+    // Where START IN would start for zone `index`: the country, and the
+    // region or city where the country has several.
+    std::string zone_label(int index) const;
     void change_car();
     // Remembers the car, driver and passenger for the next run.
     void save_choices() const;
@@ -197,6 +204,7 @@ private:
     Options options_;
     OptionsMenu options_menu_;
     bool options_open_ = false; // the pause menu shows the OPTIONS page
+    int track_index_ = 0;       // the track driven, see track_name()
     SynthParams sound_;  // what the synth was last told
     bool horn_ = false;
     Nitro nitro_;

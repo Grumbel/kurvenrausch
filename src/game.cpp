@@ -185,7 +185,7 @@ bool overlap(float c1, float w1, float c2, float w2) {
 } // namespace
 
 Game::Game()
-    : fb_(base_width, height), track_(build_demo_track()), mirror_fb_(mirror_width, mirror_height),
+    : fb_(base_width, height), track_(build_track(0)), mirror_fb_(mirror_width, mirror_height),
       weather_(base_width, height) {
     for (int k = 0; k < lot_kinds; ++k) lots_[static_cast<size_t>(k)] = track_.lots(static_cast<Lot>(k));
     map_ = track_map(track_);
@@ -244,6 +244,7 @@ bool Game::init(bool fullscreen) {
 
     // Last run's choices and the lap record.
     store_ = Store(user_state_dir());
+    int last_track = 0; // the track driven last
     if (const std::optional<Choices> c = store_.load_choices()) {
         const auto wrap = [](int i, int n) { return ((i % n) + n) % n; };
         car_model_ = wrap(c->car, car_models);
@@ -252,12 +253,14 @@ bool Game::init(bool fullscreen) {
         view_mode_ = static_cast<ViewMode>(wrap(c->view, view_modes));
         music_ = c->music >= 0 ? c->music % Music::tracks : -1;
         wide_ = c->wide != 0;
+        last_track = c->track;
         const Options before = options_;
         options_ = c->options;
         apply_options(before);
         apply_car();
     }
-    record_lap_ = best_lap(store_.load_laps());
+    if (last_track != 0) load_track(last_track);
+    record_lap_ = best_lap(store_.load_laps(), track_name(track_index_));
     best_lap_ = record_lap_;
 
     synth_.set_music(music_);
@@ -469,7 +472,7 @@ bool Game::frame() {
     set_width(screen_width());
     render();
     if (paused_ && options_open_) draw_options_menu(fb_, options_menu_, options_);
-    else if (paused_) draw_pause_menu(fb_, menu_, track_.zones[static_cast<size_t>(menu_.zone)].country);
+    else if (paused_) draw_pause_menu(fb_, menu_, zone_label(menu_.zone), track_name(menu_.track));
     present();
     return true;
 }
@@ -647,6 +650,8 @@ void Game::pause() {
     paused_ = true;
     menu_.open(zone_, static_cast<int>(track_.zones.size()), !web);
     menu_.wide = wide_;
+    menu_.track = track_index_;
+    menu_.tracks = track_count;
     SynthParams quiet = sound_;
     quiet.volume = 0.f;
     synth_.set_params(quiet);
@@ -687,6 +692,14 @@ bool Game::update_pause(const InputState& input) {
         case MenuAction::None: return true;
         case MenuAction::Quit: return false;
         case MenuAction::Restart: reset(); break;
+        case MenuAction::ChangeTrack:
+            if (menu_.track != track_index_) {
+                load_track(menu_.track);
+                save_choices();
+            } else {
+                reset();
+            }
+            break;
         case MenuAction::StartZone:
             reset();
             start_at(zone_start_position(menu_.zone));
@@ -718,6 +731,22 @@ float Game::zone_start_position(int index) const {
     // Past the fade into the zone, and the camera sits player_z behind the car.
     const float cam = world_.get<Camera>(camera_).player_z();
     return track_.wrap(static_cast<float>(zone.first_segment + 80) * track_.segment_length - cam);
+}
+
+void Game::load_track(int index) {
+    track_index_ = ((index % track_count) + track_count) % track_count;
+    track_ = build_track(track_index_);
+    for (int k = 0; k < lot_kinds; ++k) lots_[static_cast<size_t>(k)] = track_.lots(static_cast<Lot>(k));
+    map_ = track_map(track_);
+    record_lap_ = best_lap(store_.load_laps(), track_name(track_index_));
+    reset();
+}
+
+std::string Game::zone_label(int index) const {
+    const Zone& zone = track_.zones.at(static_cast<size_t>(index));
+    const auto same = std::count_if(track_.zones.begin(), track_.zones.end(),
+                                    [&](const Zone& z) { return z.country == zone.country; });
+    return same > 1 && track_index_ != 0 ? zone.country + " " + zone.region : zone.country;
 }
 
 void Game::print_zones() const {
@@ -797,7 +826,9 @@ bool Game::screenshot(const ScreenshotOptions& opts) {
     if (opts.pause) {
         menu_.open(zone_, static_cast<int>(track_.zones.size()));
         menu_.wide = wide_;
-        draw_pause_menu(fb_, menu_, track_.zones[static_cast<size_t>(menu_.zone)].country);
+        menu_.track = track_index_;
+        menu_.tracks = track_count;
+        draw_pause_menu(fb_, menu_, zone_label(menu_.zone), track_name(menu_.track));
     }
     return save_bmp(opts.path, fb_.pixels(), width_, height);
 }
@@ -1056,7 +1087,7 @@ void Game::fixed_update(const InputState& driver_input, float dt) {
 // The player's car takes its model's top speed and acceleration (grip is
 // applied where the road's grip is).
 void Game::save_choices() const {
-    store_.save_choices({car_model_, driver_, passenger_, static_cast<int>(view_mode_), music_, wide_ ? 1 : 0, options_});
+    store_.save_choices({car_model_, driver_, passenger_, static_cast<int>(view_mode_), music_, wide_ ? 1 : 0, track_index_, options_});
 }
 
 // Into another car: it comes clean and with a full tank.
@@ -1711,7 +1742,7 @@ void Game::update_laps(float prev_z, float z, float dt) {
         if (record || best_lap_ == 0.f) best_lap_ = record_lap_ = lap_time_;
         show_message(record ? "NEW RECORD" : "LAP " + std::to_string(lap_ + 1), 2.5f);
         store_.add_lap({utc_timestamp(), lap_time_, car_model(car_model_).name, driver(driver_).name,
-                        passenger(passenger_).name});
+                        passenger(passenger_).name, track_name(track_index_)});
     } else {
         show_message("GO!", 1.5f);
     }

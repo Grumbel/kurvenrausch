@@ -300,6 +300,171 @@ Bitmap make_victorian(Color body, Color accent) {
     return b;
 }
 
+// Window glass lit from inside: a light at night (see daylight.cpp).
+constexpr Color WindowLit{0xff, 0xd8, 0x88};
+
+// A window with its frame, lit or dark, at (x, y), w x h.
+void town_window(Bitmap& b, int x, int y, int w, int h, Color frame, bool lit) {
+    const Color glass{0x34, 0x40, 0x54}, glass_hi{0x7c, 0x90, 0xac};
+    paint::rect(b, x - 1, y - 1, w + 2, h + 2, frame);
+    paint::rect(b, x, y, w, h, lit ? WindowLit : glass);
+    if (!lit) paint::rect(b, x + 1, y + 1, 2, h / 2, glass_hi);
+}
+
+// A European town house, three floors under a steep tiled roof with a
+// dormer; shutters beside the windows, the door in the middle. `seed`
+// lights a few windows.
+Bitmap make_townhouse(Color wall, Color roof, Color shutter, uint32_t seed) {
+    Bitmap b(110, 150);
+    const Color trim{0xf0, 0xec, 0xe0}, roof_dark = blend(roof, Color{0x20, 0x10, 0x10}, 0.35f);
+    // The roof: rows of tiles, darker every other row; a dormer and a chimney.
+    for (int y = 6; y < 40; ++y) {
+        const int inset = (40 - y) * 18 / 34;
+        paint::rect(b, 2 + inset, y, 106 - 2 * inset, 1, (y / 3) % 2 ? roof : roof_dark);
+    }
+    paint::rect(b, 80, 0, 10, 16, Color{0x8c, 0x5c, 0x48});
+    paint::rect(b, 79, 0, 12, 3, Color{0x6c, 0x44, 0x38});
+    paint::rect(b, 44, 16, 22, 22, trim);
+    paint::rect(b, 47, 20, 16, 16, Color{0x34, 0x40, 0x54});
+    paint::rect(b, 42, 13, 26, 4, roof_dark);
+    // The facade.
+    paint::rect(b, 4, 40, 102, 110, wall);
+    paint::rect(b, 2, 38, 106, 3, trim);
+    paint::rect(b, 4, 82, 102, 2, trim);
+    paint::rect(b, 4, 112, 102, 2, trim);
+    uint32_t r = seed;
+    for (int floor = 0; floor < 2; ++floor) {
+        const int y = 52 + floor * 32;
+        for (int x : {14, 47, 80}) {
+            r = r * 1664525u + 1013904223u;
+            paint::rect(b, x - 7, y - 1, 5, 24, shutter);
+            paint::rect(b, x + 18, y - 1, 5, 24, shutter);
+            town_window(b, x, y, 16, 22, trim, (r >> 28) < 5);
+            paint::rect(b, x - 2, y + 22, 20, 2, trim);
+        }
+    }
+    // Ground floor: a window either side of the door.
+    for (int x : {12, 82}) {
+        r = r * 1664525u + 1013904223u;
+        town_window(b, x, 120, 18, 22, trim, (r >> 28) < 5);
+    }
+    paint::rect(b, 44, 118, 22, 32, trim);
+    paint::rect(b, 47, 121, 16, 29, Color{0x5c, 0x34, 0x24});
+    paint::rect(b, 47, 121, 16, 6, Color{0x34, 0x40, 0x54});
+    paint::rect(b, 59, 136, 2, 2, Color{0xe0, 0xc0, 0x60});
+    paint::outline(b, Outline);
+    return b;
+}
+
+// A shop on the ground floor, its striped awning over the window and its
+// name above; two floors of flats over it under a flat roof with a cornice.
+Bitmap make_shop(Color wall, Color awning, std::string_view name) {
+    Bitmap b(120, 140);
+    const Color trim{0xec, 0xe8, 0xdc}, dark = blend(wall, Color{0x20, 0x20, 0x28}, 0.3f);
+    paint::rect(b, 2, 0, 116, 6, trim);
+    paint::rect(b, 4, 6, 112, 134, wall);
+    for (int x = 6; x < 114; x += 5) paint::rect(b, x, 6, 3, 2, trim);
+    for (int floor = 0; floor < 2; ++floor) {
+        const int y = 16 + floor * 30;
+        for (int x : {12, 40, 68, 96}) {
+            paint::rect(b, x - 2, y + 22, 16, 3, dark); // a little balcony ledge
+            town_window(b, x, y, 12, 20, trim, ((x + floor * 7) % 3) == 0);
+        }
+    }
+    // The shop: sign board, awning in stripes, the window and the door.
+    paint::rect(b, 6, 76, 108, 12, Color{0x20, 0x24, 0x30});
+    paint::text(b, 60 - static_cast<int>(name.size()) * 3, 79, name, Color{0xf8, 0xe0, 0x80});
+    for (int x = 4; x < 116; ++x) {
+        const Color c = (x / 8) % 2 ? awning : Color{0xf4, 0xf0, 0xe8};
+        paint::rect(b, x, 88, 1, 10, c);
+        if (x % 8 < 6) paint::rect(b, x, 98, 1, 2, c); // the scalloped edge
+    }
+    paint::rect(b, 8, 102, 72, 34, trim);
+    paint::rect(b, 10, 104, 68, 32, WindowLit);
+    for (int i = 0; i < 4; ++i) paint::rect(b, 14 + i * 16, 122, 10, 14, Color{0xc0, 0x60, 0x40}); // wares
+    paint::rect(b, 86, 102, 26, 38, trim);
+    paint::rect(b, 89, 105, 20, 35, Color{0x34, 0x40, 0x54});
+    paint::outline(b, Outline);
+    return b;
+}
+
+// A tall block of flats: rows of windows, balconies with rails, a flat roof
+// with its water tank.
+Bitmap make_apartment(Color wall, Color balcony) {
+    Bitmap b(130, 220);
+    const Color trim{0xe4, 0xe4, 0xe0}, rail{0x50, 0x54, 0x5c};
+    paint::rect(b, 92, 0, 22, 14, Color{0x7c, 0x80, 0x88}); // tank on the roof
+    paint::rect(b, 96, 14, 3, 6, rail);
+    paint::rect(b, 107, 14, 3, 6, rail);
+    paint::rect(b, 2, 20, 126, 5, trim);
+    paint::rect(b, 4, 25, 122, 195, wall);
+    uint32_t r = 0x9e3779b9u ^ wall.argb();
+    for (int floor = 0; floor < 7; ++floor) {
+        const int y = 32 + floor * 26;
+        for (int x : {12, 44, 76, 104}) {
+            r = r * 1664525u + 1013904223u;
+            town_window(b, x, y, 16, 16, trim, (r >> 28) < 4);
+        }
+        // Balconies under the middle windows.
+        paint::rect(b, 40, y + 17, 56, 3, balcony);
+        for (int x = 41; x < 96; x += 4) paint::rect(b, x, y + 12, 1, 5, rail);
+        paint::rect(b, 40, y + 11, 56, 1, rail);
+    }
+    paint::rect(b, 50, 196, 30, 24, trim); // the entrance
+    paint::rect(b, 53, 199, 24, 21, Color{0x34, 0x40, 0x54});
+    paint::outline(b, Outline);
+    return b;
+}
+
+// A glass office tower: bands of blue glass between concrete floors, lit
+// windows here and there, a crown on the roof.
+Bitmap make_tower(Color glass, Color frame) {
+    Bitmap b(120, 260);
+    const Color glass_hi = blend(glass, Color{0xff, 0xff, 0xff}, 0.35f), dark = blend(frame, Color{0, 0, 0}, 0.3f);
+    paint::rect(b, 20, 0, 80, 12, dark); // the crown
+    paint::rect(b, 56, 0, 4, 4, Color{0xff, 0x30, 0x20});
+    paint::rect(b, 4, 12, 112, 248, frame);
+    uint32_t r = glass.argb();
+    for (int y = 16; y < 236; y += 14) {
+        for (int x = 8; x < 112; x += 13) {
+            r = r * 1664525u + 1013904223u;
+            const bool lit = (r >> 28) < 3;
+            paint::rect(b, x, y, 11, 11, lit ? WindowLit : glass);
+            if (!lit && (x / 13 + y / 14) % 3 == 0) paint::rect(b, x + 1, y + 1, 3, 9, glass_hi);
+        }
+    }
+    paint::rect(b, 36, 238, 48, 22, Color{0x30, 0x38, 0x48}); // the lobby
+    paint::rect(b, 40, 240, 40, 20, WindowLit);
+    paint::outline(b, Outline);
+    return b;
+}
+
+// A flat-roofed house of a warm climate: thick walls in sand or ochre, small
+// deep windows, a parapet with a water tank, a shaded doorway.
+Bitmap make_flat_house(Color wall, Color door) {
+    Bitmap b(110, 120);
+    const Color shade = blend(wall, Color{0x40, 0x20, 0x10}, 0.3f), light = blend(wall, Color{0xff, 0xff, 0xf0}, 0.3f);
+    paint::rect(b, 70, 0, 18, 12, Color{0x60, 0x64, 0x6c}); // a water tank
+    paint::rect(b, 2, 12, 106, 6, light); // parapet
+    paint::rect(b, 4, 18, 102, 102, wall);
+    paint::rect(b, 4, 62, 102, 3, shade);
+    uint32_t r = wall.argb();
+    for (int floor = 0; floor < 2; ++floor) {
+        const int y = 28 + floor * 44;
+        for (int x : {14, 46, 80}) {
+            r = r * 1664525u + 1013904223u;
+            if (floor == 1 && x == 46) continue; // the door's place
+            paint::rect(b, x - 2, y - 2, 18, 22, shade);
+            paint::rect(b, x, y, 14, 18, (r >> 28) < 5 ? WindowLit : Color{0x2c, 0x24, 0x20});
+        }
+    }
+    paint::rect(b, 42, 74, 26, 46, shade);
+    paint::rect(b, 45, 78, 20, 42, door);
+    paint::rect(b, 38, 70, 34, 5, light); // the lintel's shade
+    paint::outline(b, Outline);
+    return b;
+}
+
 // A motorway-green sign before a fork with a big arrow: dir -1 points to
 // the left, +1 to the right.
 Bitmap make_fork_sign(int dir) {
@@ -2075,6 +2240,14 @@ SpriteSheet::SpriteSheet() {
     scenery_[static_cast<size_t>(Scenery::VictorianB)] = make_victorian(Color{0xe4, 0xc4, 0x6c}, Color{0x3c, 0x6c, 0x5c});
     scenery_[static_cast<size_t>(Scenery::VictorianC)] = make_victorian(Color{0xd4, 0x8c, 0xa8}, Color{0x5c, 0x3c, 0x7c});
     scenery_[static_cast<size_t>(Scenery::StreetLamp)] = make_street_lamp();
+    scenery_[static_cast<size_t>(Scenery::Townhouse)] =
+        make_townhouse(Color{0xe8, 0xd8, 0xb8}, Color{0xb0, 0x50, 0x38}, Color{0x3c, 0x6c, 0x5c}, 0x1234u);
+    scenery_[static_cast<size_t>(Scenery::TownhouseB)] =
+        make_townhouse(Color{0xc8, 0xd8, 0xe4}, Color{0x4c, 0x50, 0x60}, Color{0x8c, 0x3c, 0x34}, 0x9876u);
+    scenery_[static_cast<size_t>(Scenery::Shop)] = make_shop(Color{0xd8, 0xa8, 0x84}, Color{0x2c, 0x7c, 0x48}, "CAFE");
+    scenery_[static_cast<size_t>(Scenery::Apartment)] = make_apartment(Color{0xb8, 0xb4, 0xa8}, Color{0x8c, 0x88, 0x80});
+    scenery_[static_cast<size_t>(Scenery::Tower)] = make_tower(Color{0x3c, 0x6c, 0xa0}, Color{0xa8, 0xb0, 0xb8});
+    scenery_[static_cast<size_t>(Scenery::FlatHouse)] = make_flat_house(Color{0xd8, 0xb8, 0x88}, Color{0x3c, 0x6c, 0x8c});
     scenery_[static_cast<size_t>(Scenery::SignLeft)] = make_fork_sign(-1);
     scenery_[static_cast<size_t>(Scenery::SignRight)] = make_fork_sign(1);
     scenery_[static_cast<size_t>(Scenery::Hedge)] = make_hedge();

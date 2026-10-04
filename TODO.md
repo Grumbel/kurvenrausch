@@ -46,6 +46,16 @@ the road/framebuffer rewrite, `Color::to_u32()` became `Color::argb()`.
   capacity (`Nitro::set_capacity`), the front held (`weather_force`), the
   clock held (`advance_clock`), a full tank, the chase ended, the traffic
   respawned (`traffic_factor`)
+- Tracks: `build_track(index)`, `track_name()`, `track_count` (2). 0 is the
+  old demo track ("SMALL WORLD"), 1 "GRAND TOUR" (`build_track` in
+  track.cpp): cities (`city()`: `Decor::Town`, sidewalk verges, a
+  `TownStyle` of buildings, the country's `town_tree`) around each
+  country's countryside. New scenery: Townhouse(B), Shop, Apartment, Tower,
+  FlatHouse (lit windows are `WindowLit`, emissive at night). Both tracks
+  pass `check_track()` in the tests. `Game::load_track()`; the pause menu's
+  TRACK line (`MenuAction::ChangeTrack`); `Choices::track`; lap records
+  carry the track (`LapRecord::track`, a sixth field; older lines are the
+  small world) and the record is per track. `--track N` headless
 
 ## Round 17: touch controls at screen resolution, the wide screen
 

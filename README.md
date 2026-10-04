@@ -36,6 +36,13 @@ weather and road markings, fading smoothly into one another:
   fog), San Francisco (steep streets between Victorian row houses) and the
   Amazon rainforest in a downpour; a banner announces each country. Roads
   differ in width as well as in markings
+- **Two tracks**, picked on the pause menu's TRACK line: the Small World
+  above, and the Grand Tour, more than twice as long, which stops in two or
+  three cities of every country (Paris, London, Amsterdam, Muenchen, Roma,
+  Cairo, Mumbai, Tokyo, Sydney, Los Angeles, Rio de Janeiro, ...): town
+  houses and shops in Europe, glass towers in Tokyo or Sydney, flat-roofed
+  houses in Cairo or Delhi, the country's own trees between them and lit
+  windows at night. Each track keeps its own lap record
 - **Cliffs and guard rails** along the road: strata-textured rock walls that
   rise and fall with the terrain, rails above the sea or a valley; both are
   solid, the car scrapes along them and throws sparks
@@ -291,6 +298,7 @@ made and how rendering changes are checked without a display:
 
 ```bash
 ./build/kurvenrausch --print-zones                       # list the zones
+./build/kurvenrausch --track 1 --print-zones             # ... of the Grand Tour
 ./build/kurvenrausch --screenshot shot.bmp --zone 3 --frames 150
 ./build/kurvenrausch --screenshot shot.bmp --position 240000 --frames 600
 ./build/kurvenrausch --screenshot shot.bmp --frames 9000 --wav lap.wav

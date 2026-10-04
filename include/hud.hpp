@@ -61,7 +61,8 @@ struct HudState {
 void draw_hud(Framebuffer& fb, const HudState& hud);
 
 // The pause menu over the dimmed game; `country` is the start choice's name.
-void draw_pause_menu(Framebuffer& fb, const PauseMenu& menu, const std::string& country);
+// `place` names where START IN would start, `track` the track picked.
+void draw_pause_menu(Framebuffer& fb, const PauseMenu& menu, const std::string& place, const std::string& track);
 // The pause menu's OPTIONS page, laid out like the pause menu.
 void draw_options_menu(Framebuffer& fb, const OptionsMenu& menu, const Options& options);
 

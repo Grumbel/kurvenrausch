@@ -128,7 +128,8 @@ MenuTap menu_tap(const PauseMenu& menu, float x, float y, int fb_width, int fb_h
         const float line = first + 16.f * static_cast<float>(i) + 3.f;
         if (std::abs(y - line) > 8.f) continue;
         const float third = static_cast<float>(fb_width) / 3.f;
-        const int side = i != PauseMenu::StartZone ? 0 : x < third ? -1 : x > 2.f * third ? 1 : 0;
+        const bool sides = i == PauseMenu::StartZone || i == PauseMenu::Track;
+        const int side = !sides ? 0 : x < third ? -1 : x > 2.f * third ? 1 : 0;
         return {i, side};
     }
     return {};

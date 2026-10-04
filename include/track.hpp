@@ -73,6 +73,12 @@ enum class Scenery : uint8_t {
     TruckSign,    // the tall sign announcing it
     SportsShowroom, // a sports car dealer's showroom, beyond its forecourt
     SportsSign,   // the tall sign announcing it
+    Townhouse,    // a European town house: plaster, shutters, a tiled roof
+    TownhouseB,   // ... in other colours
+    Shop,         // a shop with its awning, flats above
+    Apartment,    // a tall block of flats with balconies
+    Tower,        // a glass office tower
+    FlatHouse,    // a flat-roofed house of sandstone or plaster, warm climates
     Count
 };
 
@@ -230,6 +236,7 @@ enum class Decor : uint8_t {
     Desert,    // cacti, shrubs, red rocks, mesas, telephone poles
     Coast,     // sparse: shrubs, rocks, poles where the sides are free
     City,      // rows of Victorian houses along the sidewalks, street lamps
+    Town,      // the cities of the long tour: town houses, shops and blocks of flats, the country's trees
     Country,   // English lanes: hedgerows, stone walls, oaks, the odd phone box
     Polder,    // Dutch flatland: windmills, tulip fields
     Sakura,    // Japan: cherry trees, shrine gates, stone lanterns
@@ -241,6 +248,13 @@ enum class Decor : uint8_t {
     Jungle,    // Brazil: dense rainforest, banana plants
 };
 
+// What the buildings of a city (Decor::Town) are like.
+enum class TownStyle : uint8_t {
+    European, // town houses with tiled roofs, shops, some blocks of flats
+    Modern,   // office towers and blocks of flats
+    Warm,     // flat-roofed houses, shops, blocks of flats
+};
+
 // A stretch of track with its own country, scenery and atmosphere.
 struct Zone {
     std::string country;
@@ -248,6 +262,8 @@ struct Zone {
     RoadTheme theme;
     int first_segment = 0;  // set by the track builder
     Decor decor = Decor::Riviera;
+    Scenery town_tree = Scenery::Tree; // Decor::Town: the trees between the houses ...
+    TownStyle town = TownStyle::European; // ... and the houses
 };
 
 // A fork: the road splits into two routes of the same length that join again
@@ -375,6 +391,13 @@ float barrier_limit(const Segment& seg, int side, float car_half_width);
 bool crossed_line_forward(float prev_z, float z, float line_z, float length);
 
 Track build_demo_track();
+
+// The tracks to choose from: 0 is the demo track, "SMALL WORLD", one zone
+// per region; 1 "GRAND TOUR", far longer, through cities and countryside
+// in every country.
+constexpr int track_count = 2;
+const char* track_name(int index);
+Track build_track(int index);
 
 // Plan view of a track for the mini map, one point per segment start, inside
 // the unit square (centred, aspect kept, y down). A pseudo-3D track is not a

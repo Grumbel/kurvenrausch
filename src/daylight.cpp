@@ -25,6 +25,7 @@ constexpr uint32_t emissive[] = {
     0xfff0ecc8, 0xffffffff,                                     // headlights (front views)
     0xffff3030, 0xff4070ff, 0xfffff8f0,                         // the police lightbar
     0xffe8eeff, 0xffb8c8ff,                                     // stars
+    0xffffd888,                                                 // lit windows in town
 };
 
 } // namespace

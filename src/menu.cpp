@@ -19,6 +19,10 @@ MenuAction PauseMenu::choose(int item, int side) {
         zone = (zone + side + zones) % zones;
         return MenuAction::None;
     }
+    if (item == Track && side != 0) {
+        track = (track + side + tracks) % tracks;
+        return MenuAction::None;
+    }
     MenuInput confirm;
     confirm.confirm = true;
     return update(confirm);
@@ -33,12 +37,17 @@ MenuAction PauseMenu::update(const MenuInput& in) {
         if (in.left) zone = (zone + zones - 1) % zones;
         if (in.right) zone = (zone + 1) % zones;
     }
+    if (selected == Track) {
+        if (in.left) track = (track + tracks - 1) % tracks;
+        if (in.right) track = (track + 1) % tracks;
+    }
     if (selected == Screen && (in.left || in.right)) return MenuAction::ToggleWide;
     if (!in.confirm) return MenuAction::None;
     switch (selected) {
         case Resume: return MenuAction::Resume;
         case Restart: return MenuAction::Restart;
         case StartZone: return MenuAction::StartZone;
+        case Track: return MenuAction::ChangeTrack;
         case Screen: return MenuAction::ToggleWide;
         case Options: return MenuAction::Options;
         default: return MenuAction::Quit;

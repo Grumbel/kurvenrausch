@@ -26,6 +26,7 @@ void usage(const char* argv0) {
               << "  --position Z        start distance along the track for the screenshot\n"
               << "  --wav FILE          also write the sound of the simulated run (needs --screenshot)\n"
               << "  --zone N            start the screenshot inside zone N (see --print-zones)\n"
+              << "  --track N           drive track N for the screenshot or --print-zones (0 small world, 1 grand tour)\n"
               << "  --print-zones       list the zones of the track and exit\n"
               << "  --steer S           hold steering at S (-1 .. 1) instead of the autopilot\n"
               << "  --steer-from N      start holding the steering at step N (default 0)\n"
@@ -75,6 +76,8 @@ int main(int argc, char* argv[]) {
             shot.wav_path = argv[++i];
         } else if (arg == "--zone" && i + 1 < argc) {
             shot.zone = std::atoi(argv[++i]);
+        } else if (arg == "--track" && i + 1 < argc) {
+            shot.track = std::atoi(argv[++i]);
         } else if (arg == "--print-zones") {
             print_zones = true;
         } else if (arg == "--fullscreen") {
@@ -165,6 +168,7 @@ int main(int argc, char* argv[]) {
     // On the heap: in a web page the browser keeps calling into the game
     // after main() has handed it the loop.
     auto game = std::make_unique<racer::Game>();
+    if (shot.track != 0) game->load_track(shot.track);
 
     if (print_zones) {
         game->print_zones();

@@ -45,6 +45,7 @@ std::string format_choices(const Choices& c) {
         << "view " << c.view << "\n"
         << "music " << c.music << "\n"
         << "wide " << c.wide << "\n"
+        << "track " << c.track << "\n"
         << "time " << static_cast<int>(c.options.time) << "\n"
         << "fuel " << (c.options.fuel ? 1 : 0) << "\n"
         << "nitros " << c.options.nitros << "\n"
@@ -69,6 +70,7 @@ Choices parse_choices(std::string_view text) {
         else if (key == "view") c.view = value;
         else if (key == "music") c.music = value;
         else if (key == "wide") c.wide = value;
+        else if (key == "track") c.track = value;
         else if (key == "time") c.options.time = static_cast<TimeSetting>(value);
         else if (key == "fuel") c.options.fuel = value != 0;
         else if (key == "nitros") c.options.nitros = value;
@@ -83,7 +85,7 @@ Choices parse_choices(std::string_view text) {
 std::string format_lap(const LapRecord& lap) {
     char seconds[32];
     std::snprintf(seconds, sizeof seconds, "%.2f", static_cast<double>(lap.seconds));
-    return lap.when + "\t" + seconds + "\t" + lap.car + "\t" + lap.driver + "\t" + lap.passenger;
+    return lap.when + "\t" + seconds + "\t" + lap.car + "\t" + lap.driver + "\t" + lap.passenger + "\t" + lap.track;
 }
 
 std::optional<LapRecord> parse_lap(std::string_view line) {
@@ -95,11 +97,13 @@ std::optional<LapRecord> parse_lap(std::string_view line) {
         if (tab == std::string_view::npos) break;
         start = tab + 1;
     }
-    if (fields.size() != 5 || fields[0].empty()) return std::nullopt;
+    if ((fields.size() != 5 && fields.size() != 6) || fields[0].empty()) return std::nullopt;
     char* end = nullptr;
     const double seconds = std::strtod(fields[1].c_str(), &end);
     if (end == fields[1].c_str() || *end != '\0' || !(seconds > 0.0)) return std::nullopt;
-    return LapRecord{fields[0], static_cast<float>(seconds), fields[2], fields[3], fields[4]};
+    LapRecord lap{fields[0], static_cast<float>(seconds), fields[2], fields[3], fields[4]};
+    if (fields.size() == 6) lap.track = fields[5];
+    return lap;
 }
 
 std::string utc_timestamp() {
@@ -109,10 +113,10 @@ std::string utc_timestamp() {
     return text;
 }
 
-float best_lap(const std::vector<LapRecord>& laps) {
+float best_lap(const std::vector<LapRecord>& laps, const std::string& track) {
     float best = 0.f;
     for (const LapRecord& lap : laps) {
-        if (best == 0.f || lap.seconds < best) best = lap.seconds;
+        if (lap.track == track && (best == 0.f || lap.seconds < best)) best = lap.seconds;
     }
     return best;
 }

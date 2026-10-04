@@ -15,21 +15,24 @@ struct MenuInput {
     bool back = false;
 };
 
-enum class MenuAction { None, Resume, Restart, StartZone, ToggleWide, Options, Quit };
+enum class MenuAction { None, Resume, Restart, StartZone, ChangeTrack, ToggleWide, Options, Quit };
 
 // The pause menu: resume, restart at the start line, start in a chosen
-// country (picked with left and right on its line), the screen's shape (4:3
+// country (picked with left and right on its line), drive another track
+// (picked the same way, confirmed to load it), the screen's shape (4:3
 // or as wide as the screen; confirm, left or right switch it, and the menu
 // stays open), the gameplay options (a page of their own, see options.hpp)
 // or quit, where there is something to quit to (not in a web page).
 struct PauseMenu {
-    enum Item { Resume, Restart, StartZone, Screen, Options, Quit, items };
+    enum Item { Resume, Restart, StartZone, Track, Screen, Options, Quit, items };
 
     int selected = Resume;
     int zone = 0;  // the country to start in
     int zones = 1; // how many there are to choose from
     bool can_quit = true;
     bool wide = false; // shown on the Screen line
+    int track = 0;     // the track picked on the Track line ...
+    int tracks = 1;    // ... of this many
 
     // Opens the menu on "Resume", with the country the car is in as the
     // start choice.
@@ -38,8 +41,8 @@ struct PauseMenu {
     int item_count() const { return can_quit ? items : Quit; }
     // Moves the selection and returns what the player chose, if anything.
     MenuAction update(const MenuInput& in);
-    // A tap on line `item`: it is chosen at once; on the country line `side`
-    // -1 or +1 picks the previous or next country instead.
+    // A tap on line `item`: it is chosen at once; on the country and track
+    // lines `side` -1 or +1 picks the previous or next one instead.
     MenuAction choose(int item, int side = 0);
 };
 

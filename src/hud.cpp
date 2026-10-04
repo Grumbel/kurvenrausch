@@ -285,13 +285,14 @@ void draw_hud(Framebuffer& fb, const HudState& hud) {
     }
 }
 
-void draw_pause_menu(Framebuffer& fb, const PauseMenu& menu, const std::string& country) {
+void draw_pause_menu(Framebuffer& fb, const PauseMenu& menu, const std::string& place, const std::string& track) {
     for (int y = 0; y < fb.height(); ++y) {
         for (int x = 0; x < fb.width(); ++x) fb.blend_pixel(x, y, Shadow, 0.55f);
     }
     const int top = fb.height() / 2 - 50;
     text_center(fb, top, "PAUSED", Value, 3);
-    const std::string items[PauseMenu::items] = {"RESUME", "RESTART", "START IN < " + country + " >",
+    const std::string items[PauseMenu::items] = {"RESUME", "RESTART", "START IN < " + place + " >",
+                                                 "TRACK < " + track + " >",
                                                  menu.wide ? "SCREEN: WIDE" : "SCREEN: 4:3", "OPTIONS", "QUIT"};
     for (int i = 0; i < menu.item_count(); ++i) {
         const bool on = i == menu.selected;

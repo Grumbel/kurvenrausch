@@ -28,6 +28,7 @@ struct Choices {
     int view = 0; // a ViewMode
     int music = 0; // a Music track, -1 off
     int wide = 0;  // 1: the picture as wide as the screen, 0: 4:3
+    int track = 0; // see track_name()
     Options options{};
 };
 // As "key value" lines; parsing skips unknown keys and malformed lines and
@@ -35,13 +36,15 @@ struct Choices {
 std::string format_choices(const Choices& c);
 Choices parse_choices(std::string_view text);
 
-// One completed lap: when (UTC, ISO 8601), how long, and who drove what.
+// One completed lap: when (UTC, ISO 8601), how long, who drove what, and
+// where. Lines from before there were tracks to choose are on the first.
 struct LapRecord {
     std::string when;
     float seconds = 0.f;
     std::string car;
     std::string driver;
     std::string passenger;
+    std::string track = "SMALL WORLD";
 };
 // A tab-separated line, without the newline; nullopt for a malformed one.
 std::string format_lap(const LapRecord& lap);
@@ -75,6 +78,6 @@ private:
 };
 
 // The fastest of the laps, 0 for none.
-float best_lap(const std::vector<LapRecord>& laps);
+float best_lap(const std::vector<LapRecord>& laps, const std::string& track);
 
 } // namespace racer

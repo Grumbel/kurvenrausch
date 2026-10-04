@@ -75,6 +75,12 @@ const SceneryInfo& scenery_info(Scenery kind) {
         /* TruckSign */ { 700.f, true,  false, false},
         /* SportsShowroom*/{4800.f, true, false, false},
         /* SportsSign*/ { 700.f, true,  false, false},
+        /* Townhouse */ {2400.f, true,  false, true},
+        /* TownhouseB*/ {2400.f, true,  false, true},
+        /* Shop      */ {2600.f, true,  false, false},
+        /* Apartment */ {3000.f, true,  false, true},
+        /* Tower     */ {3200.f, true,  false, true},
+        /* FlatHouse */ {2400.f, true,  false, true},
     };
     static_assert(sizeof(infos) / sizeof(infos[0]) == static_cast<size_t>(Scenery::Count),
                   "scenery_info() needs an entry for every Scenery kind");
@@ -1178,6 +1184,26 @@ void decorate(Track& track, TrackBuilder& b, int from, int to, uint32_t seed) {
                 break;
             }
 
+            case Decor::Town: {
+                // Town houses, shops and blocks of flats along both
+                // sidewalks, now and then one of the country's trees; street
+                // lamps at the kerb.
+                using S = Scenery;
+                static constexpr Scenery styles[][6] = {
+                    {S::Townhouse, S::TownhouseB, S::Shop, S::Apartment, S::Townhouse, S::TownhouseB}, // European
+                    {S::Tower, S::Apartment, S::Shop, S::Tower, S::Apartment, S::Tower},                // Modern
+                    {S::FlatHouse, S::FlatHouse, S::Shop, S::Apartment, S::FlatHouse, S::Shop},         // Warm
+                };
+                const Scenery* buildings = styles[static_cast<int>(zone.town)];
+                for (int side = -1; side <= 1; side += 2) {
+                    if ((i + (side > 0 ? 2 : 0)) % 4 != 0) continue;
+                    if (rng.chance(0.14f)) put(zone.town_tree, side, 1.3f);
+                    else put(buildings[static_cast<int>(rng.next() * 6.f) % 6], side, 1.35f);
+                }
+                if (i % 10 == 5) put(Scenery::StreetLamp, i % 20 == 5 ? -1 : 1, 1.12f);
+                break;
+            }
+
             case Decor::Country:
                 // Hedgerows close along both sides, with stretches of stone
                 // wall; oaks behind them and now and then a phone box.
@@ -1296,6 +1322,10 @@ void place_patches(Track& track, int from, int to, uint32_t seed) {
     });
     place(Patch::Oil, [](const Zone&) { return 0.0006f; });
 }
+
+namespace {
+Track finish_route(Track& track, TrackBuilder& b);
+} // namespace
 
 Track build_demo_track() {
     Track track;
@@ -1497,6 +1527,14 @@ Track build_demo_track() {
     b.curve(Len::Medium, -Bend::Hard, Hill::None);
     b.downhill_to_end(Len::Long);
 
+    return finish_route(track, b);
+}
+
+namespace {
+
+// The common end of building a track: themes blended, the start line, the
+// scenery and patches along the lap and each fork's other route.
+Track finish_route(Track& track, TrackBuilder& b) {
     track.finish();
 
     // Start/finish line a few segments ahead of the starting grid.
@@ -1524,6 +1562,313 @@ Track build_demo_track() {
         b.scenery(i, Scenery::Billboard, (i / 20) % 2 ? -1.15f : 1.15f);
     }
     return track;
+}
+
+// A city of the grand tour in the look of `country`: sidewalks for verges,
+// kerbs, the country's lanes and sky; town houses, shops and flats.
+Zone city(Zone country, const char* name, Scenery tree, TownStyle style = TownStyle::European) {
+    Zone z = std::move(country);
+    z.region = name;
+    z.decor = Decor::Town;
+    z.town_tree = tree;
+    z.town = style;
+    RoadTheme& t = z.theme;
+    t.grass[0] = blend(Color{0xb8, 0xb4, 0xac}, t.grass[0], 0.15f);
+    t.grass[1] = blend(Color{0xae, 0xaa, 0xa2}, t.grass[1], 0.15f);
+    t.rumble[0] = Color{0xe8, 0xe8, 0xe0};
+    t.rumble[1] = Color{0x9c, 0x9c, 0x98};
+    t.road_scale = std::max(t.road_scale, 0.8f);
+    t.haze = std::max(t.haze, 0.35f);
+    return z;
+}
+
+Zone renamed(Zone z, const char* region) {
+    z.region = region;
+    return z;
+}
+
+} // namespace
+
+const char* track_name(int index) {
+    return index == 1 ? "GRAND TOUR" : "SMALL WORLD";
+}
+
+Track build_track(int index) {
+    if (index != 1) return build_demo_track();
+    Track track;
+    TrackBuilder b(track);
+
+    // Around the same world as the small one, but stopping in the cities:
+    // through each country from one city to the next, the countryside in
+    // between. City streets: short blocks, square turns, flat.
+    const auto streets = [&](int turn) {
+        const float s = static_cast<float>(turn);
+        b.straight(Len::Short);
+        b.curve(Len::Short, s * Bend::Hard, Hill::None);
+        b.straight(Len::Short);
+        b.curve(Len::Short, -s * Bend::Medium, Hill::Low / 4.f);
+        b.straight(Len::Short);
+        b.curve(Len::Short, s * Bend::Medium, -Hill::Low / 4.f);
+    };
+
+    b.begin_zone(city(zone_france(), "PARIS", Scenery::Tree));
+    b.straight(Len::Short);
+    streets(1);
+    b.gas_station();
+    streets(-1);
+    Zone bourgogne = renamed(zone_italy(), "BOURGOGNE"); // vineyards and cypresses
+    bourgogne.country = "FRANCE";
+    b.begin_zone(bourgogne);
+    b.low_rolling_hills();
+    b.curve(Len::Medium, Bend::Easy, Hill::Low);
+    b.curve(Len::Medium, -Bend::Medium, -Hill::Low);
+    b.car_wash();
+    b.begin_zone(city(zone_france(), "LYON", Scenery::Tree));
+    streets(1);
+    b.car_dealer();
+    b.begin_zone(zone_france()); // the Corniche above the sea
+    b.low_rolling_hills();
+    const int corniche = b.size();
+    b.curve(Len::Medium, Bend::Medium, Hill::Low);
+    b.curve(Len::Medium, -Bend::Medium, Hill::Medium);
+    b.road(Len::Medium, Len::Medium, Len::Medium, Bend::Easy, -Hill::Medium);
+    b.mark(corniche, b.size(), Edge::Cliff, Edge::Rail);
+    b.gas_station();
+    b.curve(Len::Short, Bend::Easy, -Hill::Low);
+    b.begin_zone(city(zone_france(), "NICE", Scenery::Palm));
+    streets(-1);
+    b.sports_dealer();
+
+    b.begin_zone(city(zone_england(), "LONDON", Scenery::Tree));
+    streets(1);
+    b.gas_station();
+    streets(1);
+    b.hospital();
+    b.begin_zone(zone_england());
+    b.curve(Len::Short, Bend::Medium, Hill::Low);
+    b.curve(Len::Short, -Bend::Hard, -Hill::Low / 2.f);
+    b.low_rolling_hills();
+    b.gas_station();
+    b.curve(Len::Short, Bend::Hard, Hill::Low);
+    b.curve(Len::Short, -Bend::Medium, -Hill::Low);
+    b.car_wash();
+    b.begin_zone(city(zone_england(), "OXFORD", Scenery::Tree));
+    streets(-1);
+    b.car_dealer();
+
+    b.begin_zone(city(zone_netherlands(), "AMSTERDAM", Scenery::Tree));
+    const int gracht = b.size(); // along a canal
+    streets(1);
+    b.mark(gracht, b.size(), Edge::Rail, Edge::None);
+    b.gas_station();
+    b.begin_zone(zone_netherlands());
+    b.straight(Len::Medium);
+    const int canal = b.size();
+    b.curve(Len::Medium, Bend::Easy, Hill::None);
+    b.straight(Len::Medium);
+    b.mark(canal, b.size(), Edge::Rail, Edge::None);
+    b.gas_station();
+    b.curve(Len::Medium, -Bend::Easy, Hill::None);
+    b.begin_zone(city(zone_netherlands(), "ROTTERDAM", Scenery::Tree));
+    streets(-1);
+    b.truckstop(); // by the port
+
+    b.begin_zone(city(zone_germany(), "KOELN", Scenery::Tree));
+    streets(1);
+    b.gas_station();
+    b.begin_zone(zone_germany());
+    b.curve(Len::Medium, -Bend::Medium, Hill::Low);
+    b.hill(Len::Medium, Hill::Medium);
+    b.curve(Len::Medium, Bend::Hard, -Hill::Low);
+    b.bumps();
+    b.curve(Len::Medium, -Bend::Medium, -Hill::Medium);
+    b.gas_station();
+    b.fork("AUTOBAHN", "LANDSTRASSE",
+           [&] {
+               b.straight(Len::Long);
+               b.curve(Len::Long, -Bend::Easy, Hill::Low);
+               b.curve(Len::Long, Bend::Easy, -Hill::Low);
+           },
+           [&] {
+               b.curve(Len::Medium, Bend::Hard, Hill::Low);
+               b.curve(Len::Medium, -Bend::Hard, Hill::Medium);
+               b.bumps();
+               b.curve(Len::Medium, Bend::Medium, -Hill::Medium);
+               b.curve(Len::Medium, -Bend::Hard, -Hill::Low);
+           });
+    b.begin_zone(city(zone_germany(), "MUENCHEN", Scenery::Tree));
+    streets(-1);
+    b.sports_dealer();
+
+    b.begin_zone(city(zone_switzerland(), "ZUERICH", Scenery::Fir));
+    streets(1);
+    b.gas_station();
+    b.begin_zone(zone_switzerland());
+    b.hill(Len::Medium, Hill::High);
+    const int pass = b.size();
+    b.curve(Len::Medium, Bend::Hard, Hill::Medium);
+    b.curve(Len::Medium, -Bend::Hard, Hill::Medium);
+    b.mark(pass, b.size(), Edge::Cliff, Edge::Rail);
+    b.curve(Len::Short, Bend::Medium, Hill::None);
+    b.gas_station();
+    const int descent = b.size();
+    b.curve(Len::Medium, -Bend::Medium, -Hill::High);
+    b.hill(Len::Medium, -Hill::High);
+    b.mark(descent, b.size(), Edge::Rail, Edge::Cliff);
+    b.curve(Len::Medium, Bend::Hard, -Hill::Medium);
+    b.begin_zone(city(zone_switzerland(), "GENEVE", Scenery::Fir));
+    streets(-1);
+    b.hospital();
+
+    b.begin_zone(city(zone_italy(), "MILANO", Scenery::Cypress));
+    streets(1);
+    b.gas_station();
+    b.begin_zone(zone_italy());
+    b.low_rolling_hills();
+    b.curve(Len::Medium, Bend::Medium, Hill::Low);
+    b.gas_station();
+    b.curve(Len::Medium, -Bend::Medium, -Hill::Low);
+    b.curve(Len::Long, Bend::Easy, Hill::None);
+    b.begin_zone(city(zone_italy(), "ROMA", Scenery::Cypress));
+    streets(-1);
+    b.sports_dealer();
+    streets(1);
+
+    b.begin_zone(city(zone_egypt(), "CAIRO", Scenery::DatePalm, TownStyle::Warm));
+    streets(1);
+    b.gas_station();
+    b.begin_zone(zone_egypt());
+    b.straight(Len::Medium);
+    b.gas_station();
+    b.curve(Len::Long, -Bend::Easy, Hill::None);
+    b.straight(Len::Long);
+    b.begin_zone(city(zone_egypt(), "LUXOR", Scenery::DatePalm, TownStyle::Warm));
+    streets(-1);
+    b.motel();
+
+    b.begin_zone(city(zone_kenya(), "NAIROBI", Scenery::Acacia, TownStyle::Warm));
+    streets(1);
+    b.gas_station();
+    b.begin_zone(zone_kenya());
+    b.hill(Len::Medium, Hill::Low);
+    b.curve(Len::Medium, Bend::Medium, Hill::None);
+    b.gas_station();
+    b.hill(Len::Medium, -Hill::Low);
+    b.curve(Len::Long, -Bend::Easy, Hill::None);
+    b.car_wash();
+
+    b.begin_zone(city(zone_india(), "MUMBAI", Scenery::Banyan, TownStyle::Warm));
+    streets(1);
+    b.gas_station();
+    streets(-1);
+    b.begin_zone(zone_india());
+    b.curve(Len::Short, -Bend::Medium, Hill::None);
+    b.curve(Len::Short, Bend::Medium, Hill::Low / 2.f);
+    b.gas_station();
+    b.curve(Len::Medium, -Bend::Easy, -Hill::Low / 2.f);
+    b.motel();
+    b.begin_zone(city(zone_india(), "DELHI", Scenery::Banyan, TownStyle::Warm));
+    streets(1);
+    b.hospital();
+
+    b.begin_zone(city(zone_korea(), "SEOUL", Scenery::Maple, TownStyle::Modern));
+    streets(-1);
+    b.gas_station();
+    b.begin_zone(zone_korea());
+    b.curve(Len::Medium, Bend::Hard, Hill::Medium);
+    b.gas_station();
+    b.curve(Len::Medium, -Bend::Hard, -Hill::Medium);
+    b.begin_zone(city(zone_korea(), "BUSAN", Scenery::Maple, TownStyle::Modern));
+    streets(1);
+    b.car_dealer();
+
+    b.begin_zone(city(zone_japan(), "TOKYO", Scenery::CherryTree, TownStyle::Modern));
+    streets(1);
+    b.gas_station();
+    streets(-1);
+    b.sports_dealer();
+    b.begin_zone(zone_japan());
+    b.curve(Len::Medium, Bend::Medium, Hill::Low);
+    b.gas_station();
+    b.curve(Len::Medium, -Bend::Medium, -Hill::Low);
+    b.begin_zone(city(zone_japan(), "KYOTO", Scenery::CherryTree, TownStyle::Modern));
+    streets(-1);
+    b.motel();
+
+    b.begin_zone(city(zone_australia(), "SYDNEY", Scenery::GumTree, TownStyle::Modern));
+    streets(1);
+    b.gas_station();
+    b.begin_zone(zone_australia());
+    b.straight(Len::Long);
+    b.truckstop();
+    b.gas_station();
+    b.curve(Len::Long, Bend::Easy, Hill::None);
+    b.straight(Len::Long);
+    b.gas_station();
+    b.car_wash();
+    b.begin_zone(city(zone_australia(), "MELBOURNE", Scenery::GumTree, TownStyle::Modern));
+    streets(-1);
+    b.car_dealer();
+
+    b.begin_zone(city(zone_arizona(), "PHOENIX", Scenery::Palm, TownStyle::Warm));
+    streets(1);
+    b.gas_station();
+    b.begin_zone(zone_arizona());
+    b.hill(Len::Long, Hill::Low);
+    b.gas_station();
+    b.curve(Len::Long, Bend::Easy, Hill::None);
+    b.fork("ROUTE 66", "CANYON ROAD",
+           [&] {
+               b.straight(Len::Long);
+               b.hill(Len::Medium, -Hill::Low);
+               b.bumps();
+           },
+           [&] {
+               b.straight(Len::Short);
+               const int canyon = b.size();
+               b.curve(Len::Medium, Bend::Medium, Hill::None);
+               b.curve(Len::Medium, -Bend::Hard, -Hill::Low);
+               b.curve(Len::Short, Bend::Medium, Hill::None);
+               b.mark(canyon, b.size(), Edge::Cliff, Edge::Cliff);
+           });
+    b.motel();
+    b.begin_zone(city(zone_california(), "LOS ANGELES", Scenery::Palm, TownStyle::Modern));
+    streets(-1);
+    b.gas_station();
+    streets(1);
+    b.sports_dealer();
+    b.begin_zone(zone_california());
+    const int pch = b.size();
+    b.curve(Len::Medium, Bend::Medium, Hill::None);
+    b.curve(Len::Medium, -Bend::Medium, Hill::Low);
+    b.curve(Len::Medium, Bend::Hard, -Hill::Low);
+    b.mark(pch, b.size(), Edge::Rail, Edge::Cliff);
+    b.gas_station();
+    b.begin_zone(zone_san_francisco());
+    b.slope(12, 0.f);
+    b.slope(30, 0.35f);
+    b.slope(6, 0.f);
+    b.slope(30, 0.5f);
+    b.slope(6, 0.f);
+    b.slope(30, -0.5f);
+    b.slope(6, 0.f);
+    b.slope(36, -0.35f, Bend::Easy);
+    b.slope(8, 0.f);
+    b.gas_station();
+
+    b.begin_zone(city(zone_brazil(), "SAO PAULO", Scenery::Palm, TownStyle::Modern));
+    streets(1);
+    b.gas_station();
+    b.begin_zone(zone_brazil());
+    b.curve(Len::Medium, Bend::Medium, Hill::Low);
+    b.gas_station();
+    b.curve(Len::Medium, -Bend::Hard, Hill::None);
+    b.begin_zone(city(zone_brazil(), "RIO DE JANEIRO", Scenery::Palm, TownStyle::Warm));
+    streets(-1);
+    b.hospital();
+    b.downhill_to_end(Len::Long);
+
+    return finish_route(track, b);
 }
 
 } // namespace racer

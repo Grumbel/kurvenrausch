@@ -14,6 +14,8 @@ around the world in sixteen zones, from the Cote d'Azur through England, the
 Netherlands, the Black Forest, the Alps, Tuscany, Egypt, Kenya, India, Korea,
 Japan and the Australian outback to Arizona, the California coast, San
 Francisco and the Amazon rainforest.
+A second, far longer track, the Grand Tour, stops in two or three cities of
+every country on the way; pick it on the pause menu's TRACK line.
 The road forks in places into two routes that join again; keep to the side of
 the road you want to take.
 On the way there is traffic to pass, fuel to buy at gas stations, other cars
@@ -60,6 +62,13 @@ see
 .B \-\-print\-zones
 List the zones of the track with their segments and start positions, then
 exit.
+.TP
+.BI \-\-track " N"
+Drive track
+.I N
+for the headless run or
+.BR \-\-print\-zones :
+0 the Small World, 1 the Grand Tour.
 .TP
 .BI \-\-wav " FILE"
 Also write the sound of the headless run as a WAV file.
