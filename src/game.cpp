@@ -86,6 +86,7 @@ constexpr bool web = true; // running in a web page
 constexpr bool web = false;
 #endif
 constexpr float refuel_speed = 0.08f;
+constexpr float offer_speed = 0.01f; // a lot offers its choice below this speed (of top speed)
 constexpr float attract_idle_seconds = 120.f;  // without input, back to the attract mode
 constexpr float attract_follow_seconds = 20.f; // each car followed this long
 
@@ -870,7 +871,9 @@ InputState Game::autopilot() const {
             const int ahead = ((start - here) % n + n) % n;
             if (!on && ahead > 120) continue;
             target_x = on || seg.forecourt > 1.3f ? 1.45f : 0.6f;
-            speed_limit = on ? refuel_speed * 0.6f : 0.1f + 0.9f * static_cast<float>(ahead) / 120.f;
+            // At the pumps it creeps; at any other lot it stops, for the offer.
+            speed_limit = on ? (visit != Lot::Gas && lot_here() == visit ? 0.f : refuel_speed * 0.6f)
+                             : 0.1f + 0.9f * static_cast<float>(ahead) / 120.f;
             break;
         }
     }
@@ -879,7 +882,7 @@ InputState Game::autopilot() const {
     InputState in;
     in.steer = wanted > 0.3f ? 1.f : wanted < -0.3f ? -1.f : 0.f;
     const bool coast = std::abs(drift) > 1.f && std::abs(tr.x - cruise_x) > 0.6f && target_x == cruise_x;
-    const bool slow = pct > speed_limit;
+    const bool slow = pct > speed_limit || speed_limit <= 0.f; // a limit of 0: stand on the brake
     in.throttle = coast || slow || pct > speed_limit * 0.9f ? 0.f : 1.f;
     in.brake = coast || slow ? 1.f : 0.f;
     return in;
@@ -1126,7 +1129,9 @@ void Game::visit_lot(const InputState& input) {
     const std::optional<Lot> here = speed_pct < refuel_speed ? lot_here() : std::nullopt;
     const bool choice = here == Lot::Dealer || here == Lot::SportsDealer || here == Lot::Motel ||
                         here == Lot::Hospital || here == Lot::Truckstop;
-    offer_ = choice ? here : std::nullopt;
+    // On offer only while the car stands, and not as it pulls away: steering
+    // out of the lot must not pick another car.
+    offer_ = choice && speed_pct < offer_speed && input.throttle < 0.1f ? here : std::nullopt;
     if (here == Lot::Hospital && bandaged_) {
         bandaged_ = false;
         synth_.trigger_ding();
