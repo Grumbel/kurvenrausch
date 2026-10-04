@@ -1265,9 +1265,11 @@ void Game::visit_lot(const InputState& input) {
             case Lot::Dealer:
             case Lot::SportsDealer:
             case Lot::Truckstop:
-                // The lot's range of cars, in turn, and the car the player
-                // came in.
-                car_model_ = next_car_offered(car_model_, arrived_model_, lot_range(*offer_), push);
+                // The lot's range of cars at home in its part of the world, in
+                // turn, and the car the player came in.
+                car_model_ = next_car_offered(car_model_, arrived_model_, lot_range(*offer_), push,
+                                              region_of(track_.zone_at(world_.get<Transform>(player_).z +
+                                                                       world_.get<Camera>(camera_).player_z()).country));
                 change_car();
                 break;
             case Lot::Motel:

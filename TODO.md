@@ -115,6 +115,10 @@ the road/framebuffer rewrite, `Color::to_u32()` became `Color::argb()`.
 - Chemical plants (`Lot::Chemical`, `chemical_plant()`): standing on the
   forecourt fills a nitro canister every `nitro_fill_seconds`
   (`update_nitro_fill`, `Nitro::add_canister`); `--visit chemical`
+- Dealers sell local cars: `CarModel::regions` (bits of `region::`),
+  `region_of(country)`, `next_car_offered(..., regions)`: the range's cars
+  at home there (all of the range if fewer than two), plus the car the
+  player came in
 - Trains: `Segment::rails`, `TrackBuilder::level_crossing()` (a straight,
   `Scenery::CrossingSign` either side), `Track::crossings()`. `Game::
   update_train()`: decided `train_chance` once per crossing when the car

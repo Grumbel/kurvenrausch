@@ -4,6 +4,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 
 namespace racer {
 
@@ -62,8 +63,16 @@ enum class Body : uint8_t {
 // Secret: the movie cars, found by doing the right thing in the right place.)
 enum class CarRange : uint8_t { Regular, Sports, Trucks, Emergency, Secret };
 
+// Parts of the world, as a bit set: where a car is at home, and so sold.
+namespace region {
+constexpr uint8_t europe = 1, asia = 2, america = 4, oceania = 8, africa = 16, everywhere = 0xff;
+} // namespace region
+// The part of the world a country (as the zones name it) is in.
+uint8_t region_of(const std::string& country);
+
 // The cars the player can drive. The factors are of the standard car, the
-// Spider: top speed, acceleration and grip; the width is in world units.
+// Spider: top speed, acceleration and grip; the width is in world units;
+// `regions` where it is at home (its dealers sell it there).
 struct CarModel {
     const char* name;
     float top_speed;
@@ -72,6 +81,7 @@ struct CarModel {
     Body body;
     CarRange range;
     float width;
+    uint8_t regions = region::everywhere;
 };
 constexpr int car_models = 22;
 constexpr int ambulance_model = 17;
@@ -98,5 +108,8 @@ int next_car_in_range(int current, CarRange range, int step);
 // `arrived`: the dealer's range, and the car they came in, if it is not of
 // that range, ahead of it; so it is never lost by looking around.
 int next_car_offered(int current, int arrived, CarRange range, int step);
+// The same at a dealer in `regions`: only the range's cars at home there,
+// unless there are fewer than two of them (then the whole range).
+int next_car_offered(int current, int arrived, CarRange range, int step, uint8_t regions);
 
 } // namespace racer

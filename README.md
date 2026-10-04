@@ -116,7 +116,9 @@ weather and road markings, fading smoothly into one another:
   the rivals' Racer and a Supercar, the everyday dealers (blue; England,
   Korea) the Hot Hatch, Mini, Saloon, Taxi, Estate and a retired police
   Patrol car, the truck stops the Big Rig, Van, Box Truck, Pickup and a
-  Coach
+  Coach. Each dealer sells the cars at home in its part of the world (the
+  Italian sports cars in Italy, the Japanese ones in Japan, the muscle car
+  in California, ...), and the car you came in stays on offer
 - **Dirt and car washes**: puddles splash the car with mud, crashes add more,
   oil slicks leave black spots; stop at one of the car washes in England,
   Kenya and the outback to have it washed clean

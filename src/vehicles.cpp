@@ -42,23 +42,23 @@ const CarModel& car_model(int index) {
     using R = CarRange;
     static const CarModel models[car_models] = {
         // name         top    accel  grip   body        range       width
-        {"SPIDER",      1.00f, 1.00f, 1.00f, B::Car,      R::Sports,  600.f}, // the red convertible: balanced
-        {"GT COUPE",    1.12f, 0.85f, 0.92f, B::Car,      R::Sports,  600.f}, // fastest flat out, slow to get there
-        {"HOT HATCH",   0.88f, 1.30f, 1.12f, B::Car,      R::Regular, 600.f}, // quick away and sure-footed
-        {"MUSCLE",      1.06f, 1.22f, 0.78f, B::Car,      R::Sports,  600.f}, // brute force, little grip
-        {"BIG RIG",     0.84f, 0.62f, 1.25f, B::Rig,      R::Trucks,  600.f}, // slow, but planted
-        {"SALOON",      0.90f, 0.95f, 1.04f, B::Car,      R::Regular, 600.f}, // the everyday car
-        {"TAXI",        0.92f, 1.04f, 0.98f, B::Car,      R::Regular, 600.f}, // a saloon, tuned a little
-        {"ESTATE",      0.86f, 0.90f, 1.14f, B::Car,      R::Regular, 600.f}, // the family car: steady
-        {"PATROL",      1.02f, 1.05f, 0.95f, B::Police,   R::Regular, 600.f}, // a police car, retired
-        {"RACER",       1.18f, 1.12f, 0.84f, B::Racer,    R::Sports,  620.f}, // the rivals' car: fastest, nervous
+        {"SPIDER",      1.00f, 1.00f, 1.00f, B::Car,      R::Sports,  600.f, region::europe}, // the red convertible: balanced
+        {"GT COUPE",    1.12f, 0.85f, 0.92f, B::Car,      R::Sports,  600.f, region::europe}, // fastest flat out, slow to get there
+        {"HOT HATCH",   0.88f, 1.30f, 1.12f, B::Car,      R::Regular, 600.f, region::europe}, // quick away and sure-footed
+        {"MUSCLE",      1.06f, 1.22f, 0.78f, B::Car,      R::Sports,  600.f, static_cast<uint8_t>(region::america | region::oceania)}, // brute force, little grip
+        {"BIG RIG",     0.84f, 0.62f, 1.25f, B::Rig,      R::Trucks,  600.f, static_cast<uint8_t>(region::america | region::oceania)}, // slow, but planted
+        {"SALOON",      0.90f, 0.95f, 1.04f, B::Car,      R::Regular, 600.f, static_cast<uint8_t>(region::europe | region::asia)}, // the everyday car
+        {"TAXI",        0.92f, 1.04f, 0.98f, B::Car,      R::Regular, 600.f, static_cast<uint8_t>(region::america | region::asia)}, // a saloon, tuned a little
+        {"ESTATE",      0.86f, 0.90f, 1.14f, B::Car,      R::Regular, 600.f, static_cast<uint8_t>(region::europe | region::oceania)}, // the family car: steady
+        {"PATROL",      1.02f, 1.05f, 0.95f, B::Police,   R::Regular, 600.f, region::america}, // a police car, retired
+        {"RACER",       1.18f, 1.12f, 0.84f, B::Racer,    R::Sports,  620.f, region::asia}, // the rivals' car: fastest, nervous
         {"VAN",         0.86f, 0.80f, 1.15f, B::Van,      R::Trucks,  650.f}, // roomy, slow off the line
         {"BOX TRUCK",   0.78f, 0.55f, 1.30f, B::BoxTruck, R::Trucks,  700.f}, // slow, and steady
-        {"MINI",        0.80f, 1.25f, 1.20f, B::Hatch,    R::Regular, 540.f}, // small, nippy, sticks to the road
-        {"PICKUP",      0.92f, 0.98f, 1.02f, B::Pickup,   R::Trucks,  640.f}, // a workhorse
+        {"MINI",        0.80f, 1.25f, 1.20f, B::Hatch,    R::Regular, 540.f, static_cast<uint8_t>(region::europe | region::oceania)}, // small, nippy, sticks to the road
+        {"PICKUP",      0.92f, 0.98f, 1.02f, B::Pickup,   R::Trucks,  640.f, static_cast<uint8_t>(region::america | region::oceania | region::asia)}, // a workhorse
         {"COACH",       0.76f, 0.50f, 1.35f, B::Bus,      R::Trucks,  720.f}, // a bus: the slowest and steadiest of all
-        {"ROADSTER",    1.04f, 1.10f, 0.90f, B::Car,      R::Sports,  600.f}, // the golden convertible
-        {"SUPERCAR",    1.19f, 1.00f, 0.88f, B::Racer,    R::Sports,  620.f}, // the fastest flat out
+        {"ROADSTER",    1.04f, 1.10f, 0.90f, B::Car,      R::Sports,  600.f, static_cast<uint8_t>(region::asia | region::europe)}, // the golden convertible
+        {"SUPERCAR",    1.19f, 1.00f, 0.88f, B::Racer,    R::Sports,  620.f, static_cast<uint8_t>(region::europe | region::america)}, // the fastest flat out
         {"AMBULANCE",   0.89f, 0.84f, 1.08f, B::Ambulance, R::Emergency, 650.f}, // from the hospital
         {"SCANNER",     1.16f, 1.15f, 0.98f, B::Car,      R::Secret,  600.f}, // black, a red light sweeping; nitro jumps
         {"TIME CAR",    1.05f, 1.05f, 1.05f, B::Car,      R::Secret,  600.f}, // stainless steel; 88 mph travels in time
@@ -93,6 +93,31 @@ int next_car_offered(int current, int arrived, CarRange range, int step) {
     if (car_model(arrived).range != range) offer.push_back(((arrived % car_models) + car_models) % car_models);
     for (int m = 0; m < car_models; ++m) {
         if (car_model(m).range == range) offer.push_back(m);
+    }
+    const int n = static_cast<int>(offer.size());
+    const auto it = std::find(offer.begin(), offer.end(), ((current % car_models) + car_models) % car_models);
+    const int here = it == offer.end() ? 0 : static_cast<int>(it - offer.begin());
+    return offer[static_cast<size_t>((((here + (step < 0 ? -1 : 1)) % n) + n) % n)];
+}
+
+uint8_t region_of(const std::string& country) {
+    if (country == "USA" || country == "BRAZIL") return region::america;
+    if (country == "JAPAN" || country == "KOREA" || country == "INDIA") return region::asia;
+    if (country == "AUSTRALIA") return region::oceania;
+    if (country == "EGYPT" || country == "KENYA") return region::africa;
+    return region::europe;
+}
+
+int next_car_offered(int current, int arrived, CarRange range, int step, uint8_t regions) {
+    int local = 0;
+    for (int m = 0; m < car_models; ++m) local += car_model(m).range == range && (car_model(m).regions & regions);
+    if (local < 2) return next_car_offered(current, arrived, range, step);
+    std::vector<int> offer;
+    const int came = ((arrived % car_models) + car_models) % car_models;
+    const bool came_local = car_model(came).range == range && (car_model(came).regions & regions);
+    if (!came_local) offer.push_back(came);
+    for (int m = 0; m < car_models; ++m) {
+        if (car_model(m).range == range && (car_model(m).regions & regions)) offer.push_back(m);
     }
     const int n = static_cast<int>(offer.size());
     const auto it = std::find(offer.begin(), offer.end(), ((current % car_models) + car_models) % car_models);

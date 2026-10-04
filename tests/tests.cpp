@@ -1679,6 +1679,28 @@ void test_car_models() {
         do { s = next_car_offered(s, saloon, CarRange::Regular, 1); ++steps; } while (s != saloon);
         CHECK(steps == regular);
     }
+    // Dealers sell the cars at home where they are: in England the
+    // everyday European ones; in Japan the Asian sports cars; with too few
+    // at home, the whole range.
+    {
+        const auto offered = [](int start, CarRange range, uint8_t where) {
+            std::set<int> seen;
+            int m = start;
+            for (int i = 0; i < car_models; ++i) {
+                m = next_car_offered(m, start, range, 1, where);
+                seen.insert(m);
+            }
+            return seen;
+        };
+        for (int m : offered(0, CarRange::Regular, region_of("ENGLAND"))) {
+            CHECK(m == 0 || (car_model(m).range == CarRange::Regular && (car_model(m).regions & region::europe)));
+        }
+        const std::set<int> japan = offered(0, CarRange::Sports, region_of("JAPAN"));
+        CHECK(japan.count(0) == 1); // the car the player came in stays on offer
+        for (int m : japan) CHECK(m == 0 || (car_model(m).regions & region::asia));
+        CHECK(offered(0, CarRange::Trucks, region::africa).size() >= 3); // too few at home: all of them
+        CHECK(region_of("AUSTRALIA") == region::oceania && region_of("USA") == region::america);
+    }
     // Wider bodies are as wide as the traffic's.
     CHECK(car_model(next_car_in_range(0, CarRange::Trucks, -1)).width > 600.f);
     CHECK(&car_model(car_models) == &car_model(0)); // wraps around
