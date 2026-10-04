@@ -59,6 +59,7 @@ void RoadRenderer::render(Framebuffer& fb, const Track& track, const RoadView& v
     const int count = std::min(view.draw_distance, n_segments);
     slices_.clear();
     slices_.reserve(static_cast<size_t>(count));
+    row_depth_.assign(static_cast<size_t>(fb.height()), 0.f);
 
     for (int n = 0; n < count; ++n) {
         const int index = ((base + dir * n) % n_segments + n_segments) % n_segments;
@@ -93,6 +94,15 @@ void RoadRenderer::render(Framebuffer& fb, const Track& track, const RoadView& v
                          s.p2.y < max_y;
         if (s.road_visible) {
             draw_segment(fb, track, s);
+            // The rows it shows, near to far: 1/depth goes linearly up the
+            // screen.
+            const int y0 = std::max(0, pixel_edge(s.p2.y));
+            const int y1 = std::min(fb.height(), pixel_edge(std::min(s.p1.y, max_y)));
+            for (int y = y0; y < y1; ++y) {
+                const float t = (static_cast<float>(y) + 0.5f - s.p1.y) / (s.p2.y - s.p1.y);
+                const float inv = 1.f / s.p1.cam_z + t * (1.f / s.p2.cam_z - 1.f / s.p1.cam_z);
+                row_depth_[static_cast<size_t>(y)] = inv > 0.f ? 1.f / inv : 0.f;
+            }
             max_y = s.p2.y;
         }
         slices_.push_back(s);

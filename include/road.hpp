@@ -69,6 +69,9 @@ public:
     // back of signs is drawn (`SpriteSheet::scenery_back`).
     void render(Framebuffer& fb, const Track& track, const RoadView& view,
                 const SpriteSheet& sprites, std::vector<RoadSprite>& objects);
+    // After render(): how far ahead of the camera (world units) the road or
+    // ground seen in each screen row lies; 0 where none is seen (the sky).
+    const std::vector<float>& row_depth() const { return row_depth_; }
 
 private:
     struct Slice {
@@ -91,6 +94,7 @@ private:
     const ScreenPoint& end(const Slice& s) const { return direction_ > 0 ? s.p2 : s.p1; }
 
     std::vector<Slice> slices_;
+    std::vector<float> row_depth_;
     float camera_depth_ = 1.f;
     float x_scale_ = 1.f;
     int direction_ = 1;

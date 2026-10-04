@@ -82,23 +82,29 @@ void apply_daylight(Framebuffer& fb, const Daylight& light) {
     }
 }
 
-void headlight_beam(Framebuffer& fb, const std::vector<uint32_t>& day, const Daylight& light, int horizon,
-                    int bottom) {
+void headlight_beam(Framebuffer& fb, const std::vector<uint32_t>& day, const Daylight& light,
+                    const std::vector<float>& row_depth, const Beam& beam) {
     const float dark = 1.f - light.level;
     if (dark <= 0.01f) return;
     uint32_t* px = fb.pixels_mut();
-    const int w = fb.width(), h = fb.height();
-    const float half = static_cast<float>(w) / 2.f;
-    for (int y = std::max(horizon + 1, 0); y < std::min(bottom, h); ++y) {
-        // Rows nearer the horizon are further away: the wedge narrows to the
-        // vanishing point, brightest at mid distance, fading into the dark.
-        const float s = static_cast<float>(y - horizon) / static_cast<float>(h - horizon);
-        const float reach = smoothstep(0.04f, 0.3f, s) * (1.f - 0.35f * s);
-        const float width = s * static_cast<float>(h) * (4.f / 3.f) * 0.55f; // as wide on a wide screen
-        for (int x = 0; x < w; ++x) {
-            const float across = std::abs(static_cast<float>(x) + 0.5f - half) / std::max(width, 1.f);
+    const int w = fb.width(), h = std::min(fb.height(), static_cast<int>(row_depth.size()));
+    for (int y = 0; y < std::min(beam.bottom, h); ++y) {
+        const float depth = row_depth[static_cast<size_t>(y)];
+        const float ahead = depth - beam.start; // from the lamps
+        if (depth <= 0.f || ahead <= 0.f || ahead > 4.f * beam_reach) continue;
+        // Bright from just past the lamps, fading with distance.
+        const float reach = smoothstep(0.f, 200.f, ahead) / (1.f + (ahead / beam_reach) * (ahead / beam_reach));
+        const float px_per_unit = beam.camera_depth / depth * beam.x_scale;
+        const float half = (beam_half_width + beam_spread * ahead) * px_per_unit;
+        const float mid = beam.center + beam.aim * ahead * px_per_unit;
+        const int x0 = std::max(0, static_cast<int>(mid - half)), x1 = std::min(w, static_cast<int>(mid + half) + 1);
+        for (int x = x0; x < x1; ++x) {
+            const float across = std::abs(static_cast<float>(x) + 0.5f - mid) / half;
             if (across >= 1.f) continue;
-            const float k = 0.85f * dark * reach * (1.f - across * across);
+            // Even across most of its width, a brighter spot in the middle,
+            // soft at the sides.
+            const float edge = smoothstep(1.f, 0.55f, across) * (0.75f + 0.25f * (1.f - across * across));
+            const float k = 0.9f * dark * reach * edge;
             const size_t i = static_cast<size_t>(y) * static_cast<size_t>(w) + static_cast<size_t>(x);
             const uint32_t a = px[i], o = day[i];
             const auto mix = [k](uint32_t from, uint32_t to) {

@@ -1839,10 +1839,34 @@ void Game::render() {
     if (headlights_) day_picture_.assign(fb_.pixels(), fb_.pixels() + width_ * height);
     apply_daylight(fb_, light);
     if (headlights_) {
-        const int beam_bottom = setup.cockpit ? height - dashboard_height
-                              : setup.car ? static_cast<int>(me.sy + me.sh * 0.35f)
-                              : height;
-        headlight_beam(fb_, day_picture_, light, height / 2, beam_bottom);
+        Beam beam;
+        beam.start = setup.distance + 450.f; // the lamps, at the car's front
+        beam.center = static_cast<float>(width_) / 2.f;
+        beam.aim = 0.08f * static_cast<float>(shown_steer);
+        beam.camera_depth = cam.depth;
+        beam.x_scale = x_unit;
+        beam.bottom = setup.cockpit ? height - dashboard_height : height;
+        // The car's own body stays dark: its pixels as they were before.
+        const int cx0 = std::max(0, static_cast<int>(me.sx)), cx1 = std::min(width_, static_cast<int>(me.sx + me.sw) + 1);
+        const int cy0 = std::max(0, static_cast<int>(me.sy)), cy1 = std::min(height, static_cast<int>(me.sy + me.sh) + 1);
+        const bool mask = car_visible && me.angle == 0.f && cx0 < cx1 && cy0 < cy1;
+        if (mask) {
+            car_night_.clear();
+            for (int y = cy0; y < cy1; ++y) {
+                car_night_.insert(car_night_.end(), fb_.pixels() + y * width_ + cx0, fb_.pixels() + y * width_ + cx1);
+            }
+        }
+        headlight_beam(fb_, day_picture_, light, road_.row_depth(), beam);
+        if (mask) {
+            const uint32_t* night = car_night_.data();
+            for (int y = cy0; y < cy1; ++y) {
+                for (int x = cx0; x < cx1; ++x, ++night) {
+                    const int u = static_cast<int>((static_cast<float>(x) + 0.5f - me.sx) / me.sw * static_cast<float>(car.w));
+                    const int v = static_cast<int>((static_cast<float>(y) + 0.5f - me.sy) / me.sh * static_cast<float>(car.h));
+                    if (car.opaque(u, v)) fb_.pixels_mut()[y * width_ + x] = *night;
+                }
+            }
+        }
     }
     if (flash_time_ > 0.f) {
         // Lightning lights up everything for a moment.

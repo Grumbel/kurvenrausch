@@ -2,7 +2,8 @@
 
 ## Current tip
 
-Tip is Round 17 (touch controls at screen resolution, the wide screen,
+Tip is Round 18 (in progress: headlights, options, tracks, oncoming traffic,
+more cars), after Round 17 (touch at screen resolution, wide screen,
 escapable police).
 Work is committed directly to `master`; Grok still delivers cumulative git
 bundles (see AGENTS.md).
@@ -24,6 +25,20 @@ Upstream master has since been fast-forwarded to `64fda32`, the tip of 002.1, so
 003.1 applied on top of it as a plain fast-forward.
 The rebase notes: upstream's rename is kept, its rendering fix is superseded by
 the road/framebuffer rewrite, `Color::to_u32()` became `Color::argb()`.
+
+## Round 18: the owner's list
+
+- More variety in the traffic and the cars to drive; oncoming traffic where
+  the road allows it, on the country's side of the road; tracks to choose
+  in the pause menu ("Small World", the current one, and a longer one with
+  cities in each country); a better headlight beam; a menu to switch
+  gameplay features (day/night, fuel, nitros, ...)
+- Headlights: `headlight_beam()` works in the world now. The road renderer
+  records each screen row's ground distance (`RoadRenderer::row_depth()`);
+  the beam starts at the car's front (`Beam::start`), widens by
+  `beam_spread`, fades over `beam_reach`, turns a little with the
+  steering, and lights whatever stands on the ground it reaches (not the
+  sky). The car's own pixels are put back after it (`car_night_`).
 
 ## Round 17: touch controls at screen resolution, the wide screen
 

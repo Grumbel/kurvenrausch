@@ -1020,10 +1020,28 @@ void test_daylight() {
     const std::vector<uint32_t> day(road.pixels(), road.pixels() + 40 * 40);
     apply_daylight(road, midnight);
     const uint32_t night_px = road.pixels()[30 * 40 + 20];
-    headlight_beam(road, day, midnight, 20, 40);
-    CHECK(((road.pixels()[30 * 40 + 20] >> 8) & 0xff) > ((night_px >> 8) & 0xff) + 20); // ahead: lit
+    // Flat ground: row y (below the horizon at 20) lies 20000 / (y - 20)
+    // ahead, and the lamps are 600 ahead.
+    std::vector<float> depth(40, 0.f);
+    for (int y = 21; y < 40; ++y) depth[static_cast<size_t>(y)] = 20000.f / static_cast<float>(y - 20);
+    Beam beam;
+    beam.start = 600.f;
+    beam.center = 20.f;
+    beam.x_scale = 20.f;
+    beam.bottom = 40;
+    headlight_beam(road, day, midnight, depth, beam);
+    const auto green = [&](int x, int y) { return static_cast<int>((road.pixels()[y * 40 + x] >> 8) & 0xff); };
+    CHECK(green(20, 30) > static_cast<int>((night_px >> 8) & 0xff) + 20); // ahead: lit
     CHECK(road.pixels()[10 * 40 + 20] == night_px); // above the horizon: dark
     CHECK(road.pixels()[30 * 40 + 1] == night_px);  // off to the side: dark
+    CHECK(green(20, 30) > green(20, 22));            // brighter near than far
+    // Turned with the steering, it lights the side it turns to.
+    Framebuffer turned(40, 40);
+    turned.clear(grass);
+    apply_daylight(turned, midnight);
+    beam.aim = 0.3f;
+    headlight_beam(turned, day, midnight, depth, beam);
+    CHECK(((turned.pixels()[23 * 40 + 26] >> 8) & 0xff) > ((road.pixels()[23 * 40 + 26] >> 8) & 0xff));
 }
 
 void test_pause_menu() {

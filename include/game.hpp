@@ -316,6 +316,7 @@ private:
     std::vector<Finger> touch_taps_;   // taps this frame, screen pixels
     Overlay overlay_;                  // drawn over the picture at screen resolution
     int width_ = base_width;           // the framebuffer's width now
+    std::vector<uint32_t> car_night_;  // scratch: the car in the dark, kept out of its own headlights
     bool wide_ = false;                // the player chose a picture as wide as the screen
     Uint64 prev_counter_ = 0;
     float accumulator_ = 0.f;

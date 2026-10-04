@@ -37,11 +37,29 @@ void apply_daylight(Framebuffer& fb, const Daylight& light);
 // the police lightbar, stars)?
 bool night_emissive(Color c);
 
-// The headlights' beam: the darkened road ahead lit again, the original
-// picture `day` (before apply_daylight) blended back in, in a wedge from
-// below row `bottom` towards the horizon at `horizon`, strongest at mid
-// distance. Nothing to do in full daylight.
-void headlight_beam(Framebuffer& fb, const std::vector<uint32_t>& day, const Daylight& light, int horizon,
-                    int bottom);
+// Where the headlights shine, in the camera's world: the lamps `start`
+// world units ahead of the camera, which looks straight down screen column
+// `center`; turned by `aim` (world units sideways per unit ahead, with the
+// steering). A row's ground is row_depth[y] ahead (0: none), and a world
+// unit there is camera_depth / depth * x_scale pixels wide. Rows from
+// `bottom` down are not lit (the car itself, the dashboard).
+struct Beam {
+    float start = 0.f;
+    float center = 160.f;
+    float aim = 0.f;
+    float camera_depth = 1.f;
+    float x_scale = 160.f;
+    int bottom = 0;
+};
+constexpr float beam_reach = 6000.f;    // world units: half as bright this far from the lamps
+constexpr float beam_half_width = 300.f; // at the lamps, world units ...
+constexpr float beam_spread = 0.7f;      // ... widening by this per unit ahead (35 degrees)
+
+// The headlights' beam: the darkened ground ahead lit again, the original
+// picture `day` (before apply_daylight) blended back in: from the lamps on,
+// widening ahead, fading with distance and to the sides, nothing over the
+// horizon. Nothing to do in full daylight.
+void headlight_beam(Framebuffer& fb, const std::vector<uint32_t>& day, const Daylight& light,
+                    const std::vector<float>& row_depth, const Beam& beam);
 
 } // namespace racer
