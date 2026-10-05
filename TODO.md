@@ -2,6 +2,12 @@
 
 ## Current tip
 
+### Grok: darker rural night; headlight cone in fog
+- night_level 0.22 → 0.08; default night_glow 0.05; cities still lift via
+  lit_by (0.55×). Headlight beam extends above the road horizon into air/fog
+  so the cone is not flat-topped in FOGGY.
+
+
 ### Grok: dealer not a free fill-up
 - change_car() no longer resets the tank. Switching cars at a dealer (or
   hospital ambulance / movie become) keeps the current fuel; only gas

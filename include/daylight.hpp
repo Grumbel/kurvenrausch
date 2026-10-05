@@ -19,7 +19,7 @@ struct Daylight {
     float stars = 0.f;  // 0 .. 1
     float sun = 1.f;    // 0 .. 1, how much of the sun shows
 };
-constexpr float night_level = 0.22f;
+constexpr float night_level = 0.08f;
 
 Daylight daylight_at(float hour);
 

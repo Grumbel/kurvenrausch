@@ -66,7 +66,8 @@ SkyBody moon_position(float hour) {
 }
 
 Daylight lit_by(Daylight light, float glow) {
-    light.level += (1.f - light.level) * 0.3f * std::clamp(glow, 0.f, 1.f);
+    // Cities (glow → 1) lift the floor; wilds (glow 0) keep the deep night_level.
+    light.level += (1.f - light.level) * 0.55f * std::clamp(glow, 0.f, 1.f);
     return light;
 }
 
@@ -134,10 +135,29 @@ void headlight_beam(Framebuffer& fb, const std::vector<uint32_t>& day, const Day
     if (dark <= 0.01f) return;
     uint32_t* px = fb.pixels_mut();
     const int w = fb.width(), h = std::min(fb.height(), static_cast<int>(row_depth.size()));
+    // First road row from the top of the screen (far crest / horizon). Above it,
+    // row_depth is 0 — in fog that made the cone look flat-topped. Extend a
+    // softer volumetric cone into that air using the horizon depth.
+    int horizon_y = -1;
+    float horizon_depth = 0.f;
+    for (int y = 0; y < h; ++y) {
+        if (row_depth[static_cast<size_t>(y)] > 0.f) {
+            horizon_y = y;
+            horizon_depth = row_depth[static_cast<size_t>(y)];
+            break;
+        }
+    }
     for (int y = 0; y < std::min(beam.bottom, h); ++y) {
-        const float depth = row_depth[static_cast<size_t>(y)];
+        float depth = row_depth[static_cast<size_t>(y)];
+        float air = 1.f; // 1 = full ground beam, <1 = fog scatter above the road
+        if (depth <= 0.f) {
+            if (horizon_y < 0 || y >= horizon_y) continue;
+            const float t = static_cast<float>(horizon_y - y) / static_cast<float>(std::max(1, horizon_y));
+            depth = horizon_depth * (1.f + 1.8f * t);
+            air = 0.55f * (1.f - 0.65f * t); // fade out toward the top of the frame
+        }
         const float ahead = depth - beam.start; // from the lamps
-        if (depth <= 0.f || ahead <= 0.f || ahead > 4.f * beam_reach) continue;
+        if (ahead <= 0.f || ahead > 4.f * beam_reach) continue;
         // Bright from just past the lamps, fading with distance.
         const float reach = smoothstep(0.f, 200.f, ahead) / (1.f + (ahead / beam_reach) * (ahead / beam_reach));
         const float px_per_unit = beam.camera_depth / depth * beam.x_scale;
@@ -150,7 +170,7 @@ void headlight_beam(Framebuffer& fb, const std::vector<uint32_t>& day, const Day
             // Even across most of its width, a brighter spot in the middle,
             // soft at the sides.
             const float edge = smoothstep(1.f, 0.55f, across) * (0.75f + 0.25f * (1.f - across * across));
-            const float k = 0.9f * dark * reach * edge;
+            const float k = 0.9f * dark * reach * edge * air;
             const size_t i = static_cast<size_t>(y) * static_cast<size_t>(w) + static_cast<size_t>(x);
             const uint32_t a = px[i], o = day[i];
             const auto mix = [k](uint32_t from, uint32_t to) {
