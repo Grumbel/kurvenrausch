@@ -2,6 +2,13 @@
 
 ## Current tip
 
+### Grok: render architecture notes + heavy fog
+- `docs/render-architecture.md`: overdraw, y-buffer, screen-split MT, scanline
+  assembly — what fits this engine and what does not.
+- Weather option FOGGY: dense distance fog without a full storm
+  (`with_heavy_fog`). Storms thicken fog more (`1.8×`). England base fog 12.
+
+
 ### Grok: tunnel columns a bit wider, softer bands
 - Column width 1.05 → 1.2 segment lengths.
 - Wall panel: closer tile colours, ~12 px courses, no dark joint lines —

@@ -332,7 +332,7 @@ line its left or right end to pick the country.
 OPTIONS in the pause menu switches gameplay features, kept for the next
 run: the time of day (the day passing, or held at day, dusk or night),
 fuel, how many nitro canisters each lap brings (0 to 9), police chases,
-the weather (changing, always clear, always stormy) and how much traffic
+the weather (changing, always clear, always stormy, heavy fog) and how much traffic
 there is (none to heavy).
 
 The picture is 4:3 with black bars on wider screens; SCREEN in the pause

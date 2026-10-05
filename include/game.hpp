@@ -215,7 +215,9 @@ private:
     void draw_touch();
     // The track's look at z under the weather passing over now.
     RoadTheme look_at(float z) const {
-        return at_daytime(weathered(track_.look_at(z), front_.level()), daylight_at(hour_));
+        RoadTheme look = weathered(track_.look_at(z), front_.level());
+        if (options_.weather == WeatherSetting::Foggy) look = with_heavy_fog(look);
+        return at_daytime(look, daylight_at(hour_));
     }
     void update_lightning(float rain, float dt);
 

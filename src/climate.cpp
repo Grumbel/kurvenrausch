@@ -49,10 +49,31 @@ RoadTheme weathered(const RoadTheme& look, float level) {
     r.fog = blend(look.fog, Color{0x90, 0x98, 0xa0}, 0.5f * storm);
     r.cloud_tint = blend(look.cloud_tint, grey, storm);
     r.cloud_tint_amount = std::clamp(look.cloud_tint_amount + 0.7f * storm, 0.f, 1.f);
-    r.fog_density = look.fog_density * (1.f + 1.2f * storm);
+    r.fog_density = look.fog_density * (1.f + 1.8f * storm);
     r.sun_amount = look.sun_amount * (1.f - storm);
     r.haze = std::clamp(look.haze + 0.5f * storm, 0.f, 1.f);
     r.grip = std::clamp(look.grip - 0.3f * (r.rain - look.rain) - 0.3f * (r.snowfall - look.snowfall), 0.4f, 1.f);
+    return r;
+}
+
+
+RoadTheme with_heavy_fog(const RoadTheme& look) {
+    RoadTheme r = look;
+    // Push density hard so exponential fog eats mid-distance scenery.
+    r.fog_density = std::max(look.fog_density * 2.6f, 22.f);
+    r.haze = std::clamp(look.haze + 0.65f, 0.f, 1.f);
+    const Color mist{0xb0, 0xb8, 0xc0};
+    const Color grey{0x70, 0x78, 0x80};
+    r.fog = blend(look.fog, mist, 0.75f);
+    r.sky_top = blend(look.sky_top, grey, 0.55f);
+    r.sky_horizon = blend(look.sky_horizon, mist, 0.7f);
+    r.cloud_tint = blend(look.cloud_tint, grey, 0.55f);
+    r.cloud_tint_amount = std::clamp(look.cloud_tint_amount + 0.55f, 0.f, 1.f);
+    r.sun_amount = look.sun_amount * 0.15f;
+    // Soft drizzle only — not Stormy's downpour.
+    r.rain = std::clamp(std::max(look.rain * 0.35f, 0.1f), 0.f, 0.35f);
+    r.snowfall = std::clamp(look.snowfall * 0.4f, 0.f, 0.45f);
+    r.grip = std::clamp(look.grip - 0.08f, 0.4f, 1.f);
     return r;
 }
 

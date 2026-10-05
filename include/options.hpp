@@ -13,7 +13,7 @@ namespace racer {
 
 // Gameplay features the player can switch, in the pause menu's GAME OPTIONS.
 enum class TimeSetting { Cycle, Day, Dusk, Night, count };
-enum class WeatherSetting { Changing, Clear, Stormy, count };
+enum class WeatherSetting { Changing, Clear, Stormy, Foggy, count };
 
 struct Options {
     TimeSetting time = TimeSetting::Cycle; // the day passing, or a fixed time

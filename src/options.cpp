@@ -28,6 +28,7 @@ float fixed_hour(TimeSetting time) {
 float weather_force(WeatherSetting weather) {
     switch (weather) {
         case WeatherSetting::Clear: return 0.f;
+        case WeatherSetting::Foggy: return 0.f; // front clear; fog applied in look_at
         case WeatherSetting::Stormy: return 1.f;
         default: return -1.f;
     }
@@ -115,7 +116,7 @@ OptionsAction OptionsMenu::choose(int item, int side, Options& options) {
 
 std::string OptionsMenu::line(int item, const Options& o, const std::string& place, const std::string& track_name) {
     static const char* times[] = {"CYCLE", "DAY", "DUSK", "NIGHT"};
-    static const char* weathers[] = {"CHANGING", "CLEAR", "STORMY"};
+    static const char* weathers[] = {"CHANGING", "CLEAR", "STORMY", "FOGGY"};
     static const char* traffic[] = {"NONE", "LIGHT", "NORMAL", "HEAVY"};
     const auto value = [](const std::string& label, const std::string& v) { return label + ": " + v; };
     switch (item) {

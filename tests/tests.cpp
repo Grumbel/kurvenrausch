@@ -1091,6 +1091,14 @@ void test_options() {
     // What the settings mean.
     CHECK(fixed_hour(TimeSetting::Cycle) < 0.f && fixed_hour(TimeSetting::Night) > 20.f);
     CHECK(weather_force(WeatherSetting::Changing) < 0.f && weather_force(WeatherSetting::Clear) == 0.f);
+    CHECK(weather_force(WeatherSetting::Foggy) == 0.f && weather_force(WeatherSetting::Stormy) == 1.f);
+    {
+        RoadTheme base{};
+        base.fog_density = 5.f;
+        base.sun_amount = 1.f;
+        const RoadTheme fog = with_heavy_fog(base);
+        CHECK(fog.fog_density > base.fog_density * 2.f && fog.sun_amount < 0.3f);
+    }
     CHECK(traffic_factor(0) == 0.f && traffic_factor(2) == 1.f && traffic_factor(3) > 1.f);
     // The nitro takes the chosen number of canisters.
     Nitro n;

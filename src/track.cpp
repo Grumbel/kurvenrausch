@@ -795,7 +795,7 @@ Zone zone_england() {
     t.hill_shade = Color{0x54, 0x8c, 0x44};
     t.cloud_tint = Color{0xa8, 0xb0, 0xbc};
     t.cloud_tint_amount = 0.5f;
-    t.fog_density = 7.f;
+    t.fog_density = 12.f;
     t.haze = 0.4f;
     t.mountain_scale = 0.35f;
     t.hill_scale = 1.1f;
