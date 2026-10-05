@@ -99,7 +99,6 @@ std::string OptionsMenu::line(int item, const Options& o) {
     }
 }
 
-} // namespace racer
 
 bool VideoMenu::update(const MenuInput& in, bool& wide, bool& hd, bool& toggle_fullscreen) {
     if (in.back) return true;
@@ -112,7 +111,7 @@ bool VideoMenu::update(const MenuInput& in, bool& wide, bool& hd, bool& toggle_f
     return false;
 }
 
-bool VideoMenu::choose(int item, int side, bool& wide, bool& hd, bool& toggle_fullscreen) {
+bool VideoMenu::choose(int item, int /*side*/, bool& wide, bool& hd, bool& toggle_fullscreen) {
     if (item < 0 || item >= items) return false;
     selected = item;
     if (item == Back) return true;
@@ -131,14 +130,13 @@ std::string VideoMenu::line(int item, bool wide, bool hd) {
     }
 }
 
-
 bool AudioMenu::update(const MenuInput& in, bool& muted, int& music) {
     if (in.back) return true;
     if (in.up) selected = ((selected - 1) % items + items) % items;
     if (in.down) selected = (selected + 1) % items;
     if (selected == Back) return in.confirm;
     if (selected == Mute && (in.left || in.right || in.confirm)) muted = !muted;
-    if (selected == Music) {
+    if (selected == Radio) {
         if (in.left) music = Music::previous(music);
         if (in.right || in.confirm) music = Music::next(music);
     }
@@ -150,14 +148,16 @@ bool AudioMenu::choose(int item, int side, bool& muted, int& music) {
     selected = item;
     if (item == Back) return true;
     if (item == Mute) muted = !muted;
-    if (item == Music) music = side < 0 ? Music::previous(music) : Music::next(music);
+    if (item == Radio) music = side < 0 ? Music::previous(music) : Music::next(music);
     return false;
 }
 
 std::string AudioMenu::line(int item, bool muted, int music) {
     switch (item) {
         case Mute: return std::string("MUTE: ") + (muted ? "ON" : "OFF");
-        case Music: return std::string("MUSIC: ") + Music::name(music);
+        case Radio: return std::string("MUSIC: ") + Music::name(music);
         default: return "BACK";
     }
 }
+
+} // namespace racer

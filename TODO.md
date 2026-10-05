@@ -2,6 +2,11 @@
 
 ## Current tip
 
+### Grok: fix VideoMenu/AudioMenu outside namespace
+- `src/options.cpp` had Video/Audio method bodies after `namespace racer`
+  closed; moved inside. Renamed `AudioMenu::Music` to `Radio` so it does
+  not hide `class Music`.
+
 ### Grok: optional HD (2× internal resolution)
 - VIDEO menu RESOLUTION: SD / HD. HD is 640×480 design (wide up to 1280),
   pixel_scale_ 2; projection, mirror, cockpit scaled. Sprites stay pixel art

@@ -72,7 +72,7 @@ struct VideoMenu {
 
 // Audio: mute and radio track.
 struct AudioMenu {
-    enum Item { Mute, Music, Back, items };
+    enum Item { Mute, Radio, Back, items };
 
     int selected = Mute;
 
