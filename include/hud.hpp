@@ -68,8 +68,8 @@ void draw_pause_menu(Framebuffer& fb, const PauseMenu& menu, const std::string& 
 // The pause menu's OPTIONS page, laid out like the pause menu.
 void draw_options_menu(Framebuffer& fb, const OptionsMenu& menu, const Options& options,
                        const std::string& place, const std::string& track);
-void draw_debug_menu(Framebuffer& fb, const DebugMenu& menu, const DebugOptions& debug);
-void draw_video_menu(Framebuffer& fb, const VideoMenu& menu, bool wide, bool hd);
+void draw_debug_menu(Framebuffer& fb, const DebugMenu& menu, const DebugOptions& debug, float hour);
+void draw_video_menu(Framebuffer& fb, const VideoMenu& menu, bool wide, bool hd, const DebugOptions& debug);
 void draw_audio_menu(Framebuffer& fb, const AudioMenu& menu, bool muted, int engine_vol, int music_vol,
                        int music);
 void draw_fps(Framebuffer& fb, float fps);

@@ -131,32 +131,37 @@ std::string OptionsMenu::line(int item, const Options& o, const std::string& pla
     }
 }
 
-bool VideoMenu::update(const MenuInput& in, bool& wide, bool& hd, bool& toggle_fullscreen) {
+bool VideoMenu::update(const MenuInput& in, bool& wide, bool& hd, bool& toggle_fullscreen, DebugOptions& debug) {
     if (in.back) return true;
-    if (in.up) selected = ((selected - 1) % items + items) % items;
-    if (in.down) selected = (selected + 1) % items;
+    if (in.up) selected = wrap(selected - 1, items);
+    if (in.down) selected = wrap(selected + 1, items);
     if (selected == Back) return in.confirm;
-    if (selected == Wide && (in.left || in.right || in.confirm)) wide = !wide;
-    if (selected == Hd && (in.left || in.right || in.confirm)) hd = !hd;
-    if (selected == Fullscreen && (in.left || in.right || in.confirm)) toggle_fullscreen = true;
+    if (in.left || in.right || in.confirm) choose(selected, in.left ? -1 : 1, wide, hd, toggle_fullscreen, debug);
     return false;
 }
 
-bool VideoMenu::choose(int item, int /*side*/, bool& wide, bool& hd, bool& toggle_fullscreen) {
+bool VideoMenu::choose(int item, int /*side*/, bool& wide, bool& hd, bool& toggle_fullscreen, DebugOptions& debug) {
     if (item < 0 || item >= items) return false;
     selected = item;
-    if (item == Back) return true;
-    if (item == Wide) wide = !wide;
-    if (item == Hd) hd = !hd;
-    if (item == Fullscreen) toggle_fullscreen = true;
+    switch (item) {
+        case Wide: wide = !wide; break;
+        case Hd: hd = !hd; break;
+        case Fullscreen: toggle_fullscreen = true; break;
+        case WeatherFx: debug.weather = !debug.weather; break;
+        case Fps: debug.fps = !debug.fps; break;
+        case Back: return true;
+        default: break;
+    }
     return false;
 }
 
-std::string VideoMenu::line(int item, bool wide, bool hd) {
+std::string VideoMenu::line(int item, bool wide, bool hd, const DebugOptions& debug) {
     switch (item) {
         case Wide: return std::string("SCREEN: ") + (wide ? "WIDE" : "4:3");
         case Hd: return std::string("RESOLUTION: ") + (hd ? "HD" : "SD");
         case Fullscreen: return "FULLSCREEN";
+        case WeatherFx: return std::string("WEATHER FX: ") + (debug.weather ? "ON" : "OFF");
+        case Fps: return std::string("FPS: ") + (debug.fps ? "ON" : "OFF");
         default: return "BACK";
     }
 }

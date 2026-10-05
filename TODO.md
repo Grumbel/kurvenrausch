@@ -2,6 +2,12 @@
 
 ## Current tip
 
+### Grok: menu — Debug hour, Video weather/FPS
+- DEBUG: HOUR (left/right steps the clock; switches Game Options time to
+  Cycle so a fixed Day/Dusk/Night does not snap it back). WEATHER FX and
+  FPS moved off Debug.
+- VIDEO: SCREEN, RESOLUTION, FULLSCREEN, WEATHER FX, FPS, BACK.
+
 ### Grok: horn wakes city windows at night
 - In a town/city (`night_glow >= 0.35`) after dark, holding the horn lights
   every window on nearby buildings for a couple of seconds.

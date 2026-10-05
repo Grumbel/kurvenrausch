@@ -557,9 +557,9 @@ bool Game::frame() {
     if (paused_ && options_open_)
         draw_options_menu(fb_, options_menu_, options_, zone_label(options_menu_.zone),
                           track_name(options_menu_.track));
-    else if (paused_ && video_open_) draw_video_menu(fb_, video_menu_, wide_, pixel_scale_ >= 2);
+    else if (paused_ && video_open_) draw_video_menu(fb_, video_menu_, wide_, pixel_scale_ >= 2, debug_);
     else if (paused_ && audio_open_) draw_audio_menu(fb_, audio_menu_, muted_, engine_vol_, music_vol_, music_);
-    else if (paused_ && debug_open_) draw_debug_menu(fb_, debug_menu_, debug_);
+    else if (paused_ && debug_open_) draw_debug_menu(fb_, debug_menu_, debug_, hour_);
     else if (paused_) draw_pause_menu(fb_, menu_, zone_label(zone_), track_name(track_index_));
     if (debug_.fps) draw_fps(fb_, fps_);
     present();
@@ -824,12 +824,17 @@ bool Game::update_pause(const InputState& input) {
         return true;
     }
     if (debug_open_ && !input.pause) {
-        bool close = debug_menu_.update(input.menu, debug_);
+        const float hour_before = hour_;
+        bool close = debug_menu_.update(input.menu, debug_, hour_);
         for (const Finger& tap : touch_taps_) {
             float x = 0.f, y = 0.f;
             display_->screen_to_framebuffer(tap.x, tap.y, x, y);
             const MenuTap where = options_tap(x, y, width_, fb_height(), DebugMenu::items);
-            close = debug_menu_.choose(where.item, where.side, debug_) || close;
+            close = debug_menu_.choose(where.item, where.side, debug_, hour_) || close;
+        }
+        if (hour_ != hour_before) {
+            // Free the clock from a fixed Day/Dusk/Night setting so the scrub sticks.
+            options_.time = TimeSetting::Cycle;
         }
         if (close) {
             if (debug_menu_.selected == DebugMenu::Sprites)
@@ -847,12 +852,12 @@ bool Game::update_pause(const InputState& input) {
     if (video_open_ && !input.pause) {
         bool want_fs = false;
         bool hd = pixel_scale_ >= 2;
-        bool close = video_menu_.update(input.menu, wide_, hd, want_fs);
+        bool close = video_menu_.update(input.menu, wide_, hd, want_fs, debug_);
         for (const Finger& tap : touch_taps_) {
             float x = 0.f, y = 0.f;
             display_->screen_to_framebuffer(tap.x, tap.y, x, y);
             const MenuTap where = options_tap(x, y, width_, fb_height(), VideoMenu::items);
-            close = video_menu_.choose(where.item, where.side, wide_, hd, want_fs) || close;
+            close = video_menu_.choose(where.item, where.side, wide_, hd, want_fs, debug_) || close;
         }
         set_pixel_scale(hd ? 2 : 1);
         if (want_fs) display_->toggle_fullscreen();
