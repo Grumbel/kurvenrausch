@@ -1733,14 +1733,16 @@ Bitmap make_cliff_face(int variant, bool snowy) {
     const Color scrub = Color{0x6c, 0x78, 0x50};
     const int v = ((variant % 5) + 5) % 5;
 
-    // Flat crest band (plateau), then the mass widens toward the base.
-    // Road sits on the +x side when not flipped. Crest and base a little
-    // wider than the first plateaus so the flanks read as broader slopes.
-    const float crest_left = 0.14f + 0.06f * hash01(v, 1);
-    const float crest_right = 0.62f + 0.08f * hash01(v, 2);
-    const float crest_y = 0.06f + 0.04f * hash01(v, 3); // top of plateau
-    const float base_left = 0.00f + 0.03f * hash01(v, 4);
-    const float base_right = 0.94f + 0.06f * hash01(v, 5);
+    // Plateau hugs the road (+x when not flipped); long outer slope falls
+    // away on the left. Earlier crests sat on the outer side so the mass
+    // leaned the wrong way (high ground away from the road).
+    // crest_right ≈ base_right → steep cliff face by the road.
+    // crest_left >> base_left → flat mountain slope outward.
+    const float crest_left = 0.48f + 0.08f * hash01(v, 1);
+    const float crest_right = 0.90f + 0.06f * hash01(v, 2);
+    const float crest_y = 0.05f + 0.04f * hash01(v, 3);
+    const float base_left = 0.00f + 0.04f * hash01(v, 4);
+    const float base_right = 0.96f + 0.04f * hash01(v, 5);
 
     for (int y = 0; y < b.h; ++y) {
         const float fy = static_cast<float>(y) / static_cast<float>(b.h - 1);
@@ -1748,19 +1750,26 @@ Bitmap make_cliff_face(int variant, bool snowy) {
         if (fy < crest_y) {
             continue; // above the plateau
         }
-        // Blend from crest width to base width; soft ease so the top stays flat.
+        // Slow ease: plateau reads long, then a gradual outer fall-off.
         const float t = (fy - crest_y) / (1.f - crest_y);
-        const float ease = t * t; // slow start → flat top reads longer
+        const float ease = t * t * t; // flatter outer slope than t²
         left = crest_left + (base_left - crest_left) * ease;
         right = crest_right + (base_right - crest_right) * ease;
-        // Mild raggedness on the outer (left) flank only.
-        left += 0.025f * (hash01(y / 3, v * 7) - 0.5f);
-        right += 0.015f * (hash01(y / 4, v * 9) - 0.5f);
-        if (v == 1) left = crest_left + (0.0f - crest_left) * ease; // longer outer slope
-        if (v == 2) right = crest_right + (0.98f - crest_right) * std::sqrt(std::max(0.f, t));
-        if (v == 3 && t > 0.5f) {
-            const float step = std::floor((t - 0.5f) * 3.f) / 3.f;
-            left -= 0.05f * step;
+        // Mild raggedness on the outer flank only.
+        left += 0.03f * (hash01(y / 3, v * 7) - 0.5f);
+        right += 0.01f * (hash01(y / 4, v * 9) - 0.5f);
+        if (v == 1) { // even longer outer slope
+            left = crest_left + (0.0f - crest_left) * (ease * 0.85f + t * 0.15f);
+        }
+        if (v == 2) { // slight overhang on the road face
+            right = crest_right + (0.99f - crest_right) * std::sqrt(std::max(0.f, t));
+        }
+        if (v == 3 && t > 0.4f) { // stepped outer slope
+            const float step = std::floor((t - 0.4f) * 4.f) / 4.f;
+            left -= 0.06f * step;
+        }
+        if (v == 4) { // recessed: plateau starts further from the road
+            left = (crest_left - 0.12f) + (base_left - (crest_left - 0.12f)) * ease;
         }
         left = std::clamp(left, 0.f, 1.f);
         right = std::clamp(right, left + 0.12f, 1.f);
@@ -1786,7 +1795,8 @@ Bitmap make_cliff_face(int variant, bool snowy) {
     return b;
 }
 
-// Simple concrete wall panel for tunnel sides (vertical column sprite).
+// Concrete wall panel for tunnel sides. No outline or side highlight so
+// neighbouring columns blend without flicker.
 Bitmap make_tunnel_wall() {
     Bitmap b(24, 64);
     const Color tile{0xd0, 0xc8, 0xbc}, tile_d{0xb0, 0xa8, 0x9c}, joint{0x5c, 0x58, 0x52};
@@ -1796,13 +1806,9 @@ Bitmap make_tunnel_wall() {
         Color row = fy < 0.12f ? kerb : (fy < 0.55f ? ((y / 6) % 2 ? tile : tile_d) : upper);
         if (y % 6 == 0) row = joint;
         for (int x = 0; x < b.w; ++x) {
-            Color c = row;
-            if (x == 0 || x == b.w - 1) c = joint;
-            if (x == 1) c = blend(c, Color{0xf0, 0xec, 0xe4}, 0.3f);
-            b.set(x, y, c);
+            b.set(x, y, row);
         }
     }
-    paint::outline(b, Outline);
     return b;
 }
 

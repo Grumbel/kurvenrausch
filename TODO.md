@@ -2,6 +2,14 @@
 
 ## Current tip
 
+### Grok: cliff slope toward the road; tunnel columns seamless
+- Cliff plateaus now sit on the road side (+x); the long flat outer slope
+  falls away on the left (was inverted: high ground on the outer flank).
+  Outer ease is t³ for an even flatter fall-off.
+- Tunnel wall columns: no outline, no side joint/highlight, so neighbours
+  blend without edge flicker.
+
+
 ### Grok: tunnel columns ×3, portal matches ceiling
 - Continuous full-width tunnel walls dropped (did not work visually). Side
   walls are column sprites again at ~3× the previous width (1.05 segment
