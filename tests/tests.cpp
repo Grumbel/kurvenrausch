@@ -1134,6 +1134,16 @@ void test_daylight() {
     const Daylight noon = daylight_at(12.f), midnight = daylight_at(0.f), dusk = daylight_at(17.95f);
     CHECK(noon.level == 1.f && noon.stars == 0.f && noon.glow == 0.f && noon.sun == 1.f);
     CHECK(std::abs(midnight.level - night_level) < 1e-4f && midnight.stars == 1.f && midnight.sun == 0.f);
+    {
+        RoadTheme city{};
+        city.night_glow = 0.8f;
+        const RoadTheme city_night = at_daytime(city, midnight);
+        CHECK(city_night.stars < 0.1f); // light pollution
+        RoadTheme wild{};
+        wild.night_glow = 0.f;
+        const RoadTheme wild_night = at_daytime(wild, midnight);
+        CHECK(wild_night.stars > 0.95f);
+    }
     CHECK(dusk.glow > 0.7f && dusk.level < 1.f && dusk.level > night_level);
     CHECK(daylight_at(6.05f).glow > 0.7f); // dawn too
     // Sun and moon arc: zenith at noon / midnight, on the horizon at 6 and 18.

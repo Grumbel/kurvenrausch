@@ -1188,7 +1188,7 @@ Zone zone_san_francisco() {
     t.lanes = 2;
     t.us_markings = true;
     z.theme.showers = 0.35f;
-    z.theme.night_glow = 0.7f; // the city
+    z.theme.night_glow = 0.45f; // the city
     z.theme.beyond[0] = Color{0x1c, 0x68, 0xa8}; // the bay
     z.theme.beyond[1] = Color{0x28, 0x78, 0xb8};
     return z;
@@ -1692,7 +1692,7 @@ Zone city(Zone country, const char* name, Scenery tree, TownStyle style = TownSt
     z.decor = Decor::Town;
     z.town_tree = tree;
     z.town = style;
-    z.theme.night_glow = 0.75f; // street lights, windows, the sky aglow
+    z.theme.night_glow = 0.5f; // street lights, windows, the sky aglow
     RoadTheme& t = z.theme;
     t.grass[0] = blend(Color{0xb8, 0xb4, 0xac}, t.grass[0], 0.15f);
     t.grass[1] = blend(Color{0xae, 0xaa, 0xa2}, t.grass[1], 0.15f);
@@ -1967,7 +1967,7 @@ Track build_track(int index) {
     b.motel();
     // The Strip: casinos in lights in the middle of the desert.
     Zone vegas = city(zone_arizona(), "LAS VEGAS", Scenery::Palm, TownStyle::Strip);
-    vegas.theme.night_glow = 1.f;
+    vegas.theme.night_glow = 0.65f;
     vegas.theme.lanes = 3;
     b.begin_zone(vegas);
     b.straight(Len::Medium);

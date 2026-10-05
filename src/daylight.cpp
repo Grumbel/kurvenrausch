@@ -66,8 +66,8 @@ SkyBody moon_position(float hour) {
 }
 
 Daylight lit_by(Daylight light, float glow) {
-    // Cities (glow → 1) lift the floor; wilds (glow 0) keep the deep night_level.
-    light.level += (1.f - light.level) * 0.55f * std::clamp(glow, 0.f, 1.f);
+    // Cities lift the floor modestly; wilds keep the deep night_level.
+    light.level += (1.f - light.level) * 0.32f * std::clamp(glow, 0.f, 1.f);
     return light;
 }
 
@@ -75,7 +75,7 @@ RoadTheme at_daytime(const RoadTheme& look, const Daylight& light) {
     RoadTheme r = look;
     // Over a city the night sky glows orange from its lights.
     const float dark = std::clamp((1.f - light.level) / (1.f - night_level), 0.f, 1.f);
-    r.sky_horizon = blend(look.sky_horizon, Color{0xe0, 0x90, 0x50}, 0.45f * dark * look.night_glow);
+    r.sky_horizon = blend(look.sky_horizon, Color{0xe0, 0x90, 0x50}, 0.28f * dark * look.night_glow);
     r.sky_horizon = blend(look.sky_horizon, Color{0xff, 0x90, 0x50}, 0.7f * light.glow);
     r.sky_top = blend(look.sky_top, Color{0x60, 0x40, 0x90}, 0.4f * light.glow);
     r.sun = blend(look.sun, Color{0xff, 0x70, 0x30}, light.glow);
@@ -83,7 +83,10 @@ RoadTheme at_daytime(const RoadTheme& look, const Daylight& light) {
     r.sun_amount = std::max(look.sun_amount, 0.6f * light.glow) * light.sun;
     r.cloud_tint = blend(look.cloud_tint, Color{0xc0, 0x50, 0x40}, light.glow);
     r.cloud_tint_amount = std::clamp(look.cloud_tint_amount + 0.5f * light.glow, 0.f, 1.f);
-    r.stars = light.stars;
+    // Light pollution: cities wash out the stars; open country keeps them bright.
+    const float pollution = std::clamp(look.night_glow, 0.f, 1.f);
+    const float clear = std::clamp(1.f - pollution, 0.f, 1.f);
+    r.stars = light.stars * clear * clear; // quadratic: gone in city, full in the wilds
     return r;
 }
 

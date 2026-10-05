@@ -2,6 +2,11 @@
 
 ## Current tip
 
+### Grok: dimmer cities; stars vs light pollution
+- lit_by city lift 0.55 → 0.32; SF/Vegas night_glow lowered. Stars scale with
+  (1 − night_glow)² so cities hide them and open country keeps a full sky.
+
+
 ### Grok: darker rural night; headlight cone in fog
 - night_level 0.22 → 0.08; default night_glow 0.05; cities still lift via
   lit_by (0.55×). Headlight beam extends above the road horizon into air/fog
