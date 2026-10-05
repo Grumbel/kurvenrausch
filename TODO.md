@@ -2,6 +2,11 @@
 
 ## Current tip
 
+### Grok: Scanner looks more like the KITT reference
+- `Body::Scanner` redrawn: rounded coupe silhouette (ellipses + taper),
+  continuous red light bar with bright centre, dark glass and seat hints,
+  dual tips, blank plate. No show lettering.
+
 ### Grok: debug menu + sprite viewer
 - Pause menu DEBUG page: toggle HUD, mirror, map, weather FX, headlights;
   SPRITES… launches the sprite browser. CLI `--sprites` for the same without

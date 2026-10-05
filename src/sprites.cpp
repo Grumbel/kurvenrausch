@@ -2259,24 +2259,90 @@ Bitmap make_movie_car(Body body, const CarStyle& st, int turn, bool brake, int s
     };
     switch (body) {
         case Body::Scanner: {
-            // Long and low: a wide flat deck with a ducktail, the tail
-            // lights one smoked red band right across, a black bumper.
-            for (int x : {4, 78}) tyre(b, x, at(27), 14, 15, tread);
-            paint::rect(b, 4 + s, at(18), 88, 18, st.body);
-            paint::rect(b, 6 + s, at(16), 84, 3, st.body_light); // the ducktail's lip
-            paint::rect(b, 4 + s, at(19), 88, 1, st.body_dark);
-            paint::rect(b, 8 + s, at(21), 80, 7, Color{0x30, 0x06, 0x08});
-            for (int x = 10; x < 86; x += 10) {
-                paint::rect(b, x + s, at(22), 8, 5, lamp);
-                paint::rect(b, x + 1 + s, at(23), 6, 1, lamp_hi);
+            // Knight-Rider-ish coupe from the rear: rounded sports silhouette
+            // (not a slab), continuous red light bar with a bright centre,
+            // dark glass, dual tips. Plate blank — no show lettering.
+            const Color body = st.body, body_d = st.body_dark, body_l = st.body_light;
+            const Color rubber{0x0c, 0x0c, 0x10}, plate{0x18, 0x18, 0x1c};
+            const Color glass_d{0x14, 0x1c, 0x28}, glass_m{0x28, 0x34, 0x44};
+            const Color bar{0x60, 0x08, 0x0c}, bar_mid{0xc0, 0x10, 0x18};
+            const Color scan = brake ? Color{0xff, 0x40, 0x38} : Color{0xff, 0x18, 0x14};
+            const Color scan_hi = brake ? Color{0xff, 0xe0, 0xd0} : Color{0xff, 0x80, 0x70};
+
+            for (int x : {3, 79}) tyre(b, x, at(28), 14, 14, tread);
+
+            // Rounded haunches — the silhouette is a soft coupe, not a brick.
+            paint::ellipse(b, 16.f + s, static_cast<float>(at(26)), 14.f, 11.f, body);
+            paint::ellipse(b, 80.f + s, static_cast<float>(at(26)), 14.f, 11.f, body);
+            paint::ellipse(b, 16.f + s, static_cast<float>(at(26)), 10.f, 8.f, body_d);
+            paint::ellipse(b, 80.f + s, static_cast<float>(at(26)), 10.f, 8.f, body_d);
+
+            // Main rear body, slightly tapered toward the roof.
+            for (int y = 16; y < 34; ++y) {
+                const int inset = (y < 20) ? (20 - y) : 0;
+                const int x0 = 8 + inset + s;
+                const int x1 = 88 - inset + s;
+                paint::rect(b, x0, at(y), x1 - x0, 1, (y == 16) ? body_l : body);
             }
-            indicator(b, 8 + s, at(22), 3, 5, lit(signal, -1));
-            indicator(b, 85 + s, at(22), 3, 5, lit(signal, 1));
-            paint::rect(b, 6 + s, at(29), 84, 4, st.body);
-            paint::rect(b, 40 + s, at(30), 16, 4, Color{0xe8, 0xe8, 0xd8});
-            paint::rect(b, 4 + s, at(34), 88, 3, black);
-            cabin(st.body, 4);
-            paint::rect(b, 47 + u, at(3), 2, 2, st.body_light); // the T-top's bar
+            // Soft highlight along the belt line.
+            paint::rect(b, 12 + s, at(17), 72, 1, body_l);
+            paint::rect(b, 14 + s, at(28), 68, 1, body_d);
+
+            // Cabin / rear window: wide, rounded top, dark glass + seat hints.
+            paint::ellipse(b, 48.f + u, static_cast<float>(at(10)), 28.f, 10.f, body);
+            paint::rect(b, 22 + u, at(4), 52, 12, body);
+            // Glass well.
+            paint::rect(b, 26 + u, at(6), 44, 10, glass_d);
+            paint::ellipse(b, 48.f + u, static_cast<float>(at(8)), 20.f, 6.f, glass_m);
+            // Seat silhouettes through the glass.
+            paint::rect(b, 32 + u, at(10), 8, 5, Color{0x0c, 0x10, 0x18});
+            paint::rect(b, 56 + u, at(10), 8, 5, Color{0x0c, 0x10, 0x18});
+            // T-top / roof seam.
+            paint::rect(b, 47 + u, at(4), 2, 12, body_d);
+            paint::rect(b, 47 + u, at(4), 1, 12, black);
+            // C-pillars, slightly curved by stepping.
+            paint::rect(b, 22 + u, at(6), 4, 10, body_d);
+            paint::rect(b, 70 + u, at(6), 4, 10, body_d);
+            paint::rect(b, 24 + u, at(5), 2, 2, body);
+            paint::rect(b, 70 + u, at(5), 2, 2, body);
+
+            // Continuous red light bar across the rear (the scanner strip).
+            paint::rect(b, 10 + s, at(19), 76, 7, black);
+            paint::rect(b, 12 + s, at(20), 72, 5, bar);
+            // Segmented glow along the bar.
+            for (int x = 14; x < 82; x += 6)
+                paint::rect(b, x + s, at(21), 4, 3, bar_mid);
+            // Bright centre scanner lamp (brighter when braking).
+            paint::rect(b, 44 + s, at(19), 8, 7, scan);
+            paint::rect(b, 46 + s, at(20), 4, 5, scan_hi);
+            paint::rect(b, 47 + s, at(21), 2, 3, Color{0xff, 0xf0, 0xe8});
+            // Outer ends a touch dimmer / smoked.
+            paint::rect(b, 12 + s, at(20), 6, 5, Color{0x40, 0x04, 0x08});
+            paint::rect(b, 78 + s, at(20), 6, 5, Color{0x40, 0x04, 0x08});
+            indicator(b, 8 + s, at(20), 3, 5, lit(signal, -1));
+            indicator(b, 85 + s, at(20), 3, 5, lit(signal, 1));
+
+            // Side mirror stubs.
+            paint::rect(b, 2 + s, at(14), 5, 3, body_d);
+            paint::rect(b, 89 + s, at(14), 5, 3, body_d);
+
+            // Lower valance / bumper.
+            paint::rect(b, 10 + s, at(27), 76, 6, body_d);
+            paint::rect(b, 14 + s, at(28), 68, 1, body_l);
+            // Blank plate (no show lettering).
+            paint::rect(b, 38 + s, at(29), 20, 6, rubber);
+            paint::rect(b, 40 + s, at(30), 16, 4, plate);
+
+            // Thick lower bumper lip.
+            paint::rect(b, 8 + s, at(34), 80, 4, rubber);
+            paint::rect(b, 10 + s, at(34), 76, 1, Color{0x2a, 0x2a, 0x32});
+
+            // Dual exhaust tips, inset under the bumper.
+            for (int x : {22, 30, 62, 70}) {
+                paint::rect(b, x + s, at(36), 5, 3, Color{0x28, 0x28, 0x30});
+                paint::rect(b, x + 1 + s, at(37), 3, 1, chrome);
+            }
+
             break;
         }
         case Body::TimeCar: {
