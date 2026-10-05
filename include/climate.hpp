@@ -37,8 +37,9 @@ private:
 // road gets slippery; drier, the road grips better.
 RoadTheme weathered(const RoadTheme& look, float level);
 
-// Dense fog without a full storm: thick distance fog, haze, muted sun and
-// sky, only a light misty drizzle. Used for WeatherSetting::Foggy.
+// Pea-soup fog without a full storm: very high fog_density so scenery washes
+// out close to the camera, full mountain haze, muted sun/sky, light drizzle.
+// Used for WeatherSetting::Foggy.
 RoadTheme with_heavy_fog(const RoadTheme& look);
 
 // Lightning: how many strikes per second a storm of rain `rain` brings.

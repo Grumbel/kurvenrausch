@@ -59,21 +59,23 @@ RoadTheme weathered(const RoadTheme& look, float level) {
 
 RoadTheme with_heavy_fog(const RoadTheme& look) {
     RoadTheme r = look;
-    // Push density hard so exponential fog eats mid-distance scenery.
-    r.fog_density = std::max(look.fog_density * 2.6f, 22.f);
-    r.haze = std::clamp(look.haze + 0.65f, 0.f, 1.f);
-    const Color mist{0xb0, 0xb8, 0xc0};
-    const Color grey{0x70, 0x78, 0x80};
-    r.fog = blend(look.fog, mist, 0.75f);
-    r.sky_top = blend(look.sky_top, grey, 0.55f);
-    r.sky_horizon = blend(look.sky_horizon, mist, 0.7f);
-    r.cloud_tint = blend(look.cloud_tint, grey, 0.55f);
-    r.cloud_tint_amount = std::clamp(look.cloud_tint_amount + 0.55f, 0.f, 1.f);
-    r.sun_amount = look.sun_amount * 0.15f;
+    // Pea-soup: density must be high because fog uses (n/draw_distance)², so
+    // modest values only haze the far third of the view. ~100 washes out by
+    // ~10–15% of the draw distance.
+    r.fog_density = std::max(look.fog_density * 8.f, 100.f);
+    r.haze = 1.f; // mountains / hills dissolve into the air
+    const Color mist{0xc0, 0xc8, 0xd0};
+    const Color grey{0x88, 0x90, 0x98};
+    r.fog = blend(look.fog, mist, 0.85f);
+    r.sky_top = blend(look.sky_top, grey, 0.75f);
+    r.sky_horizon = blend(look.sky_horizon, mist, 0.85f);
+    r.cloud_tint = blend(look.cloud_tint, grey, 0.7f);
+    r.cloud_tint_amount = std::clamp(look.cloud_tint_amount + 0.75f, 0.f, 1.f);
+    r.sun_amount = look.sun_amount * 0.05f;
     // Soft drizzle only — not Stormy's downpour.
-    r.rain = std::clamp(std::max(look.rain * 0.35f, 0.1f), 0.f, 0.35f);
-    r.snowfall = std::clamp(look.snowfall * 0.4f, 0.f, 0.45f);
-    r.grip = std::clamp(look.grip - 0.08f, 0.4f, 1.f);
+    r.rain = std::clamp(std::max(look.rain * 0.35f, 0.12f), 0.f, 0.4f);
+    r.snowfall = std::clamp(look.snowfall * 0.4f, 0.f, 0.5f);
+    r.grip = std::clamp(look.grip - 0.1f, 0.4f, 1.f);
     return r;
 }
 

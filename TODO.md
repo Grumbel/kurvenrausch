@@ -2,6 +2,11 @@
 
 ## Current tip
 
+### Grok: pea-soup FOGGY
+- FOGGY was only a mild haze (density ~22). Now density ≥ 100 and full
+  mountain haze so fog closes in within ~10–15% of draw distance.
+
+
 ### Grok: atmospheric distance (blue air)
 - Distance fog uses `atmosphere_air` (horizon sky mixed with theme fog) and
   `fogged_color` with slightly stronger red extinction so mid-distance
