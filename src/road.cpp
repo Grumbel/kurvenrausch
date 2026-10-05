@@ -365,7 +365,6 @@ void RoadRenderer::draw_edge(Framebuffer& fb, const Track& track, const Slice& s
     const float h2 = track.edge_height(near + direction_, side);
     const float ppu_a = a.scale * x_scale_, ppu_b = b.scale * x_scale_;
     const float ta = a.y - h1 * ppu_a, tb = b.y - h2 * ppu_b;
-    if (std::abs(xb - xa) < 0.01f) return; // seen edge-on
 
     // Cliffs: roadside billboards, not a strip stretched into |xb-xa| (that
     // is only a few pixels deep and reads as thin vertical stripes). World
@@ -389,6 +388,8 @@ void RoadRenderer::draw_edge(Framebuffer& fb, const Track& track, const Slice& s
         fb.blit_scaled(cliff, left, top, width, height, side < 0, fog_amount, th.fog);
         return;
     }
+
+    if (std::abs(xb - xa) < 0.01f) return; // rail seen edge-on
 
     const int x0 = std::max(0, pixel_edge(std::min(xa, xb)));
     const int x1 = std::min(fb.width(), pixel_edge(std::max(xa, xb)));
