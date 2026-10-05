@@ -4,7 +4,6 @@
 #include "daylight.hpp"
 
 #include <algorithm>
-#include <array>
 #include <cmath>
 
 namespace racer {
@@ -17,22 +16,6 @@ float smoothstep(float a, float b, float x) {
     const float t = std::clamp((x - a) / (b - a), 0.f, 1.f);
     return t * t * (3.f - 2.f * t);
 }
-
-// The lamps of the vehicle sprites (sprites.cpp) and the stars
-// (background.cpp), lit or dim: at night they shine.
-constexpr uint32_t emissive[] = {
-    0xffff543c, 0xfffff0e0, 0xff8c1212, 0xffc01818, 0xffc84438, 0xffe85040, 0xffff3020, // tail and brake lights
-    0xffffc038, 0xfffff4c0,                                     // indicators, lit
-    0xfff0ecc8, 0xffffffff,                                     // headlights (front views)
-    0xffff3030, 0xff4070ff, 0xfffff8f0,                         // the police lightbar
-    0xffe8eeff, 0xffb8c8ff,                                     // stars
-    0xffffd888,                                                 // lit windows in town
-    0xffffecb0, 0xfffffff0,                                     // street lamps
-    0xffff40c0, 0xff40f0ff, 0xffffe060, 0xfff0f4ff,             // neon on the Strip, the pyramid's beam
-    0xff80c0ff,                                                 // the time car's coils
-    0xfffff0a0,                                                 // Golden Gate crown lights
-    0xffe0e4ec, 0xffb0b8c8, 0xffc8d0e0,                         // the moon
-};
 
 } // namespace
 
@@ -90,17 +73,7 @@ RoadTheme at_daytime(const RoadTheme& look, const Daylight& light) {
     return r;
 }
 
-bool night_emissive(Color c) {
-    const uint32_t argb = c.argb();
-    // Sorted once; binary search beats a linear scan on every lit pixel.
-    static const auto sorted = [] {
-        std::array<uint32_t, sizeof(emissive) / sizeof(emissive[0])> a{};
-        for (size_t i = 0; i < a.size(); ++i) a[i] = emissive[i];
-        std::sort(a.begin(), a.end());
-        return a;
-    }();
-    return std::binary_search(sorted.begin(), sorted.end(), argb);
-}
+bool night_emissive(Color c) { return is_emissive_argb(c.argb()); }
 
 void apply_daylight(Framebuffer& fb, const Daylight& light) {
     if (light.level >= 0.999f && light.glow <= 0.001f) return;

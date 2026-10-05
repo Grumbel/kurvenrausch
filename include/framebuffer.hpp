@@ -69,4 +69,8 @@ private:
 // or beyond it. Clamped so wild projections can't overflow the int conversion.
 int pixel_edge(float v);
 
+// Tail lights, brake lights, headlights, windows, neon, stars — keep through
+// fog and nightfall. Exact ARGB match (not a red-channel heuristic).
+bool is_emissive_argb(uint32_t argb);
+
 } // namespace racer

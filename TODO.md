@@ -2,6 +2,12 @@
 
 ## Current tip
 
+### Grok: fog on all non-lamp sprite pixels
+- blit_scaled used a red-channel heuristic that treated red car bodies as
+  lamps and skipped fog. Now only exact emissive ARGB colours (shared
+  is_emissive_argb) keep through fog.
+
+
 ### Grok: three more radio tracks
 - COAST RUN (128, bright major), ALPINE PASS (104, minor), NEON STRIP (120,
   city). Dial has six songs then off.

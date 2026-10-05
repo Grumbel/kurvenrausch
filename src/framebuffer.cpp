@@ -6,6 +6,7 @@
 #include "font.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 
 namespace racer {
@@ -13,6 +14,30 @@ namespace racer {
 int pixel_edge(float v) {
     constexpr float limit = 1.0e6f;
     return static_cast<int>(std::ceil(std::clamp(v, -limit, limit) - 0.5f));
+}
+
+bool is_emissive_argb(uint32_t argb) {
+    static const auto sorted = [] {
+        // Keep in sync with lamps / stars / neon in sprites and daylight.
+        static constexpr uint32_t emissive[] = {
+            0xffff543c, 0xfffff0e0, 0xff8c1212, 0xffc01818, 0xffc84438, 0xffe85040, 0xffff3020,
+            0xffffc038, 0xfffff4c0,
+            0xfff0ecc8, 0xffffffff,
+            0xffff3030, 0xff4070ff, 0xfffff8f0,
+            0xffe8eeff, 0xffb8c8ff,
+            0xffffd888,
+            0xffffecb0, 0xfffffff0,
+            0xffff40c0, 0xff40f0ff, 0xffffe060, 0xfff0f4ff,
+            0xff80c0ff,
+            0xfffff0a0,
+            0xffe0e4ec, 0xffb0b8c8, 0xffc8d0e0,
+        };
+        std::array<uint32_t, sizeof(emissive) / sizeof(emissive[0])> a{};
+        for (size_t i = 0; i < a.size(); ++i) a[i] = emissive[i];
+        std::sort(a.begin(), a.end());
+        return a;
+    }();
+    return std::binary_search(sorted.begin(), sorted.end(), argb);
 }
 
 Framebuffer::Framebuffer(int width, int height)
@@ -185,14 +210,11 @@ void Framebuffer::blit_scaled(const Bitmap& bmp, float x, float y, float w, floa
             const int pr = static_cast<int>((p >> 16) & 0xff);
             const int pg = static_cast<int>((p >> 8) & 0xff);
             const int pb = static_cast<int>(p & 0xff);
-            // Tail / brake / head lamps: keep most of their colour through fog so
-            // they stay readable at night and in FOGGY (full fog washed them out
-            // and broke the emissive table for apply_daylight).
-            const bool lamp = (pr >= 0x80 && pr >= pg + 0x28 && pr >= pb + 0x28) ||
-                              (pr >= 0xc0 && pg >= 0xb0 && pb <= 0xa0);
+            // Only true lamp / neon / star colours keep through fog — a red
+            // body panel must fog like the rest of the sprite.
             float fa = fog_amount;
             float kp = keep;
-            if (lamp) {
+            if (is_emissive_argb(p | 0xff000000u)) {
                 fa = fog_amount * 0.18f;
                 kp = 1.f - fa;
             }
