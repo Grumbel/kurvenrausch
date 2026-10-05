@@ -345,7 +345,8 @@ void draw_debug_menu(Framebuffer& fb, const DebugMenu& menu, const DebugOptions&
 }
 
 
-void draw_video_menu(Framebuffer& fb, const VideoMenu& menu, bool wide, bool hd, const DebugOptions& debug) {
+void draw_video_menu(Framebuffer& fb, const VideoMenu& menu, bool wide, bool hd, PresentBackend present,
+                     const DebugOptions& debug) {
     for (int y = 0; y < fb.height(); ++y) {
         for (int x = 0; x < fb.width(); ++x) fb.blend_pixel(x, y, Shadow, 0.55f);
     }
@@ -353,7 +354,7 @@ void draw_video_menu(Framebuffer& fb, const VideoMenu& menu, bool wide, bool hd,
     text_center(fb, top, "VIDEO", Value, 3);
     for (int i = 0; i < VideoMenu::items; ++i) {
         const bool on = i == menu.selected;
-        std::string line = VideoMenu::line(i, wide, hd, debug);
+        std::string line = VideoMenu::line(i, wide, hd, present, debug);
         const size_t colon = line.find(": ");
         if (on) line = colon == std::string::npos ? "> " + line + " <"
                                                   : line.substr(0, colon + 2) + "< " + line.substr(colon + 2) + " >";

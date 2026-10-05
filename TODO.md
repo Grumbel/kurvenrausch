@@ -2,6 +2,13 @@
 
 ## Current tip
 
+### Grok: dual present backends (SDL + GL/GLES2)
+- Display can present the software FB via SDL_Renderer (streaming texture)
+  or a GL/GLES2 textured quad. VIDEO → PRESENT cycles AUTO / SDL / GL;
+  saved in choices. Road rendering stays on the CPU either way.
+- Overlay on the GL path re-uploads each item every frame (fine for touch
+  chrome); cache if it becomes hot.
+
 ### Grok: persist Video / Audio / Game Options
 - Choices now stores hd, fullscreen, muted. Restored on startup (CLI
   --fullscreen still forces FS). Game Options / Video / mute / F11 save

@@ -131,22 +131,26 @@ std::string OptionsMenu::line(int item, const Options& o, const std::string& pla
     }
 }
 
-bool VideoMenu::update(const MenuInput& in, bool& wide, bool& hd, bool& toggle_fullscreen, DebugOptions& debug) {
+bool VideoMenu::update(const MenuInput& in, bool& wide, bool& hd, bool& toggle_fullscreen,
+                       PresentBackend& present, DebugOptions& debug) {
     if (in.back) return true;
     if (in.up) selected = wrap(selected - 1, items);
     if (in.down) selected = wrap(selected + 1, items);
     if (selected == Back) return in.confirm;
-    if (in.left || in.right || in.confirm) choose(selected, in.left ? -1 : 1, wide, hd, toggle_fullscreen, debug);
+    if (in.left || in.right || in.confirm)
+        choose(selected, in.left ? -1 : 1, wide, hd, toggle_fullscreen, present, debug);
     return false;
 }
 
-bool VideoMenu::choose(int item, int /*side*/, bool& wide, bool& hd, bool& toggle_fullscreen, DebugOptions& debug) {
+bool VideoMenu::choose(int item, int /*side*/, bool& wide, bool& hd, bool& toggle_fullscreen,
+                       PresentBackend& present, DebugOptions& debug) {
     if (item < 0 || item >= items) return false;
     selected = item;
     switch (item) {
         case Wide: wide = !wide; break;
         case Hd: hd = !hd; break;
         case Fullscreen: toggle_fullscreen = true; break;
+        case Present: present = next_present_backend(present); break;
         case WeatherFx: debug.weather = !debug.weather; break;
         case Fps: debug.fps = !debug.fps; break;
         case Back: return true;
@@ -155,11 +159,12 @@ bool VideoMenu::choose(int item, int /*side*/, bool& wide, bool& hd, bool& toggl
     return false;
 }
 
-std::string VideoMenu::line(int item, bool wide, bool hd, const DebugOptions& debug) {
+std::string VideoMenu::line(int item, bool wide, bool hd, PresentBackend present, const DebugOptions& debug) {
     switch (item) {
         case Wide: return std::string("SCREEN: ") + (wide ? "WIDE" : "4:3");
         case Hd: return std::string("RESOLUTION: ") + (hd ? "HD" : "SD");
         case Fullscreen: return "FULLSCREEN";
+        case Present: return std::string("PRESENT: ") + present_backend_name(present);
         case WeatherFx: return std::string("WEATHER FX: ") + (debug.weather ? "ON" : "OFF");
         case Fps: return std::string("FPS: ") + (debug.fps ? "ON" : "OFF");
         default: return "BACK";

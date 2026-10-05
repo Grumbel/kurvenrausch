@@ -4,6 +4,7 @@
 #pragma once
 
 #include "debug.hpp"
+#include "display.hpp"
 #include "menu.hpp"
 
 #include <string>
@@ -53,17 +54,19 @@ struct OptionsMenu {
 
 void change(Options& options, int item, int step);
 
-// Video: picture shape, HD, fullscreen, weather overlay, FPS counter.
-// Weather FX and FPS are stored in DebugOptions (not saved with Choices).
+// Video: picture shape, HD, fullscreen, present path, weather overlay, FPS.
+// Weather FX and FPS are stored in DebugOptions; present path in Choices.
 struct VideoMenu {
-    enum Item { Wide, Hd, Fullscreen, WeatherFx, Fps, Back, items };
+    enum Item { Wide, Hd, Fullscreen, Present, WeatherFx, Fps, Back, items };
 
     int selected = Wide;
 
     void open() { selected = Wide; }
-    bool update(const MenuInput& in, bool& wide, bool& hd, bool& toggle_fullscreen, DebugOptions& debug);
-    bool choose(int item, int side, bool& wide, bool& hd, bool& toggle_fullscreen, DebugOptions& debug);
-    static std::string line(int item, bool wide, bool hd, const DebugOptions& debug);
+    bool update(const MenuInput& in, bool& wide, bool& hd, bool& toggle_fullscreen,
+                PresentBackend& present, DebugOptions& debug);
+    bool choose(int item, int side, bool& wide, bool& hd, bool& toggle_fullscreen,
+                PresentBackend& present, DebugOptions& debug);
+    static std::string line(int item, bool wide, bool hd, PresentBackend present, const DebugOptions& debug);
 };
 
 // Audio: mute, engine/SFX and music levels (0 .. max_volume), radio track.

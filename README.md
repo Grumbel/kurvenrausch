@@ -69,6 +69,7 @@ weather and road markings, fading smoothly into one another:
   hardly any grip at all
 - Roadside scenery as scaled, fogged pixel-art sprites; objects behind a crest
   peek over it
+- Present: SDL or OpenGL/GLES2 scale-and-blit of the software framebuffer (VIDEO → PRESENT)
 - Parallax backdrop: copper-banded sky, sun and moon on a day-long arc, drifting clouds, mountains and hills
   scrolling at different rates through bends
 - Road markings per region: dashed white lines in Europe, double yellow centre

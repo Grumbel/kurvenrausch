@@ -313,6 +313,7 @@ bool Game::init(bool fullscreen) {
         music_vol_ = std::clamp(c->music_vol, 0, max_volume);
         wide_ = c->wide != 0;
         muted_ = c->muted != 0;
+        present_backend_ = static_cast<PresentBackend>(std::clamp(c->present, 0, 2));
         saved_hd = c->hd != 0 ? 2 : 1;
         if (c->fullscreen) fullscreen = true;
         resume_position_ = c->position;
@@ -326,7 +327,9 @@ bool Game::init(bool fullscreen) {
     }
 
     display_ = std::make_unique<Display>();
-    if (!display_->init("Kurvenrausch", app_id, base_width, height, window_scale, fullscreen)) return false;
+    if (!display_->init("Kurvenrausch", app_id, base_width, height, window_scale, fullscreen, present_backend_))
+        return false;
+
     const Bitmap icon = make_app_icon();
     display_->set_icon(icon.px.data(), icon.w, icon.h);
     if (saved_hd > 1) set_pixel_scale(saved_hd);
@@ -570,7 +573,8 @@ bool Game::frame() {
     if (paused_ && options_open_)
         draw_options_menu(fb_, options_menu_, options_, zone_label(options_menu_.zone),
                           track_name(options_menu_.track));
-    else if (paused_ && video_open_) draw_video_menu(fb_, video_menu_, wide_, pixel_scale_ >= 2, debug_);
+    else if (paused_ && video_open_)
+        draw_video_menu(fb_, video_menu_, wide_, pixel_scale_ >= 2, present_backend_, debug_);
     else if (paused_ && audio_open_) draw_audio_menu(fb_, audio_menu_, muted_, engine_vol_, music_vol_, music_);
     else if (paused_ && debug_open_)
         draw_debug_menu(fb_, debug_menu_, debug_, hour_, car_model_, driver_, passenger_);
@@ -873,15 +877,21 @@ bool Game::update_pause(const InputState& input) {
     if (video_open_ && !input.pause) {
         bool want_fs = false;
         bool hd = pixel_scale_ >= 2;
-        bool close = video_menu_.update(input.menu, wide_, hd, want_fs, debug_);
+        PresentBackend present = present_backend_;
+        bool close = video_menu_.update(input.menu, wide_, hd, want_fs, present, debug_);
         for (const Finger& tap : touch_taps_) {
             float x = 0.f, y = 0.f;
             display_->screen_to_framebuffer(tap.x, tap.y, x, y);
             const MenuTap where = options_tap(x, y, width_, fb_height(), VideoMenu::items, 12, 36, 16);
-            close = video_menu_.choose(where.item, where.side, wide_, hd, want_fs, debug_) || close;
+            close = video_menu_.choose(where.item, where.side, wide_, hd, want_fs, present, debug_) || close;
         }
         set_pixel_scale(hd ? 2 : 1);
         if (want_fs) display_->toggle_fullscreen();
+        if (present != present_backend_) {
+            if (display_->set_present_backend(present)) present_backend_ = present;
+            else present_backend_ = display_->present_backend() == PresentBackend::Gl ? PresentBackend::Gl
+                                   : PresentBackend::Sdl;
+        }
         save_choices();
         if (close) video_open_ = false;
         return true;
@@ -1337,7 +1347,7 @@ void Game::fixed_update(const InputState& driver_input, float dt) {
 void Game::save_choices() const {
     Choices c{car_model_, driver_, passenger_ >= motel_passengers ? nobody : passenger_, static_cast<int>(view_mode_), music_, wide_ ? 1 : 0, track_index_, options_,
               -1, -1, -1, engine_vol_, music_vol_, pixel_scale_ >= 2 ? 1 : 0,
-              display_ && display_->is_fullscreen() ? 1 : 0, muted_ ? 1 : 0};
+              display_ && display_->is_fullscreen() ? 1 : 0, muted_ ? 1 : 0, static_cast<int>(present_backend_)};
     // Where the race is, to go on from there next time; following the
     // traffic in the attract mode, where it was.
     if (!attract_) {

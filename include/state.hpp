@@ -41,6 +41,7 @@ struct Choices {
     int hd = 0;          // 1: HD framebuffer (pixel_scale 2), 0: SD
     int fullscreen = 0;  // 1: start in fullscreen
     int muted = 0;       // 1: sound off
+    int present = 0;     // PresentBackend: 0 Auto, 1 SDL, 2 GL
 };
 // As "key value" lines; parsing skips unknown keys and malformed lines and
 // keeps the defaults for what is missing.

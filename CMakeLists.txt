@@ -83,6 +83,13 @@ add_library(kurvenrausch_core STATIC
 )
 target_include_directories(kurvenrausch_core PUBLIC include ${SDL2_INCLUDE_DIRS})
 target_link_libraries(kurvenrausch_core PUBLIC ${SDL2_LIBRARIES})
+# GL present path (desktop); GLES is provided by the platform / Emscripten.
+if(NOT EMSCRIPTEN AND NOT ANDROID)
+    find_package(OpenGL)
+    if(OpenGL_FOUND)
+        target_link_libraries(kurvenrausch_core PUBLIC OpenGL::GL)
+    endif()
+endif()
 
 add_executable(kurvenrausch src/main.cpp)
 target_link_libraries(kurvenrausch PRIVATE kurvenrausch_core)
