@@ -384,8 +384,6 @@ void RoadRenderer::draw_edge(Framebuffer& fb, const Track& track, const Slice& s
 
     const int x0 = std::max(0, pixel_edge(std::min(xa, xb)));
     const int x1 = std::min(fb.width(), pixel_edge(std::max(xa, xb)));
-    const float u0 = static_cast<float>(near);
-    const float du = static_cast<float>(direction_);
 
     for (int x = x0; x < x1; ++x) {
         const float t = std::clamp((static_cast<float>(x) + 0.5f - xa) / (xb - xa), 0.f, 1.f);
