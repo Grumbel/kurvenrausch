@@ -2,6 +2,13 @@
 
 ## Current tip
 
+### Grok: cliff sprite subsample (fps)
+- Cliffs were one large billboard per segment (~1.55 seg wide) → hundreds of
+  overlapping blits on a long run (~30 fps). Now drawn every 2nd segment near
+  the camera, every 3rd far (ppu ≤ 0.12); always at run ends so the silhouette
+  does not gap. Sprite width spans stride+0.25 segments; skip if &lt; 2 px.
+
+
 ### Grok: cliff slope toward the road; tunnel columns seamless
 - Cliff plateaus now sit on the road side (+x); the long flat outer slope
   falls away on the left (was inverted: high ground on the outer flank).

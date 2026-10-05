@@ -364,16 +364,28 @@ void RoadRenderer::draw_edge(Framebuffer& fb, const Track& track, const Slice& s
     const float ppu_a = a.scale * x_scale_, ppu_b = b.scale * x_scale_;
     const float ta = a.y - h1 * ppu_a, tb = b.y - h2 * ppu_b;
 
-    // Cliffs: mountain-shaped sprites (wide base, sloped peak), not columns and
-    // not continuous trapezoid faces.
+    // Cliffs: mountain billboards. Drawing every segment overdrew heavily
+    // (width > one segment, hundreds of overlapping blits → ~30 fps). Subsample
+    // along the run; always draw at run ends so the silhouette does not gap.
     if (kind == Edge::Cliff) {
         if (cliff.w <= 0 || cliff.h <= 0) return;
         if (!(h1 > 50.f) && !(h2 > 50.f)) return;
         const float ppu = std::max(ppu_a, 1e-4f);
+        // Far / small on screen: coarser stride. Near: still skip half of them.
+        const int stride = ppu > 0.12f ? 2 : 3;
+        const Edge prev_e = side < 0 ? track.segment(s.index - direction_).left
+                                     : track.segment(s.index - direction_).right;
+        const Edge next_e = side < 0 ? track.segment(s.index + direction_).left
+                                     : track.segment(s.index + direction_).right;
+        const bool run_end = prev_e != Edge::Cliff || next_e != Edge::Cliff;
+        // Stable world index so looking back picks the same columns.
+        if ((s.index % stride) != 0 && !run_end) return;
+
         const float height = std::max(h1, h2 * 0.5f) * ppu;
-        // World width ~1.55 segments so the mountain flanks read a little wider.
-        const float width = std::max(track.segment_length * ppu * 1.55f, height * 1.05f);
-        if (!(height > 1.f) || !(width > 1.f)) return;
+        // Span a little more than `stride` segments so neighbours still meet.
+        const float segs = static_cast<float>(stride) + 0.25f;
+        const float width = std::max(track.segment_length * ppu * segs, height * 1.05f);
+        if (!(height > 2.f) || !(width > 2.f)) return;
         const float base_x = xa;
         const float left = side < 0 ? base_x - width : base_x;
         fb.blit_scaled(cliff, left, a.y - height, width, height, side < 0, fog_amount, th.fog);
