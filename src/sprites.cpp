@@ -1496,8 +1496,8 @@ Bitmap make_car(const CarStyle& style, int turn, int signal, bool brake, int tre
     const Color tire{0x18, 0x18, 0x1c}, tread{0x60, 0x60, 0x6a};
     const Color chrome{0x9a, 0x9a, 0xa8}, grille{0x14, 0x14, 0x18}, slat{0x3a, 0x3a, 0x42};
     // Tail lights glow; brake lights burn, white-hot in the middle.
-    const Color lamp = brake ? Color{0xff, 0x54, 0x3c} : Color{0x8c, 0x12, 0x12};
-    const Color lamp_hi = brake ? Color{0xff, 0xf0, 0xe0} : Color{0xc8, 0x44, 0x38};
+    const Color lamp = brake ? Color{0xff, 0x54, 0x3c} : Color{0xc0, 0x18, 0x18};
+    const Color lamp_hi = brake ? Color{0xff, 0xf0, 0xe0} : Color{0xe8, 0x50, 0x40};
     const Color glow{0xff, 0x30, 0x20};
 
     // Shadow and tyres stay planted while the body shifts into the turn.
@@ -2220,7 +2220,7 @@ namespace {
 
 // A tail light panel; braking it burns brighter, white-hot in the middle.
 void tail_lamp(Bitmap& b, int x, int y, int w, int h, bool brake) {
-    paint::rect(b, x, y, w, h, brake ? Color{0xff, 0x54, 0x3c} : Color{0x8c, 0x12, 0x12});
+    paint::rect(b, x, y, w, h, brake ? Color{0xff, 0x54, 0x3c} : Color{0xc0, 0x18, 0x18});
     if (w > 2 && h > 2) {
         paint::rect(b, x + 1, y + 1, w - 2, std::max(1, h / 4),
                     brake ? Color{0xff, 0xf0, 0xe0} : Color{0xc8, 0x44, 0x38});
@@ -2429,8 +2429,8 @@ Bitmap make_movie_car(Body body, const CarStyle& st, int turn, bool brake, int s
     Bitmap b(96, 44 + h);
     const int s = turn, u = 2 * turn; // the body leans, the cabin further
     const Color glass{0x2c, 0x3c, 0x54}, glint{0x70, 0x88, 0xa8}, chrome{0xc4, 0xc8, 0xd0}, black{0x14, 0x14, 0x18};
-    const Color lamp = brake ? Color{0xff, 0x54, 0x3c} : Color{0x8c, 0x12, 0x12};
-    const Color lamp_hi = brake ? Color{0xff, 0xf0, 0xe0} : Color{0xc8, 0x44, 0x38};
+    const Color lamp = brake ? Color{0xff, 0x54, 0x3c} : Color{0xc0, 0x18, 0x18};
+    const Color lamp_hi = brake ? Color{0xff, 0xf0, 0xe0} : Color{0xe8, 0x50, 0x40};
     const auto at = [h](int y) { return y + h; };
     paint::ellipse(b, 48.f, static_cast<float>(at(41)), 46.f, 3.f, Color{0x22, 0x22, 0x22});
     // The cabin's rear window, where the people show: the same for all.

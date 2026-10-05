@@ -2547,6 +2547,15 @@ void Game::render() {
     view.draw_distance = cam.draw_distance;
     view.fog_density = look.fog_density;
     view.fog_air = atmosphere_air(look);
+    {
+        // Night: distant objects fade into a darker air (aerial perspective).
+        const Daylight dl = daylight_at(hour_);
+        const float night = (1.f - dl.level) / (1.f - night_level);
+        if (night > 0.02f) {
+            view.fog_density *= 1.f + 0.65f * night;
+            view.fog_air = blend(view.fog_air, Color{0x18, 0x1c, 0x28}, 0.4f * night);
+        }
+    }
     view.x_scale = fb_x_unit();
     // Nearby buildings light every window while the wake lasts (city night horn).
     if (window_wake_time_ > 0.f && daylight_at(hour_).level < 0.5f)
@@ -2893,6 +2902,14 @@ void Game::render_mirror() {
     view.draw_distance = cam.draw_distance;
     view.fog_density = look.fog_density;
     view.fog_air = atmosphere_air(look);
+    {
+        const Daylight dl = daylight_at(hour_);
+        const float night = (1.f - dl.level) / (1.f - night_level);
+        if (night > 0.02f) {
+            view.fog_density *= 1.f + 0.65f * night;
+            view.fog_air = blend(view.fog_air, Color{0x18, 0x1c, 0x28}, 0.4f * night);
+        }
+    }
     view.direction = -1;
     view.player_z = 0.f; // the mirror's camera is in the car
     view.horizon = mirror_horizon * static_cast<float>(pixel_scale_);

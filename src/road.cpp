@@ -531,7 +531,7 @@ void RoadRenderer::draw_sprites(Framebuffer& fb, const Track& track, const Sprit
                 const float depth = camera_depth_ / scale;
                 const float ahead = static_cast<float>(o.lights);
                 lamps_.push_back({cx, depth + ahead * 1100.f, 1000.f, Glow::Head});
-                lamps_.push_back({cx, depth - ahead * 350.f, 380.f, Glow::Tail});
+                lamps_.push_back({cx, depth - ahead * 350.f, 560.f, Glow::Tail});
             }
             fb.blit_scaled(bmp, cx - width / 2.f, y - height, width, height, o.flip,
                            fog_amount, fog_air_);

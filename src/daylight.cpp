@@ -21,7 +21,7 @@ float smoothstep(float a, float b, float x) {
 // The lamps of the vehicle sprites (sprites.cpp) and the stars
 // (background.cpp), lit or dim: at night they shine.
 constexpr uint32_t emissive[] = {
-    0xffff543c, 0xfffff0e0, 0xff8c1212, 0xffc84438, 0xffff3020, // tail and brake lights
+    0xffff543c, 0xfffff0e0, 0xff8c1212, 0xffc01818, 0xffc84438, 0xffe85040, 0xffff3020, // tail and brake lights
     0xffffc038, 0xfffff4c0,                                     // indicators, lit
     0xfff0ecc8, 0xffffffff,                                     // headlights (front views)
     0xffff3030, 0xff4070ff, 0xfffff8f0,                         // the police lightbar
@@ -177,9 +177,9 @@ void street_lights(Framebuffer& fb, const std::vector<uint32_t>& day, const std:
             const float dz = depth - lamp.depth;
             if (std::abs(dz) >= lamp.reach) continue;
             // Sodium yellow, headlight white, tail light red; the red only a glow.
-            const float tint_g = lamp.glow == Glow::Street ? 0.85f : lamp.glow == Glow::Tail ? 0.25f : 1.f;
+            const float tint_g = lamp.glow == Glow::Street ? 0.85f : lamp.glow == Glow::Tail ? 0.35f : 1.f;
             const float tint_b = lamp.glow == Glow::Street ? 0.55f : lamp.glow == Glow::Tail ? 0.2f : 0.95f;
-            const float strength = lamp.glow == Glow::Tail ? 0.5f : lamp.glow == Glow::Head ? 0.8f : 0.9f;
+            const float strength = lamp.glow == Glow::Tail ? 0.85f : lamp.glow == Glow::Head ? 0.8f : 0.9f;
             const float half = std::sqrt(lamp.reach * lamp.reach - dz * dz);
             const int x0 = std::max(0, static_cast<int>(lamp.x - half * px_per_unit));
             const int x1 = std::min(w, static_cast<int>(lamp.x + half * px_per_unit) + 1);

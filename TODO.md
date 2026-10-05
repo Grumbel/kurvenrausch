@@ -2,6 +2,13 @@
 
 ## Current tip
 
+### Grok: tail lights in fog/night; night aerial fog
+- blit_scaled keeps lamp pixels through fog (~18% fog) so tails/brakes stay
+  visible and remain emissive for night. Brighter default tail colours;
+  stronger/wider Tail ground glow. At night fog_density rises and fog_air
+  darkens so distance fades into darker air.
+
+
 ### Grok: fog air match (backdrop vs sprites)
 - FOGGY white-out used look_at fog for the backdrop but zone track.look for
   sprite fog → colour mismatch. RoadView.fog_air carries atmosphere_air(look)
