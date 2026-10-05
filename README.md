@@ -141,8 +141,8 @@ weather and road markings, fading smoothly into one another:
   its own. No dealer sells them
 - **Tunnels and bridges**: through the Alps, Korea and Japan in tunnels,
   their walls and lamps around you and the way out framed ahead; over the
-  Rhine and the Amazon on steel truss bridges; under road bridges on the
-  Autobahn and in the cities
+  Rhine and the Amazon on steel truss bridges; across the Golden Gate into
+  San Francisco; under road bridges on the Autobahn and in the cities
 - **Trains**: railways cross the road in the Netherlands, Germany, India,
   the outback and Arizona. Now and then a long train comes as you near a
   crossing, the lamps flashing, timed to clear the road just before you get

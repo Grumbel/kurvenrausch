@@ -2,6 +2,12 @@
 
 ## Current tip
 
+### Grok: Golden Gate Bridge in San Francisco
+- `Scenery::GoldenGate`: orange Art Deco suspension towers, main cables and
+  suspenders (centred span). `TrackBuilder::golden_gate()` lays a medium bay
+  crossing with water rails and three towers. Both SMALL WORLD and GRAND
+  TOUR open the SF zone on the bridge; bay water colours on the rails.
+
 ### Grok: menu — Debug hour, Video weather/FPS
 - DEBUG: HOUR (left/right steps the clock; switches Game Options time to
   Cycle so a fixed Day/Dusk/Night does not snap it back). WEATHER FX and

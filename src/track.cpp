@@ -90,6 +90,7 @@ const SceneryInfo& scenery_info(Scenery kind) {
         /* Apartment */ {3000.f, true,  false, true},
         /* Tower     */ {3200.f, true,  false, true},
         /* FlatHouse */ {2400.f, true,  false, true},
+        /* GoldenGate*/ {7200.f, false, true,  false},
     };
     static_assert(sizeof(infos) / sizeof(infos[0]) == static_cast<size_t>(Scenery::Count),
                   "scenery_info() needs an entry for every Scenery kind");
@@ -726,6 +727,20 @@ public:
         for (int i = from + 4; i < size() - 4; i += 6) scenery(i, Scenery::BridgeTruss, 0.f);
     }
 
+    // The Golden Gate: a long bay crossing with orange suspension towers and
+    // cables, water on both sides (San Francisco).
+    void golden_gate(int len = Len::Medium) {
+        const int from = size();
+        straight(len);
+        mark(from, size(), Edge::Rail, Edge::Rail);
+        // Towers near each end and one in the middle of a long span; cables
+        // between them are part of each tower sprite.
+        const int span = size() - from;
+        for (int i : {from + 4, from + span / 2, size() - 5}) {
+            if (i > from && i < size()) scenery(i, Scenery::GoldenGate, 0.f);
+        }
+    }
+
     // A road bridge crossing over this one.
     void overpass() {
         const int from = size();
@@ -1177,6 +1192,8 @@ Zone zone_san_francisco() {
     t.us_markings = true;
     z.theme.showers = 0.35f;
     z.theme.night_glow = 0.7f; // the city
+    z.theme.beyond[0] = Color{0x1c, 0x68, 0xa8}; // the bay
+    z.theme.beyond[1] = Color{0x28, 0x78, 0xb8};
     return z;
 }
 
@@ -1597,9 +1614,11 @@ Track build_demo_track() {
     b.sports_dealer(); // on the coast road
 
     b.begin_zone(zone_san_francisco());
-    // Up from the waterfront, block after block, each street steeper than the
-    // last and flat at every crossing; down into a valley and over the next
-    // hill. Every crest taken fast is a jump.
+    // Across the bay on the Golden Gate, then up from the waterfront, block
+    // after block, each street steeper than the last and flat at every
+    // crossing; down into a valley and over the next hill. Every crest taken
+    // fast is a jump.
+    b.golden_gate(Len::Medium);
     b.slope(12, 0.f);
     b.slope(30, 0.35f);
     b.slope(6, 0.f);
@@ -1974,6 +1993,7 @@ Track build_track(int index) {
     b.mark(pch, b.size(), Edge::Rail, Edge::Cliff);
     b.gas_station();
     b.begin_zone(zone_san_francisco());
+    b.golden_gate(Len::Medium);
     b.slope(12, 0.f);
     b.slope(30, 0.35f);
     b.slope(6, 0.f);

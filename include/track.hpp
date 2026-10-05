@@ -89,6 +89,7 @@ enum class Scenery : uint8_t {
     Apartment,    // a tall block of flats with balconies
     Tower,        // a glass office tower
     FlatHouse,    // a flat-roofed house of sandstone or plaster, warm climates
+    GoldenGate,   // San Francisco: suspension towers and cables spanning the bay
     Count
 };
 
