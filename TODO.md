@@ -2,6 +2,18 @@
 
 ## Current tip
 
+### Grok: wasmtime / standalone WASM runtimes
+- The Emscripten `kurvenrausch.wasm` is not WASI: it depends on the
+  generated JS glue (`a::a` and other minified imports). `wasmtime`,
+  Wasmer, WasmEdge and similar cannot instantiate it.
+- No practical lightweight WASM runtime supports Emscripten+SDL2 with a
+  real window outside the browser. `wasi-gfx` is experimental and not an
+  SDL2 ABI; adopting it would mean a separate graphics path, not a flake
+  app over the existing module.
+- Run path remains `nix run .#kurvenrausch-wasm` (local HTTP + browser).
+  README Web section documents the limitation. No `kurvenrausch-wasmtime`
+  app was added (it would only fail at instantiate time).
+
 ### Grok: Audio menu engine and music volume
 - ENGINE and MUSIC levels 0..10; synth splits SFX vs radio. Saved in choices.
 

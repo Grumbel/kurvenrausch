@@ -283,6 +283,22 @@ and choices in the browser's storage (with buttons to download them and to
 load them elsewhere) and pauses the game when the tab is hidden. In the
 browser Esc pauses, and the pause menu has no Quit.
 
+The `.wasm` is an Emscripten module: it imports the generated JavaScript
+runtime (minified names such as `a::a`), not WASI. Standalone runtimes
+like `wasmtime`, Wasmer or WasmEdge therefore cannot instantiate it:
+
+```text
+Error: failed to instantiate "kurvenrausch.wasm"
+Caused by: unknown import: `a::a` has not been defined
+```
+
+There is no practical lightweight WASM runtime today that runs an
+Emscripten+SDL2 game with a real window outside the browser. Experimental
+WASI graphics proposals (`wasi-gfx`, `wasi:surface` / `wasi:frame-buffer`)
+exist, but they are not an SDL2 ABI and would need a separate graphics
+backend. Use `nix run .#kurvenrausch-wasm` (or any static file server on
+`result/`) instead.
+
 ## Controls
 
 | Keyboard         | Gamepad                  | Action             |
