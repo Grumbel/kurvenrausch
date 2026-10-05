@@ -59,7 +59,7 @@ enum class Body : uint8_t {
     Ambulance,// the traffic's ambulance
     // The movie cars, each its own body (make_movie_car()).
     Scanner,     // the talking car: long, low, a smoked red band of tail lights, a ducktail
-    TimeCar,     // the time machine: brushed steel, louvres, coils and vents, the reactor on top
+    TimeCar,     // time machine: stainless, louvres, tall deck vents, cables, coils, Mr. Fusion
     SpyCar,      // the spy's: rounded sixties lines, chrome, little fins, round lamps
     Interceptor, // the road warrior's: a roof wing, fat tyres in flared arches, side pipes
 };

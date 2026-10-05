@@ -2280,33 +2280,112 @@ Bitmap make_movie_car(Body body, const CarStyle& st, int turn, bool brake, int s
             break;
         }
         case Body::TimeCar: {
-            // Brushed steel in vertical grain, a wedge: louvres on the deck,
-            // two vents where the coils glow, black-ribbed tail lights, the
-            // reactor on the engine lid, a black bumper.
-            for (int x : {4, 78}) tyre(b, x, at(27), 14, 15, tread);
+            // Sprite from the hybrid rear reference: stainless wedge, louvred
+            // rear window, tall black vent boxes high on the deck (not low by
+            // the wheels), cable loom with blue coils between them, Mr. Fusion
+            // on top, stock-style lamp clusters, black bumper and twin tips.
+            const Color steel = st.body, steel_d = st.body_dark, steel_l = st.body_light;
+            const Color rubber{0x14, 0x14, 0x18}, plate{0xe0, 0xe0, 0xd8};
+            const Color box{0x10, 0x10, 0x14}, box_slot{0x28, 0x28, 0x30};
+            const Color cable{0x1c, 0x1c, 0x22}, cable_hi{0x3a, 0x3a, 0x44};
+            const Color coil{0x28, 0x70, 0xc8}, coil_hi{0x60, 0xc0, 0xff};
+            const Color fusion{0xf0, 0xf0, 0xec}, fusion_top{0x2a, 0x2a, 0x32};
+            const Color amber{0xc8, 0x78, 0x18}, amber_on{0xff, 0xc0, 0x38};
+
+            for (int x : {3, 79}) tyre(b, x, at(27), 14, 15, tread);
+
+            // Stainless rear body, vertical brushed grain.
             for (int x = 6; x < 90; ++x) {
-                const Color grain = x % 3 == 0 ? st.body_dark : x % 3 == 1 ? st.body : st.body_light;
-                paint::rect(b, x + s, at(17), 1, 16, grain);
+                const int g = x % 3;
+                paint::rect(b, x + s, at(18), 1, 16, g == 0 ? steel_d : g == 1 ? steel : steel_l);
             }
-            for (int y = 15; y < 18; ++y) paint::rect(b, 18 + u, at(y), 60, 1, y % 2 ? black : st.body_dark); // louvres
+            // Haunches a touch wider.
+            for (int x = 4; x < 10; ++x)
+                paint::rect(b, x + s, at(20), 1, 12, x % 2 ? steel_d : steel);
+            for (int x = 86; x < 92; ++x)
+                paint::rect(b, x + s, at(20), 1, 12, x % 2 ? steel_d : steel);
+            paint::rect(b, 10 + s, at(17), 76, 1, steel_l);
+
+            // Louvred rear window (behind the deck hardware).
+            paint::rect(b, 24 + u, at(2), 48, 3, steel); // roof strip
+            paint::rect(b, 26 + u, at(5), 44, 12, black);
+            for (int y = 5; y <= 15; y += 2)
+                paint::rect(b, 26 + u, at(y), 44, 1, black);
+            for (int y = 6; y <= 14; y += 2)
+                paint::rect(b, 26 + u, at(y), 44, 1, Color{0x20, 0x28, 0x34});
+            // C-pillars and gull-wing seam.
+            for (int x = 22; x < 26; ++x) {
+                paint::rect(b, x + u, at(5), 1, 12, steel_d);
+                paint::rect(b, x + 48 + u, at(5), 1, 12, steel_d);
+            }
+            paint::rect(b, 47 + u, at(2), 2, 15, steel_d);
+            paint::rect(b, 47 + u, at(2), 1, 15, black);
+
+            // Stock-style lamp clusters: red grid + outer amber.
             for (int side = -1; side <= 1; side += 2) {
-                const int x = (side < 0 ? 9 : 69) + s;
-                paint::rect(b, x, at(20), 18, 7, black);
-                for (int i = 1; i < 17; i += 3) paint::rect(b, x + i, at(21), 2, 5, lamp);
-                if (brake) paint::rect(b, x + 1, at(22), 16, 1, lamp_hi);
-                indicator(b, side < 0 ? x : x + 15, at(27), 3, 2, lit(signal, side));
+                const int x0 = (side < 0 ? 8 : 68) + s;
+                paint::rect(b, x0, at(20), 20, 9, black);
+                // Red segments in a 3x2 grid.
+                for (int row = 0; row < 2; ++row)
+                    for (int col = 0; col < 3; ++col) {
+                        paint::rect(b, x0 + 2 + col * 5, at(21 + row * 3), 4, 2, lamp);
+                        if (brake) paint::rect(b, x0 + 2 + col * 5, at(21 + row * 3), 4, 1, lamp_hi);
+                    }
+                // Amber outer marker.
+                const int ax = side < 0 ? x0 - 4 : x0 + 20;
+                paint::rect(b, ax, at(21), 4, 6, lit(signal, side) ? amber_on : amber);
             }
-            for (int x : {32, 52}) { // the time circuits' vents
-                paint::rect(b, x + s, at(19), 12, 9, black);
-                for (int y = 20; y < 27; y += 2) paint::rect(b, x + 1 + s, at(y), 10, 1, Color{0x30, 0x40, 0x58});
+
+            // Tall black vent boxes HIGH on the rear deck (the film-prop tell).
+            // Left and right, grid of horizontal slots, rising into headroom.
+            for (int side = -1; side <= 1; side += 2) {
+                const int x0 = (side < 0 ? 18 : 66) + u;
+                // Box body: tall, sits on the deck above the lamps.
+                paint::rect(b, x0, at(0), 12, 18, box);
+                paint::rect(b, x0, at(0), 12, 1, Color{0x30, 0x30, 0x36}); // top lip
+                // Horizontal slot grid (3 columns x 5 rows).
+                for (int row = 0; row < 5; ++row)
+                    for (int col = 0; col < 3; ++col)
+                        paint::rect(b, x0 + 1 + col * 4, at(2 + row * 3), 3, 2, box_slot);
+                // Slight outward lean: a one-pixel step on the outer edge.
+                const int outer = side < 0 ? x0 - 1 : x0 + 12;
+                paint::rect(b, outer, at(4), 1, 12, box);
             }
-            paint::rect(b, 40 + s, at(29), 16, 4, Color{0xe8, 0xe8, 0xd8});
-            paint::rect(b, 5 + s, at(32), 86, 5, Color{0x20, 0x20, 0x24});
-            cabin(st.body, 3);
-            paint::rect(b, 47 + u, at(2), 2, 13, st.body_dark); // where the doors open upwards
-            // The reactor on the lid, white, its cap dark.
-            paint::rect(b, 64 + u, at(9), 8, 8, Color{0xf0, 0xf0, 0xe8});
-            paint::rect(b, 65 + u, at(7), 6, 2, Color{0x40, 0x40, 0x48});
+
+            // Cable loom across the deck between the boxes, with blue coils.
+            for (int y : {8, 10, 12, 14}) {
+                paint::rect(b, 30 + u, at(y), 36, 1, (y % 4 == 0) ? cable_hi : cable);
+            }
+            // Cross-links and drops.
+            paint::rect(b, 36 + u, at(9), 1, 6, cable);
+            paint::rect(b, 44 + u, at(9), 1, 6, cable);
+            paint::rect(b, 52 + u, at(9), 1, 6, cable);
+            paint::rect(b, 58 + u, at(9), 1, 6, cable);
+            // Blue energy coils in the loom.
+            for (int cx : {34, 48, 58}) {
+                paint::rect(b, cx + u, at(11), 5, 3, coil);
+                paint::rect(b, cx + 1 + u, at(12), 3, 1, coil_hi);
+            }
+
+            // Mr. Fusion centered on the top of the deck / roof.
+            paint::rect(b, 42 + u, at(-1), 12, 6, fusion);
+            paint::rect(b, 43 + u, at(-2), 10, 2, fusion_top);
+            paint::rect(b, 45 + u, at(0), 6, 3, Color{0xd0, 0xd0, 0xc8});
+            paint::rect(b, 46 + u, at(1), 4, 2, Color{0x38, 0x90, 0x40}); // fill window
+            paint::rect(b, 46 + u, at(5), 4, 1, black); // mount
+
+            // Plate on a dark plinth.
+            paint::rect(b, 36 + s, at(30), 24, 5, rubber);
+            paint::rect(b, 38 + s, at(31), 20, 3, plate);
+
+            // Black bumper, chrome strip, twin exhaust tips.
+            paint::rect(b, 5 + s, at(34), 86, 5, rubber);
+            paint::rect(b, 7 + s, at(34), 82, 1, chrome);
+            paint::ellipse(b, 42.f + s, static_cast<float>(at(38)), 3.f, 2.f, chrome);
+            paint::ellipse(b, 54.f + s, static_cast<float>(at(38)), 3.f, 2.f, chrome);
+            paint::rect(b, 40 + s, at(37), 5, 3, Color{0x50, 0x50, 0x58});
+            paint::rect(b, 51 + s, at(37), 5, 3, Color{0x50, 0x50, 0x58});
+
             break;
         }
         case Body::SpyCar: {
@@ -2845,7 +2924,7 @@ SpriteSheet::SpriteSheet() {
         {{{0x58, 0x6c, 0x08}, {0x9c, 0xc8, 0x10}, {0xf0, 0xf0, 0xf8}, false}, false}, // Supercar
         {{{0xc0, 0xc0, 0xc8}, {0xf4, 0xf4, 0xf8}, {0xff, 0xff, 0xff}, false}, false}, // Ambulance
         {{{0x06, 0x06, 0x08}, {0x16, 0x16, 0x1a}, {0x48, 0x48, 0x52}, false}, false}, // Scanner
-        {{{0x7c, 0x80, 0x88}, {0xb4, 0xb8, 0xc0}, {0xe4, 0xe8, 0xee}, false}, false}, // Time car
+        {{{0x70, 0x74, 0x7a}, {0xa8, 0xac, 0xb2}, {0xd4, 0xd8, 0xde}, false}, false}, // Time car
         {{{0x6c, 0x74, 0x6c}, {0xa4, 0xac, 0xa4}, {0xd4, 0xdc, 0xd4}, false}, false}, // Spy car
         {{{0x0a, 0x0a, 0x0a}, {0x20, 0x1e, 0x1c}, {0x7c, 0x68, 0x28}, false}, false}, // Interceptor
     };
