@@ -298,10 +298,18 @@ void draw_pause_menu(Framebuffer& fb, const PauseMenu& menu, const std::string& 
     }
     const int top = fb.height() / 2 - 50;
     text_center(fb, top, "PAUSED", Value, 3);
-    const std::string items[PauseMenu::items] = {"RESUME", "RESTART", "START IN < " + place + " >",
-                                                 "TRACK < " + track + " >",
-                                                 menu.wide ? "SCREEN: WIDE" : "SCREEN: 4:3", "OPTIONS", "DEBUG",
-                                                 "QUIT"};
+    const std::string items[PauseMenu::items] = {
+        "RESUME",
+        "RESTART",
+        "START IN < " + place + " >",
+        "TRACK < " + track + " >",
+        menu.wide ? "SCREEN: WIDE" : "SCREEN: 4:3",
+        "GAME OPTIONS",
+        "VIDEO",
+        "AUDIO",
+        "DEBUG",
+        "QUIT",
+    };
     for (int i = 0; i < menu.item_count(); ++i) {
         const bool on = i == menu.selected;
         const std::string line = on ? "> " + items[i] + " <" : items[i];
@@ -314,7 +322,7 @@ void draw_options_menu(Framebuffer& fb, const OptionsMenu& menu, const Options& 
         for (int x = 0; x < fb.width(); ++x) fb.blend_pixel(x, y, Shadow, 0.55f);
     }
     const int top = fb.height() / 2 - 50;
-    text_center(fb, top, "OPTIONS", Value, 3);
+    text_center(fb, top, "GAME OPTIONS", Value, 3);
     for (int i = 0; i < OptionsMenu::items; ++i) {
         // The selected setting with arrows round its value, BACK between
         // the usual marks.
@@ -342,6 +350,45 @@ void draw_debug_menu(Framebuffer& fb, const DebugMenu& menu, const DebugOptions&
                                                   : line.substr(0, colon + 2) + "< " + line.substr(colon + 2) + " >";
         text_center(fb, top + 36 + 16 * i, line, on ? Label : Value);
     }
+}
+
+
+void draw_video_menu(Framebuffer& fb, const VideoMenu& menu, bool wide) {
+    for (int y = 0; y < fb.height(); ++y) {
+        for (int x = 0; x < fb.width(); ++x) fb.blend_pixel(x, y, Shadow, 0.55f);
+    }
+    const int top = fb.height() / 2 - 50;
+    text_center(fb, top, "VIDEO", Value, 3);
+    for (int i = 0; i < VideoMenu::items; ++i) {
+        const bool on = i == menu.selected;
+        std::string line = VideoMenu::line(i, wide);
+        const size_t colon = line.find(": ");
+        if (on) line = colon == std::string::npos ? "> " + line + " <"
+                                                  : line.substr(0, colon + 2) + "< " + line.substr(colon + 2) + " >";
+        text_center(fb, top + 36 + 16 * i, line, on ? Label : Value);
+    }
+}
+
+void draw_audio_menu(Framebuffer& fb, const AudioMenu& menu, bool muted, int music) {
+    for (int y = 0; y < fb.height(); ++y) {
+        for (int x = 0; x < fb.width(); ++x) fb.blend_pixel(x, y, Shadow, 0.55f);
+    }
+    const int top = fb.height() / 2 - 50;
+    text_center(fb, top, "AUDIO", Value, 3);
+    for (int i = 0; i < AudioMenu::items; ++i) {
+        const bool on = i == menu.selected;
+        std::string line = AudioMenu::line(i, muted, music);
+        const size_t colon = line.find(": ");
+        if (on) line = colon == std::string::npos ? "> " + line + " <"
+                                                  : line.substr(0, colon + 2) + "< " + line.substr(colon + 2) + " >";
+        text_center(fb, top + 36 + 16 * i, line, on ? Label : Value);
+    }
+}
+
+void draw_fps(Framebuffer& fb, float fps) {
+    char buf[16];
+    std::snprintf(buf, sizeof buf, "%.0f FPS", static_cast<double>(fps));
+    fb.draw_text(4, 4, buf, Color{0xe0, 0xe8, 0x40});
 }
 
 } // namespace racer

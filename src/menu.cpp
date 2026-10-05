@@ -50,6 +50,8 @@ MenuAction PauseMenu::update(const MenuInput& in) {
         case Track: return MenuAction::ChangeTrack;
         case Screen: return MenuAction::ToggleWide;
         case Options: return MenuAction::Options;
+        case Video: return MenuAction::Video;
+        case Audio: return MenuAction::Audio;
         case Debug: return MenuAction::Debug;
         default: return MenuAction::Quit;
     }

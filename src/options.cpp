@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "options.hpp"
+#include "music.hpp"
 
 #include <algorithm>
 
@@ -99,3 +100,60 @@ std::string OptionsMenu::line(int item, const Options& o) {
 }
 
 } // namespace racer
+
+bool VideoMenu::update(const MenuInput& in, bool& wide, bool& toggle_fullscreen) {
+    if (in.back) return true;
+    if (in.up) selected = ((selected - 1) % items + items) % items;
+    if (in.down) selected = (selected + 1) % items;
+    if (selected == Back) return in.confirm;
+    if (selected == Wide && (in.left || in.right || in.confirm)) wide = !wide;
+    if (selected == Fullscreen && (in.left || in.right || in.confirm)) toggle_fullscreen = true;
+    return false;
+}
+
+bool VideoMenu::choose(int item, int side, bool& wide, bool& toggle_fullscreen) {
+    if (item < 0 || item >= items) return false;
+    selected = item;
+    if (item == Back) return true;
+    if (item == Wide) wide = !wide;
+    if (item == Fullscreen) toggle_fullscreen = true;
+    return false;
+}
+
+std::string VideoMenu::line(int item, bool wide) {
+    switch (item) {
+        case Wide: return std::string("SCREEN: ") + (wide ? "WIDE" : "4:3");
+        case Fullscreen: return "FULLSCREEN";
+        default: return "BACK";
+    }
+}
+
+bool AudioMenu::update(const MenuInput& in, bool& muted, int& music) {
+    if (in.back) return true;
+    if (in.up) selected = ((selected - 1) % items + items) % items;
+    if (in.down) selected = (selected + 1) % items;
+    if (selected == Back) return in.confirm;
+    if (selected == Mute && (in.left || in.right || in.confirm)) muted = !muted;
+    if (selected == Music) {
+        if (in.left) music = Music::previous(music);
+        if (in.right || in.confirm) music = Music::next(music);
+    }
+    return false;
+}
+
+bool AudioMenu::choose(int item, int side, bool& muted, int& music) {
+    if (item < 0 || item >= items) return false;
+    selected = item;
+    if (item == Back) return true;
+    if (item == Mute) muted = !muted;
+    if (item == Music) music = side < 0 ? Music::previous(music) : Music::next(music);
+    return false;
+}
+
+std::string AudioMenu::line(int item, bool muted, int music) {
+    switch (item) {
+        case Mute: return std::string("MUTE: ") + (muted ? "ON" : "OFF");
+        case Music: return std::string("MUSIC: ") + Music::name(music);
+        default: return "BACK";
+    }
+}

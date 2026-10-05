@@ -2,6 +2,10 @@
 
 ## Current tip
 
+### Grok: menus — Game Options, Video, Audio, FPS, Attract
+- Pause: GAME OPTIONS, VIDEO, AUDIO, DEBUG. Debug: FPS toggle, ATTRACT MODE.
+- Video: wide / fullscreen. Audio: mute / music track. FPS counter when enabled.
+
 ### Grok: Scanner looks more like the KITT reference
 - `Body::Scanner` redrawn: rounded coupe silhouette (ellipses + taper),
   continuous red light bar with bright centre, dark glass and seat hints,

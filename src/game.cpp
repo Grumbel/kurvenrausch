@@ -456,6 +456,7 @@ bool Game::frame() {
     const double freq = static_cast<double>(SDL_GetPerformanceFrequency());
     const float dt = std::min(static_cast<float>((now - prev_counter_) / freq), 0.25f);
     prev_counter_ = now;
+    if (dt > 0.f) fps_ = fps_ * 0.9f + (1.f / dt) * 0.1f;
 
     InputState& input = input_state_;
     input_.poll(input);
@@ -551,8 +552,11 @@ bool Game::frame() {
     set_width(screen_width());
     render();
     if (paused_ && options_open_) draw_options_menu(fb_, options_menu_, options_);
+    else if (paused_ && video_open_) draw_video_menu(fb_, video_menu_, wide_);
+    else if (paused_ && audio_open_) draw_audio_menu(fb_, audio_menu_, muted_, music_);
     else if (paused_ && debug_open_) draw_debug_menu(fb_, debug_menu_, debug_);
     else if (paused_) draw_pause_menu(fb_, menu_, zone_label(menu_.zone), track_name(menu_.track));
+    if (debug_.fps) draw_fps(fb_, fps_);
     present();
     return true;
 }
@@ -786,7 +790,7 @@ bool Game::update_pause(const InputState& input) {
             float x = 0.f, y = 0.f;
             display_->screen_to_framebuffer(tap.x, tap.y, x, y);
             const MenuTap where = options_tap(x, y, width_, height);
-            close = options_menu_.choose(where.item, where.side, options_) || close;
+            close = options_menu_.choose(where.item, where.side, options_) || close; // OptionsMenu::items
         }
         if (close) options_open_ = false;
         apply_options(before);
@@ -797,17 +801,56 @@ bool Game::update_pause(const InputState& input) {
         for (const Finger& tap : touch_taps_) {
             float x = 0.f, y = 0.f;
             display_->screen_to_framebuffer(tap.x, tap.y, x, y);
-            const MenuTap where = options_tap(x, y, width_, height); // same layout density
+            const MenuTap where = options_tap(x, y, width_, height, DebugMenu::items);
             close = debug_menu_.choose(where.item, where.side, debug_) || close;
         }
         if (close) {
             if (debug_menu_.selected == DebugMenu::Sprites)
                 run_sprite_viewer_session(*display_, input_, sprites_);
+            if (debug_menu_.selected == DebugMenu::Attract) {
+                debug_open_ = false;
+                paused_ = false;
+                start_attract(true);
+                return true;
+            }
             debug_open_ = false;
         }
         return true;
     }
+    if (video_open_ && !input.pause) {
+        bool want_fs = false;
+        bool close = video_menu_.update(input.menu, wide_, want_fs);
+        for (const Finger& tap : touch_taps_) {
+            float x = 0.f, y = 0.f;
+            display_->screen_to_framebuffer(tap.x, tap.y, x, y);
+            const MenuTap where = options_tap(x, y, width_, height, VideoMenu::items);
+            close = video_menu_.choose(where.item, where.side, wide_, want_fs) || close;
+        }
+        menu_.wide = wide_;
+        if (want_fs) display_->toggle_fullscreen();
+        save_choices();
+        if (close) video_open_ = false;
+        return true;
+    }
+    if (audio_open_ && !input.pause) {
+        const int music_before = music_;
+        bool close = audio_menu_.update(input.menu, muted_, music_);
+        for (const Finger& tap : touch_taps_) {
+            float x = 0.f, y = 0.f;
+            display_->screen_to_framebuffer(tap.x, tap.y, x, y);
+            const MenuTap where = options_tap(x, y, width_, height, AudioMenu::items);
+            close = audio_menu_.choose(where.item, where.side, muted_, music_) || close;
+        }
+        if (music_ != music_before) {
+            synth_.set_music(music_);
+            save_choices();
+        }
+        if (close) audio_open_ = false;
+        return true;
+    }
     options_open_ = false;
+    video_open_ = false;
+    audio_open_ = false;
     debug_open_ = false;
     MenuAction action = input.pause ? MenuAction::Resume : menu_.update(input.menu);
     for (const Finger& tap : touch_taps_) {
@@ -836,6 +879,14 @@ bool Game::update_pause(const InputState& input) {
         case MenuAction::Options:
             options_open_ = true;
             options_menu_.open();
+            return true;
+        case MenuAction::Video:
+            video_open_ = true;
+            video_menu_.open();
+            return true;
+        case MenuAction::Audio:
+            audio_open_ = true;
+            audio_menu_.open();
             return true;
         case MenuAction::Debug:
             debug_open_ = true;

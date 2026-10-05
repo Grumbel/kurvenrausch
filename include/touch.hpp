@@ -83,6 +83,6 @@ struct MenuTap {
 };
 MenuTap menu_tap(const PauseMenu& menu, float x, float y, int fb_width, int fb_height);
 // The same on the OPTIONS page: every setting line has its sides.
-MenuTap options_tap(float x, float y, int fb_width, int fb_height);
+MenuTap options_tap(float x, float y, int fb_width, int fb_height, int item_count = 0);
 
 } // namespace racer

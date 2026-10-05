@@ -54,4 +54,32 @@ struct OptionsMenu {
 // Steps setting `item` by `step` (+1 or -1), wrapping round.
 void change(Options& options, int item, int step);
 
+
+// Video: picture shape and fullscreen. The game owns the bools; the menu
+// only flips them.
+struct VideoMenu {
+    enum Item { Wide, Fullscreen, Back, items };
+
+    int selected = Wide;
+
+    void open() { selected = Wide; }
+    // Sets *toggle_fullscreen when the player chooses FULLSCREEN.
+    // Returns true when BACK closes the page.
+    bool update(const MenuInput& in, bool& wide, bool& toggle_fullscreen);
+    bool choose(int item, int side, bool& wide, bool& toggle_fullscreen);
+    static std::string line(int item, bool wide);
+};
+
+// Audio: mute and radio track.
+struct AudioMenu {
+    enum Item { Mute, Music, Back, items };
+
+    int selected = Mute;
+
+    void open() { selected = Mute; }
+    bool update(const MenuInput& in, bool& muted, int& music);
+    bool choose(int item, int side, bool& muted, int& music);
+    static std::string line(int item, bool muted, int music);
+};
+
 } // namespace racer
