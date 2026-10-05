@@ -1780,6 +1780,33 @@ Bitmap make_bridge_truss() {
 // The Golden Gate: two Art Deco suspension towers in international orange,
 // main cables and suspenders spanning 256x128 for 7200 world units. The
 // middle stays transparent so the road is seen between the towers.
+
+// A vertical rock face for roadside cliffs: strata, cracks and a darker base.
+// Drawn as a scaled sprite instead of per-pixel procedural rock (much cheaper).
+Bitmap make_cliff_face() {
+    Bitmap b(48, 128);
+    const Color rock[3] = {{0x5a, 0x44, 0x34}, {0x7a, 0x5c, 0x44}, {0x9c, 0x78, 0x58}};
+    const Color dark{0x3c, 0x2c, 0x22}, light{0xb0, 0x90, 0x70}, cap{0x6c, 0x78, 0x50};
+    for (int x = 0; x < b.w; ++x) {
+        const float fx = static_cast<float>(x) / static_cast<float>(b.w - 1);
+        // Ragged top edge.
+        const int top = 2 + static_cast<int>(3.f * hash01(x, 3) + 2.f * hash01(x / 3, 4));
+        for (int y = top; y < b.h; ++y) {
+            const float fy = static_cast<float>(y - top) / static_cast<float>(b.h - top);
+            int band = static_cast<int>(fy * 9.f + hash01(x / 4, 5));
+            Color c = rock[((band % 3) + 3) % 3];
+            if (hash01(x, y / 5) > 0.88f) c = dark;           // crack
+            if (fx < 0.12f || fx > 0.88f) c = blend(c, dark, 0.35f); // flanks
+            if (fy < 0.08f) c = blend(c, cap, 0.45f);         // top scrub
+            if (fy > 0.85f) c = blend(c, dark, 0.4f);         // foot in shadow
+            if (bayer4(x, y) < 0.12f) c = blend(c, light, 0.25f);
+            b.set(x, y, c);
+        }
+    }
+    paint::outline(b, Outline);
+    return b;
+}
+
 Bitmap make_golden_gate() {
     Bitmap b(256, 128);
     const Color orange{0xc4, 0x3c, 0x28}, orange_dark{0x8c, 0x28, 0x1c}, orange_lit{0xe8, 0x6c, 0x48};
@@ -3211,6 +3238,7 @@ SpriteSheet::SpriteSheet() {
     scenery_[static_cast<size_t>(Scenery::BridgeTruss)] = make_bridge_truss();
     scenery_[static_cast<size_t>(Scenery::Overpass)] = make_overpass();
     scenery_[static_cast<size_t>(Scenery::GoldenGate)] = make_golden_gate();
+    cliff_face_ = make_cliff_face();
     for (int t = 0; t < 3; ++t) ramp_trucks_[static_cast<size_t>(t)] = make_ramp_truck(t);
     crossing_signs_[0] = make_crossing_sign(-1);
     crossing_signs_[1] = make_crossing_sign(1);

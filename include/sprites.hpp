@@ -154,6 +154,8 @@ public:
     const Bitmap& scenery_back(Scenery kind, bool windows_lit = false) const {
         return is_billboard(kind) ? billboard_back_ : scenery(kind, windows_lit);
     }
+    // Rock face for Edge::Cliff (drawn by the road renderer, not planted as scenery).
+    const Bitmap& cliff_face() const { return cliff_face_; }
     // Buildings whose dark windows can light up (horn at night in town).
     static bool scenery_has_windows(Scenery kind);
     // The player's car, without its people: model (see car_model()); steer
@@ -250,6 +252,7 @@ private:
     };
     std::array<std::vector<VehicleSprites>, static_cast<size_t>(Vehicle::Count)> vehicles_; // [kind][style]
     Bitmap billboard_back_;
+    Bitmap cliff_face_;
 
     static bool is_billboard(Scenery kind) {
         return kind == Scenery::Billboard || kind == Scenery::BillboardUs;

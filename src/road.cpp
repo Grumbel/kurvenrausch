@@ -360,35 +360,10 @@ float smooth_noise(float u, float freq, int seed) {
     return a + (b - a) * t * t * (3.f - 2.f * t);
 }
 
-// How far the cliff face juts out at u, 0 (a gully) .. 1 (a buttress):
-// ridges a couple of segments apart, with smaller ribs on them.
-float cliff_relief(float u) { return 0.7f * smooth_noise(u, 0.5f, 21) + 0.3f * smooth_noise(u, 1.7f, 22); }
-
-// `light` is how the face is turned at this column: below 1 away from the
-// light (the shaded flank of a ridge, the back of a gully), above 1 towards it.
-Color cliff_color(const RoadTheme& th, float h, float top, float u, float light, int x, int y) {
-    const float dither = bayer4(x, y) - 0.5f;
-    const float strata = h / 260.f + 0.5f * hash01(static_cast<int>(std::floor(u * 1.5f)), 3) + 0.3f * dither;
-    const int band = static_cast<int>(std::floor(strata));
-    Color c = th.rock[((band % 3) + 3) % 3];
-    const float frac = strata - std::floor(strata);
-    if (frac < 0.14f) c = blend(c, th.rock[0], 0.65f);       // crevice between layers
-    else if (frac < 0.24f) c = blend(c, th.rock[2], 0.4f);   // the lit lip of the ledge above it
-    if (hash01(static_cast<int>(std::floor(u * 4.f)), 9) > 0.86f) c = blend(c, th.rock[0], 0.5f); // crack
-    // Darker where the wall meets the ground, catching more light higher up.
-    c = blend(th.rock[0], c, 0.55f + 0.45f * std::clamp(h / 1100.f, 0.f, 1.f));
-    // The relief: flanks turned away fall into shadow, those facing the light
-    // brighten; dithered so the bands stay pixel art.
-    const float l = light + 0.12f * dither;
-    if (l < 1.f) c = blend(c, blend(th.rock[0], Color{0x10, 0x0c, 0x10}, 0.45f), std::min(1.f, 1.f - l));
-    else c = blend(c, th.rock[2], std::min(1.f, l - 1.f));
-    if (th.cap_amount > 0.01f && h > top - 700.f * th.cap_amount + 220.f * dither) c = th.cap;
-    return c;
-}
-
 } // namespace
 
-void RoadRenderer::draw_edge(Framebuffer& fb, const Track& track, const Slice& s, int side) const {
+void RoadRenderer::draw_edge(Framebuffer& fb, const Track& track, const Slice& s, int side,
+                                   const Bitmap& cliff) const {
     const Segment& seg = track.segment(s.index);
     const Edge kind = side < 0 ? seg.left : seg.right;
     if (kind == Edge::None) return;
@@ -401,13 +376,27 @@ void RoadRenderer::draw_edge(Framebuffer& fb, const Track& track, const Slice& s
 
     // Screen position of the base line and the top line at both ends.
     const float xa = a.x + off * a.w, xb = b.x + off * b.w;
-    // Boundary index (segment start) and track position at the near end.
     const int near = direction_ > 0 ? s.index : s.index + 1;
     const float h1 = track.edge_height(near, side);
     const float h2 = track.edge_height(near + direction_, side);
-    const float ppu_a = a.scale * x_scale_, ppu_b = b.scale * x_scale_; // pixels per world unit
+    const float ppu_a = a.scale * x_scale_, ppu_b = b.scale * x_scale_;
     const float ta = a.y - h1 * ppu_a, tb = b.y - h2 * ppu_b;
     if (std::abs(xb - xa) < 0.01f) return; // seen edge-on
+
+    // Cliffs: one scaled rock sprite covering the face (cheap). Rails stay
+    // procedural posts and bars (few pixels).
+    if (kind == Edge::Cliff) {
+        if (cliff.w <= 0 || cliff.h <= 0) return;
+        const float left = std::min(xa, xb);
+        const float right = std::max(xa, xb);
+        const float top = std::min(ta, tb);
+        const float bot = std::max(a.y, b.y);
+        const float width = right - left;
+        const float height = bot - top;
+        if (!(width > 0.5f) || !(height > 0.5f)) return;
+        fb.blit_scaled(cliff, left, top, width, height, side < 0, fog_amount, th.fog);
+        return;
+    }
 
     const int x0 = std::max(0, pixel_edge(std::min(xa, xb)));
     const int x1 = std::min(fb.width(), pixel_edge(std::max(xa, xb)));
@@ -416,40 +405,20 @@ void RoadRenderer::draw_edge(Framebuffer& fb, const Track& track, const Slice& s
 
     for (int x = x0; x < x1; ++x) {
         const float t = std::clamp((static_cast<float>(x) + 0.5f - xa) / (xb - xa), 0.f, 1.f);
-        const float u = u0 + du * t; // position along the track in segments
         const float base = a.y + (b.y - a.y) * t;
-        const float top = ta + (tb - ta) * t;
+        const float top_y = ta + (tb - ta) * t;
         const float ppu = ppu_a + (ppu_b - ppu_a) * t;
-        float height = (base - top) / ppu; // world units at this column
-        float light = 1.f;
-        float top_y = top;
-        if (kind == Edge::Cliff) {
-            // Ridges and gullies along the face: lit on the flank facing the
-            // light, shaded on the other, gullies darker; buttresses stand
-            // taller and the top edge is ragged.
-            const float relief = cliff_relief(u);
-            const float slope = (cliff_relief(u + 0.02f) - cliff_relief(u - 0.02f)) / 0.04f;
-            light = 0.9f + 0.4f * std::clamp(slope * static_cast<float>(side) * 0.8f, -1.f, 1.f) +
-                    0.45f * (relief - 0.5f);
-            height *= 0.9f + 0.12f * relief + 0.06f * (smooth_noise(u, 7.f, 23) - 0.5f);
-            top_y = base - height * ppu;
-        }
         const int y0 = pixel_edge(top_y), y1 = pixel_edge(base);
         for (int y = y0; y < y1; ++y) {
             const float h = (base - (static_cast<float>(y) + 0.5f)) / ppu;
-            Color c;
-            if (kind == Edge::Cliff) {
-                c = cliff_color(th, h, height, u, light, x, y);
-            } else {
-                // Two horizontal bars on posts; the gaps show the ground behind.
-                const bool post = (direction_ > 0 ? t : 1.f - t) < 0.1f; // at the segment start
-                const float r = h / rail_height;
-                const bool upper = r > 0.6f && r <= 0.95f;
-                const bool lower = r > 0.2f && r <= 0.42f;
-                if (!post && !upper && !lower) continue;
-                c = post ? th.rail[1] : th.rail[0];
-                if (upper && r > 0.88f) c = blend(c, Color{255, 255, 255}, 0.4f); // highlight
-            }
+            // Two horizontal bars on posts; the gaps show the ground behind.
+            const bool post = (direction_ > 0 ? t : 1.f - t) < 0.1f;
+            const float r = h / rail_height;
+            const bool upper = r > 0.6f && r <= 0.95f;
+            const bool lower = r > 0.2f && r <= 0.42f;
+            if (!post && !upper && !lower) continue;
+            Color c = post ? th.rail[1] : th.rail[0];
+            if (upper && r > 0.88f) c = blend(c, Color{255, 255, 255}, 0.4f);
             fb.put_pixel(x, y, blend(c, th.fog, fog_amount));
         }
     }
@@ -473,8 +442,8 @@ void RoadRenderer::draw_sprites(Framebuffer& fb, const Track& track, const Sprit
 
         fb.set_clip(static_cast<int>(s.left), std::max(0, pixel_edge(s.top)), static_cast<int>(std::ceil(s.right)), clip);
         if (projectable) {
-            draw_edge(fb, track, s, -1);
-            draw_edge(fb, track, s, +1);
+            draw_edge(fb, track, s, -1, sprites.cliff_face());
+            draw_edge(fb, track, s, +1, sprites.cliff_face());
         }
         const ScreenPoint& p0 = start(s);
         // Scenery at `shift` road half-widths from where it belongs.

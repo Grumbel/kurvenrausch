@@ -2,6 +2,11 @@
 
 ## Current tip
 
+### Grok: cliffs as sprites
+- Edge::Cliff no longer fills the face pixel-by-pixel (noise/strata). One
+  scaled cliff_face bitmap per segment side via blit_scaled. Rails unchanged.
+  Collision / edge_height / rock ground beyond the cliff are the same.
+
 ### Grok: software renderer speedups
 - fill_trapezoid writes rows directly (no hline call per row).
 - blit_scaled opaque path skips Color/blend; fog path blends in-place.
