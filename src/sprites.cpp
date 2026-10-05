@@ -1777,104 +1777,48 @@ Bitmap make_bridge_truss() {
 // A road bridge crossing over the road, 256x112 for 6400 world units: the
 // deck with its railing on two pillars.
 
-// The Golden Gate: two Art Deco suspension towers in international orange,
-// main cables and suspenders spanning 256x128 for 7200 world units. The
-// middle stays transparent so the road is seen between the towers.
-
-// A vertical rock face for roadside cliffs: strata, cracks and a darker base.
-// Drawn as a scaled sprite instead of per-pixel procedural rock (much cheaper).
-Bitmap make_cliff_face() {
-    Bitmap b(48, 128);
-    const Color rock[3] = {{0x5a, 0x44, 0x34}, {0x7a, 0x5c, 0x44}, {0x9c, 0x78, 0x58}};
-    const Color dark{0x3c, 0x2c, 0x22}, light{0xb0, 0x90, 0x70}, cap{0x6c, 0x78, 0x50};
-    for (int x = 0; x < b.w; ++x) {
-        const float fx = static_cast<float>(x) / static_cast<float>(b.w - 1);
-        // Ragged top edge.
-        const int top = 2 + static_cast<int>(3.f * hash01(x, 3) + 2.f * hash01(x / 3, 4));
-        for (int y = top; y < b.h; ++y) {
-            const float fy = static_cast<float>(y - top) / static_cast<float>(b.h - top);
-            int band = static_cast<int>(fy * 9.f + hash01(x / 4, 5));
-            Color c = rock[((band % 3) + 3) % 3];
-            if (hash01(x, y / 5) > 0.88f) c = dark;           // crack
-            if (fx < 0.12f || fx > 0.88f) c = blend(c, dark, 0.35f); // flanks
-            if (fy < 0.08f) c = blend(c, cap, 0.45f);         // top scrub
-            if (fy > 0.85f) c = blend(c, dark, 0.4f);         // foot in shadow
-            if (bayer4(x, y) < 0.12f) c = blend(c, light, 0.25f);
-            b.set(x, y, c);
-        }
-    }
-    paint::outline(b, Outline);
-    return b;
-}
-
+// The Golden Gate: an Art Deco suspension *tower* you drive through (portal),
+// international orange — same role as BridgeTruss, not a side-on span crossing
+// the road. Planted along the bay crossing so the roadway *is* the bridge.
 Bitmap make_golden_gate() {
     Bitmap b(256, 128);
-    const Color orange{0xc4, 0x3c, 0x28}, orange_dark{0x8c, 0x28, 0x1c}, orange_lit{0xe8, 0x6c, 0x48};
-    const Color cable{0xa0, 0x38, 0x28}, steel{0x5c, 0x58, 0x54};
-    // Deck line just above the road (bottom of the sprite).
-    paint::rect(b, 20, 118, 216, 4, steel);
-    paint::rect(b, 20, 116, 216, 2, orange_dark);
+    const Color orange{0xe8, 0x6a, 0x28}, orange_dark{0xb0, 0x48, 0x18}, orange_lit{0xf8, 0x98, 0x50};
+    const Color cable{0x6c, 0x58, 0x48};
 
-    auto tower = [&](int x0) {
-        // Art Deco tower: stepped top, X bracing, open roadway bay at the bottom.
-        paint::rect(b, x0, 8, 22, 110, orange);
-        paint::rect(b, x0 + 16, 8, 6, 110, orange_dark);
-        // Cross braces.
-        for (int y = 20; y < 100; y += 18) {
-            paint::stroke(b, static_cast<float>(x0 + 2), static_cast<float>(y),
-                          static_cast<float>(x0 + 20), static_cast<float>(y + 14), 2.f, 2.f, orange_dark);
-            paint::stroke(b, static_cast<float>(x0 + 20), static_cast<float>(y),
-                          static_cast<float>(x0 + 2), static_cast<float>(y + 14), 2.f, 2.f, orange_lit);
+    // Twin legs of one tower, framing the roadway (transparent centre).
+    auto leg = [&](int x0) {
+        paint::rect(b, x0, 8, 18, 120, orange);
+        paint::rect(b, x0 + 12, 8, 6, 120, orange_dark);
+        // X braces on the face.
+        for (int y = 16; y < 100; y += 20) {
+            paint::stroke(b, static_cast<float>(x0 + 1), static_cast<float>(y),
+                          static_cast<float>(x0 + 16), static_cast<float>(y + 16), 2.f, 2.f, orange_dark);
+            paint::stroke(b, static_cast<float>(x0 + 16), static_cast<float>(y),
+                          static_cast<float>(x0 + 1), static_cast<float>(y + 16), 2.f, 2.f, orange_lit);
         }
-        // Stepped crown.
-        paint::rect(b, x0 - 2, 4, 26, 8, orange);
-        paint::rect(b, x0 + 2, 0, 18, 6, orange_lit);
-        paint::rect(b, x0 + 6, 0, 10, 3, orange);
-        // Roadway opening through the tower base (transparent already).
-        for (int y = 100; y < 118; ++y)
-            for (int x = x0 + 4; x < x0 + 18; ++x) b.set(x, y, Color{0, 0, 0, 0});
+        // Stepped Art Deco crown.
+        paint::rect(b, x0 - 3, 4, 24, 8, orange);
+        paint::rect(b, x0 + 1, 0, 16, 6, orange_lit);
+        paint::rect(b, x0 + 4, 0, 10, 3, orange);
     };
-    tower(28);
-    tower(206);
+    // Outer edges of the portal — road runs between them.
+    leg(8);
+    leg(230);
 
-    // Main cables: left tower top → centre low → right tower top, and down to
-    // the ends of the deck.
-    const float y_top = 10.f, y_mid = 72.f, y_end = 116.f;
-    auto cable_arc = [&](float x0, float y0, float x1, float y1, float x2, float y2) {
-        for (int i = 0; i <= 48; ++i) {
-            const float t = static_cast<float>(i) / 48.f;
-            const float u = 1.f - t;
-            const float x = u * u * x0 + 2.f * u * t * x1 + t * t * x2;
-            const float y = u * u * y0 + 2.f * u * t * y1 + t * t * y2;
-            paint::rect(b, static_cast<int>(x), static_cast<int>(y), 2, 2, cable);
-            paint::rect(b, static_cast<int>(x), static_cast<int>(y) + 1, 2, 1, orange_dark);
-        }
-    };
-    // Left half: left tower → mid, and left end of deck → left tower.
-    cable_arc(39.f, y_top, 80.f, y_mid, 128.f, y_mid);
-    cable_arc(20.f, y_end, 30.f, 90.f, 39.f, y_top);
-    // Right half.
-    cable_arc(128.f, y_mid, 176.f, y_mid, 217.f, y_top);
-    cable_arc(217.f, y_top, 226.f, 90.f, 236.f, y_end);
-
-    // Vertical suspenders from the main cable down to the deck.
-    for (int x = 48; x < 208; x += 8) {
-        // Approximate cable height at x (piecewise).
-        float cy = y_mid;
-        if (x < 128) {
-            const float t = static_cast<float>(x - 39) / (128.f - 39.f);
-            cy = y_top + (y_mid - y_top) * t * (2.f - t); // ease toward mid
-        } else {
-            const float t = static_cast<float>(x - 128) / (217.f - 128.f);
-            cy = y_mid + (y_top - y_mid) * t * t;
-        }
-        if (cy < 100.f)
-            paint::rect(b, x, static_cast<int>(cy) + 2, 1, 116 - static_cast<int>(cy), cable);
+    // Cross members joining the legs above the traffic opening (portal lintels).
+    for (int y : {18, 48, 78}) {
+        paint::rect(b, 26, y, 204, 5, orange);
+        paint::rect(b, 26, y + 4, 204, 2, orange_dark);
     }
+    // Top strut with a slight cable suggestion toward the next span (not a
+    // full side-elevation of the bridge across the view).
+    paint::rect(b, 26, 10, 204, 4, orange_lit);
+    paint::stroke(b, 26.f, 12.f, 128.f, 4.f, 2.f, 2.f, cable);
+    paint::stroke(b, 230.f, 12.f, 128.f, 4.f, 2.f, 2.f, cable);
 
-    // A few navigation lights on the crowns (emissive warm).
-    paint::rect(b, 36, 1, 2, 2, Color{0xff, 0xf0, 0xa0});
-    paint::rect(b, 218, 1, 2, 2, Color{0xff, 0xf0, 0xa0});
+    // Navigation lights on the crowns.
+    paint::rect(b, 14, 1, 2, 2, Color{0xff, 0xf0, 0xa0});
+    paint::rect(b, 240, 1, 2, 2, Color{0xff, 0xf0, 0xa0});
 
     paint::outline(b, Outline);
     return b;

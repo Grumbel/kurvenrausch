@@ -727,18 +727,15 @@ public:
         for (int i = from + 4; i < size() - 4; i += 6) scenery(i, Scenery::BridgeTruss, 0.f);
     }
 
-    // The Golden Gate: a long bay crossing with orange suspension towers and
-    // cables, water on both sides (San Francisco).
+    // The Golden Gate: a long bay crossing — the road *is* the bridge. Orange
+    // Art Deco tower portals (like BridgeTruss) you drive through; water beyond
+    // the rails on both sides (San Francisco).
     void golden_gate(int len = Len::Medium) {
         const int from = size();
         straight(len);
         mark(from, size(), Edge::Rail, Edge::Rail);
-        // Towers near each end and one in the middle of a long span; cables
-        // between them are part of each tower sprite.
-        const int span = size() - from;
-        for (int i : {from + 4, from + span / 2, size() - 5}) {
-            if (i > from && i < size()) scenery(i, Scenery::GoldenGate, 0.f);
-        }
+        for (int i = from + 4; i < size() - 4; i += 6)
+            scenery(i, Scenery::GoldenGate, 0.f);
     }
 
     // A road bridge crossing over this one.
