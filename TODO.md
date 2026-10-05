@@ -3,11 +3,10 @@
 ## Current tip
 
 ### Grok: Time Car sprite from reference images
-- Dropped earlier freehand Time Car commits. New `Body::TimeCar` in
-  `make_movie_car()` follows a hybrid of generated rear refs + real BTTF
-  replica layout: stainless grain, louvred window, **tall black vent boxes
-  high on the deck**, cable loom with blue coils, Mr. Fusion on top,
-  stock-style lamps, bumper and twin tips.
+- `Body::TimeCar` follows the pixel rear reference (angled body, not a slab):
+  tapered stainless, **flux capacitor** visible in the rear window, tall
+  vent boxes high on the deck, top mast (first film, no Mr. Fusion), amber/red
+  lamp strips, thick bumper, twin dual exhausts. Draw order fixed.
 - Base: `22f0782`. Bundle in artifacts.
 
 Tip is Round 18 (headlights, options, tracks, oncoming traffic, more

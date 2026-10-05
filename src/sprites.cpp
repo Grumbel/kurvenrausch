@@ -2280,111 +2280,119 @@ Bitmap make_movie_car(Body body, const CarStyle& st, int turn, bool brake, int s
             break;
         }
         case Body::TimeCar: {
-            // Sprite from the hybrid rear reference: stainless wedge, louvred
-            // rear window, tall black vent boxes high on the deck (not low by
-            // the wheels), cable loom with blue coils between them, Mr. Fusion
-            // on top, stock-style lamp clusters, black bumper and twin tips.
+            // First-film time machine from the pixel rear reference: tapered
+            // stainless body (not a slab), flux capacitor glowing through the
+            // rear window, tall vent boxes high on the deck, top mast, stock
+            // lamp strips, thick bumper, twin dual exhausts. No Mr. Fusion.
+            // Draw order: body → window/flux → boxes & loom → lamps → bumper.
             const Color steel = st.body, steel_d = st.body_dark, steel_l = st.body_light;
-            const Color rubber{0x14, 0x14, 0x18}, plate{0xe0, 0xe0, 0xd8};
-            const Color box{0x10, 0x10, 0x14}, box_slot{0x28, 0x28, 0x30};
-            const Color cable{0x1c, 0x1c, 0x22}, cable_hi{0x3a, 0x3a, 0x44};
-            const Color coil{0x28, 0x70, 0xc8}, coil_hi{0x60, 0xc0, 0xff};
-            const Color fusion{0xf0, 0xf0, 0xec}, fusion_top{0x2a, 0x2a, 0x32};
-            const Color amber{0xc8, 0x78, 0x18}, amber_on{0xff, 0xc0, 0x38};
+            const Color rubber{0x12, 0x12, 0x16}, plate{0xe8, 0xe8, 0xe0};
+            const Color box{0x0c, 0x0c, 0x10}, box_slot{0x2a, 0x2a, 0x32};
+            const Color cable{0x18, 0x18, 0x20};
+            const Color flux{0xe8, 0x78, 0x18}, flux_hi{0xff, 0xd0, 0x40}, flux_core{0xff, 0xf0, 0xa0};
+            const Color amber{0xc0, 0x70, 0x14}, amber_on{0xff, 0xb8, 0x30};
+            const Color mast{0xc8, 0xcc, 0xd0};
 
-            for (int x : {3, 79}) tyre(b, x, at(27), 14, 15, tread);
+            // Tyres under the haunches.
+            for (int x : {2, 80}) tyre(b, x, at(28), 14, 14, tread);
 
-            // Stainless rear body, vertical brushed grain.
-            for (int x = 6; x < 90; ++x) {
-                const int g = x % 3;
-                paint::rect(b, x + s, at(18), 1, 16, g == 0 ? steel_d : g == 1 ? steel : steel_l);
+            // ---- Tapered stainless body (wider at the bumper, narrower at roof) ----
+            for (int y = 14; y < 34; ++y) {
+                // inset grows toward the roof so the sides angle in.
+                const int inset = (y < 20) ? (20 - y) : 0;
+                const int x0 = 6 + inset + s;
+                const int x1 = 90 - inset + s;
+                for (int x = x0; x < x1; ++x) {
+                    const int g = (x - s) % 3;
+                    paint::rect(b, x, at(y), 1, 1, g == 0 ? steel_d : g == 1 ? steel : steel_l);
+                }
             }
-            // Haunches a touch wider.
-            for (int x = 4; x < 10; ++x)
-                paint::rect(b, x + s, at(20), 1, 12, x % 2 ? steel_d : steel);
-            for (int x = 86; x < 92; ++x)
-                paint::rect(b, x + s, at(20), 1, 12, x % 2 ? steel_d : steel);
-            paint::rect(b, 10 + s, at(17), 76, 1, steel_l);
+            // Rounded haunches (the real car is not a brick).
+            paint::ellipse(b, 14.f + s, static_cast<float>(at(24)), 10.f, 9.f, steel);
+            paint::ellipse(b, 82.f + s, static_cast<float>(at(24)), 10.f, 9.f, steel);
+            paint::ellipse(b, 14.f + s, static_cast<float>(at(24)), 7.f, 6.f, steel_l);
+            paint::ellipse(b, 82.f + s, static_cast<float>(at(24)), 7.f, 6.f, steel_l);
+            // Roof edge, slightly arched.
+            paint::rect(b, 28 + u, at(3), 40, 2, steel_l);
+            paint::rect(b, 26 + u, at(4), 44, 1, steel);
 
-            // Louvred rear window (behind the deck hardware).
-            paint::rect(b, 24 + u, at(2), 48, 3, steel); // roof strip
-            paint::rect(b, 26 + u, at(5), 44, 12, black);
-            for (int y = 5; y <= 15; y += 2)
-                paint::rect(b, 26 + u, at(y), 44, 1, black);
-            for (int y = 6; y <= 14; y += 2)
-                paint::rect(b, 26 + u, at(y), 44, 1, Color{0x20, 0x28, 0x34});
-            // C-pillars and gull-wing seam.
-            for (int x = 22; x < 26; ++x) {
-                paint::rect(b, x + u, at(5), 1, 12, steel_d);
-                paint::rect(b, x + 48 + u, at(5), 1, 12, steel_d);
-            }
-            paint::rect(b, 47 + u, at(2), 2, 15, steel_d);
-            paint::rect(b, 47 + u, at(2), 1, 15, black);
+            // ---- Rear window well, then flux capacitor (read through the glass) ----
+            paint::rect(b, 30 + u, at(5), 36, 12, black);
+            // Soft blue-black depth behind the flux.
+            paint::rect(b, 32 + u, at(6), 32, 10, Color{0x10, 0x14, 0x28});
+            // Flux capacitor: Y of three arms + bright core (first film).
+            const int fx = 48 + u, fy = at(10);
+            paint::stroke(b, static_cast<float>(fx), static_cast<float>(fy - 3),
+                          static_cast<float>(fx), static_cast<float>(fy + 4), 2.f, 2.f, flux);
+            paint::stroke(b, static_cast<float>(fx), static_cast<float>(fy),
+                          static_cast<float>(fx - 6), static_cast<float>(fy + 5), 2.f, 1.5f, flux);
+            paint::stroke(b, static_cast<float>(fx), static_cast<float>(fy),
+                          static_cast<float>(fx + 6), static_cast<float>(fy + 5), 2.f, 1.5f, flux);
+            paint::rect(b, fx - 1, fy - 1, 3, 3, flux_hi);
+            paint::rect(b, fx, fy, 1, 1, flux_core);
+            // A few louvre hints at the top of the window only (do not hide the flux).
+            for (int y = 5; y <= 7; y += 2)
+                paint::rect(b, 32 + u, at(y), 32, 1, Color{0x18, 0x18, 0x20});
+            // C-pillars.
+            paint::rect(b, 28 + u, at(5), 2, 12, steel_d);
+            paint::rect(b, 66 + u, at(5), 2, 12, steel_d);
+            // Gull-wing centre seam.
+            paint::rect(b, 47 + u, at(3), 2, 14, steel_d);
 
-            // Stock-style lamp clusters: red grid + outer amber.
+            // ---- Tall vent boxes high on the deck, flanking the window ----
             for (int side = -1; side <= 1; side += 2) {
-                const int x0 = (side < 0 ? 8 : 68) + s;
-                paint::rect(b, x0, at(20), 20, 9, black);
-                // Red segments in a 3x2 grid.
-                for (int row = 0; row < 2; ++row)
-                    for (int col = 0; col < 3; ++col) {
-                        paint::rect(b, x0 + 2 + col * 5, at(21 + row * 3), 4, 2, lamp);
-                        if (brake) paint::rect(b, x0 + 2 + col * 5, at(21 + row * 3), 4, 1, lamp_hi);
-                    }
-                // Amber outer marker.
-                const int ax = side < 0 ? x0 - 4 : x0 + 20;
-                paint::rect(b, ax, at(21), 4, 6, lit(signal, side) ? amber_on : amber);
-            }
-
-            // Tall black vent boxes HIGH on the rear deck (the film-prop tell).
-            // Left and right, grid of horizontal slots, rising into headroom.
-            for (int side = -1; side <= 1; side += 2) {
-                const int x0 = (side < 0 ? 18 : 66) + u;
-                // Box body: tall, sits on the deck above the lamps.
-                paint::rect(b, x0, at(0), 12, 18, box);
-                paint::rect(b, x0, at(0), 12, 1, Color{0x30, 0x30, 0x36}); // top lip
-                // Horizontal slot grid (3 columns x 5 rows).
-                for (int row = 0; row < 5; ++row)
+                const int x0 = (side < 0 ? 16 : 68) + u;
+                paint::rect(b, x0, at(0), 12, 16, box);
+                paint::rect(b, x0, at(0), 12, 1, Color{0x34, 0x34, 0x3c});
+                for (int row = 0; row < 4; ++row)
                     for (int col = 0; col < 3; ++col)
                         paint::rect(b, x0 + 1 + col * 4, at(2 + row * 3), 3, 2, box_slot);
-                // Slight outward lean: a one-pixel step on the outer edge.
-                const int outer = side < 0 ? x0 - 1 : x0 + 12;
-                paint::rect(b, outer, at(4), 1, 12, box);
+                // Outer step so they read a little proud of the body.
+                paint::rect(b, side < 0 ? x0 - 1 : x0 + 12, at(2), 1, 12, box);
+            }
+            // Short cable runs from boxes toward the centre (under the flux glass).
+            paint::rect(b, 28 + u, at(14), 8, 1, cable);
+            paint::rect(b, 60 + u, at(14), 8, 1, cable);
+            // Small blue / red status lamps on the deck between box and window.
+            paint::rect(b, 29 + u, at(2), 2, 2, Color{0x20, 0x50, 0xd0});
+            paint::rect(b, 65 + u, at(2), 2, 2, Color{0xc0, 0x20, 0x28});
+
+            // ---- Top mast (first-film reactor chimney), not Mr. Fusion ----
+            paint::rect(b, 46 + u, at(-2), 4, 6, mast);
+            paint::rect(b, 47 + u, at(-3), 2, 2, Color{0xe0, 0xe4, 0xe8});
+            paint::rect(b, 45 + u, at(3), 6, 1, steel_d); // base on the roof
+
+            // ---- Side mirror stubs ----
+            paint::rect(b, 2 + s, at(16), 5, 3, steel_d);
+            paint::rect(b, 89 + s, at(16), 5, 3, steel_d);
+
+            // ---- Lamp strips: amber outer, red inner (stock DeLorean layout) ----
+            for (int side = -1; side <= 1; side += 2) {
+                const int x0 = (side < 0 ? 8 : 64) + s;
+                paint::rect(b, x0, at(20), 24, 7, black);
+                // Amber block toward the outside.
+                const int ax = side < 0 ? x0 + 1 : x0 + 15;
+                paint::rect(b, ax, at(21), 8, 5, lit(signal, side) ? amber_on : amber);
+                if (lit(signal, side)) paint::rect(b, ax + 2, at(22), 4, 1, Color{0xff, 0xe8, 0xa0});
+                // Red block toward the centre.
+                const int rx = side < 0 ? x0 + 10 : x0 + 1;
+                paint::rect(b, rx, at(21), 12, 5, lamp);
+                if (brake) paint::rect(b, rx + 1, at(22), 10, 1, lamp_hi);
             }
 
-            // Cable loom across the deck between the boxes, with blue coils.
-            for (int y : {8, 10, 12, 14}) {
-                paint::rect(b, 30 + u, at(y), 36, 1, (y % 4 == 0) ? cable_hi : cable);
+            // Plate (blank — no film lettering).
+            paint::rect(b, 36 + s, at(28), 24, 6, rubber);
+            paint::rect(b, 38 + s, at(29), 20, 4, plate);
+
+            // Thick black bumper.
+            paint::rect(b, 6 + s, at(33), 84, 6, rubber);
+            paint::rect(b, 8 + s, at(33), 80, 1, Color{0x2a, 0x2a, 0x30});
+
+            // Twin dual exhaust tips (two pairs).
+            for (int x : {18, 26, 66, 74}) {
+                paint::rect(b, x + s, at(37), 5, 3, Color{0x40, 0x40, 0x48});
+                paint::rect(b, x + 1 + s, at(38), 3, 1, chrome);
             }
-            // Cross-links and drops.
-            paint::rect(b, 36 + u, at(9), 1, 6, cable);
-            paint::rect(b, 44 + u, at(9), 1, 6, cable);
-            paint::rect(b, 52 + u, at(9), 1, 6, cable);
-            paint::rect(b, 58 + u, at(9), 1, 6, cable);
-            // Blue energy coils in the loom.
-            for (int cx : {34, 48, 58}) {
-                paint::rect(b, cx + u, at(11), 5, 3, coil);
-                paint::rect(b, cx + 1 + u, at(12), 3, 1, coil_hi);
-            }
-
-            // Mr. Fusion centered on the top of the deck / roof.
-            paint::rect(b, 42 + u, at(-1), 12, 6, fusion);
-            paint::rect(b, 43 + u, at(-2), 10, 2, fusion_top);
-            paint::rect(b, 45 + u, at(0), 6, 3, Color{0xd0, 0xd0, 0xc8});
-            paint::rect(b, 46 + u, at(1), 4, 2, Color{0x38, 0x90, 0x40}); // fill window
-            paint::rect(b, 46 + u, at(5), 4, 1, black); // mount
-
-            // Plate on a dark plinth.
-            paint::rect(b, 36 + s, at(30), 24, 5, rubber);
-            paint::rect(b, 38 + s, at(31), 20, 3, plate);
-
-            // Black bumper, chrome strip, twin exhaust tips.
-            paint::rect(b, 5 + s, at(34), 86, 5, rubber);
-            paint::rect(b, 7 + s, at(34), 82, 1, chrome);
-            paint::ellipse(b, 42.f + s, static_cast<float>(at(38)), 3.f, 2.f, chrome);
-            paint::ellipse(b, 54.f + s, static_cast<float>(at(38)), 3.f, 2.f, chrome);
-            paint::rect(b, 40 + s, at(37), 5, 3, Color{0x50, 0x50, 0x58});
-            paint::rect(b, 51 + s, at(37), 5, 3, Color{0x50, 0x50, 0x58});
 
             break;
         }
