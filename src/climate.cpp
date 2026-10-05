@@ -68,7 +68,7 @@ RoadTheme with_heavy_fog(const RoadTheme& look) {
     const Color grey{0x88, 0x90, 0x98};
     r.fog = blend(look.fog, mist, 0.85f);
     r.sky_top = blend(look.sky_top, grey, 0.75f);
-    r.sky_horizon = blend(look.sky_horizon, mist, 0.85f);
+    r.sky_horizon = r.fog; // same as fog so air and backdrop stay matched
     r.cloud_tint = blend(look.cloud_tint, grey, 0.7f);
     r.cloud_tint_amount = std::clamp(look.cloud_tint_amount + 0.75f, 0.f, 1.f);
     r.sun_amount = look.sun_amount * 0.05f;

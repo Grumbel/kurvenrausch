@@ -1099,6 +1099,9 @@ void test_options() {
         const Color air = atmosphere_air(th);
         // Mostly theme fog; only a touch of sky blue.
         CHECK(std::abs(static_cast<int>(air.r) - static_cast<int>(th.fog.r)) <= 30);
+        th.haze = 1.f;
+        th.fog_density = 200.f;
+        CHECK(atmosphere_air(th).r == th.fog.r && atmosphere_air(th).g == th.fog.g);
         const Color far = fogged_color(Color{0xd0, 0x40, 0x20}, air, 0.4f);
         // Still recognisably warm at moderate fog — not washed to pure blue.
         CHECK(far.r > far.b);

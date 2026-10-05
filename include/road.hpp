@@ -21,6 +21,9 @@ struct RoadView {
     float player_z = 840.f;
     int draw_distance = 300;
     float fog_density = 5.f;
+    // Distance fog / air colour from the current look (weather, FOGGY, …).
+    // Must match Background; do not re-derive from track.look per segment.
+    Color fog_air{};
     // +1 looks along the track. -1 looks back from `position`, as seen in a
     // rear-view mirror: left stays left, so the image needs no flipping.
     int direction = 1;
@@ -118,6 +121,7 @@ private:
     float x_scale_ = 1.f;
     float y_scale_ = 1.f;
     int direction_ = 1;
+    Color fog_air_{};
     float window_wake_ = 0.f;
 };
 

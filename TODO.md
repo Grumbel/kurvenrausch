@@ -2,6 +2,12 @@
 
 ## Current tip
 
+### Grok: fog air match (backdrop vs sprites)
+- FOGGY white-out used look_at fog for the backdrop but zone track.look for
+  sprite fog → colour mismatch. RoadView.fog_air carries atmosphere_air(look)
+  for the whole pass. Extreme fog uses pure theme.fog as air.
+
+
 ### Grok: white-out FOGGY, no backdrop
 - FOGGY density ≥ 200. When haze ≥ 0.99 or density ≥ 80, Background fills
   the frame with air colour and skips sky/mountains/clouds/sun.

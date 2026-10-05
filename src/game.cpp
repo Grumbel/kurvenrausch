@@ -2546,6 +2546,7 @@ void Game::render() {
     view.player_z = setup.distance;
     view.draw_distance = cam.draw_distance;
     view.fog_density = look.fog_density;
+    view.fog_air = atmosphere_air(look);
     view.x_scale = fb_x_unit();
     // Nearby buildings light every window while the wake lasts (city night horn).
     if (window_wake_time_ > 0.f && daylight_at(hour_).level < 0.5f)
@@ -2891,6 +2892,7 @@ void Game::render_mirror() {
     view.camera_depth = mirror_depth;
     view.draw_distance = cam.draw_distance;
     view.fog_density = look.fog_density;
+    view.fog_air = atmosphere_air(look);
     view.direction = -1;
     view.player_z = 0.f; // the mirror's camera is in the car
     view.horizon = mirror_horizon * static_cast<float>(pixel_scale_);

@@ -238,6 +238,8 @@ struct RoadTheme {
 // a light touch of horizon sky — enough for a cool cast, not a blue wash that
 // strips mid-distance colour and detail.
 inline Color atmosphere_air(const RoadTheme& th) {
+    // White-out: one solid fog colour so backdrop and distance sprites match.
+    if (th.haze >= 0.99f || th.fog_density >= 80.f) return th.fog;
     return blend(th.fog, th.sky_horizon, 0.14f);
 }
 
