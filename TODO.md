@@ -2,6 +2,10 @@
 
 ## Current tip
 
+### Grok: sprite viewer exits with Start / B
+- Besides Esc, gamepad Start (`pause`) and B (`menu.back`) leave the sprite
+  browser. Help line notes ESC/START.
+
 ### Grok: Golden Gate Bridge in San Francisco
 - `Scenery::GoldenGate`: orange Art Deco suspension towers, main cables and
   suspenders (centred span). `TrackBuilder::golden_gate()` lays a medium bay

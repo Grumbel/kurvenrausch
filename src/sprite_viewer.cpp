@@ -110,7 +110,8 @@ bool run_sprite_viewer_session(Display& display, Input& input, const SpriteSheet
     while (running) {
         InputState st;
         input.poll(st);
-        if (st.quit || st.escape) running = false;
+        // Esc, Start (pause), B (menu.back), or window close leave the browser.
+        if (st.quit || st.escape || st.pause || st.menu.back) running = false;
         if (st.menu.left)
             index = (index - 1 + static_cast<int>(entries.size())) % static_cast<int>(entries.size());
         if (st.menu.right) index = (index + 1) % static_cast<int>(entries.size());
@@ -128,7 +129,7 @@ bool run_sprite_viewer_session(Display& display, Input& input, const SpriteSheet
                      std::to_string(index + 1) + "/" + std::to_string(entries.size()) + "  " + std::to_string(bmp.w) +
                          "x" + std::to_string(bmp.h),
                      Color{0xa0, 0xa8, 0xb0});
-        fb.draw_text(4, fb_h - 12, "LEFT/RIGHT  UP/DOWN category  ESC back", Color{0x80, 0x88, 0x90});
+        fb.draw_text(4, fb_h - 12, "LEFT/RIGHT  UP/DOWN category  ESC/START back", Color{0x80, 0x88, 0x90});
 
         display.present(fb.pixels(), overlay);
         SDL_Delay(16);
