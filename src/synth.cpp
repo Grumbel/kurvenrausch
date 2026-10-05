@@ -37,6 +37,8 @@ void Synth::set_params(const SynthParams& p) {
     scrape_.store(p.scrape, std::memory_order_relaxed);
     rain_.store(p.rain, std::memory_order_relaxed);
     volume_.store(p.volume, std::memory_order_relaxed);
+    engine_volume_.store(p.engine_volume, std::memory_order_relaxed);
+    music_volume_.store(p.music_volume, std::memory_order_relaxed);
     horn_.store(p.horn, std::memory_order_relaxed);
     nitro_.store(p.nitro, std::memory_order_relaxed);
     engine_.store(p.engine, std::memory_order_relaxed);
@@ -82,12 +84,14 @@ void Synth::render(int16_t* out, int frames) {
     const float t_rpm = load(rpm_), t_throttle = load(throttle_), t_speed = load(speed_);
     const float t_skid = load(skid_), t_gravel = load(gravel_), t_scrape = load(scrape_);
     const float t_rain = load(rain_), t_volume = load(volume_);
+    const float t_engine_volume = load(engine_volume_), t_music_volume = load(music_volume_);
     const float t_horn = load(horn_), t_nitro = load(nitro_), t_engine = load(engine_), t_pump = load(pump_);
     const float t_splash = load(splash_), t_siren = load(siren_);
 
     if (!primed_) { // start from the current state instead of fading in from silence
         s_rpm_ = t_rpm; s_throttle_ = t_throttle; s_speed_ = t_speed; s_skid_ = t_skid;
         s_gravel_ = t_gravel; s_scrape_ = t_scrape; s_rain_ = t_rain; s_volume_ = t_volume;
+        s_engine_volume_ = t_engine_volume; s_music_volume_ = t_music_volume;
         s_horn_ = t_horn; s_nitro_ = t_nitro; s_engine_ = t_engine; s_pump_ = t_pump; s_splash_ = t_splash;
         s_siren_ = t_siren;
         slow_throttle_ = t_throttle;
@@ -157,6 +161,8 @@ void Synth::render(int16_t* out, int frames) {
         s_scrape_ += (t_scrape - s_scrape_) * a_fast;
         s_rain_ += (t_rain - s_rain_) * a_vol;
         s_volume_ += (t_volume - s_volume_) * a_vol;
+        s_engine_volume_ += (t_engine_volume - s_engine_volume_) * a_vol;
+        s_music_volume_ += (t_music_volume - s_music_volume_) * a_vol;
         s_horn_ += (t_horn - s_horn_) * a_horn;
         s_nitro_ += (t_nitro - s_nitro_) * a_nitro;
         s_engine_ += (t_engine - s_engine_) * a_load;
@@ -402,8 +408,9 @@ void Synth::render(int16_t* out, int frames) {
             }
         }
 
-        const float mix = engine + roar + wind + gravel + rain + skid + scrape + crash + horn + nitro + whoosh + pump + ding +
-                          splash + thunder + siren + tick + 0.55f * music_.sample();
+        const float sfx = engine + roar + wind + gravel + rain + skid + scrape + crash + horn + nitro + whoosh + pump +
+                          ding + splash + thunder + siren + tick;
+        const float mix = sfx * s_engine_volume_ + 0.55f * music_.sample() * s_music_volume_;
         const float x = std::tanh(mix * s_volume_ * 1.1f);
         out[i] = static_cast<int16_t>(std::lround(x * 30000.f));
     }

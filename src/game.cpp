@@ -312,6 +312,8 @@ bool Game::init(bool fullscreen) {
         passenger_ = c->passenger >= 0 && c->passenger < motel_passengers ? c->passenger : nobody;
         view_mode_ = static_cast<ViewMode>(wrap(c->view, view_modes));
         music_ = c->music >= 0 ? c->music % Music::tracks : -1;
+        engine_vol_ = std::clamp(c->engine_vol, 0, max_volume);
+        music_vol_ = std::clamp(c->music_vol, 0, max_volume);
         wide_ = c->wide != 0;
         resume_position_ = c->position;
         resume_minutes_ = c->minutes;
@@ -555,7 +557,7 @@ bool Game::frame() {
         draw_options_menu(fb_, options_menu_, options_, zone_label(options_menu_.zone),
                           track_name(options_menu_.track));
     else if (paused_ && video_open_) draw_video_menu(fb_, video_menu_, wide_, pixel_scale_ >= 2);
-    else if (paused_ && audio_open_) draw_audio_menu(fb_, audio_menu_, muted_, music_);
+    else if (paused_ && audio_open_) draw_audio_menu(fb_, audio_menu_, muted_, engine_vol_, music_vol_, music_);
     else if (paused_ && debug_open_) draw_debug_menu(fb_, debug_menu_, debug_);
     else if (paused_) draw_pause_menu(fb_, menu_, zone_label(zone_), track_name(track_index_));
     if (debug_.fps) draw_fps(fb_, fps_);
@@ -859,17 +861,16 @@ bool Game::update_pause(const InputState& input) {
     }
     if (audio_open_ && !input.pause) {
         const int music_before = music_;
-        bool close = audio_menu_.update(input.menu, muted_, music_);
+        const int eng_before = engine_vol_, mus_before = music_vol_;
+        bool close = audio_menu_.update(input.menu, muted_, engine_vol_, music_vol_, music_);
         for (const Finger& tap : touch_taps_) {
             float x = 0.f, y = 0.f;
             display_->screen_to_framebuffer(tap.x, tap.y, x, y);
             const MenuTap where = options_tap(x, y, width_, fb_height(), AudioMenu::items);
-            close = audio_menu_.choose(where.item, where.side, muted_, music_) || close;
+            close = audio_menu_.choose(where.item, where.side, muted_, engine_vol_, music_vol_, music_) || close;
         }
-        if (music_ != music_before) {
-            synth_.set_music(music_);
-            save_choices();
-        }
+        if (music_ != music_before) synth_.set_music(music_);
+        if (music_ != music_before || eng_before != engine_vol_ || mus_before != music_vol_) save_choices();
         if (close) audio_open_ = false;
         return true;
     }
@@ -1296,7 +1297,8 @@ void Game::fixed_update(const InputState& driver_input, float dt) {
 // The player's car takes its model's top speed and acceleration (grip is
 // applied where the road's grip is).
 void Game::save_choices() const {
-    Choices c{car_model_, driver_, passenger_ >= motel_passengers ? nobody : passenger_, static_cast<int>(view_mode_), music_, wide_ ? 1 : 0, track_index_, options_};
+    Choices c{car_model_, driver_, passenger_ >= motel_passengers ? nobody : passenger_, static_cast<int>(view_mode_), music_, wide_ ? 1 : 0, track_index_, options_,
+              -1, -1, -1, engine_vol_, music_vol_};
     // Where the race is, to go on from there next time; following the
     // traffic in the attract mode, where it was.
     if (!attract_) {
@@ -2125,6 +2127,8 @@ void Game::update_audio(const InputState& input, float dt) {
     p.nitro = nitro_.intensity();
     p.throttle = std::max(p.throttle, p.nitro);
     p.volume = muted_ ? 0.f : 1.f;
+    p.engine_volume = static_cast<float>(engine_vol_) / static_cast<float>(max_volume);
+    p.music_volume = static_cast<float>(music_vol_) / static_cast<float>(max_volume);
     sound_ = p;
     synth_.set_params(p);
 }

@@ -359,7 +359,8 @@ void draw_video_menu(Framebuffer& fb, const VideoMenu& menu, bool wide, bool hd)
     }
 }
 
-void draw_audio_menu(Framebuffer& fb, const AudioMenu& menu, bool muted, int music) {
+void draw_audio_menu(Framebuffer& fb, const AudioMenu& menu, bool muted, int engine_vol, int music_vol,
+                     int music) {
     for (int y = 0; y < fb.height(); ++y) {
         for (int x = 0; x < fb.width(); ++x) fb.blend_pixel(x, y, Shadow, 0.55f);
     }
@@ -367,7 +368,7 @@ void draw_audio_menu(Framebuffer& fb, const AudioMenu& menu, bool muted, int mus
     text_center(fb, top, "AUDIO", Value, 3);
     for (int i = 0; i < AudioMenu::items; ++i) {
         const bool on = i == menu.selected;
-        std::string line = AudioMenu::line(i, muted, music);
+        std::string line = AudioMenu::line(i, muted, engine_vol, music_vol, music);
         const size_t colon = line.find(": ");
         if (on) line = colon == std::string::npos ? "> " + line + " <"
                                                   : line.substr(0, colon + 2) + "< " + line.substr(colon + 2) + " >";

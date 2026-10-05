@@ -2,6 +2,9 @@
 
 ## Current tip
 
+### Grok: Audio menu engine and music volume
+- ENGINE and MUSIC levels 0..10; synth splits SFX vs radio. Saved in choices.
+
 ### Grok: menu layout — Start In / Track / Screen moved
 - Pause: Resume, Restart, Game Options, Video, Audio, Debug, Quit.
 - GAME OPTIONS holds Start In and Track; VIDEO holds Screen (wide).

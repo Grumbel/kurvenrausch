@@ -161,12 +161,20 @@ std::string VideoMenu::line(int item, bool wide, bool hd) {
     }
 }
 
-bool AudioMenu::update(const MenuInput& in, bool& muted, int& music) {
+bool AudioMenu::update(const MenuInput& in, bool& muted, int& engine_vol, int& music_vol, int& music) {
     if (in.back) return true;
     if (in.up) selected = ((selected - 1) % items + items) % items;
     if (in.down) selected = (selected + 1) % items;
     if (selected == Back) return in.confirm;
     if (selected == Mute && (in.left || in.right || in.confirm)) muted = !muted;
+    if (selected == Engine) {
+        if (in.left) engine_vol = std::max(0, engine_vol - 1);
+        if (in.right || in.confirm) engine_vol = std::min(max_volume, engine_vol + 1);
+    }
+    if (selected == MusicVol) {
+        if (in.left) music_vol = std::max(0, music_vol - 1);
+        if (in.right || in.confirm) music_vol = std::min(max_volume, music_vol + 1);
+    }
     if (selected == Radio) {
         if (in.left) music = Music::previous(music);
         if (in.right || in.confirm) music = Music::next(music);
@@ -174,19 +182,29 @@ bool AudioMenu::update(const MenuInput& in, bool& muted, int& music) {
     return false;
 }
 
-bool AudioMenu::choose(int item, int side, bool& muted, int& music) {
+bool AudioMenu::choose(int item, int side, bool& muted, int& engine_vol, int& music_vol, int& music) {
     if (item < 0 || item >= items) return false;
     selected = item;
     if (item == Back) return true;
     if (item == Mute) muted = !muted;
+    if (item == Engine) {
+        if (side < 0) engine_vol = std::max(0, engine_vol - 1);
+        else engine_vol = std::min(max_volume, engine_vol + 1);
+    }
+    if (item == MusicVol) {
+        if (side < 0) music_vol = std::max(0, music_vol - 1);
+        else music_vol = std::min(max_volume, music_vol + 1);
+    }
     if (item == Radio) music = side < 0 ? Music::previous(music) : Music::next(music);
     return false;
 }
 
-std::string AudioMenu::line(int item, bool muted, int music) {
+std::string AudioMenu::line(int item, bool muted, int engine_vol, int music_vol, int music) {
     switch (item) {
         case Mute: return std::string("MUTE: ") + (muted ? "ON" : "OFF");
-        case Radio: return std::string("MUSIC: ") + Music::name(music);
+        case Engine: return "ENGINE: " + std::to_string(engine_vol);
+        case MusicVol: return "MUSIC: " + std::to_string(music_vol);
+        case Radio: return std::string("RADIO: ") + Music::name(music);
         default: return "BACK";
     }
 }

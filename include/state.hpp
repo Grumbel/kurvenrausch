@@ -36,6 +36,8 @@ struct Choices {
     int position = -1;
     int minutes = -1;
     int tank = -1;
+    int engine_vol = 10; // 0 .. max_volume
+    int music_vol = 10;
 };
 // As "key value" lines; parsing skips unknown keys and malformed lines and
 // keeps the defaults for what is missing.

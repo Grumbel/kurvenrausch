@@ -64,16 +64,18 @@ struct VideoMenu {
     static std::string line(int item, bool wide, bool hd);
 };
 
-// Audio: mute and radio track.
+// Audio: mute, engine/SFX and music levels (0 .. max_volume), radio track.
+constexpr int max_volume = 10;
+
 struct AudioMenu {
-    enum Item { Mute, Radio, Back, items };
+    enum Item { Mute, Engine, MusicVol, Radio, Back, items };
 
     int selected = Mute;
 
     void open() { selected = Mute; }
-    bool update(const MenuInput& in, bool& muted, int& music);
-    bool choose(int item, int side, bool& muted, int& music);
-    static std::string line(int item, bool muted, int music);
+    bool update(const MenuInput& in, bool& muted, int& engine_vol, int& music_vol, int& music);
+    bool choose(int item, int side, bool& muted, int& engine_vol, int& music_vol, int& music);
+    static std::string line(int item, bool muted, int engine_vol, int music_vol, int music);
 };
 
 } // namespace racer

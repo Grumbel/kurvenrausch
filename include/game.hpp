@@ -235,6 +235,8 @@ private:
     Synth synth_;   // declared before audio_, which must be destroyed first
     Audio audio_;
     bool muted_ = false;
+    int engine_vol_ = max_volume; // 0 .. max_volume, engine and world SFX
+    int music_vol_ = max_volume;  // 0 .. max_volume, radio
     bool paused_ = false;
     PauseMenu menu_;
     Options options_;

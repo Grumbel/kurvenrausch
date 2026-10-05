@@ -27,8 +27,11 @@ struct SynthParams {
     float pump = 0.f;      // a fuel pump running beside the car
     float splash = 0.f;    // tyres ploughing through water
     float siren = 0.f;     // a police siren, louder the nearer
-    float volume = 1.f;    // master volume, 0 mutes
+    float volume = 1.f;       // master volume, 0 mutes (the mute switch)
+    float engine_volume = 1.f; // engine and world SFX, 0 .. 1
+    float music_volume = 1.f;  // radio level, 0 .. 1
 };
+
 
 // Real-time sound synthesis, entirely on the fly: there are no samples. The
 // engine is an additive six-cylinder whose pitch follows the revs and whose
@@ -69,6 +72,7 @@ private:
     // Parameters (written by the game thread, read by render()).
     std::atomic<float> rpm_{0.f}, throttle_{0.f}, speed_{0.f}, skid_{0.f};
     std::atomic<float> gravel_{0.f}, scrape_{0.f}, rain_{0.f}, volume_{1.f};
+    std::atomic<float> engine_volume_{1.f}, music_volume_{1.f};
     std::atomic<float> horn_{0.f}, nitro_{0.f}, engine_{1.f}, pump_{0.f}, splash_{0.f}, siren_{0.f};
     std::atomic<float> crash_intensity_{0.f}, whoosh_intensity_{0.f}, thunder_intensity_{0.f};
     std::atomic<int> crash_events_{0}, whoosh_events_{0}, ding_events_{0}, thunder_events_{0};
@@ -80,6 +84,7 @@ private:
     bool primed_ = false;
     float s_rpm_ = 0.f, s_throttle_ = 0.f, s_speed_ = 0.f, s_skid_ = 0.f;
     float s_gravel_ = 0.f, s_scrape_ = 0.f, s_rain_ = 0.f, s_volume_ = 1.f;
+    float s_engine_volume_ = 1.f, s_music_volume_ = 1.f;
     float s_horn_ = 0.f, s_nitro_ = 0.f, s_engine_ = 1.f, s_pump_ = 0.f, s_splash_ = 0.f, s_siren_ = 0.f;
     // The radio playing (0 .. 1, eased), and the engine's low band: while
     // it plays the engine makes room for it in the middle (see render()).
