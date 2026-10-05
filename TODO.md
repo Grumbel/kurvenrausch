@@ -2,6 +2,12 @@
 
 ## Current tip
 
+### Grok: dealer not a free fill-up
+- change_car() no longer resets the tank. Switching cars at a dealer (or
+  hospital ambulance / movie become) keeps the current fuel; only gas
+  stations refuel. Car still comes clean (dirt cleared).
+
+
 ### Grok: tail lights in fog/night; night aerial fog
 - blit_scaled keeps lamp pixels through fog (~18% fog) so tails/brakes stay
   visible and remain emissive for night. Brighter default tail colours;
@@ -499,7 +505,7 @@ commit:
 - Lots generalised (`Lot`, `Track::lots`, one offer panel, `--visit KIND`):
   car washes, motels (passenger), hospitals (driver; a crash leaves a
   bandage until a hospital), truck stops (the Big Rig, `truck_model`).
-  Changing car gives a clean car with a full tank.
+  Changing car gives a clean car (fuel unchanged; gas stations refill).
 - State in `$XDG_STATE_HOME/kurvenrausch/` (`state.hpp`): `choices` (car,
   driver, passenger, view, radio) written atomically, `laps.tsv` appended;
   the fastest lap there is BEST. Headless runs never touch it.

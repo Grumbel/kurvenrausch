@@ -1362,11 +1362,11 @@ void Game::save_choices() const {
     store_.save_choices(c);
 }
 
-// Into another car: it comes clean and with a full tank.
+// Into another car: it comes clean. Fuel stays as it is — a dealer is not a
+// free fill-up (gas stations are).
 void Game::change_car() {
     apply_car();
     beacon_ = beacon_ && body_has_lightbar(car_model(car_model_).body);
-    fuel_.reset();
     dirt_.reset();
 }
 
