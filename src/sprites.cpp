@@ -1734,12 +1734,13 @@ Bitmap make_cliff_face(int variant, bool snowy) {
     const int v = ((variant % 5) + 5) % 5;
 
     // Flat crest band (plateau), then the mass widens toward the base.
-    // Road sits on the +x side when not flipped.
-    const float crest_left = 0.22f + 0.06f * hash01(v, 1);
-    const float crest_right = 0.55f + 0.08f * hash01(v, 2);
+    // Road sits on the +x side when not flipped. Crest and base a little
+    // wider than the first plateaus so the flanks read as broader slopes.
+    const float crest_left = 0.14f + 0.06f * hash01(v, 1);
+    const float crest_right = 0.62f + 0.08f * hash01(v, 2);
     const float crest_y = 0.06f + 0.04f * hash01(v, 3); // top of plateau
-    const float base_left = 0.00f + 0.04f * hash01(v, 4);
-    const float base_right = 0.88f + 0.10f * hash01(v, 5);
+    const float base_left = 0.00f + 0.03f * hash01(v, 4);
+    const float base_right = 0.94f + 0.06f * hash01(v, 5);
 
     for (int y = 0; y < b.h; ++y) {
         const float fy = static_cast<float>(y) / static_cast<float>(b.h - 1);
@@ -1782,26 +1783,6 @@ Bitmap make_cliff_face(int variant, bool snowy) {
             b.set(x, y, c);
         }
     }
-    return b;
-}
-
-// Simple concrete wall panel for tunnel sides (vertical column sprite).
-Bitmap make_tunnel_wall() {
-    Bitmap b(24, 64);
-    const Color tile{0xd0, 0xc8, 0xbc}, tile_d{0xb0, 0xa8, 0x9c}, joint{0x5c, 0x58, 0x52};
-    const Color kerb{0xe8, 0xe4, 0xdc}, upper{0x78, 0x74, 0x6c};
-    for (int y = 0; y < b.h; ++y) {
-        const float fy = static_cast<float>(y) / static_cast<float>(b.h - 1);
-        Color row = fy < 0.12f ? kerb : (fy < 0.55f ? ((y / 6) % 2 ? tile : tile_d) : upper);
-        if (y % 6 == 0) row = joint;
-        for (int x = 0; x < b.w; ++x) {
-            Color c = row;
-            if (x == 0 || x == b.w - 1) c = joint;
-            if (x == 1) c = blend(c, Color{0xf0, 0xec, 0xe4}, 0.3f);
-            b.set(x, y, c);
-        }
-    }
-    paint::outline(b, Outline);
     return b;
 }
 
@@ -3280,7 +3261,6 @@ SpriteSheet::SpriteSheet() {
         cliff_faces_[static_cast<size_t>(i)] = make_cliff_face(i, false);
         cliff_faces_snow_[static_cast<size_t>(i)] = make_cliff_face(i, true);
     }
-    tunnel_wall_ = make_tunnel_wall();
     for (int t = 0; t < 3; ++t) ramp_trucks_[static_cast<size_t>(t)] = make_ramp_truck(t);
     crossing_signs_[0] = make_crossing_sign(-1);
     crossing_signs_[1] = make_crossing_sign(1);

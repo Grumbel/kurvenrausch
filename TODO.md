@@ -2,6 +2,14 @@
 
 ## Current tip
 
+### Grok: wider tunnel walls and mountain slopes
+- Tunnel interiors use continuous side walls again (apron + kerb/tile/joint/
+  upper bands from road edge to the screen edge, ring frames, ceiling and
+  lamps). The thin column sprites left gaps you could see through.
+- Cliff billboards are a little wider (~1.55 segment lengths, taller min
+  aspect) and the plateau silhouettes have broader crests and bases.
+
+
 ### Grok: cliff slope variants
 - Five cliff_face silhouettes (steep, talus, overhang, stepped, recessed)
   with lit inner / shaded outer edges. Picked per segment/side so runs of

@@ -168,13 +168,50 @@ void RoadRenderer::draw_segment(Framebuffer& fb, const Track& track, const Slice
     fb.set_clip(static_cast<int>(s.left), std::max(0, pixel_edge(s.top)), static_cast<int>(std::ceil(s.right)),
                 clip_row(s.clip));
 
-    // Grass spans the full width; in a tunnel a dark fill, ceiling and lamps.
-    // Side walls are column sprites drawn with the edges.
+    // Grass spans the full width. In a tunnel: apron, continuous side walls
+    // (road edge to screen edge so nothing shows through), ceiling and lamps.
     const float wf = static_cast<float>(fb.width());
-    const Color wall[2] = {{0x6c, 0x68, 0x62}, {0x60, 0x5c, 0x56}};
-    fb.fill_trapezoid(b.y, 0.f, wf, a.y, 0.f, wf, fogged(seg.tunnel ? wall[band] : theme.grass[band]));
-    if (seg.tunnel) {
-        const float ca = a.y - a.scale * tunnel_height * y_scale_, cb = b.y - b.scale * tunnel_height * y_scale_;
+    if (!seg.tunnel) {
+        fb.fill_trapezoid(b.y, 0.f, wf, a.y, 0.f, wf, fogged(theme.grass[band]));
+    } else {
+        const float ca = a.y - a.scale * tunnel_height * y_scale_;
+        const float cb = b.y - b.scale * tunnel_height * y_scale_;
+        const float rl_a = a.x - a.w, rr_a = a.x + a.w;
+        const float rl_b = b.x - b.w, rr_b = b.x + b.w;
+        // Floor apron beside the road.
+        const Color apron = fogged(band ? Color{0x54, 0x50, 0x4c} : Color{0x5c, 0x58, 0x54});
+        fb.fill_trapezoid(b.y, 0.f, rl_b, a.y, 0.f, rl_a, apron);
+        fb.fill_trapezoid(b.y, rr_b, wf, a.y, rr_a, wf, apron);
+        // High-contrast wall bands (kerb / tiles / joint / upper concrete).
+        const Color kerb = fogged(Color{0xf4, 0xf0, 0xe8});
+        const Color tile = fogged(Color{0xc8, 0xc0, 0xb4});
+        const Color tile_alt = fogged(Color{0xa8, 0xa0, 0x94});
+        const Color upper = fogged(Color{0x6c, 0x68, 0x62});
+        const Color joint = fogged(Color{0x3c, 0x38, 0x34});
+        const struct { float t0, t1; Color c; } bands[4] = {
+            {0.f, 0.12f, kerb},
+            {0.12f, 0.45f, band ? tile : tile_alt},
+            {0.45f, 0.55f, joint},
+            {0.55f, 1.f, upper},
+        };
+        for (const auto& band_w : bands) {
+            const float a_bot = a.y + (ca - a.y) * band_w.t0;
+            const float a_top = a.y + (ca - a.y) * band_w.t1;
+            const float b_bot = b.y + (cb - b.y) * band_w.t0;
+            const float b_top = b.y + (cb - b.y) * band_w.t1;
+            const float y_top = std::min(a_top, b_top);
+            const float y_bot = std::max(a_bot, b_bot);
+            if (!(y_bot > y_top + 0.5f)) continue;
+            fb.fill_trapezoid(b_top, 0.f, rl_b, a_bot, 0.f, rl_a, band_w.c);
+            fb.fill_trapezoid(b_top, rr_b, wf, a_bot, rr_a, wf, band_w.c);
+        }
+        // Vertical ring frames every few segments.
+        if (s.index % 3 == 0) {
+            const float tw = std::max(3.f, a.w * 0.03f);
+            fb.fill_trapezoid(cb, rl_b - tw, rl_b, ca, rl_a - tw, rl_a, joint);
+            fb.fill_trapezoid(cb, rr_b, rr_b + tw, ca, rr_a, rr_a + tw, joint);
+        }
+        // Ceiling.
         fb.fill_trapezoid(ca, 0.f, wf, cb, 0.f, wf, fogged(Color{0x34, 0x32, 0x30}));
         if (s.index % 6 == 0) {
             const float lw = a.w * 0.08f;
@@ -371,8 +408,8 @@ void RoadRenderer::draw_edge(Framebuffer& fb, const Track& track, const Slice& s
         if (!(h1 > 50.f) && !(h2 > 50.f)) return;
         const float ppu = std::max(ppu_a, 1e-4f);
         const float height = std::max(h1, h2 * 0.5f) * ppu;
-        // World width ~1.2 segments so the mountain wedge reads clearly.
-        const float width = std::max(track.segment_length * ppu * 1.2f, height * 0.9f);
+        // World width ~1.55 segments so the mountain flanks read a little wider.
+        const float width = std::max(track.segment_length * ppu * 1.55f, height * 1.05f);
         if (!(height > 1.f) || !(width > 1.f)) return;
         const float base_x = xa;
         const float left = side < 0 ? base_x - width : base_x;
@@ -427,21 +464,6 @@ void RoadRenderer::draw_sprites(Framebuffer& fb, const Track& track, const Sprit
             const bool snow_cliff = track.look(s.index).cap_amount > 0.45f;
             draw_edge(fb, track, s, -1, sprites.cliff_face(s.index, snow_cliff));
             draw_edge(fb, track, s, +1, sprites.cliff_face(s.index * 3 + 1, snow_cliff));
-            // Tunnel side walls: simple column sprites along the road edge.
-            if (seg.tunnel) {
-                const Bitmap& wall = sprites.tunnel_wall();
-                const ScreenPoint& p0 = start(s);
-                const float px = p0.scale * x_scale_;
-                const float wh = tunnel_height * px;
-                const float ww = std::max(8.f, track.segment_length * px * 0.35f);
-                const float fog = 1.f - s.fog;
-                const Color fogc = track.look(s.index).fog;
-                for (int side = -1; side <= 1; side += 2) {
-                    const float edge = p0.x + static_cast<float>(side) * p0.w;
-                    const float left = side < 0 ? edge - ww : edge;
-                    fb.blit_scaled(wall, left, p0.y - wh, ww, wh, side < 0, fog, fogc);
-                }
-            }
         }
         const ScreenPoint& p0 = start(s);
         // Scenery at `shift` road half-widths from where it belongs.

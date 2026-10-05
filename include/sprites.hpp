@@ -161,7 +161,6 @@ public:
         const int i = ((variant % cliff_faces) + cliff_faces) % cliff_faces;
         return (snowy ? cliff_faces_snow_ : cliff_faces_)[static_cast<size_t>(i)];
     }
-    const Bitmap& tunnel_wall() const { return tunnel_wall_; }
     // Buildings whose dark windows can light up (horn at night in town).
     static bool scenery_has_windows(Scenery kind);
     // The player's car, without its people: model (see car_model()); steer
@@ -260,7 +259,6 @@ private:
     Bitmap billboard_back_;
     std::array<Bitmap, cliff_faces> cliff_faces_;
     std::array<Bitmap, cliff_faces> cliff_faces_snow_;
-    Bitmap tunnel_wall_;
 
     static bool is_billboard(Scenery kind) {
         return kind == Scenery::Billboard || kind == Scenery::BillboardUs;
