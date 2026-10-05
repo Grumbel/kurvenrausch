@@ -3,6 +3,8 @@
 
 #include "background.hpp"
 
+#include "daylight.hpp"
+
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -84,11 +86,11 @@ void Background::update(float curve, float segments, float dt) {
     drift_ = wrap(drift_ + dt * 3.f, sky_period); // clouds drift slowly on their own
 }
 
-void Background::render(Framebuffer& fb, const RoadTheme& theme) const {
-    render(fb, theme, BackdropView{static_cast<float>(fb.height() / 2), 1.f, false});
+void Background::render(Framebuffer& fb, const RoadTheme& theme, float hour) const {
+    render(fb, theme, BackdropView{static_cast<float>(fb.height() / 2), 1.f, false}, hour);
 }
 
-void Background::render(Framebuffer& fb, const RoadTheme& theme, const BackdropView& view) const {
+void Background::render(Framebuffer& fb, const RoadTheme& theme, const BackdropView& view, float hour) const {
     const int w = fb.width();
     const int horizon = static_cast<int>(std::lround(view.horizon));
     const float zoom = view.zoom;
@@ -99,17 +101,50 @@ void Background::render(Framebuffer& fb, const RoadTheme& theme, const BackdropV
         return view.mirror ? offset + period / 2.f - (x - half_w) / zoom : offset + x / zoom;
     };
 
-    // Copper-style sky: 16 colour bands, dithered into each other.
+    const SkyBody sun = sun_position(hour);
+    const SkyBody moon = moon_position(hour);
+    // Screen place of a body above the horizon; a little parallax from the
+    // sky scroll so bends nudge it. Returns false when fully below.
+    auto body_screen = [&](const SkyBody& body, float& sx, float& sy) {
+        if (body.elevation < -0.08f) return false;
+        const float elev = std::clamp(body.elevation, 0.f, 1.f);
+        const float band = static_cast<float>(horizon) * 0.88f * zoom;
+        sx = half_w + body.azimuth * half_w * 0.88f + (sky_offset_ * 0.04f) * zoom;
+        sy = static_cast<float>(horizon) - elev * band;
+        return true;
+    };
+
+    // Copper-style sky: 16 colour bands, dithered into each other. Near the
+    // sun the horizon band warms a little for a more natural dawn/dusk wash.
     constexpr int bands = 16;
     const float sky_h = sky_height * zoom;
     const float sky_top = static_cast<float>(horizon) - sky_h; // above the screen in the mirror
+    float sun_sx = 0.f, sun_sy = 0.f;
+    const bool sun_up = !view.mirror && body_screen(sun, sun_sx, sun_sy);
     for (int y = 0; y < horizon; ++y) {
         const float t = std::max(0.f, static_cast<float>(y) - sky_top) / sky_h * (bands - 1);
         const int band = static_cast<int>(t);
         const float frac = t - static_cast<float>(band);
-        const Color c0 = blend(theme.sky_top, theme.sky_horizon, static_cast<float>(band) / (bands - 1));
-        const Color c1 = blend(theme.sky_top, theme.sky_horizon, static_cast<float>(std::min(band + 1, bands - 1)) / (bands - 1));
-        for (int x = 0; x < w; ++x) fb.put_pixel(x, y, bayer4(x, y) < frac ? c1 : c0);
+        Color c0 = blend(theme.sky_top, theme.sky_horizon, static_cast<float>(band) / (bands - 1));
+        Color c1 = blend(theme.sky_top, theme.sky_horizon, static_cast<float>(std::min(band + 1, bands - 1)) / (bands - 1));
+        if (sun_up && theme.sun_amount > 0.05f) {
+            // Stronger warm haze near the sun, especially low on the horizon.
+            const float near_h = std::clamp(1.f - std::abs(static_cast<float>(y) - sun_sy) / (28.f * zoom), 0.f, 1.f);
+            const float low = std::clamp(1.f - sun.elevation, 0.f, 1.f);
+            const float warm = 0.35f * near_h * low * theme.sun_amount;
+            c0 = blend(c0, theme.sun, warm);
+            c1 = blend(c1, theme.sun, warm);
+        }
+        for (int x = 0; x < w; ++x) {
+            Color c = bayer4(x, y) < frac ? c1 : c0;
+            if (sun_up && theme.sun_amount > 0.05f) {
+                const float dx = (static_cast<float>(x) - sun_sx) / (half_w * 0.5f);
+                const float near_x = std::clamp(1.f - dx * dx, 0.f, 1.f);
+                const float low = std::clamp(1.f - sun.elevation, 0.f, 1.f);
+                c = blend(c, theme.sun, 0.12f * near_x * low * theme.sun_amount);
+            }
+            fb.put_pixel(x, y, c);
+        }
     }
     fb.fill_rect(0, horizon, w, fb.height() - horizon, theme.fog);
 
@@ -129,23 +164,49 @@ void Background::render(Framebuffer& fb, const RoadTheme& theme, const BackdropV
         }
     }
 
-    // The sun sits in the sky layer, wrapping so it is seen most of the time.
-    // The sun is ahead, so the mirror never shows it.
-    if (theme.sun_amount > 0.02f && !view.mirror) {
-        const float period = static_cast<float>(w) + 100.f;
-        const float sx = wrap(215.f - sky_offset_, period) - 30.f;
-        const float sy = static_cast<float>(horizon) - 30.f;
-        const float radius = 7.f + 8.f * theme.sun_amount;
-        for (int y = static_cast<int>(sy - radius * 2.f); y <= static_cast<int>(sy + radius * 2.f); ++y) {
-            if (y >= horizon) break;
-            for (int x = static_cast<int>(sx - radius * 2.f); x <= static_cast<int>(sx + radius * 2.f); ++x) {
+    // Sun: arc by the hour (ahead only; the mirror never shows it). Larger
+    // and softer near the horizon, smaller near the zenith.
+    if (theme.sun_amount > 0.02f && sun_up && sun.elevation > -0.02f) {
+        const float low = std::clamp(1.f - sun.elevation, 0.f, 1.f);
+        const float radius = (5.f + 4.f * theme.sun_amount + 6.f * low) * zoom;
+        const float sx = sun_sx, sy = sun_sy;
+        for (int y = static_cast<int>(sy - radius * 2.5f); y <= static_cast<int>(sy + radius * 2.5f); ++y) {
+            if (y < 0 || y >= horizon) continue;
+            for (int x = static_cast<int>(sx - radius * 2.5f); x <= static_cast<int>(sx + radius * 2.5f); ++x) {
+                if (x < 0 || x >= w) continue;
                 const float d = std::hypot(static_cast<float>(x) - sx, static_cast<float>(y) - sy);
                 if (d <= radius) {
-                    fb.put_pixel(x, y, blend(theme.sun, Color{255, 255, 255}, 0.25f * (1.f - d / radius)));
-                } else if (d < radius * 2.f) {
-                    // Dithered glow fading out into the sky.
-                    const float glow = (1.f - (d - radius) / radius) * 0.55f * theme.sun_amount;
-                    if (bayer4(x, y) < glow) fb.put_pixel(x, y, blend(theme.sky_horizon, theme.sun, 0.6f));
+                    fb.put_pixel(x, y, blend(theme.sun, Color{255, 255, 255}, 0.3f * (1.f - d / radius)));
+                } else if (d < radius * (1.8f + 0.6f * low)) {
+                    const float glow = (1.f - (d - radius) / (radius * (0.8f + 0.6f * low))) * (0.4f + 0.35f * low) *
+                                       theme.sun_amount;
+                    if (bayer4(x, y) < glow) fb.put_pixel(x, y, blend(theme.sky_horizon, theme.sun, 0.55f));
+                }
+            }
+        }
+    }
+
+    // Moon: opposite the sun, a pale disc when above the horizon. Visible at
+    // night and faintly by day when the sun is low.
+    float moon_sx = 0.f, moon_sy = 0.f;
+    const bool moon_up = !view.mirror && body_screen(moon, moon_sx, moon_sy) && moon.elevation > 0.02f;
+    const bool moon_show = moon_up && (theme.stars > 0.05f || sun.elevation < 0.25f);
+    if (moon_show) {
+        const float radius = 5.5f * zoom;
+        const Color disc{0xe0, 0xe4, 0xec}, limb{0xb0, 0xb8, 0xc8};
+        for (int y = static_cast<int>(moon_sy - radius * 1.6f); y <= static_cast<int>(moon_sy + radius * 1.6f); ++y) {
+            if (y < 0 || y >= horizon) continue;
+            for (int x = static_cast<int>(moon_sx - radius * 1.6f); x <= static_cast<int>(moon_sx + radius * 1.6f);
+                 ++x) {
+                if (x < 0 || x >= w) continue;
+                const float d = std::hypot(static_cast<float>(x) - moon_sx, static_cast<float>(y) - moon_sy);
+                if (d <= radius) {
+                    // Slight shading on the left for a bit of form.
+                    const float shade = std::clamp((static_cast<float>(x) - moon_sx) / radius * 0.5f + 0.5f, 0.f, 1.f);
+                    fb.put_pixel(x, y, blend(limb, disc, shade));
+                } else if (d < radius * 1.45f && theme.stars > 0.2f) {
+                    if (bayer4(x, y) < 0.2f * (1.f - (d - radius) / (0.45f * radius)))
+                        fb.put_pixel(x, y, Color{0xc8, 0xd0, 0xe0});
                 }
             }
         }

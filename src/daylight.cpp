@@ -30,6 +30,7 @@ constexpr uint32_t emissive[] = {
     0xffff40c0, 0xff40f0ff, 0xffffe060, 0xfff0f4ff,             // neon on the Strip, the pyramid's beam
     0xff80c0ff,                                                 // the time car's coils
     0xfffff0a0,                                                 // Golden Gate crown lights
+    0xffe0e4ec, 0xffb0b8c8, 0xffc8d0e0,                         // the moon
 };
 
 } // namespace
@@ -48,6 +49,19 @@ Daylight daylight_at(float hour) {
 float advance_hour(float hour, float seconds) {
     const float h = std::fmod(hour + seconds / day_seconds * 24.f, 24.f);
     return h < 0.f ? h + 24.f : h;
+}
+
+SkyBody sun_position(float hour) {
+    // Simple equatorial day: zenith at noon, on the horizon at 6 and 18,
+    // below at midnight. Azimuth runs left (east) at sunrise to right (west)
+    // at sunset.
+    const float a = (hour - 12.f) / 12.f * PI;
+    return SkyBody{std::cos(a), std::sin(a)};
+}
+
+SkyBody moon_position(float hour) {
+    // Roughly opposite the sun: high at midnight, low at noon.
+    return sun_position(std::fmod(hour + 12.f, 24.f));
 }
 
 Daylight lit_by(Daylight light, float glow) {

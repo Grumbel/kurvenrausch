@@ -69,7 +69,7 @@ weather and road markings, fading smoothly into one another:
   hardly any grip at all
 - Roadside scenery as scaled, fogged pixel-art sprites; objects behind a crest
   peek over it
-- Parallax backdrop: copper-banded sky, drifting clouds, mountains and hills
+- Parallax backdrop: copper-banded sky, sun and moon on a day-long arc, drifting clouds, mountains and hills
   scrolling at different rates through bends
 - Road markings per region: dashed white lines in Europe, double yellow centre
   line and white edge lines in the USA

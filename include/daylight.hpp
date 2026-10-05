@@ -23,6 +23,17 @@ constexpr float night_level = 0.22f;
 
 Daylight daylight_at(float hour);
 
+// Where a body sits in the sky for the hour of day (0 .. 24). Elevation is
+// +1 at the zenith, 0 at the horizon and negative below; azimuth is -1 at
+// the left of the screen (east at sunrise) through 0 overhead to +1 at the
+// right (west at sunset). The moon is opposite the sun.
+struct SkyBody {
+    float elevation = 0.f;
+    float azimuth = 0.f;
+};
+SkyBody sun_position(float hour);
+SkyBody moon_position(float hour);
+
 // The hour after `seconds` of play from `hour`, wrapped to 0 .. 24.
 float advance_hour(float hour, float seconds);
 

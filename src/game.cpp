@@ -2490,7 +2490,7 @@ void Game::render() {
     const auto& cam = world_.get<Camera>(camera_);
 
     const RoadTheme look = look_at(tr.z + cam.player_z());
-    background_.render(fb_, look);
+    background_.render(fb_, look, hour_);
 
     // The camera of the chosen view, placed relative to the car; the car's
     // own reference (the chase camera, see Camera) stays where it is.
@@ -2847,7 +2847,7 @@ void Game::render_mirror() {
     const float half_w = static_cast<float>(mir_width()) / 2.f;
     const float y_scale = half_w * (static_cast<float>(fb_height()) / 2.f) / fb_x_unit();
     const float zoom = mirror_depth * half_w / (cam.depth * fb_x_unit());
-    background_.render(mirror_fb_, look, BackdropView{mirror_horizon * static_cast<float>(pixel_scale_), zoom, true});
+    background_.render(mirror_fb_, look, BackdropView{mirror_horizon * static_cast<float>(pixel_scale_), zoom, true}, hour_);
 
     RoadView view;
     view.position = car_z;

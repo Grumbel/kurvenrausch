@@ -2,6 +2,12 @@
 
 ## Current tip
 
+### Grok: sun and moon arc across the sky
+- `sun_position` / `moon_position` (hour → elevation + azimuth). Sun rises
+  left, zenith at noon, sets right; moon opposite. Backdrop draws them on
+  that arc, warms the sky near a low sun, larger disc near the horizon.
+  Moon is emissive at night. Mirror still has no celestial bodies.
+
 ### Grok: sprite viewer exits with Start / B
 - Besides Esc, gamepad Start (`pause`) and B (`menu.back`) leave the sprite
   browser. Help line notes ESC/START.

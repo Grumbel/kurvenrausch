@@ -21,7 +21,8 @@ struct BackdropView {
 
 // Parallax backdrop: banded sky, clouds, far mountains and near hills. The
 // layers sit on the horizon (the projection's eye level) and scroll sideways
-// at different rates when the road bends.
+// at different rates when the road bends. The sun and moon follow the hour
+// of day across the sky (see sun_position / moon_position).
 class Background {
 public:
     Background();
@@ -31,9 +32,11 @@ public:
     void update(float curve, float segments, float dt);
     void reset();
 
-    // The main view: horizon at half the screen height, zoom 1.
-    void render(Framebuffer& fb, const RoadTheme& theme) const;
-    void render(Framebuffer& fb, const RoadTheme& theme, const BackdropView& view) const;
+    // The main view: horizon at half the screen height, zoom 1. `hour` is the
+    // time of day (0 .. 24) for the sun and moon.
+    void render(Framebuffer& fb, const RoadTheme& theme, float hour = 12.f) const;
+    void render(Framebuffer& fb, const RoadTheme& theme, const BackdropView& view,
+                float hour = 12.f) const;
 
 private:
     struct Cloud {

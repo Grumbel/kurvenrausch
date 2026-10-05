@@ -1103,6 +1103,16 @@ void test_daylight() {
     CHECK(std::abs(midnight.level - night_level) < 1e-4f && midnight.stars == 1.f && midnight.sun == 0.f);
     CHECK(dusk.glow > 0.7f && dusk.level < 1.f && dusk.level > night_level);
     CHECK(daylight_at(6.05f).glow > 0.7f); // dawn too
+    // Sun and moon arc: zenith at noon / midnight, on the horizon at 6 and 18.
+    {
+        const SkyBody noon = sun_position(12.f), rise = sun_position(6.f), set = sun_position(18.f);
+        CHECK(noon.elevation > 0.99f && std::abs(noon.azimuth) < 0.05f);
+        CHECK(std::abs(rise.elevation) < 0.05f && rise.azimuth < -0.95f);
+        CHECK(std::abs(set.elevation) < 0.05f && set.azimuth > 0.95f);
+        const SkyBody mid = moon_position(0.f);
+        CHECK(mid.elevation > 0.99f); // high at midnight
+    }
+
     // The clock: a day in day_seconds, wrapping at midnight.
     CHECK(std::abs(advance_hour(10.f, day_seconds / 24.f) - 11.f) < 1e-4f);
     CHECK(std::abs(advance_hour(23.f, day_seconds / 12.f) - 1.f) < 1e-3f);
