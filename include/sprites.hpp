@@ -155,11 +155,11 @@ public:
         return is_billboard(kind) ? billboard_back_ : scenery(kind, windows_lit);
     }
     // Rock faces for Edge::Cliff (not planted as scenery). Several slope
-    // silhouettes so consecutive segments do not look like flat billboards.
+    // silhouettes; snowy set for alpine themes (grey rock + snow cap).
     static constexpr int cliff_faces = 5;
-    const Bitmap& cliff_face(int variant = 0) const {
+    const Bitmap& cliff_face(int variant = 0, bool snowy = false) const {
         const int i = ((variant % cliff_faces) + cliff_faces) % cliff_faces;
-        return cliff_faces_[static_cast<size_t>(i)];
+        return (snowy ? cliff_faces_snow_ : cliff_faces_)[static_cast<size_t>(i)];
     }
     // Buildings whose dark windows can light up (horn at night in town).
     static bool scenery_has_windows(Scenery kind);
@@ -258,6 +258,7 @@ private:
     std::array<std::vector<VehicleSprites>, static_cast<size_t>(Vehicle::Count)> vehicles_; // [kind][style]
     Bitmap billboard_back_;
     std::array<Bitmap, cliff_faces> cliff_faces_;
+    std::array<Bitmap, cliff_faces> cliff_faces_snow_;
 
     static bool is_billboard(Scenery kind) {
         return kind == Scenery::Billboard || kind == Scenery::BillboardUs;

@@ -409,8 +409,8 @@ void RoadRenderer::draw_edge(Framebuffer& fb, const Track& track, const Slice& s
         // Project at the nearer end so height matches the wall the player sees.
         const float ppu = std::max(ppu_a, 1e-4f);
         const float height = std::max(h1, h2 * 0.5f) * ppu;
-        // ~segment_length of rock along the road, in pixels at this depth.
-        const float width = std::max(track.segment_length * ppu, height * 0.35f);
+        // Wide enough to read as a slope/talus, not a thin column.
+        const float width = std::max(track.segment_length * ppu * 1.6f, height * 0.75f);
         if (!(height > 1.f) || !(width > 1.f)) return;
         // Base of the wall on the road side of the cliff offset.
         const float base_x = xa;
@@ -466,8 +466,9 @@ void RoadRenderer::draw_sprites(Framebuffer& fb, const Track& track, const Sprit
 
         fb.set_clip(static_cast<int>(s.left), std::max(0, pixel_edge(s.top)), static_cast<int>(std::ceil(s.right)), clip);
         if (projectable) {
-            draw_edge(fb, track, s, -1, sprites.cliff_face(s.index));
-            draw_edge(fb, track, s, +1, sprites.cliff_face(s.index * 3 + 1));
+            const bool snow_cliff = track.look(s.index).cap_amount > 0.45f;
+            draw_edge(fb, track, s, -1, sprites.cliff_face(s.index, snow_cliff));
+            draw_edge(fb, track, s, +1, sprites.cliff_face(s.index * 3 + 1, snow_cliff));
         }
         const ScreenPoint& p0 = start(s);
         // Scenery at `shift` road half-widths from where it belongs.
