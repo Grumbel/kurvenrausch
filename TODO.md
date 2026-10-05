@@ -2,6 +2,11 @@
 
 ## Current tip
 
+### Grok: atmosphere toned down
+- Air is mostly theme fog + 14% horizon sky (was sky-heavy). Uniform fog
+  blend again — per-channel Rayleigh skew had washed far objects to flat blue.
+
+
 ### Grok: pea-soup FOGGY
 - FOGGY was only a mild haze (density ~22). Now density ≥ 100 and full
   mountain haze so fog closes in within ~10–15% of draw distance.

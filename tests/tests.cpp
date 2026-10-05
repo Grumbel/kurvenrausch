@@ -1097,9 +1097,11 @@ void test_options() {
         th.sky_horizon = Color{0xb8, 0xdc, 0xf4};
         th.fog = Color{0xc8, 0xe0, 0xe8};
         const Color air = atmosphere_air(th);
-        CHECK(air.b >= air.r); // air is blue-biased
-        const Color far = fogged_color(Color{0xd0, 0x40, 0x20}, air, 0.55f);
-        CHECK(far.b > far.r); // red object shifts cool with distance
+        // Mostly theme fog; only a touch of sky blue.
+        CHECK(std::abs(static_cast<int>(air.r) - static_cast<int>(th.fog.r)) <= 30);
+        const Color far = fogged_color(Color{0xd0, 0x40, 0x20}, air, 0.4f);
+        // Still recognisably warm at moderate fog — not washed to pure blue.
+        CHECK(far.r > far.b);
     }
     {
         RoadTheme base{};
