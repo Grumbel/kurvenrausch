@@ -168,15 +168,49 @@ void RoadRenderer::draw_segment(Framebuffer& fb, const Track& track, const Slice
     fb.set_clip(static_cast<int>(s.left), std::max(0, pixel_edge(s.top)), static_cast<int>(std::ceil(s.right)),
                 clip_row(s.clip));
 
-    // Grass spans the full width; in a tunnel its walls, and over them the
-    // ceiling with a lamp now and then.
-    const Color wall[2] = {{0x7c, 0x78, 0x72}, {0x70, 0x6c, 0x66}};
-    fb.fill_trapezoid(b.y, 0.f, static_cast<float>(fb.width()),
-                      a.y, 0.f, static_cast<float>(fb.width()), fogged(seg.tunnel ? wall[band] : theme.grass[band]));
-    if (seg.tunnel) {
-        const float ca = a.y - a.scale * tunnel_height * y_scale_, cb = b.y - b.scale * tunnel_height * y_scale_;
-        fb.fill_trapezoid(ca, 0.f, static_cast<float>(fb.width()), cb, 0.f, static_cast<float>(fb.width()),
-                          fogged(Color{0x34, 0x32, 0x30}));
+    // Grass spans the full width. In a tunnel: apron, tiled side walls (like a
+    // Japanese mountain tunnel), ceiling and an occasional lamp.
+    const float wf = static_cast<float>(fb.width());
+    if (!seg.tunnel) {
+        fb.fill_trapezoid(b.y, 0.f, wf, a.y, 0.f, wf, fogged(theme.grass[band]));
+    } else {
+        const float ca = a.y - a.scale * tunnel_height * y_scale_;
+        const float cb = b.y - b.scale * tunnel_height * y_scale_;
+        const float rl_a = a.x - a.w, rr_a = a.x + a.w;
+        const float rl_b = b.x - b.w, rr_b = b.x + b.w;
+        // Floor apron beside the road.
+        const Color apron = fogged(band ? Color{0x54, 0x50, 0x4c} : Color{0x5c, 0x58, 0x54});
+        fb.fill_trapezoid(b.y, 0.f, rl_b, a.y, 0.f, rl_a, apron);
+        fb.fill_trapezoid(b.y, rr_b, wf, a.y, rr_a, wf, apron);
+        // Horizontal tile courses from the road up to the ceiling.
+        const Color tile_l = fogged(Color{0xd4, 0xd0, 0xc8});
+        const Color tile_d = fogged(Color{0xb0, 0xac, 0xa4});
+        const Color kerb = fogged(Color{0xe8, 0xe4, 0xdc});
+        const Color joint = fogged(Color{0x78, 0x74, 0x6c});
+        constexpr int courses = 5;
+        for (int c = 0; c < courses; ++c) {
+            const float t0 = static_cast<float>(c) / static_cast<float>(courses);
+            const float t1 = static_cast<float>(c + 1) / static_cast<float>(courses);
+            const float a_bot = a.y + (ca - a.y) * t0;
+            const float b_bot = b.y + (cb - b.y) * t0;
+            const float b_top = b.y + (cb - b.y) * t1;
+            if (!(a_bot > b_top)) continue;
+            const Color tile = c == 0 ? kerb : (((c + band) & 1) ? tile_l : tile_d);
+            fb.fill_trapezoid(b_top, 0.f, rl_b, a_bot, 0.f, rl_a, tile);
+            fb.fill_trapezoid(b_top, rr_b, wf, a_bot, rr_a, wf, tile);
+            // Thin joint on the lower edge of each course above the kerb.
+            if (c > 0 && a_bot > b_bot) {
+                fb.fill_trapezoid(b_bot, 0.f, rl_b, a_bot, 0.f, rl_a, joint);
+                fb.fill_trapezoid(b_bot, rr_b, wf, a_bot, rr_a, wf, joint);
+            }
+        }
+        // Vertical seams at the road edge (ring frames along the tunnel).
+        fb.fill_trapezoid(cb, rl_b - std::max(2.f, b.w * 0.02f), rl_b, ca, rl_a - std::max(2.f, a.w * 0.02f), rl_a,
+                          joint);
+        fb.fill_trapezoid(cb, rr_b, rr_b + std::max(2.f, b.w * 0.02f), ca, rr_a, rr_a + std::max(2.f, a.w * 0.02f),
+                          joint);
+        // Ceiling.
+        fb.fill_trapezoid(ca, 0.f, wf, cb, 0.f, wf, fogged(Color{0x34, 0x32, 0x30}));
         if (s.index % 6 == 0) {
             const float lw = a.w * 0.08f;
             fb.fill_trapezoid(ca, a.x - lw, a.x + lw, std::max(cb, ca + 1.f), b.x - lw, b.x + lw,
@@ -186,7 +220,6 @@ void RoadRenderer::draw_segment(Framebuffer& fb, const Track& track, const Slice
 
     // Ground beyond a rail or cliff: sea or valley, or rock. It is mostly hidden
     // behind the edge feature itself, which is drawn later with the sprites.
-    const float wf = static_cast<float>(fb.width());
     for (int side = -1; side <= 1; side += 2) {
         const Edge kind = side < 0 ? seg.left : seg.right;
         if (kind == Edge::None) continue;
