@@ -4,7 +4,7 @@
 # clangd / LSP for Kurvenrausch.
 # After `cmake -B build`, the compilation database lives in build/.
 CompileFlags:
-  CompilationDatabase: build
+  CompilationDatabase: /tmp/kurvenrausch-build
   Add:
     - -std=c++17
     - -Iinclude
