@@ -2994,6 +2994,7 @@ bool is_dark_window_glass(uint32_t p) {
         case 0xff80b0d8u: // hospital
         case 0xff70a0c0u: // truck stop
         case 0xff9cc0dcu: // showroom
+        case 0xff6090b0u: // motel
         case 0xff2c3c48u: // dark interior panes
             return true;
         default:
