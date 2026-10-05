@@ -818,7 +818,10 @@ bool Game::update_pause(const InputState& input) {
             act = options_menu_.choose(where.item, where.side, options_);
         }
         apply_options(before);
-        if (options_ != before || act == OptionsAction::Back) save_choices();
+        if (options_.time != before.time || options_.fuel != before.fuel || options_.nitros != before.nitros ||
+            options_.police != before.police || options_.weather != before.weather ||
+            options_.traffic != before.traffic || act == OptionsAction::Back)
+            save_choices();
         if (act == OptionsAction::Back) {
             options_open_ = false;
         } else if (act == OptionsAction::StartZone) {
