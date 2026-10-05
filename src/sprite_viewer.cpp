@@ -12,6 +12,7 @@
 
 #include <SDL2/SDL.h>
 
+#include <algorithm>
 #include <string>
 #include <vector>
 
@@ -89,7 +90,11 @@ bool run_sprite_viewer_session(Display& display, Input& input, const SpriteSheet
     const std::vector<Entry> entries = catalogue(sheet);
     if (entries.empty()) return false;
 
-    constexpr int fb_w = 320, fb_h = 240;
+    // Match the display texture size. A fixed 320x240 buffer fed into a wider
+    // (or taller HD) game texture makes SDL_UpdateTexture use the wrong pitch
+    // and the picture tears into diagonal stripes.
+    const int fb_w = std::max(1, display.fb_width());
+    const int fb_h = std::max(1, display.fb_height());
     Framebuffer fb(fb_w, fb_h);
     Overlay overlay;
     int index = 0;

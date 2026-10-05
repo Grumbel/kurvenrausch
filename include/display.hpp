@@ -46,6 +46,10 @@ public:
     // A point in screen pixels on the framebuffer.
     void screen_to_framebuffer(float sx, float sy, float& x, float& y) const;
 
+    // Size of the texture `present()` expects (pixels). Must match the buffer.
+    int fb_width() const { return fb_w_; }
+    int fb_height() const { return fb_h_; }
+
     // True if presentation is synchronised to the display refresh; if not the
     // caller should throttle its frame rate itself.
     bool vsync() const { return vsync_; }

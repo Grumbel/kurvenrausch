@@ -2,6 +2,11 @@
 
 ## Current tip
 
+### Grok: sprite viewer pitch in wide/fullscreen
+- Session viewer used a fixed 320x240 buffer while Display::present expected
+  the game texture width (wide/HD). Wrong pitch → skewed picture. Viewer now
+  matches `display.fb_width/height()`.
+
 ### Grok: sun and moon arc across the sky
 - `sun_position` / `moon_position` (hour → elevation + azimuth). Sun rises
   left, zenith at noon, sets right; moon opposite. Backdrop draws them on
