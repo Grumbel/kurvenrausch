@@ -121,13 +121,15 @@ void Background::render(Framebuffer& fb, const RoadTheme& theme, const BackdropV
     const float sky_top = static_cast<float>(horizon) - sky_h; // above the screen in the mirror
     float sun_sx = 0.f, sun_sy = 0.f;
     const bool sun_up = !view.mirror && body_screen(sun, sun_sx, sun_sy);
+    const bool sun_wash = sun_up && theme.sun_amount > 0.05f;
+    uint32_t* fb_px = fb.pixels_mut();
     for (int y = 0; y < horizon; ++y) {
         const float t = std::max(0.f, static_cast<float>(y) - sky_top) / sky_h * (bands - 1);
         const int band = static_cast<int>(t);
         const float frac = t - static_cast<float>(band);
         Color c0 = blend(theme.sky_top, theme.sky_horizon, static_cast<float>(band) / (bands - 1));
         Color c1 = blend(theme.sky_top, theme.sky_horizon, static_cast<float>(std::min(band + 1, bands - 1)) / (bands - 1));
-        if (sun_up && theme.sun_amount > 0.05f) {
+        if (sun_wash) {
             // Stronger warm haze near the sun, especially low on the horizon.
             const float near_h = std::clamp(1.f - std::abs(static_cast<float>(y) - sun_sy) / (28.f * zoom), 0.f, 1.f);
             const float low = std::clamp(1.f - sun.elevation, 0.f, 1.f);
@@ -135,15 +137,21 @@ void Background::render(Framebuffer& fb, const RoadTheme& theme, const BackdropV
             c0 = blend(c0, theme.sun, warm);
             c1 = blend(c1, theme.sun, warm);
         }
+        const uint32_t a0 = c0.argb(), a1 = c1.argb();
+        uint32_t* row = fb_px + static_cast<size_t>(y) * static_cast<size_t>(w);
+        if (!sun_wash) {
+            // Dither only: no per-pixel blend toward the sun.
+            for (int x = 0; x < w; ++x) row[x] = bayer4(x, y) < frac ? a1 : a0;
+            continue;
+        }
+        const float low = std::clamp(1.f - sun.elevation, 0.f, 1.f);
+        const float inv = 1.f / (half_w * 0.5f);
         for (int x = 0; x < w; ++x) {
             Color c = bayer4(x, y) < frac ? c1 : c0;
-            if (sun_up && theme.sun_amount > 0.05f) {
-                const float dx = (static_cast<float>(x) - sun_sx) / (half_w * 0.5f);
-                const float near_x = std::clamp(1.f - dx * dx, 0.f, 1.f);
-                const float low = std::clamp(1.f - sun.elevation, 0.f, 1.f);
-                c = blend(c, theme.sun, 0.12f * near_x * low * theme.sun_amount);
-            }
-            fb.put_pixel(x, y, c);
+            const float dx = (static_cast<float>(x) - sun_sx) * inv;
+            const float near_x = std::clamp(1.f - dx * dx, 0.f, 1.f);
+            c = blend(c, theme.sun, 0.12f * near_x * low * theme.sun_amount);
+            row[x] = c.argb();
         }
     }
     fb.fill_rect(0, horizon, w, fb.height() - horizon, theme.fog);

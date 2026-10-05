@@ -4,6 +4,7 @@
 #include "daylight.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 
 namespace racer {
@@ -87,25 +88,43 @@ RoadTheme at_daytime(const RoadTheme& look, const Daylight& light) {
 
 bool night_emissive(Color c) {
     const uint32_t argb = c.argb();
-    return std::find(std::begin(emissive), std::end(emissive), argb) != std::end(emissive);
+    // Sorted once; binary search beats a linear scan on every lit pixel.
+    static const auto sorted = [] {
+        std::array<uint32_t, sizeof(emissive) / sizeof(emissive[0])> a{};
+        for (size_t i = 0; i < a.size(); ++i) a[i] = emissive[i];
+        std::sort(a.begin(), a.end());
+        return a;
+    }();
+    return std::binary_search(sorted.begin(), sorted.end(), argb);
 }
 
 void apply_daylight(Framebuffer& fb, const Daylight& light) {
     if (light.level >= 0.999f && light.glow <= 0.001f) return;
     // Per channel: blue at night, warm in the glow of dawn and dusk.
     const float night = (1.f - light.level) / (1.f - night_level);
-    const float r = light.level * (1.f - 0.15f * night) * (1.f - 0.05f * light.glow);
-    const float g = light.level * (1.f - 0.05f * night) * (1.f - 0.15f * light.glow);
-    const float b = light.level * (1.f + 0.45f * night) * (1.f - 0.30f * light.glow);
+    const float rf = light.level * (1.f - 0.15f * night) * (1.f - 0.05f * light.glow);
+    const float gf = light.level * (1.f - 0.05f * night) * (1.f - 0.15f * light.glow);
+    const float bf = light.level * (1.f + 0.45f * night) * (1.f - 0.30f * light.glow);
+    // 8.8 fixed-point scales.
+    const int r_scale = static_cast<int>(rf * 256.f + 0.5f);
+    const int g_scale = static_cast<int>(gf * 256.f + 0.5f);
+    const int b_scale = static_cast<int>(bf * 256.f + 0.5f);
     uint32_t* px = fb.pixels_mut();
     const int n = fb.width() * fb.height();
     for (int i = 0; i < n; ++i) {
         const uint32_t p = px[i];
-        if (night_emissive(Color{static_cast<uint8_t>(p >> 16), static_cast<uint8_t>(p >> 8), static_cast<uint8_t>(p)})) {
+        // Reconstruct Color with opaque alpha so it matches the emissive table.
+        if (night_emissive(Color{static_cast<uint8_t>(p >> 16), static_cast<uint8_t>(p >> 8),
+                                 static_cast<uint8_t>(p)}))
             continue;
-        }
-        const auto ch = [](uint32_t v, float k) { return static_cast<uint32_t>(std::min(255.f, static_cast<float>(v) * k)); };
-        px[i] = 0xff000000u | ch((p >> 16) & 0xff, r) << 16 | ch((p >> 8) & 0xff, g) << 8 | ch(p & 0xff, b);
+        int r = ((static_cast<int>((p >> 16) & 0xff) * r_scale) >> 8);
+        int g = ((static_cast<int>((p >> 8) & 0xff) * g_scale) >> 8);
+        int b = ((static_cast<int>(p & 0xff) * b_scale) >> 8);
+        if (r > 255) r = 255;
+        if (g > 255) g = 255;
+        if (b > 255) b = 255;
+        px[i] = 0xff000000u | static_cast<uint32_t>(r) << 16 | static_cast<uint32_t>(g) << 8 |
+                static_cast<uint32_t>(b);
     }
 }
 

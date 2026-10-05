@@ -107,12 +107,21 @@ void Framebuffer::fill_trapezoid(float y_top, float xl_top, float xr_top,
     if (!(y_bot > y_top)) return;
     const int row0 = std::max(clip_y0_, pixel_edge(y_top));
     const int row1 = std::min(clip_y1_, pixel_edge(y_bot));
+    if (row0 >= row1) return;
     const float inv_h = 1.f / (y_bot - y_top);
+    const uint32_t argb = c.argb();
+    const int clip_l = clip_x0_, clip_r = clip_x1_;
+    const int stride = w_;
+    uint32_t* base = pixels_.data();
     for (int y = row0; y < row1; ++y) {
         const float t = (static_cast<float>(y) + 0.5f - y_top) * inv_h;
-        const float xl = xl_top + (xl_bot - xl_top) * t;
-        const float xr = xr_top + (xr_bot - xr_top) * t;
-        hline(pixel_edge(xl), pixel_edge(xr), y, c);
+        int x0 = pixel_edge(xl_top + (xl_bot - xl_top) * t);
+        int x1 = pixel_edge(xr_top + (xr_bot - xr_top) * t);
+        if (x0 < clip_l) x0 = clip_l;
+        if (x1 > clip_r) x1 = clip_r;
+        if (x0 >= x1) continue;
+        uint32_t* row = base + static_cast<size_t>(y) * static_cast<size_t>(stride);
+        std::fill(row + x0, row + x1, argb);
     }
 }
 
@@ -131,28 +140,60 @@ void Framebuffer::blit_scaled(const Bitmap& bmp, float x, float y, float w, floa
 
     const float sx = static_cast<float>(bmp.w) / w;
     const float sy = static_cast<float>(bmp.h) / h;
-    columns_.resize(static_cast<size_t>(x1 - x0));
-    for (int dx = x0; dx < x1; ++dx) {
-        int u = static_cast<int>((static_cast<float>(dx) + 0.5f - x) * sx);
-        u = std::clamp(u, 0, bmp.w - 1);
-        columns_[static_cast<size_t>(dx - x0)] = flip ? bmp.w - 1 - u : u;
+    const int span = x1 - x0;
+    columns_.resize(static_cast<size_t>(span));
+    int* cols = columns_.data();
+    const int bmp_w = bmp.w;
+    for (int i = 0; i < span; ++i) {
+        int u = static_cast<int>((static_cast<float>(x0 + i) + 0.5f - x) * sx);
+        if (u < 0) u = 0;
+        else if (u >= bmp_w) u = bmp_w - 1;
+        cols[i] = flip ? bmp_w - 1 - u : u;
     }
 
     const bool fogged = fog_amount > 0.004f;
-    for (int dy = y0; dy < y1; ++dy) {
-        const int v = std::clamp(static_cast<int>((static_cast<float>(dy) + 0.5f - y) * sy), 0, bmp.h - 1);
-        const uint32_t* src = &bmp.px[static_cast<size_t>(v) * bmp.w];
-        uint32_t* dst = &pixels_[static_cast<size_t>(dy) * w_];
-        for (int dx = x0; dx < x1; ++dx) {
-            const uint32_t p = src[columns_[static_cast<size_t>(dx - x0)]];
-            if ((p >> 24) == 0) continue;
-            if (fogged) {
-                const Color c(static_cast<uint8_t>(p >> 16), static_cast<uint8_t>(p >> 8),
-                              static_cast<uint8_t>(p));
-                dst[dx] = blend(c, fog, fog_amount).argb();
-            } else {
-                dst[dx] = p;
+    const int bmp_h = bmp.h;
+    const uint32_t* bmp_px = bmp.px.data();
+    uint32_t* fb = pixels_.data();
+    const int stride = w_;
+    if (!fogged) {
+        // Opaque path: no Color/blend construction.
+        for (int dy = y0; dy < y1; ++dy) {
+            int v = static_cast<int>((static_cast<float>(dy) + 0.5f - y) * sy);
+            if (v < 0) v = 0;
+            else if (v >= bmp_h) v = bmp_h - 1;
+            const uint32_t* src = bmp_px + static_cast<size_t>(v) * static_cast<size_t>(bmp_w);
+            uint32_t* dst = fb + static_cast<size_t>(dy) * static_cast<size_t>(stride);
+            for (int i = 0; i < span; ++i) {
+                const uint32_t p = src[cols[i]];
+                if (p & 0xff000000u) dst[x0 + i] = p;
             }
+        }
+        return;
+    }
+    const uint32_t fog_argb = fog.argb();
+    const float keep = 1.f - fog_amount;
+    for (int dy = y0; dy < y1; ++dy) {
+        int v = static_cast<int>((static_cast<float>(dy) + 0.5f - y) * sy);
+        if (v < 0) v = 0;
+        else if (v >= bmp_h) v = bmp_h - 1;
+        const uint32_t* src = bmp_px + static_cast<size_t>(v) * static_cast<size_t>(bmp_w);
+        uint32_t* dst = fb + static_cast<size_t>(dy) * static_cast<size_t>(stride);
+        for (int i = 0; i < span; ++i) {
+            const uint32_t p = src[cols[i]];
+            if ((p >> 24) == 0) continue;
+            // Integer-ish blend toward fog without constructing Color.
+            const int pr = static_cast<int>((p >> 16) & 0xff);
+            const int pg = static_cast<int>((p >> 8) & 0xff);
+            const int pb = static_cast<int>(p & 0xff);
+            const int fr = static_cast<int>((fog_argb >> 16) & 0xff);
+            const int fg = static_cast<int>((fog_argb >> 8) & 0xff);
+            const int fb_c = static_cast<int>(fog_argb & 0xff);
+            const int r = static_cast<int>(static_cast<float>(pr) * keep + static_cast<float>(fr) * fog_amount + 0.5f);
+            const int g = static_cast<int>(static_cast<float>(pg) * keep + static_cast<float>(fg) * fog_amount + 0.5f);
+            const int b = static_cast<int>(static_cast<float>(pb) * keep + static_cast<float>(fb_c) * fog_amount + 0.5f);
+            dst[x0 + i] = 0xff000000u | static_cast<uint32_t>(r) << 16 | static_cast<uint32_t>(g) << 8 |
+                          static_cast<uint32_t>(b);
         }
     }
 }

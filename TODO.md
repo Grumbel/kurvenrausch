@@ -2,6 +2,14 @@
 
 ## Current tip
 
+### Grok: software renderer speedups
+- fill_trapezoid writes rows directly (no hline call per row).
+- blit_scaled opaque path skips Color/blend; fog path blends in-place.
+- apply_daylight: binary-search emissive table, fixed-point channel scale.
+- Sky fill writes rows without put_pixel; skips sun wash when not needed.
+- Tiled renderer: not a good fit — classic maxy scanline already occludes
+  by hill; road overdraw is layered trapezoids per segment (grass→road).
+
 ### Grok: dual present backends (SDL + GL/GLES2)
 - Display can present the software FB via SDL_Renderer (streaming texture)
   or a GL/GLES2 textured quad. VIDEO → PRESENT cycles AUTO / SDL / GL;
