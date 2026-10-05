@@ -886,6 +886,7 @@ bool Game::update_pause(const InputState& input) {
     if (audio_open_ && !input.pause) {
         const int music_before = music_;
         const int eng_before = engine_vol_, mus_before = music_vol_;
+        const bool muted_before = muted_;
         bool close = audio_menu_.update(input.menu, muted_, engine_vol_, music_vol_, music_);
         for (const Finger& tap : touch_taps_) {
             float x = 0.f, y = 0.f;
@@ -894,7 +895,8 @@ bool Game::update_pause(const InputState& input) {
             close = audio_menu_.choose(where.item, where.side, muted_, engine_vol_, music_vol_, music_) || close;
         }
         if (music_ != music_before) synth_.set_music(music_);
-        if (music_ != music_before || eng_before != engine_vol_ || mus_before != music_vol_) save_choices();
+        if (music_ != music_before || eng_before != engine_vol_ || mus_before != music_vol_ || muted_ != muted_before)
+            save_choices();
         if (close) audio_open_ = false;
         return true;
     }
