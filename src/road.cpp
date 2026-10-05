@@ -424,8 +424,8 @@ void RoadRenderer::draw_sprites(Framebuffer& fb, const Track& track, const Sprit
 
         fb.set_clip(static_cast<int>(s.left), std::max(0, pixel_edge(s.top)), static_cast<int>(std::ceil(s.right)), clip);
         if (projectable) {
-            draw_edge(fb, track, s, -1, sprites.cliff_face());
-            draw_edge(fb, track, s, +1, sprites.cliff_face());
+            draw_edge(fb, track, s, -1, sprites.cliff_face(s.index));
+            draw_edge(fb, track, s, +1, sprites.cliff_face(s.index * 3 + 1));
         }
         const ScreenPoint& p0 = start(s);
         // Scenery at `shift` road half-widths from where it belongs.

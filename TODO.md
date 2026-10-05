@@ -2,6 +2,12 @@
 
 ## Current tip
 
+### Grok: cliff slope variants
+- Five cliff_face silhouettes (steep, talus, overhang, stepped, recessed)
+  with lit inner / shaded outer edges. Picked per segment/side so runs of
+  cliffs are not one flat billboard. Still cheap (one blit each).
+- HD overdraw / GLES road path still open if SD is not enough.
+
 ### Grok: cliffs as sprites
 - Edge::Cliff no longer fills the face pixel-by-pixel (noise/strata). One
   scaled cliff_face bitmap per segment side via blit_scaled. Rails unchanged.
