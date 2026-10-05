@@ -176,8 +176,9 @@ weather and road markings, fading smoothly into one another:
   pulled over; swerve past and it starts over; get far enough ahead (nitro, a
   faster car, clean lines) or hold out until it gives up and you escape. A
   meter under the mirror shows how near you are to getting away
-- **Radio**: three synthesised songs (Sunset Cruise, Turbo Breeze, Night
-  Drive), each a loop of pads, bass, lead and drums from a step sequencer;
+- **Radio**: six synthesised songs (Sunset Cruise, Turbo Breeze, Night Drive,
+  Coast Run, Alpine Pass, Neon Strip), each a loop of pads, bass, lead and
+  drums from a step sequencer;
   flick the right stick up or down, or press N, to change the track or switch it off
 - **Synthesised sound**: a six-cylinder engine with exhaust pulses ringing a
   pipe and a body resonance for the bass, building with the revs, surging as

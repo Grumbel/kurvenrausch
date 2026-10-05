@@ -2,6 +2,11 @@
 
 ## Current tip
 
+### Grok: three more radio tracks
+- COAST RUN (128, bright major), ALPINE PASS (104, minor), NEON STRIP (120,
+  city). Dial has six songs then off.
+
+
 ### Grok: dimmer cities; stars vs light pollution
 - lit_by city lift 0.55 → 0.32; SF/Vegas night_glow lowered. Stars scale with
   (1 − night_glow)² so cities hide them and open country keeps a full sky.

@@ -13,7 +13,7 @@ namespace racer {
 // the samples played so far. Runs on the audio thread (inside Synth).
 class Music {
 public:
-    static constexpr int tracks = 3;
+    static constexpr int tracks = 6;
     // A track's name, or "RADIO OFF" for -1.
     static const char* name(int track);
     // Next and previous in the order of the dial: the songs, then off.
