@@ -1719,53 +1719,50 @@ void draw_head(Bitmap& b, float x, float y, float r, const Person& p) {
 // 3 stepped ledges, 4 back-sloping / recessed.
 // Rock face for roadside cliffs. `variant` picks a silhouette; `snowy` uses
 // alpine grey rock and a snow cap (Switzerland) instead of warm desert stone.
-// Mountain-side cliff sprite: a wide base that slopes up to a ridge/peak,
-// not a vertical column. `snowy` uses alpine grey + snow.
+// Mountain-side cliff: flat-topped plateau with sloping flanks (not a pointed
+// peak / Christmas tree). No black outline — edges are the rock itself.
+// `snowy` uses alpine grey + snow.
 Bitmap make_cliff_face(int variant, bool snowy) {
-    Bitmap b(96, 96);
+    Bitmap b(96, 80);
     const Color rock_snow[3] = {{0x4a, 0x50, 0x5c}, {0x6e, 0x74, 0x80}, {0x96, 0x9c, 0xa8}};
     const Color rock_warm[3] = {{0x5a, 0x44, 0x34}, {0x7a, 0x5c, 0x44}, {0x9c, 0x78, 0x58}};
     const Color* rock = snowy ? rock_snow : rock_warm;
     const Color dark = snowy ? Color{0x32, 0x36, 0x40} : Color{0x3c, 0x2c, 0x22};
     const Color light = snowy ? Color{0xc0, 0xc6, 0xd0} : Color{0xb0, 0x90, 0x70};
-    const Color snow = Color{0xf2, 0xf6, 0xfc};
+    const Color snowc = Color{0xf2, 0xf6, 0xfc};
     const Color scrub = Color{0x6c, 0x78, 0x50};
     const int v = ((variant % 5) + 5) % 5;
 
-    // Peak position and slope shape by variant (road is on the +x / right side
-    // of the sprite when not flipped).
-    const float peak_x = 0.35f + 0.1f * static_cast<float>(v % 3);
-    const float peak_y = 0.08f + 0.06f * hash01(v, 2);
-    const float base_left = 0.02f + 0.05f * hash01(v, 3);
-    const float base_right = 0.92f + 0.06f * hash01(v, 4);
+    // Flat crest band (plateau), then the mass widens toward the base.
+    // Road sits on the +x side when not flipped.
+    const float crest_left = 0.22f + 0.06f * hash01(v, 1);
+    const float crest_right = 0.55f + 0.08f * hash01(v, 2);
+    const float crest_y = 0.06f + 0.04f * hash01(v, 3); // top of plateau
+    const float base_left = 0.00f + 0.04f * hash01(v, 4);
+    const float base_right = 0.88f + 0.10f * hash01(v, 5);
 
     for (int y = 0; y < b.h; ++y) {
-        const float fy = static_cast<float>(y) / static_cast<float>(b.h - 1); // 0 top .. 1 base
-        // Width grows from peak toward the base (mountain wedge).
+        const float fy = static_cast<float>(y) / static_cast<float>(b.h - 1);
         float left, right;
-        if (fy < peak_y) {
-            left = right = peak_x; // above peak: empty
-        } else {
-            const float t = (fy - peak_y) / (1.f - peak_y);
-            left = peak_x + (base_left - peak_x) * t;
-            right = peak_x + (base_right - peak_x) * t;
-            // Ragged edges.
-            left += 0.03f * (hash01(y / 2, v * 7) - 0.5f);
-            right += 0.04f * (hash01(y / 3, v * 9 + 1) - 0.5f);
-            // Variant: steeper outer face, shoulder, or double ridge.
-            if (v == 1) left = peak_x + (0.0f - peak_x) * (t * t);           // long outer slope
-            if (v == 2) right = peak_x + (1.0f - peak_x) * std::sqrt(t);     // broad shoulder
-            if (v == 3 && t > 0.4f) { // stepped lower slope
-                const float step = std::floor((t - 0.4f) * 4.f) / 4.f;
-                left -= 0.06f * step;
-            }
-            if (v == 4) { // secondary ridge
-                const float p2 = 0.55f;
-                if (std::abs(fy - 0.35f) < 0.08f) right = std::max(right, p2 + 0.1f);
-            }
+        if (fy < crest_y) {
+            continue; // above the plateau
+        }
+        // Blend from crest width to base width; soft ease so the top stays flat.
+        const float t = (fy - crest_y) / (1.f - crest_y);
+        const float ease = t * t; // slow start → flat top reads longer
+        left = crest_left + (base_left - crest_left) * ease;
+        right = crest_right + (base_right - crest_right) * ease;
+        // Mild raggedness on the outer (left) flank only.
+        left += 0.025f * (hash01(y / 3, v * 7) - 0.5f);
+        right += 0.015f * (hash01(y / 4, v * 9) - 0.5f);
+        if (v == 1) left = crest_left + (0.0f - crest_left) * ease; // longer outer slope
+        if (v == 2) right = crest_right + (0.98f - crest_right) * std::sqrt(std::max(0.f, t));
+        if (v == 3 && t > 0.5f) {
+            const float step = std::floor((t - 0.5f) * 3.f) / 3.f;
+            left -= 0.05f * step;
         }
         left = std::clamp(left, 0.f, 1.f);
-        right = std::clamp(right, left + 0.05f, 1.f);
+        right = std::clamp(right, left + 0.12f, 1.f);
         const int x0 = static_cast<int>(left * static_cast<float>(b.w));
         const int x1 = static_cast<int>(right * static_cast<float>(b.w));
         for (int x = x0; x < x1; ++x) {
@@ -1773,17 +1770,18 @@ Bitmap make_cliff_face(int variant, bool snowy) {
             int band = static_cast<int>(fy * 8.f + hash01(x / 4, 5 + v));
             Color c = rock[((band % 3) + 3) % 3];
             if (hash01(x, y / 4 + v) > 0.9f) c = dark;
-            if (across < 0.2f) c = blend(c, light, 0.25f);
-            else if (across > 0.75f) c = blend(c, dark, 0.35f);
-            // Snow on the upper ridge.
-            if (snowy && fy < 0.35f) c = blend(c, snow, 0.75f * (1.f - fy / 0.35f));
-            else if (!snowy && fy < 0.12f) c = blend(c, scrub, 0.4f);
-            if (fy > 0.9f) c = blend(c, dark, 0.3f);
-            if (bayer4(x, y) < 0.08f) c = blend(c, light, 0.15f);
+            if (across < 0.15f) c = blend(c, light, 0.22f);
+            else if (across > 0.8f) c = blend(c, dark, 0.3f);
+            // Snow / scrub on the plateau top.
+            if (snowy && fy < crest_y + 0.28f)
+                c = blend(c, snowc, 0.7f * (1.f - (fy - crest_y) / 0.28f));
+            else if (!snowy && fy < crest_y + 0.14f)
+                c = blend(c, scrub, 0.35f);
+            if (fy > 0.9f) c = blend(c, dark, 0.25f);
+            if (bayer4(x, y) < 0.08f) c = blend(c, light, 0.12f);
             b.set(x, y, c);
         }
     }
-    paint::outline(b, Outline);
     return b;
 }
 
