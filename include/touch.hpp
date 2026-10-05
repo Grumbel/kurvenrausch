@@ -83,6 +83,9 @@ struct MenuTap {
 };
 MenuTap menu_tap(const PauseMenu& menu, float x, float y, int fb_width, int fb_height);
 // The same on the OPTIONS page: every setting line has its sides.
-MenuTap options_tap(float x, float y, int fb_width, int fb_height, int item_count = 0);
+// `top` is the title row Y; lines sit at top + first_line + row * i (centre).
+// Defaults match draw_options_menu. Pass the same numbers the draw uses.
+MenuTap options_tap(float x, float y, int fb_width, int fb_height, int item_count = 0,
+                    int top = -1, int first_line = 28, int row = 14);
 
 } // namespace racer

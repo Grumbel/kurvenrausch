@@ -326,19 +326,21 @@ void draw_options_menu(Framebuffer& fb, const OptionsMenu& menu, const Options& 
 }
 
 
-void draw_debug_menu(Framebuffer& fb, const DebugMenu& menu, const DebugOptions& debug, float hour) {
+void draw_debug_menu(Framebuffer& fb, const DebugMenu& menu, const DebugOptions& debug, float hour, int car,
+                     int driver, int passenger) {
     for (int y = 0; y < fb.height(); ++y) {
         for (int x = 0; x < fb.width(); ++x) fb.blend_pixel(x, y, Shadow, 0.55f);
     }
-    const int top = fb.height() / 2 - 50;
+    // Sit near the top so the longer list still fits on a 240-tall framebuffer.
+    const int top = 8;
     text_center(fb, top, "DEBUG", Value, 3);
     for (int i = 0; i < DebugMenu::items; ++i) {
         const bool on = i == menu.selected;
-        std::string line = DebugMenu::line(i, debug, hour);
+        std::string line = DebugMenu::line(i, debug, hour, car, driver, passenger);
         const size_t colon = line.find(": ");
         if (on) line = colon == std::string::npos ? "> " + line + " <"
                                                   : line.substr(0, colon + 2) + "< " + line.substr(colon + 2) + " >";
-        text_center(fb, top + 36 + 16 * i, line, on ? Label : Value);
+        text_center(fb, top + 28 + 14 * i, line, on ? Label : Value);
     }
 }
 
@@ -347,7 +349,7 @@ void draw_video_menu(Framebuffer& fb, const VideoMenu& menu, bool wide, bool hd,
     for (int y = 0; y < fb.height(); ++y) {
         for (int x = 0; x < fb.width(); ++x) fb.blend_pixel(x, y, Shadow, 0.55f);
     }
-    const int top = fb.height() / 2 - 50;
+    const int top = 12;
     text_center(fb, top, "VIDEO", Value, 3);
     for (int i = 0; i < VideoMenu::items; ++i) {
         const bool on = i == menu.selected;

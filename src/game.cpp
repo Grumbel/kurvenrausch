@@ -559,7 +559,8 @@ bool Game::frame() {
                           track_name(options_menu_.track));
     else if (paused_ && video_open_) draw_video_menu(fb_, video_menu_, wide_, pixel_scale_ >= 2, debug_);
     else if (paused_ && audio_open_) draw_audio_menu(fb_, audio_menu_, muted_, engine_vol_, music_vol_, music_);
-    else if (paused_ && debug_open_) draw_debug_menu(fb_, debug_menu_, debug_, hour_);
+    else if (paused_ && debug_open_)
+        draw_debug_menu(fb_, debug_menu_, debug_, hour_, car_model_, driver_, passenger_);
     else if (paused_) draw_pause_menu(fb_, menu_, zone_label(zone_), track_name(track_index_));
     if (debug_.fps) draw_fps(fb_, fps_);
     present();
@@ -825,17 +826,20 @@ bool Game::update_pause(const InputState& input) {
     }
     if (debug_open_ && !input.pause) {
         const float hour_before = hour_;
-        bool close = debug_menu_.update(input.menu, debug_, hour_);
+        const int car_before = car_model_;
+        bool close = debug_menu_.update(input.menu, debug_, hour_, car_model_, driver_, passenger_);
         for (const Finger& tap : touch_taps_) {
             float x = 0.f, y = 0.f;
             display_->screen_to_framebuffer(tap.x, tap.y, x, y);
-            const MenuTap where = options_tap(x, y, width_, fb_height(), DebugMenu::items);
-            close = debug_menu_.choose(where.item, where.side, debug_, hour_) || close;
+            const MenuTap where = options_tap(x, y, width_, fb_height(), DebugMenu::items, 8, 28, 14);
+            close = debug_menu_.choose(where.item, where.side, debug_, hour_, car_model_, driver_, passenger_) ||
+                    close;
         }
         if (hour_ != hour_before) {
             // Free the clock from a fixed Day/Dusk/Night setting so the scrub sticks.
             options_.time = TimeSetting::Cycle;
         }
+        if (car_model_ != car_before) apply_car();
         if (close) {
             if (debug_menu_.selected == DebugMenu::Sprites)
                 run_sprite_viewer_session(*display_, input_, sprites_);
@@ -856,7 +860,7 @@ bool Game::update_pause(const InputState& input) {
         for (const Finger& tap : touch_taps_) {
             float x = 0.f, y = 0.f;
             display_->screen_to_framebuffer(tap.x, tap.y, x, y);
-            const MenuTap where = options_tap(x, y, width_, fb_height(), VideoMenu::items);
+            const MenuTap where = options_tap(x, y, width_, fb_height(), VideoMenu::items, 12, 36, 16);
             close = video_menu_.choose(where.item, where.side, wide_, hd, want_fs, debug_) || close;
         }
         set_pixel_scale(hd ? 2 : 1);

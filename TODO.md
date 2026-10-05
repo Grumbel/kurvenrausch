@@ -2,6 +2,11 @@
 
 ## Current tip
 
+### Grok: Debug CAR / DRIVER / PASSENGER; menu higher
+- Debug menu cycles car model, driver and passenger (all indexes). Changing
+  the car calls apply_car(). Panel sits near the top (tighter row spacing)
+  so the longer list fits on 240-tall frames.
+
 ### Grok: sprite viewer pitch in wide/fullscreen
 - Session viewer used a fixed 320x240 buffer while Display::present expected
   the game texture width (wide/HD). Wrong pitch → skewed picture. Viewer now

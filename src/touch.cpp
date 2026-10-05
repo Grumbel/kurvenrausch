@@ -131,13 +131,16 @@ MenuTap menu_tap(const PauseMenu& menu, float /*x*/, float y, int /*fb_width*/, 
     return {};
 }
 
-MenuTap options_tap(float x, float y, int fb_width, int fb_height, int item_count) {
+MenuTap options_tap(float x, float y, int fb_width, int fb_height, int item_count, int top,
+                    int first_line, int row) {
     const int n = item_count > 0 ? item_count : OptionsMenu::items;
-    // Match draw_options_menu(): top = h/2 - 70, lines at top + 28 + 14*i.
-    const float first = static_cast<float>(fb_height / 2 - 70 + 28);
+    // Default top matches draw_options_menu(); callers pass their draw numbers.
+    if (top < 0) top = fb_height / 2 - 70;
+    const float first = static_cast<float>(top + first_line);
+    const float row_f = static_cast<float>(row);
     for (int i = 0; i < n; ++i) {
-        const float line = first + 14.f * static_cast<float>(i) + 3.f;
-        if (std::abs(y - line) > 7.f) continue;
+        const float line = first + row_f * static_cast<float>(i) + 3.f;
+        if (std::abs(y - line) > static_cast<float>(row) * 0.5f) continue;
         const float third = static_cast<float>(fb_width) / 3.f;
         const int side = x < third ? -1 : x > 2.f * third ? 1 : 0;
         return {i, side};
