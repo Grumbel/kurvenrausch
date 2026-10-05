@@ -182,33 +182,35 @@ void RoadRenderer::draw_segment(Framebuffer& fb, const Track& track, const Slice
         const Color apron = fogged(band ? Color{0x54, 0x50, 0x4c} : Color{0x5c, 0x58, 0x54});
         fb.fill_trapezoid(b.y, 0.f, rl_b, a.y, 0.f, rl_a, apron);
         fb.fill_trapezoid(b.y, rr_b, wf, a.y, rr_a, wf, apron);
-        // Horizontal tile courses from the road up to the ceiling.
-        const Color tile_l = fogged(Color{0xd4, 0xd0, 0xc8});
-        const Color tile_d = fogged(Color{0xb0, 0xac, 0xa4});
-        const Color kerb = fogged(Color{0xe8, 0xe4, 0xdc});
-        const Color joint = fogged(Color{0x78, 0x74, 0x6c});
-        constexpr int courses = 5;
-        for (int c = 0; c < courses; ++c) {
-            const float t0 = static_cast<float>(c) / static_cast<float>(courses);
-            const float t1 = static_cast<float>(c + 1) / static_cast<float>(courses);
-            const float a_bot = a.y + (ca - a.y) * t0;
-            const float b_bot = b.y + (cb - b.y) * t0;
-            const float b_top = b.y + (cb - b.y) * t1;
-            if (!(a_bot > b_top)) continue;
-            const Color tile = c == 0 ? kerb : (((c + band) & 1) ? tile_l : tile_d);
-            fb.fill_trapezoid(b_top, 0.f, rl_b, a_bot, 0.f, rl_a, tile);
-            fb.fill_trapezoid(b_top, rr_b, wf, a_bot, rr_a, wf, tile);
-            // Thin joint on the lower edge of each course above the kerb.
-            if (c > 0 && a_bot > b_bot) {
-                fb.fill_trapezoid(b_bot, 0.f, rl_b, a_bot, 0.f, rl_a, joint);
-                fb.fill_trapezoid(b_bot, rr_b, wf, a_bot, rr_a, wf, joint);
-            }
+        // Three high-contrast wall bands (kerb / tiles / upper concrete).
+        const Color kerb = fogged(Color{0xf4, 0xf0, 0xe8});
+        const Color tile = fogged(Color{0xc8, 0xc0, 0xb4});
+        const Color tile_alt = fogged(Color{0xa8, 0xa0, 0x94});
+        const Color upper = fogged(Color{0x6c, 0x68, 0x62});
+        const Color joint = fogged(Color{0x3c, 0x38, 0x34});
+        const struct { float t0, t1; Color c; } bands[4] = {
+            {0.f, 0.12f, kerb},
+            {0.12f, 0.45f, band ? tile : tile_alt},
+            {0.45f, 0.55f, joint},
+            {0.55f, 1.f, upper},
+        };
+        for (const auto& band_w : bands) {
+            const float a_bot = a.y + (ca - a.y) * band_w.t0;
+            const float a_top = a.y + (ca - a.y) * band_w.t1;
+            const float b_bot = b.y + (cb - b.y) * band_w.t0;
+            const float b_top = b.y + (cb - b.y) * band_w.t1;
+            const float y_top = std::min(a_top, b_top);
+            const float y_bot = std::max(a_bot, b_bot);
+            if (!(y_bot > y_top + 0.5f)) continue;
+            fb.fill_trapezoid(b_top, 0.f, rl_b, a_bot, 0.f, rl_a, band_w.c);
+            fb.fill_trapezoid(b_top, rr_b, wf, a_bot, rr_a, wf, band_w.c);
         }
-        // Vertical seams at the road edge (ring frames along the tunnel).
-        fb.fill_trapezoid(cb, rl_b - std::max(2.f, b.w * 0.02f), rl_b, ca, rl_a - std::max(2.f, a.w * 0.02f), rl_a,
-                          joint);
-        fb.fill_trapezoid(cb, rr_b, rr_b + std::max(2.f, b.w * 0.02f), ca, rr_a, rr_a + std::max(2.f, a.w * 0.02f),
-                          joint);
+        // Vertical ring frames every few segments.
+        if (s.index % 3 == 0) {
+            const float tw = std::max(3.f, a.w * 0.03f);
+            fb.fill_trapezoid(cb, rl_b - tw, rl_b, ca, rl_a - tw, rl_a, joint);
+            fb.fill_trapezoid(cb, rr_b, rr_b + tw, ca, rr_a, rr_a + tw, joint);
+        }
         // Ceiling.
         fb.fill_trapezoid(ca, 0.f, wf, cb, 0.f, wf, fogged(Color{0x34, 0x32, 0x30}));
         if (s.index % 6 == 0) {
@@ -399,26 +401,46 @@ void RoadRenderer::draw_edge(Framebuffer& fb, const Track& track, const Slice& s
     const float ppu_a = a.scale * x_scale_, ppu_b = b.scale * x_scale_;
     const float ta = a.y - h1 * ppu_a, tb = b.y - h2 * ppu_b;
 
-    // Cliffs: roadside billboards, not a strip stretched into |xb-xa| (that
-    // is only a few pixels deep and reads as thin vertical stripes). World
-    // width covers about one segment along the road; the sprite sits at the
-    // cliff line and extends outward. Slope variants supply the silhouette.
+    // Cliffs: continuous sloping face (trapezoid bands), not stacked billboard
+    // columns. Wider at the road (talus), leans back toward the crest; snow cap
+    // when the theme has one (Alps).
     if (kind == Edge::Cliff) {
-        if (cliff.w <= 0 || cliff.h <= 0) return;
         if (!(h1 > 50.f) && !(h2 > 50.f)) return;
-        // Project at the nearer end so height matches the wall the player sees.
-        const float ppu = std::max(ppu_a, 1e-4f);
-        const float height = std::max(h1, h2 * 0.5f) * ppu;
-        // Wide enough to read as a slope/talus, not a thin column.
-        const float width = std::max(track.segment_length * ppu * 1.6f, height * 0.75f);
-        if (!(height > 1.f) || !(width > 1.f)) return;
-        // Base of the wall on the road side of the cliff offset.
-        const float base_x = xa;
-        const float base_y = a.y;
-        // Outward: left side grows leftward, right side rightward.
-        const float left = side < 0 ? base_x - width : base_x;
-        const float top = base_y - height;
-        fb.blit_scaled(cliff, left, top, width, height, side < 0, fog_amount, th.fog);
+        const float sf = static_cast<float>(side);
+        // Half-widths of rock face outward from the cliff line: wide base, narrow crest.
+        const float depth_base = 0.95f;
+        const float depth_top = 0.22f;
+        constexpr int bands = 7;
+        for (int i = 0; i < bands; ++i) {
+            const float t0 = static_cast<float>(i) / static_cast<float>(bands);
+            const float t1 = static_cast<float>(i + 1) / static_cast<float>(bands);
+            const float d0 = depth_base + (depth_top - depth_base) * t0;
+            const float d1 = depth_base + (depth_top - depth_base) * t1;
+            const float y_a0 = a.y + (ta - a.y) * t0;
+            const float y_a1 = a.y + (ta - a.y) * t1;
+            const float y_b0 = b.y + (tb - b.y) * t0;
+            const float y_b1 = b.y + (tb - b.y) * t1;
+            if (!(std::max(y_a0, y_b0) > std::min(y_a1, y_b1) + 0.5f)) continue;
+            const float in_a = a.x + sf * cliff_offset * a.w;
+            const float in_b = b.x + sf * cliff_offset * b.w;
+            const float out_a0 = a.x + sf * (cliff_offset + d0) * a.w;
+            const float out_b0 = b.x + sf * (cliff_offset + d0) * b.w;
+            // Use lower band edge for the outer width (talus reads at the base).
+            const float xl_a = std::min(in_a, out_a0), xr_a = std::max(in_a, out_a0);
+            const float xl_b = std::min(in_b, out_b0), xr_b = std::max(in_b, out_b0);
+            Color c = fogged(th.rock[i % 3]);
+            if (th.cap_amount > 0.4f && t0 > 0.5f) {
+                const float snow = std::clamp((t0 - 0.5f) / 0.5f, 0.f, 1.f) * th.cap_amount;
+                c = fogged(blend(th.rock[i % 3], th.cap, snow));
+            } else if (t0 < 0.12f) {
+                c = fogged(blend(th.rock[0], th.rock[1], 0.3f)); // darker foot
+            }
+            const float y_top = std::min(y_b1, y_a1);
+            const float y_bot = std::max(y_b0, y_a0);
+            if (!(y_bot > y_top)) continue;
+            fb.fill_trapezoid(y_b1, xl_b, xr_b, y_a0, xl_a, xr_a, c);
+        }
+        (void)cliff;
         return;
     }
 
