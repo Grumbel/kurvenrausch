@@ -2,6 +2,11 @@
 
 ## Current tip
 
+### Grok: debug menu + sprite viewer
+- Pause menu DEBUG page: toggle HUD, mirror, map, weather FX, headlights;
+  SPRITES… launches the sprite browser. CLI `--sprites` for the same without
+  the game. Files: `debug.hpp`/`debug.cpp`, `sprite_viewer.hpp`/`cpp`.
+
 ### Grok: develop shell (biltoo/Pingus pattern)
 - `kurvenrausch-configure` / `-build` / `-run` / `-run-gdb` as PATH scripts;
   `KURVENRAUSCH_SOURCE` + out-of-tree `$KURVENRAUSCH_BUILD_DIR`; reconfigure

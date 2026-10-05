@@ -5,6 +5,7 @@
 #include "framebuffer.hpp"
 #include "menu.hpp"
 #include "options.hpp"
+#include "debug.hpp"
 #include "track.hpp"
 
 #include <array>
@@ -66,6 +67,7 @@ void draw_hud(Framebuffer& fb, const HudState& hud);
 void draw_pause_menu(Framebuffer& fb, const PauseMenu& menu, const std::string& place, const std::string& track);
 // The pause menu's OPTIONS page, laid out like the pause menu.
 void draw_options_menu(Framebuffer& fb, const OptionsMenu& menu, const Options& options);
+void draw_debug_menu(Framebuffer& fb, const DebugMenu& menu, const DebugOptions& debug);
 
 // Formats seconds as m'ss"cc, the classic arcade lap time.
 std::string format_lap_time(float seconds);

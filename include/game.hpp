@@ -229,6 +229,9 @@ private:
     PauseMenu menu_;
     Options options_;
     OptionsMenu options_menu_;
+    DebugMenu debug_menu_;
+    DebugOptions debug_;
+    bool debug_open_ = false;
     bool options_open_ = false; // the pause menu shows the OPTIONS page
     int track_index_ = 0;       // the track driven, see track_name()
     // Where the last run left off (see Choices), taken up by the first race.

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "game.hpp"
+#include "sprite_viewer.hpp"
 
 #include <SDL2/SDL.h>
 #include <cstdlib>
@@ -54,7 +55,7 @@ void usage(const char* argv0) {
               << "  --nitro N           press nitro at step N of the headless run\n"
               << "  --icon FILE         write the application icon (32x32) as a BMP and exit\n"
               << "  --version           print the version and exit\n"
-              << "  --help              show this help\n";
+              << "  --sprites           browse every sprite and exit\n"              << "  --help              show this help\n";
 }
 
 } // namespace
@@ -150,6 +151,8 @@ int main(int argc, char* argv[]) {
         } else if (arg == "--version") {
             std::cout << "kurvenrausch " << KURVENRAUSCH_VERSION << "\n";
             return 0;
+        } else if (arg == "--sprites") {
+            return racer::run_sprite_viewer(fullscreen) ? 0 : 1;
         } else if (arg == "--help" || arg == "-h") {
             usage(argv[0]);
             return 0;

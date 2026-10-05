@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "game.hpp"
+#include "sprite_viewer.hpp"
 
 #include "drivetrain.hpp"
 
@@ -550,6 +551,7 @@ bool Game::frame() {
     set_width(screen_width());
     render();
     if (paused_ && options_open_) draw_options_menu(fb_, options_menu_, options_);
+    else if (paused_ && debug_open_) draw_debug_menu(fb_, debug_menu_, debug_);
     else if (paused_) draw_pause_menu(fb_, menu_, zone_label(menu_.zone), track_name(menu_.track));
     present();
     return true;
@@ -790,7 +792,23 @@ bool Game::update_pause(const InputState& input) {
         apply_options(before);
         return true;
     }
+    if (debug_open_ && !input.pause) {
+        bool close = debug_menu_.update(input.menu, debug_);
+        for (const Finger& tap : touch_taps_) {
+            float x = 0.f, y = 0.f;
+            display_->screen_to_framebuffer(tap.x, tap.y, x, y);
+            const MenuTap where = options_tap(x, y, width_, height); // same layout density
+            close = debug_menu_.choose(where.item, where.side, debug_) || close;
+        }
+        if (close) {
+            if (debug_menu_.selected == DebugMenu::Sprites)
+                run_sprite_viewer_session(*display_, input_, sprites_);
+            debug_open_ = false;
+        }
+        return true;
+    }
     options_open_ = false;
+    debug_open_ = false;
     MenuAction action = input.pause ? MenuAction::Resume : menu_.update(input.menu);
     for (const Finger& tap : touch_taps_) {
         if (action != MenuAction::None) break;
@@ -818,6 +836,10 @@ bool Game::update_pause(const InputState& input) {
         case MenuAction::Options:
             options_open_ = true;
             options_menu_.open();
+            return true;
+        case MenuAction::Debug:
+            debug_open_ = true;
+            debug_menu_.open();
             return true;
         case MenuAction::ToggleWide:
             // Takes effect on the next picture; the menu stays open.
@@ -2587,7 +2609,7 @@ void Game::render() {
         }
     }
     // No rain or snow falls in a tunnel.
-    if (!track_.segment_at(tr.z + cam.player_z()).tunnel) weather_.render(fb_);
+    if (debug_.weather && !track_.segment_at(tr.z + cam.player_z()).tunnel) weather_.render(fb_);
     if (setup.cockpit) {
         // The dashboard and the wheel, shaking with the car. On a wide
         // screen the dashboard is centred and its outer edges carry on to
@@ -2607,7 +2629,7 @@ void Game::render() {
         fb_.blit_rotated(sprites_.wheel(driver_), static_cast<float>(dash_x + dashboard_wheel_x),
                          static_cast<float>(height) + 6.f + bounce_, wheel_size, wheel_size, wheel_angle_ + twitch);
     }
-    render_mirror();
+    if (debug_.mirror) render_mirror();
 
     // Nightfall: the picture darkened but for its lamps; the headlights
     // light the road ahead again, from the car's front up (above the
@@ -2618,7 +2640,7 @@ void Game::render() {
     if (headlights_ || !road_.lamps().empty()) day_picture_.assign(fb_.pixels(), fb_.pixels() + width_ * height);
     apply_daylight(fb_, light);
     street_lights(fb_, day_picture_, road_.ground(), light, road_.row_depth(), road_.lamps(), cam.depth, x_unit);
-    if (headlights_) {
+    if (headlights_ && debug_.headlights) {
         Beam beam;
         beam.start = setup.distance + 450.f; // the lamps, at the car's front
         beam.center = static_cast<float>(width_) / 2.f;
@@ -2697,7 +2719,7 @@ void Game::render() {
     hud.nitro = nitro_.canisters();
     hud.nitro_capacity = nitro_.capacity();
     hud.fuel = fuel_.level();
-    hud.map = &map_;
+    hud.map = debug_.map ? &map_ : nullptr;
     // A fork coming up: the routes' names, left and right.
     for (const Branch& br : track_.branches) {
         const int ahead = br.fork - track_.index_at(tr.z + cam.player_z());
@@ -2726,7 +2748,7 @@ void Game::render() {
         hud.banner = track_.zones[static_cast<size_t>(zone_)].country;
         hud.banner_sub = track_.zones[static_cast<size_t>(zone_)].region;
     }
-    draw_hud(fb_, hud);
+    if (debug_.hud) draw_hud(fb_, hud);
 }
 
 // The road behind the car, drawn into its own small framebuffer and set into

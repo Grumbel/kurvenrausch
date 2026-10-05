@@ -56,6 +56,7 @@ add_library(kurvenrausch_core STATIC
     src/bitmap.cpp
     src/climate.cpp
     src/daylight.cpp
+    src/debug.cpp
     src/display.cpp
     src/driving.cpp
     src/font.cpp
@@ -71,6 +72,7 @@ add_library(kurvenrausch_core STATIC
     src/police.cpp
     src/road.cpp
     src/sprites.cpp
+    src/sprite_viewer.cpp
     src/state.cpp
     src/touch.cpp
     src/synth.cpp
