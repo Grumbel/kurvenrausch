@@ -1108,7 +1108,7 @@ void test_options() {
         base.fog_density = 5.f;
         base.sun_amount = 1.f;
         const RoadTheme fog = with_heavy_fog(base);
-        CHECK(fog.fog_density >= 100.f && fog.haze >= 0.99f && fog.sun_amount < 0.1f);
+        CHECK(fog.fog_density >= 200.f && fog.haze >= 0.99f && fog.sun_amount < 0.1f);
     }
     CHECK(traffic_factor(0) == 0.f && traffic_factor(2) == 1.f && traffic_factor(3) > 1.f);
     // The nitro takes the chosen number of canisters.

@@ -2,6 +2,11 @@
 
 ## Current tip
 
+### Grok: white-out FOGGY, no backdrop
+- FOGGY density ≥ 200. When haze ≥ 0.99 or density ≥ 80, Background fills
+  the frame with air colour and skips sky/mountains/clouds/sun.
+
+
 ### Grok: atmosphere toned down
 - Air is mostly theme fog + 14% horizon sky (was sky-heavy). Uniform fog
   blend again — per-channel Rayleigh skew had washed far objects to flat blue.

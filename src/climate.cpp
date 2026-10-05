@@ -59,11 +59,11 @@ RoadTheme weathered(const RoadTheme& look, float level) {
 
 RoadTheme with_heavy_fog(const RoadTheme& look) {
     RoadTheme r = look;
-    // Pea-soup: density must be high because fog uses (n/draw_distance)², so
-    // modest values only haze the far third of the view. ~100 washes out by
-    // ~10–15% of the draw distance.
-    r.fog_density = std::max(look.fog_density * 8.f, 100.f);
-    r.haze = 1.f; // mountains / hills dissolve into the air
+    // White-out: density must be very high because fog uses (n/draw_distance)².
+    // ~200 eats most of the view within a short range; backdrop is skipped
+    // when haze is full (see Background::render).
+    r.fog_density = std::max(look.fog_density * 12.f, 200.f);
+    r.haze = 1.f; // mountains / hills / sky: solid fog (no backdrop draw)
     const Color mist{0xc0, 0xc8, 0xd0};
     const Color grey{0x88, 0x90, 0x98};
     r.fog = blend(look.fog, mist, 0.85f);

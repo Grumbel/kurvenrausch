@@ -37,8 +37,8 @@ private:
 // road gets slippery; drier, the road grips better.
 RoadTheme weathered(const RoadTheme& look, float level);
 
-// Pea-soup fog without a full storm: very high fog_density so scenery washes
-// out close to the camera, full mountain haze, muted sun/sky, light drizzle.
+// White-out fog without a full storm: fog_density ≥ 200, full haze so the
+// backdrop is solid air colour (Background skips sky/mountains), light drizzle.
 // Used for WeatherSetting::Foggy.
 RoadTheme with_heavy_fog(const RoadTheme& look);
 

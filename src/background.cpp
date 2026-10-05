@@ -91,6 +91,13 @@ void Background::render(Framebuffer& fb, const RoadTheme& theme, float hour) con
 }
 
 void Background::render(Framebuffer& fb, const RoadTheme& theme, const BackdropView& view, float hour) const {
+    // Extreme fog (FOGGY / white-out): no sky bands, mountains, clouds or sun —
+    // the whole frame is air colour; the road pass draws the near field into it.
+    if (theme.haze >= 0.99f || theme.fog_density >= 80.f) {
+        fb.clear(atmosphere_air(theme));
+        return;
+    }
+
     const int w = fb.width();
     const int horizon = static_cast<int>(std::lround(view.horizon));
     const float zoom = view.zoom;
