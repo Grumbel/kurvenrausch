@@ -997,33 +997,19 @@ void test_touch() {
     CHECK(o.items().size() == shapes);
     CHECK(o.items()[0].image->w > 2 * static_cast<int>(gas.r));
 
-    // Taps on the pause menu choose the line tapped; on the country line
-    // the outer thirds change the country.
+    // Taps on the pause menu choose the line tapped (no side actions on the root).
     PauseMenu m;
-    m.open(3, 16, false);
+    m.open(false); // no Quit on the web
     const float first = 240.f / 2.f - 50.f + 36.f + 3.f;
     CHECK(menu_tap(m, 160.f, 20.f, 320, 240).item == -1);
     const MenuTap restart = menu_tap(m, 160.f, first + 16.f, 320, 240);
     CHECK(restart.item == PauseMenu::Restart && restart.side == 0);
     CHECK(m.choose(restart.item, restart.side) == MenuAction::Restart);
-    const MenuTap left = menu_tap(m, 20.f, first + 32.f, 320, 240);
-    CHECK(left.item == PauseMenu::StartZone && left.side == -1);
-    CHECK(m.choose(left.item, left.side) == MenuAction::None && m.zone == 2);
-    CHECK(menu_tap(m, 300.f, first + 32.f, 320, 240).side == 1);
-    CHECK(m.choose(PauseMenu::StartZone, 0) == MenuAction::StartZone);
-    CHECK(menu_tap(m, 160.f, first + 80.f, 320, 240).item == PauseMenu::Options);
-    CHECK(menu_tap(m, 160.f, first + 96.f, 320, 240).item == -1); // no Quit line in a web page
-    // The track line picks with its sides, and loads with its middle.
-    m.tracks = 2;
-    const MenuTap track_right = menu_tap(m, 300.f, first + 48.f, 320, 240);
-    CHECK(track_right.item == PauseMenu::Track && track_right.side == 1);
-    CHECK(m.choose(track_right.item, track_right.side) == MenuAction::None && m.track == 1);
-    CHECK(m.choose(PauseMenu::Track) == MenuAction::ChangeTrack);
-    // The screen line switches the shape and keeps the menu open.
-    CHECK(m.choose(PauseMenu::Screen) == MenuAction::ToggleWide);
-    MenuInput side;
-    side.right = true;
-    CHECK(m.update(side) == MenuAction::ToggleWide);
+    CHECK(menu_tap(m, 160.f, first + 32.f, 320, 240).item == PauseMenu::Options);
+    CHECK(menu_tap(m, 160.f, first + 48.f, 320, 240).item == PauseMenu::Video);
+    CHECK(menu_tap(m, 160.f, first + 96.f, 320, 240).item == -1); // no Quit line
+    CHECK(m.choose(PauseMenu::Video) == MenuAction::Video);
+    CHECK(m.choose(PauseMenu::Audio) == MenuAction::Audio);
 }
 
 void test_oncoming_lanes() {
@@ -1065,25 +1051,32 @@ void test_options() {
     using namespace racer;
     Options o;
     OptionsMenu m;
-    m.open();
+    m.open(3, 16, 0, 2);
+    CHECK(m.zone == 3 && m.zones == 16 && m.track == 0 && m.tracks == 2);
     // Right and confirm step a setting forward, left back, wrapping round.
     MenuInput right; right.right = true;
     MenuInput left; left.left = true;
     MenuInput down; down.down = true;
     MenuInput ok; ok.confirm = true;
-    CHECK(!m.update(right, o) && o.time == TimeSetting::Day);
-    CHECK(!m.update(left, o) && !m.update(left, o) && o.time == TimeSetting::Night);
+    CHECK(m.update(right, o) == OptionsAction::None && o.time == TimeSetting::Day);
+    CHECK(m.update(left, o) == OptionsAction::None && m.update(left, o) == OptionsAction::None &&
+          o.time == TimeSetting::Night);
     m.update(down, o);
-    CHECK(!m.update(ok, o) && !o.fuel);
+    CHECK(m.update(ok, o) == OptionsAction::None && !o.fuel);
     m.update(down, o);
     for (int i = 0; i < max_nitros; ++i) m.update(right, o);
     CHECK(o.nitros == 2); // 3 + 9, wrapped over 0 .. 9
     // A tap's side picks the way; BACK (or the back button) closes the page.
-    CHECK(!m.choose(OptionsMenu::Traffic, -1, o) && o.traffic == 1);
-    CHECK(m.choose(OptionsMenu::Back, 1, o));
+    CHECK(m.choose(OptionsMenu::Traffic, -1, o) == OptionsAction::None && o.traffic == 1);
+    CHECK(m.choose(OptionsMenu::Back, 1, o) == OptionsAction::Back);
     MenuInput back; back.back = true;
-    CHECK(m.update(back, o));
-    CHECK(OptionsMenu::line(OptionsMenu::Fuel, o) == "FUEL: OFF");
+    CHECK(m.update(back, o) == OptionsAction::Back);
+    CHECK(OptionsMenu::line(OptionsMenu::Fuel, o, "X", "Y") == "FUEL: OFF");
+    // Start In and Track: sides change the pick, confirm acts.
+    CHECK(m.choose(OptionsMenu::StartZone, -1, o) == OptionsAction::None && m.zone == 2);
+    CHECK(m.choose(OptionsMenu::StartZone, 0, o) == OptionsAction::StartZone);
+    CHECK(m.choose(OptionsMenu::Track, 1, o) == OptionsAction::None && m.track == 1);
+    CHECK(m.choose(OptionsMenu::Track, 0, o) == OptionsAction::ChangeTrack);
     // What the settings mean.
     CHECK(fixed_hour(TimeSetting::Cycle) < 0.f && fixed_hour(TimeSetting::Night) > 20.f);
     CHECK(weather_force(WeatherSetting::Changing) < 0.f && weather_force(WeatherSetting::Clear) == 0.f);
@@ -1095,10 +1088,11 @@ void test_options() {
     CHECK(n.canisters() == 5 && n.capacity() == 5);
     n.set_capacity(0);
     CHECK(n.canisters() == 0 && !n.fire());
-    // Taps on the page: the line, and its side.
-    const float first = 240.f / 2.f - 50.f + 36.f + 3.f;
-    CHECK(options_tap(20.f, first + 16.f, 320, 240).item == OptionsMenu::Fuel);
-    CHECK(options_tap(20.f, first + 16.f, 320, 240).side == -1 && options_tap(200.f, first, 320, 240).side == 1);
+    // Taps on the page: the line, and its side (layout matches draw_options_menu).
+    const float first = 240.f / 2.f - 70.f + 28.f + 3.f;
+    CHECK(options_tap(20.f, first + 14.f, 320, 240).item == OptionsMenu::Fuel);
+    CHECK(options_tap(20.f, first + 14.f, 320, 240).side == -1 && options_tap(200.f, first, 320, 240).side == 0);
+    CHECK(options_tap(300.f, first, 320, 240).side == 1);
 }
 
 void test_daylight() {
@@ -1162,40 +1156,30 @@ void test_daylight() {
 void test_pause_menu() {
     using namespace racer;
     PauseMenu m;
-    m.open(18, 16); // out of range: wraps
-    CHECK(m.selected == PauseMenu::Resume && m.zone == 2 && m.zones == 16);
+    m.open();
+    CHECK(m.selected == PauseMenu::Resume);
     CHECK(m.update(MenuInput{}) == MenuAction::None);
     MenuInput up; up.up = true;
     MenuInput down; down.down = true;
-    MenuInput left; left.left = true;
-    MenuInput right; right.right = true;
     MenuInput ok; ok.confirm = true;
     MenuInput back; back.back = true;
     CHECK(m.update(ok) == MenuAction::Resume);
     m.update(up); // wraps round to the last item
     CHECK(m.selected == PauseMenu::Quit && m.update(ok) == MenuAction::Quit);
-    m.update(right); // only changes the country on its own line
-    CHECK(m.zone == 2);
     m.update(down);
     m.update(down);
     CHECK(m.selected == PauseMenu::Restart && m.update(ok) == MenuAction::Restart);
-    m.update(down);
-    m.update(left);
-    m.update(left);
-    m.update(left);
-    CHECK(m.zone == 15);
-    m.update(right);
-    CHECK(m.zone == 0 && m.update(ok) == MenuAction::StartZone);
     CHECK(m.update(back) == MenuAction::Resume);
-    m.open(-1, 16);
-    CHECK(m.zone == 0 && m.selected == PauseMenu::Resume);
     // Without Quit (in a web page) the selection wraps round the others.
-    m.open(0, 16, false);
-    CHECK(m.item_count() == 6);
+    m.open(false);
+    CHECK(m.item_count() == PauseMenu::Quit); // Quit is the first omitted index
     m.update(up);
-    CHECK(m.selected == PauseMenu::Options && m.update(ok) == MenuAction::Options);
+    CHECK(m.selected == PauseMenu::Debug && m.update(ok) == MenuAction::Debug);
     m.update(down);
     CHECK(m.selected == PauseMenu::Resume);
+    CHECK(m.choose(PauseMenu::Options) == MenuAction::Options);
+    CHECK(m.choose(PauseMenu::Video) == MenuAction::Video);
+    CHECK(m.choose(PauseMenu::Audio) == MenuAction::Audio);
 }
 
 void test_steer_rate() {

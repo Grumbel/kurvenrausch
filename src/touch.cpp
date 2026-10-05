@@ -121,7 +121,7 @@ void TouchControls::draw(Overlay& overlay) const {
     }
 }
 
-MenuTap menu_tap(const PauseMenu& menu, float x, float y, int fb_width, int fb_height) {
+MenuTap menu_tap(const PauseMenu& menu, float /*x*/, float y, int /*fb_width*/, int fb_height) {
     const float first = static_cast<float>(fb_height / 2 - 50 + 36);
     for (int i = 0; i < menu.item_count(); ++i) {
         const float line = first + 16.f * static_cast<float>(i) + 3.f;
