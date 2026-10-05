@@ -2974,6 +2974,69 @@ const Bitmap& SpriteSheet::occupants(int driver_index, int passenger_index, int 
     return it->second;
 }
 
+
+namespace {
+
+// Dark window glass used across the town sprites → warm lit interior.
+// Exact colours from town_window, Victorian, flat houses, phone box, etc.
+bool is_dark_window_glass(uint32_t p) {
+    switch (p) {
+        case 0xff344054u: // town_window / casino glass
+        case 0xff7c90acu: // town_window highlight
+        case 0xff304058u: // Victorian glass
+        case 0xff8098b8u: // Victorian highlight
+        case 0xff3c5c84u: // older glass
+        case 0xff8cb0d8u:
+        case 0xff304050u: // phone box
+        case 0xff2c2420u: // flat-house dark pane
+        case 0xff3c6ca0u: // office tower glass
+        case 0xff809fc1u: // tower glass highlight (blend with white)
+        case 0xff80b0d8u: // hospital
+        case 0xff70a0c0u: // truck stop
+        case 0xff9cc0dcu: // showroom
+        case 0xff2c3c48u: // dark interior panes
+            return true;
+        default:
+            return false;
+    }
+}
+
+Bitmap light_scenery_windows(Bitmap b) {
+    constexpr uint32_t lit = 0xffffd888u; // WindowLit, opaque
+    for (uint32_t& p : b.px) {
+        if ((p >> 24) == 0) continue;
+        if (is_dark_window_glass(p)) p = lit;
+    }
+    return b;
+}
+
+} // namespace
+
+bool SpriteSheet::scenery_has_windows(Scenery kind) {
+    switch (kind) {
+        case Scenery::Townhouse:
+        case Scenery::TownhouseB:
+        case Scenery::Shop:
+        case Scenery::Apartment:
+        case Scenery::Tower:
+        case Scenery::FlatHouse:
+        case Scenery::Victorian:
+        case Scenery::VictorianB:
+        case Scenery::VictorianC:
+        case Scenery::Casino:
+        case Scenery::Hospital:
+        case Scenery::Motel:
+        case Scenery::PhoneBox:
+        case Scenery::Showroom:
+        case Scenery::SportsShowroom:
+        case Scenery::GasStation:
+        case Scenery::Truckstop:
+            return true;
+        default:
+            return false;
+    }
+}
+
 SpriteSheet::SpriteSheet() {
     scenery_[static_cast<size_t>(Scenery::Palm)] = make_palm();
     scenery_[static_cast<size_t>(Scenery::Tree)] = make_tree();
@@ -3223,6 +3286,13 @@ SpriteSheet::SpriteSheet() {
     scenery_[static_cast<size_t>(Scenery::Casino)] = make_casino(Color{0xe8, 0xd8, 0xb0}, NeonPink, "LUCKY");
     scenery_[static_cast<size_t>(Scenery::CasinoPyramid)] = make_casino_pyramid();
     scenery_[static_cast<size_t>(Scenery::NeonSign)] = make_neon_sign();
+
+    // Lit-window copies for the horn-at-night effect in town.
+    for (size_t i = 0; i < scenery_.size(); ++i) {
+        const auto kind = static_cast<Scenery>(i);
+        if (scenery_has_windows(kind) && !scenery_[i].px.empty())
+            scenery_lit_[i] = light_scenery_windows(scenery_[i]);
+    }
 }
 
 namespace {

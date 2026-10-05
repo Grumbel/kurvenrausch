@@ -263,6 +263,7 @@ private:
     HeldRace held_race_;
     SynthParams sound_;  // what the synth was last told
     bool horn_ = false;
+    float window_wake_time_ = 0.f; // buildings stay lit after a night horn
     Nitro nitro_;
     bool nitro_held_ = false; // a burn starts when the button goes down
     float wave_time_ = 0.f;   // seconds left of the wave after a close pass

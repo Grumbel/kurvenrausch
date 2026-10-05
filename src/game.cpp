@@ -357,6 +357,7 @@ void Game::reset() {
     zone_ = -1;
     banner_time_ = 0.f;
     horn_ = false;
+    window_wake_time_ = 0.f;
     nitro_.reset();
     nitro_held_ = false;
     wave_time_ = 0.f;
@@ -1104,6 +1105,15 @@ void Game::fixed_update(const InputState& driver_input, float dt) {
 
     // Horn, nitro and the wave after a close pass.
     horn_ = input.horn;
+    // In a city at night the horn wakes nearby buildings: every window lights.
+    {
+        const float player_z = world_.get<Camera>(camera_).player_z();
+        const float z = world_.get<Transform>(player_).z + player_z;
+        const RoadTheme town = track_.look_at(z);
+        const Daylight sky = daylight_at(hour_);
+        if (horn_ && town.night_glow >= 0.35f && sky.level < 0.5f) window_wake_time_ = 2.f;
+        if (window_wake_time_ > 0.f) window_wake_time_ -= dt;
+    }
     nitro_.update(dt);
     if (input.nitro && !nitro_held_ && !fuel_.empty() && nitro_.fire() && car_model_ == scanner_model &&
         !vertical_.airborne) {
@@ -2498,6 +2508,9 @@ void Game::render() {
     view.draw_distance = cam.draw_distance;
     view.fog_density = look.fog_density;
     view.x_scale = fb_x_unit();
+    // Nearby buildings light every window while the wake lasts (city night horn).
+    if (window_wake_time_ > 0.f && daylight_at(hour_).level < 0.5f)
+        view.window_wake = 55.f * track_.segment_length;
     road_sprites_.clear();
     world_.view<Transform, Traffic>([&](Entity e, Transform& t, Traffic& traffic) {
         RoadSprite s;
@@ -2843,6 +2856,8 @@ void Game::render_mirror() {
     view.player_z = 0.f; // the mirror's camera is in the car
     view.horizon = mirror_horizon * static_cast<float>(pixel_scale_);
     view.y_scale = y_scale;
+    if (window_wake_time_ > 0.f && daylight_at(hour_).level < 0.5f)
+        view.window_wake = 55.f * track_.segment_length;
     mirror_sprites_.clear();
     world_.view<Transform, Traffic>([&](Entity e, Transform& t, Traffic& traffic) {
         RoadSprite s;

@@ -38,6 +38,9 @@ struct RoadView {
     // framebuffer width. A framebuffer wider than 4:3 keeps the 4:3 scale and
     // shows more to the sides.
     float x_scale = 0.f;
+    // World units ahead of the camera: windowed buildings inside this range
+    // draw with every window lit (horn at night in a city). 0 = off.
+    float window_wake = 0.f;
 };
 
 struct ScreenPoint {
@@ -114,6 +117,7 @@ private:
     float x_scale_ = 1.f;
     float y_scale_ = 1.f;
     int direction_ = 1;
+    float window_wake_ = 0.f;
 };
 
 } // namespace racer

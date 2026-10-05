@@ -2,6 +2,12 @@
 
 ## Current tip
 
+### Grok: horn wakes city windows at night
+- In a town/city (`night_glow >= 0.35`) after dark, holding the horn lights
+  every window on nearby buildings for a couple of seconds.
+- Lit copies of windowed scenery are built at startup (`scenery_lit_`);
+  the road renderer swaps them in within `window_wake` world units.
+
 ### Grok: Professor driver (Einstein / Doc Brown hair)
 - New `HeadStyle::Wild`: fluffy white hair out in every direction (rear
   view cloud + side tufts; front view wide crown and side flares).

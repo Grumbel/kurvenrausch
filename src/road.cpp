@@ -61,6 +61,7 @@ void RoadRenderer::render(Framebuffer& fb, const Track& track, const RoadView& v
 
     camera_depth_ = view.camera_depth;
     direction_ = dir;
+    window_wake_ = view.window_wake;
     const int count = std::min(view.draw_distance, n_segments);
     slices_.clear();
     slices_.reserve(static_cast<size_t>(count));
@@ -484,7 +485,11 @@ void RoadRenderer::draw_sprites(Framebuffer& fb, const Track& track, const Sprit
             float left = p0.x + (obj.offset + shift) * track.half_width(s.index) * px_per_unit;
             if (info.centered) left -= width / 2.f;
             else if (obj.offset < 0.f) left -= width;
-            const Bitmap& bmp = direction_ > 0 ? sprites.scenery(obj.kind) : sprites.scenery_back(obj.kind);
+            // Horn at night: light every window on nearby buildings.
+            const bool wake = window_wake_ > 0.f && p0.cam_z < window_wake_ &&
+                              SpriteSheet::scenery_has_windows(obj.kind);
+            const Bitmap& bmp = direction_ > 0 ? sprites.scenery(obj.kind, wake)
+                                              : sprites.scenery_back(obj.kind, wake);
             const float height = width * static_cast<float>(bmp.h) / static_cast<float>(bmp.w);
             const bool flip = info.mirrorable && obj.offset < 0.f;
             fb.blit_scaled(bmp, left, p0.y - height, width, height, flip,

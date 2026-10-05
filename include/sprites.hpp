@@ -144,12 +144,18 @@ class SpriteSheet {
 public:
     SpriteSheet();
 
-    const Bitmap& scenery(Scenery kind) const { return scenery_[static_cast<size_t>(kind)]; }
+    const Bitmap& scenery(Scenery kind, bool windows_lit = false) const {
+        const auto i = static_cast<size_t>(kind);
+        if (windows_lit && scenery_has_windows(kind) && !scenery_lit_[i].px.empty()) return scenery_lit_[i];
+        return scenery_[i];
+    }
     // Scenery seen from behind (in the mirror): the back of billboards,
     // otherwise the same as scenery().
-    const Bitmap& scenery_back(Scenery kind) const {
-        return is_billboard(kind) ? billboard_back_ : scenery(kind);
+    const Bitmap& scenery_back(Scenery kind, bool windows_lit = false) const {
+        return is_billboard(kind) ? billboard_back_ : scenery(kind, windows_lit);
     }
+    // Buildings whose dark windows can light up (horn at night in town).
+    static bool scenery_has_windows(Scenery kind);
     // The player's car, without its people: model (see car_model()); steer
     // -1 left, 0 straight, +1 right; brake lights; tyre frame.
     // signal: the indicators lit, -1 left, +1 right, hazard_signal both.
@@ -222,6 +228,8 @@ public:
 
 private:
     std::array<Bitmap, static_cast<size_t>(Scenery::Count)> scenery_;
+    // Same buildings with every dark window lit (empty for non-windowed kinds).
+    std::array<Bitmap, static_cast<size_t>(Scenery::Count)> scenery_lit_;
     static size_t tread_index(int tread) { return static_cast<size_t>(((tread % tyre_frames) + tyre_frames) % tyre_frames); }
 
     // [model][steer][brake][tread]
