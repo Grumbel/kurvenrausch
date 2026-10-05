@@ -234,6 +234,28 @@ struct RoadTheme {
     Color center_line{0xe8, 0xc0, 0x20};
 };
 
+// Distance fog / aerial perspective. Air is mostly the horizon sky (Rayleigh
+// inscatter toward blue) mixed with the theme fog colour so storms can still
+// grey the view out.
+inline Color atmosphere_air(const RoadTheme& th) {
+    return blend(th.sky_horizon, th.fog, 0.32f);
+}
+
+// Blend surface colour into air. Red extinguishes a little faster than blue
+// so mid-distance objects shift cooler before they fully wash out.
+inline Color fogged_color(Color c, Color air, float amount) {
+    const float a = amount < 0.f ? 0.f : (amount > 1.f ? 1.f : amount);
+    if (a <= 0.004f) return c;
+    const float ar = a < 1.f ? a * 1.12f : 1.f;
+    const float ag = a;
+    const float ab = a * 0.82f;
+    auto ch = [](uint8_t o, uint8_t f, float t) {
+        if (t >= 1.f) return f;
+        return static_cast<uint8_t>(static_cast<float>(o) + (static_cast<float>(f) - static_cast<float>(o)) * t + 0.5f);
+    };
+    return Color(ch(c.r, air.r, ar > 1.f ? 1.f : ar), ch(c.g, air.g, ag), ch(c.b, air.b, ab < 0.f ? 0.f : ab));
+}
+
 // Lateral centre of lane `index` (0 = leftmost) on a road with `lanes` lanes,
 // in road half-widths: -2/3, 0, 2/3 for three lanes, -1/2, 1/2 for two.
 inline float lane_center(int lanes, int index) {

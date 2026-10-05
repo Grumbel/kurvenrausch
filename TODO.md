@@ -2,6 +2,12 @@
 
 ## Current tip
 
+### Grok: atmospheric distance (blue air)
+- Distance fog uses `atmosphere_air` (horizon sky mixed with theme fog) and
+  `fogged_color` with slightly stronger red extinction so mid-distance
+  scenery shifts blue before washing out. Road, cliffs, sprites, backdrop.
+
+
 ### Grok: render architecture notes + heavy fog
 - `docs/render-architecture.md`: overdraw, y-buffer, screen-split MT, scanline
   assembly — what fits this engine and what does not.

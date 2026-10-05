@@ -154,7 +154,7 @@ void Background::render(Framebuffer& fb, const RoadTheme& theme, const BackdropV
             row[x] = c.argb();
         }
     }
-    fb.fill_rect(0, horizon, w, fb.height() - horizon, theme.fog);
+    fb.fill_rect(0, horizon, w, fb.height() - horizon, atmosphere_air(theme));
 
     // Stars at night, in a fixed field above the horizon (so the mirror
     // shows them too). Their colours are lights: they keep shining in the
@@ -260,7 +260,7 @@ void Background::render(Framebuffer& fb, const RoadTheme& theme, const BackdropV
                     c = bayer4(x, y) < light ? theme.snow : blend(theme.snow, theme.mountain_shade, 0.5f);
                 }
                 const float haze = std::max(std::clamp(1.f - alt / (14.f * zoom), 0.f, 1.f) * 0.75f, theme.haze);
-                fb.put_pixel(x, y, blend(c, theme.fog, haze));
+                fb.put_pixel(x, y, fogged_color(c, atmosphere_air(theme), haze));
             }
         }
     };

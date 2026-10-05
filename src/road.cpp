@@ -121,7 +121,7 @@ void RoadRenderer::render(Framebuffer& fb, const Track& track, const RoadView& v
                     // The way out, seen from inside: the wall round it.
                     fb.set_clip(static_cast<int>(mouth_left), std::max(0, pixel_edge(s.top)),
                                 static_cast<int>(mouth_right), clip_row(max_y));
-                    const Color wall = blend(Color{0x6c, 0x68, 0x62}, track.look(index).fog, 1.f - s.fog);
+                    const Color wall = fogged_color(Color{0x6c, 0x68, 0x62}, atmosphere_air(track.look(index)), 1.f - s.fog);
                     fb.fill_trapezoid(far_ceiling, 0.f, x0, s.p2.y, 0.f, x0, wall);
                     fb.fill_trapezoid(far_ceiling, x1, static_cast<float>(fb.width()), s.p2.y, x1,
                                       static_cast<float>(fb.width()), wall);
@@ -157,7 +157,8 @@ void RoadRenderer::draw_segment(Framebuffer& fb, const Track& track, const Slice
     const RoadTheme& theme = track.look(s.index);
     const int band = seg.alt ? 0 : 1;
     const float fog_amount = 1.f - s.fog;
-    auto fogged = [&](Color c) { return blend(c, theme.fog, fog_amount); };
+    const Color air = atmosphere_air(theme);
+    auto fogged = [&](Color c) { return fogged_color(c, air, fog_amount); };
 
     const ScreenPoint& a = s.p1; // near
     const ScreenPoint& b = s.p2; // far
@@ -353,6 +354,7 @@ void RoadRenderer::draw_edge(Framebuffer& fb, const Track& track, const Slice& s
     const RoadTheme& th = track.look(s.index);
     const float off = (kind == Edge::Rail ? rail_offset : cliff_offset) * static_cast<float>(side);
     const float fog_amount = 1.f - s.fog;
+    const Color air = atmosphere_air(th);
     const ScreenPoint& a = s.p1;
     const ScreenPoint& b = s.p2;
 
@@ -388,7 +390,7 @@ void RoadRenderer::draw_edge(Framebuffer& fb, const Track& track, const Slice& s
         if (!(height > 2.f) || !(width > 2.f)) return;
         const float base_x = xa;
         const float left = side < 0 ? base_x - width : base_x;
-        fb.blit_scaled(cliff, left, a.y - height, width, height, side < 0, fog_amount, th.fog);
+        fb.blit_scaled(cliff, left, a.y - height, width, height, side < 0, fog_amount, air);
         return;
     }
 
@@ -413,7 +415,7 @@ void RoadRenderer::draw_edge(Framebuffer& fb, const Track& track, const Slice& s
             if (!post && !upper && !lower) continue;
             Color c = post ? th.rail[1] : th.rail[0];
             if (upper && r > 0.88f) c = blend(c, Color{255, 255, 255}, 0.4f);
-            fb.put_pixel(x, y, blend(c, th.fog, fog_amount));
+            fb.put_pixel(x, y, fogged_color(c, air, fog_amount));
         }
     }
 }
@@ -448,7 +450,7 @@ void RoadRenderer::draw_sprites(Framebuffer& fb, const Track& track, const Sprit
                 const float wh = tunnel_height * p0.scale * y_scale_;
                 const float ww = std::max(8.f, track.segment_length * px * 1.2f);
                 const float fog = 1.f - s.fog;
-                const Color fogc = track.look(s.index).fog;
+                const Color fogc = atmosphere_air(track.look(s.index));
                 for (int side = -1; side <= 1; side += 2) {
                     const float edge = p0.x + static_cast<float>(side) * p0.w;
                     const float left = side < 0 ? edge - ww : edge;
@@ -481,7 +483,7 @@ void RoadRenderer::draw_sprites(Framebuffer& fb, const Track& track, const Sprit
             }
             const bool flip = info.mirrorable && obj.offset < 0.f;
             fb.blit_scaled(bmp, left, p0.y - height, width, height, flip,
-                           fog_amount, track.look(s.index).fog);
+                           fog_amount, atmosphere_air(track.look(s.index)));
             // A lamp's light falls at its foot, a little out over the road.
             if (obj.kind == Scenery::StreetLamp) {
                 const float toward_road = (obj.offset < 0.f ? 1.f : -1.f) * 0.15f * track.half_width(s.index) * px_per_unit;
@@ -531,7 +533,7 @@ void RoadRenderer::draw_sprites(Framebuffer& fb, const Track& track, const Sprit
                 lamps_.push_back({cx, depth - ahead * 350.f, 380.f, Glow::Tail});
             }
             fb.blit_scaled(bmp, cx - width / 2.f, y - height, width, height, o.flip,
-                           fog_amount, track.look(s.index).fog);
+                           fog_amount, atmosphere_air(track.look(s.index)));
         };
         if (direction_ > 0) {
             for (auto o = std::make_reverse_iterator(last); o != std::make_reverse_iterator(first); ++o) draw_object(*o);

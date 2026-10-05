@@ -22,7 +22,7 @@ weather and road markings, fading smoothly into one another:
 - Segment-based pseudo-3D road: perspective projection (`scale = depth / z`),
   curves by accumulated lateral offset, hills and crests with correct
   occlusion, alternating rumble strips and grass bands, lane markings, a
-  chequered start line, and distance fog
+  chequered start line, and distance fog (aerial perspective toward blue air)
 - **Sixteen zones** with blended looks: the Cote d'Azur (palms, sunny),
   England (narrow lanes between hedgerows and stone walls, drizzle), the
   Netherlands (dead flat: windmills, tulip fields, a canal), the Black Forest

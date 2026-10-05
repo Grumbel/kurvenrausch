@@ -1093,6 +1093,15 @@ void test_options() {
     CHECK(weather_force(WeatherSetting::Changing) < 0.f && weather_force(WeatherSetting::Clear) == 0.f);
     CHECK(weather_force(WeatherSetting::Foggy) == 0.f && weather_force(WeatherSetting::Stormy) == 1.f);
     {
+        RoadTheme th{};
+        th.sky_horizon = Color{0xb8, 0xdc, 0xf4};
+        th.fog = Color{0xc8, 0xe0, 0xe8};
+        const Color air = atmosphere_air(th);
+        CHECK(air.b >= air.r); // air is blue-biased
+        const Color far = fogged_color(Color{0xd0, 0x40, 0x20}, air, 0.55f);
+        CHECK(far.b > far.r); // red object shifts cool with distance
+    }
+    {
         RoadTheme base{};
         base.fog_density = 5.f;
         base.sun_amount = 1.f;
