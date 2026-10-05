@@ -15,34 +15,20 @@ struct MenuInput {
     bool back = false;
 };
 
-enum class MenuAction { None, Resume, Restart, StartZone, ChangeTrack, ToggleWide, Options, Video, Audio, Debug, Quit };
+enum class MenuAction { None, Resume, Restart, Options, Video, Audio, Debug, Quit };
 
-// The pause menu: resume, restart at the start line, start in a chosen
-// country (picked with left and right on its line), drive another track
-// (picked the same way, confirmed to load it), the screen's shape (4:3
-// or as wide as the screen; confirm, left or right switch it, and the menu
-// stays open), game options, video, audio (see options.hpp), debug toggles
-// and the sprite viewer (see debug.hpp), or quit, where there is something to quit to (not in a web page).
+// The pause menu: resume, restart, game options / video / audio / debug pages,
+// or quit (where there is something to quit to). Start-in country, track, and
+// screen shape live on those pages (see options.hpp).
 struct PauseMenu {
-    enum Item { Resume, Restart, StartZone, Track, Screen, Options, Video, Audio, Debug, Quit, items };
+    enum Item { Resume, Restart, Options, Video, Audio, Debug, Quit, items };
 
     int selected = Resume;
-    int zone = 0;  // the country to start in
-    int zones = 1; // how many there are to choose from
     bool can_quit = true;
-    bool wide = false; // shown on the Screen line
-    int track = 0;     // the track picked on the Track line ...
-    int tracks = 1;    // ... of this many
 
-    // Opens the menu on "Resume", with the country the car is in as the
-    // start choice.
-    void open(int current_zone, int zone_count, bool allow_quit = true);
-    // The items shown: all of them, or all but Quit.
+    void open(bool allow_quit = true);
     int item_count() const { return can_quit ? items : Quit; }
-    // Moves the selection and returns what the player chose, if anything.
     MenuAction update(const MenuInput& in);
-    // A tap on line `item`: it is chosen at once; on the country and track
-    // lines `side` -1 or +1 picks the previous or next one instead.
     MenuAction choose(int item, int side = 0);
 };
 

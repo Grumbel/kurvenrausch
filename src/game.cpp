@@ -551,11 +551,13 @@ bool Game::frame() {
 
     set_width(screen_width());
     render();
-    if (paused_ && options_open_) draw_options_menu(fb_, options_menu_, options_);
+    if (paused_ && options_open_)
+        draw_options_menu(fb_, options_menu_, options_, zone_label(options_menu_.zone),
+                          track_name(options_menu_.track));
     else if (paused_ && video_open_) draw_video_menu(fb_, video_menu_, wide_, pixel_scale_ >= 2);
     else if (paused_ && audio_open_) draw_audio_menu(fb_, audio_menu_, muted_, music_);
     else if (paused_ && debug_open_) draw_debug_menu(fb_, debug_menu_, debug_);
-    else if (paused_) draw_pause_menu(fb_, menu_, zone_label(menu_.zone), track_name(menu_.track));
+    else if (paused_) draw_pause_menu(fb_, menu_, zone_label(zone_), track_name(track_index_));
     if (debug_.fps) draw_fps(fb_, fps_);
     present();
     return true;
@@ -774,10 +776,7 @@ void Game::pause() {
     if (paused_) return;
     touch_.release();
     paused_ = true;
-    menu_.open(zone_, static_cast<int>(track_.zones.size()), !web);
-    menu_.wide = wide_;
-    menu_.track = track_index_;
-    menu_.tracks = track_count;
+    menu_.open(!web);
     SynthParams quiet = sound_;
     quiet.volume = 0.f;
     synth_.set_params(quiet);
@@ -792,17 +791,33 @@ bool Game::update_pause(const InputState& input) {
         return true;
     }
     if (options_open_ && !input.pause) {
-        // The OPTIONS page: each change takes effect at once, and is kept.
         const Options before = options_;
-        bool close = options_menu_.update(input.menu, options_);
+        OptionsAction act = options_menu_.update(input.menu, options_);
         for (const Finger& tap : touch_taps_) {
+            if (act != OptionsAction::None) break;
             float x = 0.f, y = 0.f;
             display_->screen_to_framebuffer(tap.x, tap.y, x, y);
-            const MenuTap where = options_tap(x, y, width_, fb_height());
-            close = options_menu_.choose(where.item, where.side, options_) || close; // OptionsMenu::items
+            const MenuTap where = options_tap(x, y, width_, fb_height(), OptionsMenu::items);
+            act = options_menu_.choose(where.item, where.side, options_);
         }
-        if (close) options_open_ = false;
         apply_options(before);
+        if (act == OptionsAction::Back) {
+            options_open_ = false;
+        } else if (act == OptionsAction::StartZone) {
+            options_open_ = false;
+            paused_ = false;
+            reset();
+            start_at(zone_start_position(options_menu_.zone));
+        } else if (act == OptionsAction::ChangeTrack) {
+            options_open_ = false;
+            paused_ = false;
+            if (options_menu_.track != track_index_) {
+                load_track(options_menu_.track);
+                save_choices();
+            } else {
+                reset();
+            }
+        }
         return true;
     }
     if (debug_open_ && !input.pause) {
@@ -836,7 +851,6 @@ bool Game::update_pause(const InputState& input) {
             const MenuTap where = options_tap(x, y, width_, fb_height(), VideoMenu::items);
             close = video_menu_.choose(where.item, where.side, wide_, hd, want_fs) || close;
         }
-        menu_.wide = wide_;
         set_pixel_scale(hd ? 2 : 1);
         if (want_fs) display_->toggle_fullscreen();
         save_choices();
@@ -875,21 +889,9 @@ bool Game::update_pause(const InputState& input) {
         case MenuAction::None: return true;
         case MenuAction::Quit: return false;
         case MenuAction::Restart: reset(); break;
-        case MenuAction::ChangeTrack:
-            if (menu_.track != track_index_) {
-                load_track(menu_.track);
-                save_choices();
-            } else {
-                reset();
-            }
-            break;
-        case MenuAction::StartZone:
-            reset();
-            start_at(zone_start_position(menu_.zone));
-            break;
         case MenuAction::Options:
             options_open_ = true;
-            options_menu_.open();
+            options_menu_.open(zone_, static_cast<int>(track_.zones.size()), track_index_, track_count);
             return true;
         case MenuAction::Video:
             video_open_ = true;
@@ -902,12 +904,6 @@ bool Game::update_pause(const InputState& input) {
         case MenuAction::Debug:
             debug_open_ = true;
             debug_menu_.open();
-            return true;
-        case MenuAction::ToggleWide:
-            // Takes effect on the next picture; the menu stays open.
-            wide_ = !wide_;
-            menu_.wide = wide_;
-            save_choices();
             return true;
         case MenuAction::Resume: break;
     }
@@ -1022,11 +1018,8 @@ bool Game::screenshot(const ScreenshotOptions& opts) {
     draw_touch();
     overlay_.draw(fb_);
     if (opts.pause) {
-        menu_.open(zone_, static_cast<int>(track_.zones.size()));
-        menu_.wide = wide_;
-        menu_.track = track_index_;
-        menu_.tracks = track_count;
-        draw_pause_menu(fb_, menu_, zone_label(menu_.zone), track_name(menu_.track));
+        menu_.open();
+        draw_pause_menu(fb_, menu_, zone_label(zone_), track_name(track_index_));
     }
     return save_bmp(opts.path, fb_.pixels(), width_, fb_height());
 }

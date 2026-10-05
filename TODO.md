@@ -2,6 +2,10 @@
 
 ## Current tip
 
+### Grok: menu layout — Start In / Track / Screen moved
+- Pause: Resume, Restart, Game Options, Video, Audio, Debug, Quit.
+- GAME OPTIONS holds Start In and Track; VIDEO holds Screen (wide).
+
 ### Grok: fix VideoMenu/AudioMenu outside namespace
 - `src/options.cpp` had Video/Audio method bodies after `namespace racer`
   closed; moved inside. Renamed `AudioMenu::Music` to `Radio` so it does

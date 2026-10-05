@@ -9,7 +9,7 @@
 
 namespace racer {
 
-// Gameplay features the player can switch, in the pause menu's OPTIONS.
+// Gameplay features the player can switch, in the pause menu's GAME OPTIONS.
 enum class TimeSetting { Cycle, Day, Dusk, Night, count };
 enum class WeatherSetting { Changing, Clear, Stormy, count };
 
@@ -24,47 +24,41 @@ struct Options {
 constexpr int max_nitros = 9;
 constexpr int traffic_levels = 4;
 
-// The hour a fixed time of day holds, or -1 for the cycle.
 float fixed_hour(TimeSetting time);
-// What the weather front is held at (see WeatherFront::force), -1 to drift.
 float weather_force(WeatherSetting weather);
-// How much traffic, of the normal amount.
 float traffic_factor(int level);
-// Out-of-range values (from an edited file) brought into range.
 Options clamped(const Options& o);
 
-// The OPTIONS page: one line per setting, changed with left and right (or
-// confirm, which steps forward), and BACK. Taps: a line's left third steps
-// back, the rest forward.
+// What GAME OPTIONS returned: stay on the page, go back, or start / change track.
+enum class OptionsAction { None, Back, StartZone, ChangeTrack };
+
+// GAME OPTIONS: settings, start-in country, track, BACK.
 struct OptionsMenu {
-    enum Item { Time, Fuel, Nitros, Police, Weather, Traffic, Back, items };
+    enum Item { Time, Fuel, Nitros, Police, Weather, Traffic, StartZone, Track, Back, items };
 
     int selected = Time;
+    int zone = 0;
+    int zones = 1;
+    int track = 0;
+    int tracks = 1;
 
-    void open() { selected = Time; }
-    // Moves the selection or changes the selected setting; true when the
-    // page closes (BACK chosen, or the back button).
-    bool update(const MenuInput& in, Options& options);
-    // A tap on line `item`, on its left (-1) or right (+1) side.
-    bool choose(int item, int side, Options& options);
-    // The text of line `item`, such as "FUEL: ON".
-    static std::string line(int item, const Options& options);
+    void open(int current_zone, int zone_count, int current_track, int track_count);
+    OptionsAction update(const MenuInput& in, Options& options);
+    OptionsAction choose(int item, int side, Options& options);
+    // `place` and `track_name` are the labels for StartZone and Track lines.
+    static std::string line(int item, const Options& options, const std::string& place,
+                            const std::string& track_name);
 };
 
-// Steps setting `item` by `step` (+1 or -1), wrapping round.
 void change(Options& options, int item, int step);
 
-
-// Video: picture shape and fullscreen. The game owns the bools; the menu
-// only flips them.
+// Video: picture shape, HD, fullscreen.
 struct VideoMenu {
     enum Item { Wide, Hd, Fullscreen, Back, items };
 
     int selected = Wide;
 
     void open() { selected = Wide; }
-    // Sets *toggle_fullscreen when the player chooses FULLSCREEN.
-    // Returns true when BACK closes the page.
     bool update(const MenuInput& in, bool& wide, bool& hd, bool& toggle_fullscreen);
     bool choose(int item, int side, bool& wide, bool& hd, bool& toggle_fullscreen);
     static std::string line(int item, bool wide, bool hd);

@@ -5,24 +5,14 @@
 
 namespace racer {
 
-void PauseMenu::open(int current_zone, int zone_count, bool allow_quit) {
+void PauseMenu::open(bool allow_quit) {
     selected = Resume;
     can_quit = allow_quit;
-    zones = zone_count > 0 ? zone_count : 1;
-    zone = current_zone >= 0 ? current_zone % zones : 0;
 }
 
-MenuAction PauseMenu::choose(int item, int side) {
+MenuAction PauseMenu::choose(int item, int /*side*/) {
     if (item < 0 || item >= item_count()) return MenuAction::None;
     selected = item;
-    if (item == StartZone && side != 0) {
-        zone = (zone + side + zones) % zones;
-        return MenuAction::None;
-    }
-    if (item == Track && side != 0) {
-        track = (track + side + tracks) % tracks;
-        return MenuAction::None;
-    }
     MenuInput confirm;
     confirm.confirm = true;
     return update(confirm);
@@ -33,22 +23,10 @@ MenuAction PauseMenu::update(const MenuInput& in) {
     const int n = item_count();
     if (in.up) selected = (selected + n - 1) % n;
     if (in.down) selected = (selected + 1) % n;
-    if (selected == StartZone) {
-        if (in.left) zone = (zone + zones - 1) % zones;
-        if (in.right) zone = (zone + 1) % zones;
-    }
-    if (selected == Track) {
-        if (in.left) track = (track + tracks - 1) % tracks;
-        if (in.right) track = (track + 1) % tracks;
-    }
-    if (selected == Screen && (in.left || in.right)) return MenuAction::ToggleWide;
     if (!in.confirm) return MenuAction::None;
     switch (selected) {
         case Resume: return MenuAction::Resume;
         case Restart: return MenuAction::Restart;
-        case StartZone: return MenuAction::StartZone;
-        case Track: return MenuAction::ChangeTrack;
-        case Screen: return MenuAction::ToggleWide;
         case Options: return MenuAction::Options;
         case Video: return MenuAction::Video;
         case Audio: return MenuAction::Audio;

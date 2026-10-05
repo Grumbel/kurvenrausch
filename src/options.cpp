@@ -65,25 +65,55 @@ void change(Options& o, int item, int step) {
     }
 }
 
-bool OptionsMenu::update(const MenuInput& in, Options& options) {
-    if (in.back) return true;
+void OptionsMenu::open(int current_zone, int zone_count, int current_track, int track_count) {
+    selected = Time;
+    zones = zone_count > 0 ? zone_count : 1;
+    zone = current_zone >= 0 ? current_zone % zones : 0;
+    tracks = track_count > 0 ? track_count : 1;
+    track = current_track >= 0 ? current_track % tracks : 0;
+}
+
+OptionsAction OptionsMenu::update(const MenuInput& in, Options& options) {
+    if (in.back) return OptionsAction::Back;
     if (in.up) selected = wrap(selected - 1, items);
     if (in.down) selected = wrap(selected + 1, items);
-    if (selected == Back) return in.confirm;
+    if (selected == StartZone) {
+        if (in.left) zone = (zone + zones - 1) % zones;
+        if (in.right) zone = (zone + 1) % zones;
+        if (in.confirm) return OptionsAction::StartZone;
+        return OptionsAction::None;
+    }
+    if (selected == Track) {
+        if (in.left) track = (track + tracks - 1) % tracks;
+        if (in.right) track = (track + 1) % tracks;
+        if (in.confirm) return OptionsAction::ChangeTrack;
+        return OptionsAction::None;
+    }
+    if (selected == Back) return in.confirm ? OptionsAction::Back : OptionsAction::None;
     if (in.left) change(options, selected, -1);
     if (in.right || in.confirm) change(options, selected, +1);
-    return false;
+    return OptionsAction::None;
 }
 
-bool OptionsMenu::choose(int item, int side, Options& options) {
-    if (item < 0 || item >= items) return false;
+OptionsAction OptionsMenu::choose(int item, int side, Options& options) {
+    if (item < 0 || item >= items) return OptionsAction::None;
     selected = item;
-    if (item == Back) return true;
+    if (item == Back) return OptionsAction::Back;
+    if (item == StartZone) {
+        if (side != 0) zone = (zone + side + zones) % zones;
+        else return OptionsAction::StartZone;
+        return OptionsAction::None;
+    }
+    if (item == Track) {
+        if (side != 0) track = (track + side + tracks) % tracks;
+        else return OptionsAction::ChangeTrack;
+        return OptionsAction::None;
+    }
     change(options, item, side < 0 ? -1 : 1);
-    return false;
+    return OptionsAction::None;
 }
 
-std::string OptionsMenu::line(int item, const Options& o) {
+std::string OptionsMenu::line(int item, const Options& o, const std::string& place, const std::string& track_name) {
     static const char* times[] = {"CYCLE", "DAY", "DUSK", "NIGHT"};
     static const char* weathers[] = {"CHANGING", "CLEAR", "STORMY"};
     static const char* traffic[] = {"NONE", "LIGHT", "NORMAL", "HEAVY"};
@@ -95,10 +125,11 @@ std::string OptionsMenu::line(int item, const Options& o) {
         case Police: return value("POLICE", on_off(o.police));
         case Weather: return value("WEATHER", weathers[static_cast<int>(o.weather)]);
         case Traffic: return value("TRAFFIC", traffic[std::clamp(o.traffic, 0, traffic_levels - 1)]);
+        case StartZone: return "START IN < " + place + " >";
+        case Track: return "TRACK < " + track_name + " >";
         default: return "BACK";
     }
 }
-
 
 bool VideoMenu::update(const MenuInput& in, bool& wide, bool& hd, bool& toggle_fullscreen) {
     if (in.back) return true;
