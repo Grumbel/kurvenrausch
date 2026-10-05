@@ -57,7 +57,10 @@ std::string format_choices(const Choices& c) {
         << "minutes " << c.minutes << "\n"
         << "tank " << c.tank << "\n"
         << "engine_vol " << c.engine_vol << "\n"
-        << "music_vol " << c.music_vol << "\n";
+        << "music_vol " << c.music_vol << "\n"
+        << "hd " << c.hd << "\n"
+        << "fullscreen " << c.fullscreen << "\n"
+        << "muted " << c.muted << "\n";
     return out.str();
 }
 
@@ -88,6 +91,9 @@ Choices parse_choices(std::string_view text) {
         else if (key == "tank") c.tank = value;
         else if (key == "engine_vol") c.engine_vol = value;
         else if (key == "music_vol") c.music_vol = value;
+        else if (key == "hd") c.hd = value;
+        else if (key == "fullscreen") c.fullscreen = value;
+        else if (key == "muted") c.muted = value;
     }
     c.options = clamped(c.options);
     c.engine_vol = std::clamp(c.engine_vol, 0, max_volume);

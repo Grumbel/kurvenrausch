@@ -173,8 +173,11 @@ void Display::set_icon(const uint32_t* argb_pixels, int width, int height) {
 }
 
 void Display::toggle_fullscreen() {
-    const bool fullscreen = (SDL_GetWindowFlags(window_) & SDL_WINDOW_FULLSCREEN_DESKTOP) != 0;
-    SDL_SetWindowFullscreen(window_, fullscreen ? 0 : SDL_WINDOW_FULLSCREEN_DESKTOP);
+    SDL_SetWindowFullscreen(window_, is_fullscreen() ? 0 : SDL_WINDOW_FULLSCREEN_DESKTOP);
+}
+
+bool Display::is_fullscreen() const {
+    return window_ && (SDL_GetWindowFlags(window_) & SDL_WINDOW_FULLSCREEN_DESKTOP) != 0;
 }
 
 bool save_bmp(const std::string& path, const uint32_t* argb_pixels, int width, int height) {

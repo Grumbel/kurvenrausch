@@ -297,14 +297,11 @@ void Game::spawn_traffic() {
 }
 
 bool Game::init(bool fullscreen) {
-    display_ = std::make_unique<Display>();
-    if (!display_->init("Kurvenrausch", app_id, base_width, height, window_scale, fullscreen)) return false;
-    const Bitmap icon = make_app_icon();
-    display_->set_icon(icon.px.data(), icon.w, icon.h);
-
-    // Last run's choices and the lap record.
+    // Last run's choices first: fullscreen and HD affect the window and the
+    // framebuffer size. A CLI --fullscreen still forces fullscreen on.
     store_ = Store(user_state_dir());
     int last_track = 0; // the track driven last
+    int saved_hd = 0;
     if (const std::optional<Choices> c = store_.load_choices()) {
         const auto wrap = [](int i, int n) { return ((i % n) + n) % n; };
         car_model_ = wrap(c->car, car_models);
@@ -315,6 +312,9 @@ bool Game::init(bool fullscreen) {
         engine_vol_ = std::clamp(c->engine_vol, 0, max_volume);
         music_vol_ = std::clamp(c->music_vol, 0, max_volume);
         wide_ = c->wide != 0;
+        muted_ = c->muted != 0;
+        saved_hd = c->hd != 0 ? 2 : 1;
+        if (c->fullscreen) fullscreen = true;
         resume_position_ = c->position;
         resume_minutes_ = c->minutes;
         resume_tank_ = c->tank;
@@ -324,6 +324,13 @@ bool Game::init(bool fullscreen) {
         apply_options(before);
         apply_car();
     }
+
+    display_ = std::make_unique<Display>();
+    if (!display_->init("Kurvenrausch", app_id, base_width, height, window_scale, fullscreen)) return false;
+    const Bitmap icon = make_app_icon();
+    display_->set_icon(icon.px.data(), icon.w, icon.h);
+    if (saved_hd > 1) set_pixel_scale(saved_hd);
+
     if (last_track != 0) load_track(last_track);
     record_lap_ = best_lap(store_.load_laps(), track_name(track_index_));
     best_lap_ = record_lap_;
@@ -464,8 +471,14 @@ bool Game::frame() {
     InputState& input = input_state_;
     input_.poll(input);
     if (input.quit && !web) return false;
-    if (input.toggle_fullscreen) display_->toggle_fullscreen();
-    if (input.toggle_mute) muted_ = !muted_;
+    if (input.toggle_fullscreen) {
+        display_->toggle_fullscreen();
+        save_choices();
+    }
+    if (input.toggle_mute) {
+        muted_ = !muted_;
+        save_choices();
+    }
     if (input.toggle_map) map_zoomed_ = !map_zoomed_;
 
     // The attract mode until somebody presses something; and back to it
@@ -805,6 +818,7 @@ bool Game::update_pause(const InputState& input) {
             act = options_menu_.choose(where.item, where.side, options_);
         }
         apply_options(before);
+        if (options_ != before || act == OptionsAction::Back) save_choices();
         if (act == OptionsAction::Back) {
             options_open_ = false;
         } else if (act == OptionsAction::StartZone) {
@@ -1317,7 +1331,8 @@ void Game::fixed_update(const InputState& driver_input, float dt) {
 // applied where the road's grip is).
 void Game::save_choices() const {
     Choices c{car_model_, driver_, passenger_ >= motel_passengers ? nobody : passenger_, static_cast<int>(view_mode_), music_, wide_ ? 1 : 0, track_index_, options_,
-              -1, -1, -1, engine_vol_, music_vol_};
+              -1, -1, -1, engine_vol_, music_vol_, pixel_scale_ >= 2 ? 1 : 0,
+              display_ && display_->is_fullscreen() ? 1 : 0, muted_ ? 1 : 0};
     // Where the race is, to go on from there next time; following the
     // traffic in the attract mode, where it was.
     if (!attract_) {

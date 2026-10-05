@@ -2,6 +2,11 @@
 
 ## Current tip
 
+### Grok: persist Video / Audio / Game Options
+- Choices now stores hd, fullscreen, muted. Restored on startup (CLI
+  --fullscreen still forces FS). Game Options / Video / mute / F11 save
+  through save_choices().
+
 ### Grok: Debug CAR / DRIVER / PASSENGER; menu higher
 - Debug menu cycles car model, driver and passenger (all indexes). Changing
   the car calls apply_car(). Panel sits near the top (tighter row spacing)

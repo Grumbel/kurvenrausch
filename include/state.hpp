@@ -38,6 +38,9 @@ struct Choices {
     int tank = -1;
     int engine_vol = 10; // 0 .. max_volume
     int music_vol = 10;
+    int hd = 0;          // 1: HD framebuffer (pixel_scale 2), 0: SD
+    int fullscreen = 0;  // 1: start in fullscreen
+    int muted = 0;       // 1: sound off
 };
 // As "key value" lines; parsing skips unknown keys and malformed lines and
 // keeps the defaults for what is missing.

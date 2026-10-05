@@ -746,6 +746,17 @@ void test_state() {
     const Choices c{3, 4, 2};
     const Choices back = parse_choices(format_choices(c));
     CHECK(back.car == 3 && back.driver == 4 && back.passenger == 2);
+    {
+        Choices full{};
+        full.hd = 1;
+        full.fullscreen = 1;
+        full.muted = 1;
+        full.options.fuel = false;
+        full.engine_vol = 4;
+        const Choices round = parse_choices(format_choices(full));
+        CHECK(round.hd == 1 && round.fullscreen == 1 && round.muted == 1);
+        CHECK(!round.options.fuel && round.engine_vol == 4);
+    }
     // Older files with a car_before_truck line still load.
     CHECK(parse_choices("car 3\ncar_before_truck 1\ndriver 4\n").driver == 4);
     const Choices junk = parse_choices("car\nfoo 7\ndriver x\npassenger 2\n\n");

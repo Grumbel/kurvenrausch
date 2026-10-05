@@ -34,6 +34,7 @@ public:
     // A framebuffer of another size from now on.
     bool resize_framebuffer(int fb_width, int fb_height);
     void toggle_fullscreen();
+    bool is_fullscreen() const;
 
     // The screen's size in pixels (the window's, in pixels rather than
     // points on high-DPI screens).
