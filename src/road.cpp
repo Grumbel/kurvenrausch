@@ -407,6 +407,7 @@ void RoadRenderer::draw_edge(Framebuffer& fb, const Track& track, const Slice& s
     if (kind == Edge::Cliff) {
         if (!(h1 > 50.f) && !(h2 > 50.f)) return;
         const float sf = static_cast<float>(side);
+        auto fogged = [&](Color c) { return blend(c, th.fog, fog_amount); };
         // Half-widths of rock face outward from the cliff line: wide base, narrow crest.
         const float depth_base = 0.95f;
         const float depth_top = 0.22f;
@@ -415,7 +416,6 @@ void RoadRenderer::draw_edge(Framebuffer& fb, const Track& track, const Slice& s
             const float t0 = static_cast<float>(i) / static_cast<float>(bands);
             const float t1 = static_cast<float>(i + 1) / static_cast<float>(bands);
             const float d0 = depth_base + (depth_top - depth_base) * t0;
-            const float d1 = depth_base + (depth_top - depth_base) * t1;
             const float y_a0 = a.y + (ta - a.y) * t0;
             const float y_a1 = a.y + (ta - a.y) * t1;
             const float y_b0 = b.y + (tb - b.y) * t0;
