@@ -17,6 +17,7 @@ enum class HeadStyle : uint8_t {
     Mohawk, // a shaved head with a crest
     Bald,
     Dog,    // a dog, with floppy ears
+    Wild,   // fluffy white hair out in every direction (Einstein / Doc Brown)
     None,   // nobody: an empty seat
 };
 
@@ -32,7 +33,7 @@ struct Person {
 // The drivers (the hospital swaps them) and the passengers: the first
 // motel_passengers are the motel's to choose from, the last of them nobody
 // (an empty seat); after them come the fares, people who hail a taxi.
-constexpr int drivers = 5;
+constexpr int drivers = 6;
 constexpr int motel_passengers = 6;
 constexpr int nobody = motel_passengers - 1;
 constexpr int fares = 4;

@@ -1688,6 +1688,21 @@ void draw_head(Bitmap& b, float x, float y, float r, const Person& p) {
                 paint::shaded_ellipse(b, x + side * r, y + 1.f, 2.f, r * 0.8f, p.hair_dark, p.hair_dark, p.hair);
             }
             break;
+        case HeadStyle::Wild: {
+            // Skin underneath, then a big fluffy cloud of hair and side tufts
+            // (Einstein / Doc Brown from behind).
+            paint::shaded_ellipse(b, x, y, r * 0.85f, r * 0.85f,
+                                  blend(p.skin, Color{0, 0, 0}, 0.2f), p.skin,
+                                  blend(p.skin, Color{255, 255, 255}, 0.25f));
+            paint::shaded_ellipse(b, x, y - r * 0.15f, r * 1.55f, r * 1.35f, p.hair_dark, p.hair, p.hair_light);
+            for (float side : {-1.f, 1.f}) {
+                paint::shaded_ellipse(b, x + side * r * 1.15f, y - r * 0.1f, r * 0.55f, r * 0.75f, p.hair_dark, p.hair,
+                                      p.hair_light);
+                paint::shaded_ellipse(b, x + side * r * 0.7f, y - r * 1.05f, r * 0.45f, r * 0.4f, p.hair_dark, p.hair,
+                                      p.hair_light);
+            }
+            break;
+        }
         default:
             paint::shaded_ellipse(b, x, y, r, ry, p.hair_dark, p.hair, p.hair_light);
             break;
@@ -1948,6 +1963,15 @@ Bitmap make_pedestrian(const Person& p, int frame) {
             paint::rect(b, 8, 13, 12, 3, p.hair);
             paint::rect(b, 7, 15, 2, 12, p.hair);
             paint::rect(b, 19, 15, 2, 12, p.hair);
+            break;
+        case HeadStyle::Wild:
+            // Fluffy white cloud around the face: tall crown, wide sides.
+            paint::shaded_ellipse(b, 14.f, 14.f, 9.f, 8.f, p.hair_dark, p.hair, p.hair_light);
+            paint::shaded_ellipse(b, 6.f, 18.f, 4.f, 6.f, p.hair_dark, p.hair, p.hair_light);
+            paint::shaded_ellipse(b, 22.f, 18.f, 4.f, 6.f, p.hair_dark, p.hair, p.hair_light);
+            paint::shaded_ellipse(b, 14.f, 8.f, 5.f, 4.f, p.hair_dark, p.hair, p.hair_light);
+            // Face back on top of the hair so the features stay visible.
+            paint::shaded_ellipse(b, 14.f, 20.f, 6.f, 7.f, skin_dark, skin, blend(skin, Color{255, 255, 255}, 0.25f));
             break;
         default: paint::rect(b, 8, 13, 12, 3, p.hair); break;
     }

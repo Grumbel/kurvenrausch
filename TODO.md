@@ -2,6 +2,12 @@
 
 ## Current tip
 
+### Grok: Professor driver (Einstein / Doc Brown hair)
+- New `HeadStyle::Wild`: fluffy white hair out in every direction (rear
+  view cloud + side tufts; front view wide crown and side flares).
+- New driver **PROFESSOR** (white/silver hair, light skin). Drivers
+  count 6; hospital cycle and sprite sheet pick him up automatically.
+
 ### Grok: wasmtime / standalone WASM runtimes
 - The Emscripten `kurvenrausch.wasm` is not WASI: it depends on the
   generated JS glue (`a::a` and other minified imports). `wasmtime`,
