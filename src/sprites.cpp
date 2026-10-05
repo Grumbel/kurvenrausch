@@ -1719,79 +1719,87 @@ void draw_head(Bitmap& b, float x, float y, float r, const Person& p) {
 // 3 stepped ledges, 4 back-sloping / recessed.
 // Rock face for roadside cliffs. `variant` picks a silhouette; `snowy` uses
 // alpine grey rock and a snow cap (Switzerland) instead of warm desert stone.
+// Mountain-side cliff sprite: a wide base that slopes up to a ridge/peak,
+// not a vertical column. `snowy` uses alpine grey + snow.
 Bitmap make_cliff_face(int variant, bool snowy) {
-    Bitmap b(80, 128);
+    Bitmap b(96, 96);
     const Color rock_snow[3] = {{0x4a, 0x50, 0x5c}, {0x6e, 0x74, 0x80}, {0x96, 0x9c, 0xa8}};
     const Color rock_warm[3] = {{0x5a, 0x44, 0x34}, {0x7a, 0x5c, 0x44}, {0x9c, 0x78, 0x58}};
     const Color* rock = snowy ? rock_snow : rock_warm;
     const Color dark = snowy ? Color{0x32, 0x36, 0x40} : Color{0x3c, 0x2c, 0x22};
     const Color light = snowy ? Color{0xc0, 0xc6, 0xd0} : Color{0xb0, 0x90, 0x70};
-    const Color cap = snowy ? Color{0xf2, 0xf6, 0xfc} : Color{0x6c, 0x78, 0x50};
+    const Color snow = Color{0xf2, 0xf6, 0xfc};
+    const Color scrub = Color{0x6c, 0x78, 0x50};
     const int v = ((variant % 5) + 5) % 5;
 
-    for (int x = 0; x < b.w; ++x) {
-        const float fx = static_cast<float>(x) / static_cast<float>(b.w - 1);
-        float crest = 3.f + 8.f * hash01(x, 3 + v) + 5.f * hash01(x / 2, 4 + v);
-        if (snowy) crest += 2.f * hash01(x / 5, 9); // uneven snow line
+    // Peak position and slope shape by variant (road is on the +x / right side
+    // of the sprite when not flipped).
+    const float peak_x = 0.35f + 0.1f * static_cast<float>(v % 3);
+    const float peak_y = 0.08f + 0.06f * hash01(v, 2);
+    const float base_left = 0.02f + 0.05f * hash01(v, 3);
+    const float base_right = 0.92f + 0.06f * hash01(v, 4);
 
-        auto edges = [&](int y) -> std::pair<int, int> {
-            const float fy = static_cast<float>(y) / static_cast<float>(b.h - 1);
-            float inner = 0.f, outer = 1.f;
-            switch (v) {
-                case 0: // steep but clearly tapered (not a column)
-                    inner = 0.02f + 0.06f * (1.f - fy);
-                    outer = 0.55f + 0.40f * fy;
-                    break;
-                case 1: // strong talus: wide rubble skirt
-                    inner = 0.02f;
-                    outer = 0.35f + 0.60f * fy * fy;
-                    break;
-                case 2: // overhang / cornice at the top
-                    inner = 0.02f + 0.35f * fy;
-                    outer = 0.95f - 0.25f * fy;
-                    break;
-                case 3: { // big stepped terraces
-                    const float ledge = std::floor(fy * 4.f) / 4.f;
-                    inner = 0.02f + 0.18f * ledge;
-                    outer = 0.45f + 0.50f * ledge;
-                    break;
-                }
-                default: // long back-slope (mountain face)
-                    inner = 0.02f + 0.45f * fy;
-                    outer = 0.70f + 0.25f * fy;
-                    break;
+    for (int y = 0; y < b.h; ++y) {
+        const float fy = static_cast<float>(y) / static_cast<float>(b.h - 1); // 0 top .. 1 base
+        // Width grows from peak toward the base (mountain wedge).
+        float left, right;
+        if (fy < peak_y) {
+            left = right = peak_x; // above peak: empty
+        } else {
+            const float t = (fy - peak_y) / (1.f - peak_y);
+            left = peak_x + (base_left - peak_x) * t;
+            right = peak_x + (base_right - peak_x) * t;
+            // Ragged edges.
+            left += 0.03f * (hash01(y / 2, v * 7) - 0.5f);
+            right += 0.04f * (hash01(y / 3, v * 9 + 1) - 0.5f);
+            // Variant: steeper outer face, shoulder, or double ridge.
+            if (v == 1) left = peak_x + (0.0f - peak_x) * (t * t);           // long outer slope
+            if (v == 2) right = peak_x + (1.0f - peak_x) * std::sqrt(t);     // broad shoulder
+            if (v == 3 && t > 0.4f) { // stepped lower slope
+                const float step = std::floor((t - 0.4f) * 4.f) / 4.f;
+                left -= 0.06f * step;
             }
-            outer += 0.05f * (hash01(x, y / 3 + v * 11) - 0.5f);
-            inner = std::clamp(inner + 0.03f * (hash01(x + 9, y / 4 + v) - 0.5f), 0.f, 0.9f);
-            outer = std::clamp(outer, inner + 0.12f, 1.f);
-            int x0 = static_cast<int>(inner * static_cast<float>(b.w));
-            int x1 = static_cast<int>(outer * static_cast<float>(b.w));
-            if (x0 < 0) x0 = 0;
-            if (x1 > b.w) x1 = b.w;
-            if (x0 >= x1) x1 = std::min(b.w, x0 + 2);
-            return {x0, x1};
-        };
-
-        const int top = static_cast<int>(crest);
-        for (int y = top; y < b.h; ++y) {
-            const auto [x0, x1] = edges(y);
-            if (x < x0 || x >= x1) continue;
-            const float fy = static_cast<float>(y - top) / static_cast<float>(std::max(1, b.h - top));
+            if (v == 4) { // secondary ridge
+                const float p2 = 0.55f;
+                if (std::abs(fy - 0.35f) < 0.08f) right = std::max(right, p2 + 0.1f);
+            }
+        }
+        left = std::clamp(left, 0.f, 1.f);
+        right = std::clamp(right, left + 0.05f, 1.f);
+        const int x0 = static_cast<int>(left * static_cast<float>(b.w));
+        const int x1 = static_cast<int>(right * static_cast<float>(b.w));
+        for (int x = x0; x < x1; ++x) {
             const float across = static_cast<float>(x - x0) / static_cast<float>(std::max(1, x1 - x0));
-            int band = static_cast<int>(fy * 9.f + hash01(x / 4, 5 + v));
+            int band = static_cast<int>(fy * 8.f + hash01(x / 4, 5 + v));
             Color c = rock[((band % 3) + 3) % 3];
-            if (hash01(x, y / 5 + v) > 0.88f) c = dark;
-            if (across < 0.18f) c = blend(c, light, 0.3f);
-            else if (across > 0.7f) c = blend(c, dark, 0.4f);
-            // Snow / scrub cap on the upper face.
-            const float snow_line = snowy ? 0.22f : 0.08f;
-            if (fy < snow_line) c = blend(c, cap, snowy ? 0.85f : 0.4f);
-            else if (snowy && fy < snow_line + 0.12f)
-                c = blend(c, cap, 0.35f * (1.f - (fy - snow_line) / 0.12f));
-            if (fy > 0.88f) c = blend(c, dark, 0.35f);
-            if (v == 3 && static_cast<int>(fy * 4.f + 0.02f) != static_cast<int>(fy * 4.f - 0.02f))
-                c = blend(c, dark, 0.4f);
-            if (bayer4(x, y) < 0.1f) c = blend(c, light, 0.18f);
+            if (hash01(x, y / 4 + v) > 0.9f) c = dark;
+            if (across < 0.2f) c = blend(c, light, 0.25f);
+            else if (across > 0.75f) c = blend(c, dark, 0.35f);
+            // Snow on the upper ridge.
+            if (snowy && fy < 0.35f) c = blend(c, snow, 0.75f * (1.f - fy / 0.35f));
+            else if (!snowy && fy < 0.12f) c = blend(c, scrub, 0.4f);
+            if (fy > 0.9f) c = blend(c, dark, 0.3f);
+            if (bayer4(x, y) < 0.08f) c = blend(c, light, 0.15f);
+            b.set(x, y, c);
+        }
+    }
+    paint::outline(b, Outline);
+    return b;
+}
+
+// Simple concrete wall panel for tunnel sides (vertical column sprite).
+Bitmap make_tunnel_wall() {
+    Bitmap b(24, 64);
+    const Color tile{0xd0, 0xc8, 0xbc}, tile_d{0xb0, 0xa8, 0x9c}, joint{0x5c, 0x58, 0x52};
+    const Color kerb{0xe8, 0xe4, 0xdc}, upper{0x78, 0x74, 0x6c};
+    for (int y = 0; y < b.h; ++y) {
+        const float fy = static_cast<float>(y) / static_cast<float>(b.h - 1);
+        Color row = fy < 0.12f ? kerb : (fy < 0.55f ? ((y / 6) % 2 ? tile : tile_d) : upper);
+        if (y % 6 == 0) row = joint;
+        for (int x = 0; x < b.w; ++x) {
+            Color c = row;
+            if (x == 0 || x == b.w - 1) c = joint;
+            if (x == 1) c = blend(c, Color{0xf0, 0xec, 0xe4}, 0.3f);
             b.set(x, y, c);
         }
     }
@@ -3274,6 +3282,7 @@ SpriteSheet::SpriteSheet() {
         cliff_faces_[static_cast<size_t>(i)] = make_cliff_face(i, false);
         cliff_faces_snow_[static_cast<size_t>(i)] = make_cliff_face(i, true);
     }
+    tunnel_wall_ = make_tunnel_wall();
     for (int t = 0; t < 3; ++t) ramp_trucks_[static_cast<size_t>(t)] = make_ramp_truck(t);
     crossing_signs_[0] = make_crossing_sign(-1);
     crossing_signs_[1] = make_crossing_sign(1);
