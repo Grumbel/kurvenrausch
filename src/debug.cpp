@@ -89,7 +89,7 @@ bool DebugMenu::choose(int item, int side, DebugOptions& debug, float& hour, int
     return false;
 }
 
-std::string DebugMenu::line(int item, const DebugOptions& d, float hour, int car, int driver, int passenger) {
+std::string DebugMenu::line(int item, const DebugOptions& d, float hour, int car, int driver_i, int passenger_i) {
     const auto value = [](const std::string& label, const std::string& v) { return label + ": " + v; };
     switch (item) {
         case Hud: return value("HUD", on_off(d.hud));
@@ -104,8 +104,8 @@ std::string DebugMenu::line(int item, const DebugOptions& d, float hour, int car
             return value("HOUR", buf);
         }
         case Car: return value("CAR", car_model(car).name);
-        case Driver: return value("DRIVER", driver(driver).name);
-        case Passenger: return value("PASSENGER", passenger(passenger).name);
+        case Driver: return value("DRIVER", driver(driver_i).name);
+        case Passenger: return value("PASSENGER", passenger(passenger_i).name);
         case Sprites: return "SPRITES…";
         case Attract: return "ATTRACT MODE";
         default: return "BACK";
