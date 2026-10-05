@@ -222,9 +222,13 @@ PresentBackend next_present_backend(PresentBackend b) {
 
 Display::~Display() {
     destroy_present();
-    if (window_) SDL_DestroyWindow(window_);
-    window_ = nullptr;
-    if (SDL_WasInit(SDL_INIT_VIDEO)) SDL_QuitSubSystem(SDL_INIT_VIDEO);
+    if (window_) {
+        SDL_DestroyWindow(window_);
+        window_ = nullptr;
+    }
+    // Do not QuitSubSystem(VIDEO) here: other code (or SDL itself) may still
+    // touch the display connection during process teardown, which on X11 shows
+    // up as BadWindow / X_TranslateCoords. SDL_Quit at process exit is enough.
 }
 
 void Display::destroy_present() {
@@ -238,21 +242,33 @@ void Display::destroy_present() {
         SDL_DestroyRenderer(renderer_);
         renderer_ = nullptr;
     }
-    if (gl_fb_tex_ && g_gl.DeleteTextures) {
-        g_gl.DeleteTextures(1, &gl_fb_tex_);
-        gl_fb_tex_ = 0;
-    }
-    if (gl_vbo_ && g_gl.DeleteBuffers) {
-        g_gl.DeleteBuffers(1, &gl_vbo_);
-        gl_vbo_ = 0;
-    }
-    if (gl_program_ && g_gl.DeleteProgram) {
-        g_gl.DeleteProgram(gl_program_);
-        gl_program_ = 0;
-    }
-    if (gl_) {
+    // GL objects must be deleted while the context is current; otherwise X11
+    // can raise BadWindow during later TranslateCoords from SDL teardown.
+    if (gl_ && window_) {
+        SDL_GL_MakeCurrent(window_, gl_);
+        if (gl_fb_tex_ && g_gl.DeleteTextures) {
+            g_gl.DeleteTextures(1, &gl_fb_tex_);
+            gl_fb_tex_ = 0;
+        }
+        if (gl_vbo_ && g_gl.DeleteBuffers) {
+            g_gl.DeleteBuffers(1, &gl_vbo_);
+            gl_vbo_ = 0;
+        }
+        if (gl_program_ && g_gl.DeleteProgram) {
+            g_gl.DeleteProgram(gl_program_);
+            gl_program_ = 0;
+        }
+        SDL_GL_MakeCurrent(window_, nullptr);
         SDL_GL_DeleteContext(gl_);
         gl_ = nullptr;
+    } else {
+        gl_fb_tex_ = 0;
+        gl_vbo_ = 0;
+        gl_program_ = 0;
+        if (gl_) {
+            SDL_GL_DeleteContext(gl_);
+            gl_ = nullptr;
+        }
     }
 }
 
