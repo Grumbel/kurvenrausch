@@ -21,18 +21,33 @@ struct DebugOptions {
     bool fps = false;       // frames-per-second counter (VIDEO menu)
 };
 
-// The DEBUG page: display toggles, time of day, sprite viewer, attract, BACK.
+// The DEBUG page: display toggles, time of day, car / driver / passenger,
+// sprite viewer, attract, BACK.
 struct DebugMenu {
-    enum Item { Hud, Mirror, Map, Headlights, Hour, Sprites, Attract, Back, items };
+    enum Item {
+        Hud,
+        Mirror,
+        Map,
+        Headlights,
+        Hour,
+        Car,
+        Driver,
+        Passenger,
+        Sprites,
+        Attract,
+        Back,
+        items
+    };
 
     int selected = Hud;
 
     void open() { selected = Hud; }
     // true when the page should close (BACK, Sprites, or Attract).
     // `hour` is the current time of day (0 .. 24); left/right on Hour steps it.
-    bool update(const MenuInput& in, DebugOptions& debug, float& hour);
-    bool choose(int item, int side, DebugOptions& debug, float& hour);
-    static std::string line(int item, const DebugOptions& debug, float hour);
+    // `car` / `driver` / `passenger` are model indices; left/right cycles them.
+    bool update(const MenuInput& in, DebugOptions& debug, float& hour, int& car, int& driver, int& passenger);
+    bool choose(int item, int side, DebugOptions& debug, float& hour, int& car, int& driver, int& passenger);
+    static std::string line(int item, const DebugOptions& debug, float hour, int car, int driver, int passenger);
 };
 
 void change_debug(DebugOptions& debug, int item, int step);

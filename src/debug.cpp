@@ -3,6 +3,9 @@
 
 #include "debug.hpp"
 
+#include "people.hpp"
+#include "vehicles.hpp"
+
 #include <cmath>
 #include <cstdio>
 
@@ -31,7 +34,8 @@ void change_debug(DebugOptions& d, int item, int /*step*/) {
     }
 }
 
-bool DebugMenu::update(const MenuInput& in, DebugOptions& debug, float& hour) {
+bool DebugMenu::update(const MenuInput& in, DebugOptions& debug, float& hour, int& car, int& driver,
+                       int& passenger) {
     if (in.back) return true;
     if (in.up) selected = wrap(selected - 1, items);
     if (in.down) selected = wrap(selected + 1, items);
@@ -41,11 +45,27 @@ bool DebugMenu::update(const MenuInput& in, DebugOptions& debug, float& hour) {
         if (in.right || in.confirm) step_hour(hour, 1);
         return false;
     }
+    if (selected == Car) {
+        if (in.left) car = wrap(car - 1, car_models);
+        if (in.right || in.confirm) car = wrap(car + 1, car_models);
+        return false;
+    }
+    if (selected == Driver) {
+        if (in.left) driver = wrap(driver - 1, drivers);
+        if (in.right || in.confirm) driver = wrap(driver + 1, drivers);
+        return false;
+    }
+    if (selected == Passenger) {
+        if (in.left) passenger = wrap(passenger - 1, passengers);
+        if (in.right || in.confirm) passenger = wrap(passenger + 1, passengers);
+        return false;
+    }
     if (in.left || in.right || in.confirm) change_debug(debug, selected, in.left ? -1 : 1);
     return false;
 }
 
-bool DebugMenu::choose(int item, int side, DebugOptions& debug, float& hour) {
+bool DebugMenu::choose(int item, int side, DebugOptions& debug, float& hour, int& car, int& driver,
+                       int& passenger) {
     if (item < 0 || item >= items) return false;
     selected = item;
     if (item == Back || item == Sprites || item == Attract) return true;
@@ -53,11 +73,23 @@ bool DebugMenu::choose(int item, int side, DebugOptions& debug, float& hour) {
         step_hour(hour, side < 0 ? -1 : 1);
         return false;
     }
+    if (item == Car) {
+        car = wrap(car + (side < 0 ? -1 : 1), car_models);
+        return false;
+    }
+    if (item == Driver) {
+        driver = wrap(driver + (side < 0 ? -1 : 1), drivers);
+        return false;
+    }
+    if (item == Passenger) {
+        passenger = wrap(passenger + (side < 0 ? -1 : 1), passengers);
+        return false;
+    }
     change_debug(debug, item, side < 0 ? -1 : 1);
     return false;
 }
 
-std::string DebugMenu::line(int item, const DebugOptions& d, float hour) {
+std::string DebugMenu::line(int item, const DebugOptions& d, float hour, int car, int driver, int passenger) {
     const auto value = [](const std::string& label, const std::string& v) { return label + ": " + v; };
     switch (item) {
         case Hud: return value("HUD", on_off(d.hud));
@@ -71,6 +103,9 @@ std::string DebugMenu::line(int item, const DebugOptions& d, float hour) {
             std::snprintf(buf, sizeof(buf), "%02d:%02d", h, m);
             return value("HOUR", buf);
         }
+        case Car: return value("CAR", car_model(car).name);
+        case Driver: return value("DRIVER", driver(driver).name);
+        case Passenger: return value("PASSENGER", passenger(passenger).name);
         case Sprites: return "SPRITES…";
         case Attract: return "ATTRACT MODE";
         default: return "BACK";
