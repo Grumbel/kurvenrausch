@@ -346,22 +346,6 @@ void RoadRenderer::draw_segment(Framebuffer& fb, const Track& track, const Slice
     fb.reset_clip();
 }
 
-namespace {
-
-// Colour of the rock face at height h above the ground. `top` is the wall's
-// height at this column and u its position along the track, so the strata
-// and cracks stay attached to the rock as the camera moves.
-// Smooth noise along the track (u in segments), 0 .. 1, varying over about
-// 1 / freq segments.
-float smooth_noise(float u, float freq, int seed) {
-    const float p = u * freq;
-    const float i = std::floor(p), t = p - i;
-    const float a = hash01(static_cast<int>(i), seed), b = hash01(static_cast<int>(i) + 1, seed);
-    return a + (b - a) * t * t * (3.f - 2.f * t);
-}
-
-} // namespace
-
 void RoadRenderer::draw_edge(Framebuffer& fb, const Track& track, const Slice& s, int side,
                                    const Bitmap& cliff) const {
     const Segment& seg = track.segment(s.index);
