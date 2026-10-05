@@ -1795,16 +1795,24 @@ Bitmap make_cliff_face(int variant, bool snowy) {
     return b;
 }
 
-// Concrete wall panel for tunnel sides. No outline or side highlight so
-// neighbouring columns blend without flicker.
+// Concrete wall panel for tunnel sides. Soft, low-frequency bands so
+// neighbouring columns blend without temporal flicker when scaled.
 Bitmap make_tunnel_wall() {
     Bitmap b(24, 64);
-    const Color tile{0xd0, 0xc8, 0xbc}, tile_d{0xb0, 0xa8, 0x9c}, joint{0x5c, 0x58, 0x52};
-    const Color kerb{0xe8, 0xe4, 0xdc}, upper{0x78, 0x74, 0x6c};
+    // Close tile pair — old tile/tile_d contrast shimmered under scaling.
+    const Color tile{0xc4, 0xbc, 0xb0}, tile_d{0xb8, 0xb0, 0xa4};
+    const Color kerb{0xe0, 0xdc, 0xd4}, upper{0x7c, 0x78, 0x70};
     for (int y = 0; y < b.h; ++y) {
         const float fy = static_cast<float>(y) / static_cast<float>(b.h - 1);
-        Color row = fy < 0.12f ? kerb : (fy < 0.55f ? ((y / 6) % 2 ? tile : tile_d) : upper);
-        if (y % 6 == 0) row = joint;
+        Color row;
+        if (fy < 0.14f) {
+            row = kerb;
+        } else if (fy < 0.55f) {
+            // ~12 px courses, mild alternate — no dark joint lines.
+            row = ((y / 12) % 2) ? tile : tile_d;
+        } else {
+            row = upper;
+        }
         for (int x = 0; x < b.w; ++x) {
             b.set(x, y, row);
         }

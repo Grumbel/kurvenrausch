@@ -439,15 +439,14 @@ void RoadRenderer::draw_sprites(Framebuffer& fb, const Track& track, const Sprit
             const bool snow_cliff = track.look(s.index).cap_amount > 0.45f;
             draw_edge(fb, track, s, -1, sprites.cliff_face(s.index, snow_cliff));
             draw_edge(fb, track, s, +1, sprites.cliff_face(s.index * 3 + 1, snow_cliff));
-            // Tunnel side walls: wide columns (≈3× the old 0.35 segment width)
-            // so neighbouring segments overlap and nothing shows through.
+            // Tunnel side walls: wide columns so neighbours overlap.
             if (seg.tunnel) {
                 const Bitmap& wall = sprites.tunnel_wall();
                 const ScreenPoint& p0 = start(s);
                 const float px = p0.scale * x_scale_;
                 // Height follows y_scale so the top meets the ceiling.
                 const float wh = tunnel_height * p0.scale * y_scale_;
-                const float ww = std::max(8.f, track.segment_length * px * 1.05f);
+                const float ww = std::max(8.f, track.segment_length * px * 1.2f);
                 const float fog = 1.f - s.fog;
                 const Color fogc = track.look(s.index).fog;
                 for (int side = -1; side <= 1; side += 2) {

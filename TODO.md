@@ -2,6 +2,12 @@
 
 ## Current tip
 
+### Grok: tunnel columns a bit wider, softer bands
+- Column width 1.05 → 1.2 segment lengths.
+- Wall panel: closer tile colours, ~12 px courses, no dark joint lines —
+  high-frequency tile/joint contrast was shimmering under scale.
+
+
 ### Grok: cliff sprite subsample (fps)
 - Cliffs were one large billboard per segment (~1.55 seg wide) → hundreds of
   overlapping blits on a long run (~30 fps). Now drawn every 2nd segment near
