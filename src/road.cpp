@@ -367,17 +367,25 @@ void RoadRenderer::draw_edge(Framebuffer& fb, const Track& track, const Slice& s
     const float ta = a.y - h1 * ppu_a, tb = b.y - h2 * ppu_b;
     if (std::abs(xb - xa) < 0.01f) return; // seen edge-on
 
-    // Cliffs: one scaled rock sprite covering the face (cheap). Rails stay
-    // procedural posts and bars (few pixels).
+    // Cliffs: roadside billboards, not a strip stretched into |xb-xa| (that
+    // is only a few pixels deep and reads as thin vertical stripes). World
+    // width covers about one segment along the road; the sprite sits at the
+    // cliff line and extends outward. Slope variants supply the silhouette.
     if (kind == Edge::Cliff) {
         if (cliff.w <= 0 || cliff.h <= 0) return;
-        const float left = std::min(xa, xb);
-        const float right = std::max(xa, xb);
-        const float top = std::min(ta, tb);
-        const float bot = std::max(a.y, b.y);
-        const float width = right - left;
-        const float height = bot - top;
-        if (!(width > 0.5f) || !(height > 0.5f)) return;
+        if (!(h1 > 50.f) && !(h2 > 50.f)) return;
+        // Project at the nearer end so height matches the wall the player sees.
+        const float ppu = std::max(ppu_a, 1e-4f);
+        const float height = std::max(h1, h2 * 0.5f) * ppu;
+        // ~segment_length of rock along the road, in pixels at this depth.
+        const float width = std::max(track.segment_length * ppu, height * 0.35f);
+        if (!(height > 1.f) || !(width > 1.f)) return;
+        // Base of the wall on the road side of the cliff offset.
+        const float base_x = xa;
+        const float base_y = a.y;
+        // Outward: left side grows leftward, right side rightward.
+        const float left = side < 0 ? base_x - width : base_x;
+        const float top = base_y - height;
         fb.blit_scaled(cliff, left, top, width, height, side < 0, fog_amount, th.fog);
         return;
     }
