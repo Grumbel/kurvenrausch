@@ -2,12 +2,18 @@
 
 ## Current tip
 
-### Grok: wider tunnel walls and mountain slopes
-- Tunnel interiors use continuous side walls again (apron + kerb/tile/joint/
-  upper bands from road edge to the screen edge, ring frames, ceiling and
-  lamps). The thin column sprites left gaps you could see through.
-- Cliff billboards are a little wider (~1.55 segment lengths, taller min
-  aspect) and the plateau silhouettes have broader crests and bases.
+### Grok: tunnel columns ×3, portal matches ceiling
+- Continuous full-width tunnel walls dropped (did not work visually). Side
+  walls are column sprites again at ~3× the previous width (1.05 segment
+  lengths) so neighbours overlap. Column height uses y_scale so the top
+  meets the ceiling.
+- TunnelPortal sprite height is set so the arch opening top lands on the
+  tunnel ceiling (plain aspect × x_scale made the doorway taller and showed
+  sky through the top of the entrance).
+
+### Grok: wider mountain slopes
+- Cliff billboards ~1.55 segment lengths; broader plateau crest/base in the
+  silhouettes.
 
 
 ### Grok: cliff slope variants

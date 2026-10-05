@@ -1786,6 +1786,26 @@ Bitmap make_cliff_face(int variant, bool snowy) {
     return b;
 }
 
+// Simple concrete wall panel for tunnel sides (vertical column sprite).
+Bitmap make_tunnel_wall() {
+    Bitmap b(24, 64);
+    const Color tile{0xd0, 0xc8, 0xbc}, tile_d{0xb0, 0xa8, 0x9c}, joint{0x5c, 0x58, 0x52};
+    const Color kerb{0xe8, 0xe4, 0xdc}, upper{0x78, 0x74, 0x6c};
+    for (int y = 0; y < b.h; ++y) {
+        const float fy = static_cast<float>(y) / static_cast<float>(b.h - 1);
+        Color row = fy < 0.12f ? kerb : (fy < 0.55f ? ((y / 6) % 2 ? tile : tile_d) : upper);
+        if (y % 6 == 0) row = joint;
+        for (int x = 0; x < b.w; ++x) {
+            Color c = row;
+            if (x == 0 || x == b.w - 1) c = joint;
+            if (x == 1) c = blend(c, Color{0xf0, 0xec, 0xe4}, 0.3f);
+            b.set(x, y, c);
+        }
+    }
+    paint::outline(b, Outline);
+    return b;
+}
+
 // The rock face round a tunnel's mouth, 256x128 for 16000 world units
 // across: the opening, as wide and high as the tunnel's inside, at the
 // bottom in the middle, framed in concrete.
@@ -1806,7 +1826,8 @@ Bitmap make_tunnel_portal() {
         }
     }
     // The opening (transparent), its concrete frame round it.
-    const float cx = 128.f, half = 40.f, top = 128.f - 42.f, arch = 14.f;
+    // Opening sized to tunnel_height under y_scale planting (see RoadRenderer).
+    const float cx = 128.f, half = 36.f, top = 128.f - 36.f, arch = 12.f;
     for (int y = static_cast<int>(top) - 6; y < 128; ++y) {
         for (int x = 0; x < 256; ++x) {
             const float dx = std::abs(static_cast<float>(x) + 0.5f - cx);
@@ -3261,6 +3282,7 @@ SpriteSheet::SpriteSheet() {
         cliff_faces_[static_cast<size_t>(i)] = make_cliff_face(i, false);
         cliff_faces_snow_[static_cast<size_t>(i)] = make_cliff_face(i, true);
     }
+    tunnel_wall_ = make_tunnel_wall();
     for (int t = 0; t < 3; ++t) ramp_trucks_[static_cast<size_t>(t)] = make_ramp_truck(t);
     crossing_signs_[0] = make_crossing_sign(-1);
     crossing_signs_[1] = make_crossing_sign(1);
