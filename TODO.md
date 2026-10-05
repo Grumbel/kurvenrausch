@@ -2,6 +2,11 @@
 
 ## Current tip
 
+### Grok: optional HD (2× internal resolution)
+- VIDEO menu RESOLUTION: SD / HD. HD is 640×480 design (wide up to 1280),
+  pixel_scale_ 2; projection, mirror, cockpit scaled. Sprites stay pixel art
+  (nearest-scaled by the road renderer).
+
 ### Grok: menus — Game Options, Video, Audio, FPS, Attract
 - Pause: GAME OPTIONS, VIDEO, AUDIO, DEBUG. Debug: FPS toggle, ATTRACT MODE.
 - Video: wide / fullscreen. Audio: mute / music track. FPS counter when enabled.

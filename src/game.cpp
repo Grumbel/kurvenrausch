@@ -147,7 +147,6 @@ constexpr float spare_can = 0.15f;
 // crash with the tumbling animation; slower it is a knock that slows the car.
 constexpr float crash_speed = 0.4f;
 // Where the car's tyres touch the ground on screen, for dust and debris.
-constexpr float ground_y = static_cast<float>(Game::height) - 3.f;
 
 // The mirror's camera sits in the car, lower than the chase camera, and sees
 // a narrower field than the main view.
@@ -236,6 +235,7 @@ bool overlap(float c1, float w1, float c2, float w2) {
 Game::Game()
     : fb_(base_width, height), track_(build_track(0)), mirror_fb_(mirror_width, mirror_height),
       weather_(base_width, height) {
+    // Framebuffers match pixel_scale_ once set_pixel_scale runs; start at SD.
     for (int k = 0; k < lot_kinds; ++k) lots_[static_cast<size_t>(k)] = track_.lots(static_cast<Lot>(k));
     map_ = track_map(track_);
     player_ = world_.create();
@@ -552,7 +552,7 @@ bool Game::frame() {
     set_width(screen_width());
     render();
     if (paused_ && options_open_) draw_options_menu(fb_, options_menu_, options_);
-    else if (paused_ && video_open_) draw_video_menu(fb_, video_menu_, wide_);
+    else if (paused_ && video_open_) draw_video_menu(fb_, video_menu_, wide_, pixel_scale_ >= 2);
     else if (paused_ && audio_open_) draw_audio_menu(fb_, audio_menu_, muted_, music_);
     else if (paused_ && debug_open_) draw_debug_menu(fb_, debug_menu_, debug_);
     else if (paused_) draw_pause_menu(fb_, menu_, zone_label(menu_.zone), track_name(menu_.track));
@@ -583,20 +583,29 @@ void Game::advance_clock(float dt) {
 }
 
 void Game::set_width(int w) {
-    w = std::clamp(w, base_width, max_width);
-    if (w == width_) return;
-    if (display_ && !display_->resize_framebuffer(w, height)) return;
+    w = std::clamp(w, fb_base_width(), fb_max_width());
+    if (w == width_ && fb_.height() == fb_height()) return;
+    if (display_ && !display_->resize_framebuffer(w, fb_height())) return;
     width_ = w;
-    fb_ = Framebuffer(width_, height);
-    weather_.resize(width_, height);
+    fb_ = Framebuffer(width_, fb_height());
+    weather_.resize(width_, fb_height());
+}
+
+void Game::set_pixel_scale(int scale) {
+    scale = scale >= 2 ? 2 : 1;
+    if (scale == pixel_scale_) return;
+    pixel_scale_ = scale;
+    width_ = 0; // force set_width to rebuild
+    set_width(screen_width());
+    mirror_fb_ = Framebuffer(mir_width(), mir_height());
 }
 
 int Game::screen_width() const {
-    if (!wide_) return base_width;
+    if (!wide_) return fb_base_width();
     // Rounded to an even width, so the picture's centre is between pixels
     // as it is at 4:3.
     const SDL_Rect s = display_->screen();
-    return 2 * static_cast<int>(std::lround(static_cast<float>(height) * static_cast<float>(s.w) /
+    return 2 * static_cast<int>(std::lround(static_cast<float>(fb_height()) * static_cast<float>(s.w) /
                                             static_cast<float>(s.h) / 2.f));
 }
 
@@ -789,7 +798,7 @@ bool Game::update_pause(const InputState& input) {
         for (const Finger& tap : touch_taps_) {
             float x = 0.f, y = 0.f;
             display_->screen_to_framebuffer(tap.x, tap.y, x, y);
-            const MenuTap where = options_tap(x, y, width_, height);
+            const MenuTap where = options_tap(x, y, width_, fb_height());
             close = options_menu_.choose(where.item, where.side, options_) || close; // OptionsMenu::items
         }
         if (close) options_open_ = false;
@@ -801,7 +810,7 @@ bool Game::update_pause(const InputState& input) {
         for (const Finger& tap : touch_taps_) {
             float x = 0.f, y = 0.f;
             display_->screen_to_framebuffer(tap.x, tap.y, x, y);
-            const MenuTap where = options_tap(x, y, width_, height, DebugMenu::items);
+            const MenuTap where = options_tap(x, y, width_, fb_height(), DebugMenu::items);
             close = debug_menu_.choose(where.item, where.side, debug_) || close;
         }
         if (close) {
@@ -819,14 +828,16 @@ bool Game::update_pause(const InputState& input) {
     }
     if (video_open_ && !input.pause) {
         bool want_fs = false;
-        bool close = video_menu_.update(input.menu, wide_, want_fs);
+        bool hd = pixel_scale_ >= 2;
+        bool close = video_menu_.update(input.menu, wide_, hd, want_fs);
         for (const Finger& tap : touch_taps_) {
             float x = 0.f, y = 0.f;
             display_->screen_to_framebuffer(tap.x, tap.y, x, y);
-            const MenuTap where = options_tap(x, y, width_, height, VideoMenu::items);
-            close = video_menu_.choose(where.item, where.side, wide_, want_fs) || close;
+            const MenuTap where = options_tap(x, y, width_, fb_height(), VideoMenu::items);
+            close = video_menu_.choose(where.item, where.side, wide_, hd, want_fs) || close;
         }
         menu_.wide = wide_;
+        set_pixel_scale(hd ? 2 : 1);
         if (want_fs) display_->toggle_fullscreen();
         save_choices();
         if (close) video_open_ = false;
@@ -838,7 +849,7 @@ bool Game::update_pause(const InputState& input) {
         for (const Finger& tap : touch_taps_) {
             float x = 0.f, y = 0.f;
             display_->screen_to_framebuffer(tap.x, tap.y, x, y);
-            const MenuTap where = options_tap(x, y, width_, height, AudioMenu::items);
+            const MenuTap where = options_tap(x, y, width_, fb_height(), AudioMenu::items);
             close = audio_menu_.choose(where.item, where.side, muted_, music_) || close;
         }
         if (music_ != music_before) {
@@ -857,7 +868,7 @@ bool Game::update_pause(const InputState& input) {
         if (action != MenuAction::None) break;
         float x = 0.f, y = 0.f;
         display_->screen_to_framebuffer(tap.x, tap.y, x, y);
-        const MenuTap where = menu_tap(menu_, x, y, width_, height);
+        const MenuTap where = menu_tap(menu_, x, y, width_, fb_height());
         action = menu_.choose(where.item, where.side);
     }
     switch (action) {
@@ -946,9 +957,9 @@ void Game::print_zones() const {
 bool Game::screenshot(const ScreenshotOptions& opts) {
     // Headless, the screen is the framebuffer.
     set_width(opts.width);
-    wide_ = width_ > base_width;
-    touch_.set_layout(TouchLayout{static_cast<float>(width_), static_cast<float>(height), 0.f, 0.f,
-                                  static_cast<float>(width_), static_cast<float>(height)});
+    wide_ = width_ > fb_base_width();
+    touch_.set_layout(TouchLayout{static_cast<float>(width_), static_cast<float>(fb_height()), 0.f, 0.f,
+                                  static_cast<float>(width_), static_cast<float>(fb_height())});
     const float start = opts.zone >= 0 ? zone_start_position(opts.zone) : opts.position;
     start_at(start);
     if (opts.fuel >= 0.f) fuel_.set(opts.fuel);
@@ -1017,7 +1028,7 @@ bool Game::screenshot(const ScreenshotOptions& opts) {
         menu_.tracks = track_count;
         draw_pause_menu(fb_, menu_, zone_label(menu_.zone), track_name(menu_.track));
     }
-    return save_bmp(opts.path, fb_.pixels(), width_, height);
+    return save_bmp(opts.path, fb_.pixels(), width_, fb_height());
 }
 
 InputState Game::autopilot() const {
@@ -1620,7 +1631,7 @@ void Game::update_movie_cars(const InputState& input, float dt) {
         for (int i = 0; i < 30; ++i) {
             rng_ = rng_ * 1664525u + 1013904223u;
             const float a = static_cast<float>(rng_ >> 8) / 16777216.f;
-            particles_.push_back({x + (a - 0.5f) * 90.f, ground_y - 4.f, (a - 0.5f) * 400.f, -60.f - 200.f * a, 0.7f, 0.7f,
+            particles_.push_back({x + (a - 0.5f) * 90.f, (static_cast<float>(fb_height()) - 3.f) - 4.f, (a - 0.5f) * 400.f, -60.f - 200.f * a, 0.7f, 0.7f,
                                   1.f, i % 2 ? Color{0xff, 0xa0, 0x30} : Color{0x80, 0xc0, 0xff}, Particle::Kind::Debris});
         }
         become(time_car_model, "88 MPH!");
@@ -1736,13 +1747,13 @@ void Game::update_wash(float dt) {
     const Color water{0xc8, 0xe0, 0xf4}, foam{0xf8, 0xfc, 0xff};
     for (int i = 0; i < 3; ++i) {
         const float a = random(), b = random();
-        particles_.push_back({static_cast<float>(width_) / 2.f + (a - 0.5f) * 100.f, ground_y - 50.f - 10.f * b,
+        particles_.push_back({static_cast<float>(width_) / 2.f + (a - 0.5f) * 100.f, (static_cast<float>(fb_height()) - 3.f) - 50.f - 10.f * b,
                               (b - 0.5f) * 40.f, 40.f * b, 0.5f, 0.5f, 1.f + b, blend(water, foam, b),
                               Particle::Kind::Spray});
     }
     if (random() < 0.3f) {
         const float a = random();
-        particles_.push_back({static_cast<float>(width_) / 2.f + (a - 0.5f) * 80.f, ground_y - 30.f, 0.f, -8.f, 0.6f,
+        particles_.push_back({static_cast<float>(width_) / 2.f + (a - 0.5f) * 80.f, (static_cast<float>(fb_height()) - 3.f) - 30.f, 0.f, -8.f, 0.6f,
                               0.6f, 3.f + 3.f * a, foam, Particle::Kind::Dust});
     }
     if (dirt_.clean()) {
@@ -1837,11 +1848,11 @@ void Game::start_crash(float speed_pct) {
         const float a = static_cast<float>(rng_ >> 8) / 16777216.f;
         rng_ = rng_ * 1664525u + 1013904223u;
         const float b = static_cast<float>(rng_ >> 8) / 16777216.f;
-        particles_.push_back({x + (a - 0.5f) * 60.f, ground_y - 20.f * b,
+        particles_.push_back({x + (a - 0.5f) * 60.f, (static_cast<float>(fb_height()) - 3.f) - 20.f * b,
                               (a - 0.5f) * 320.f + static_cast<float>(crash_side_) * 60.f, -80.f - 220.f * b,
                               0.9f + 0.6f * b, 0.9f + 0.6f * b, 1.f, chips[i % 5], Particle::Kind::Debris});
     }
-    spawn_dust(x, ground_y, 10, 1.f + speed_pct);
+    spawn_dust(x, (static_cast<float>(fb_height()) - 3.f), 10, 1.f + speed_pct);
 }
 
 void Game::update_crash(float dt) {
@@ -1870,7 +1881,7 @@ void Game::update_crash(float dt) {
         // Each touchdown is softer than the one before.
         const float strength = pose.recover > 0.f ? 0.f : 1.f - std::min(crash_time_ / crash_tumble_seconds, 0.8f);
         synth_.trigger_crash(0.3f + 0.4f * strength);
-        spawn_dust(static_cast<float>(width_) / 2.f + pose.slide, ground_y, 6, 0.5f + strength);
+        spawn_dust(static_cast<float>(width_) / 2.f + pose.slide, (static_cast<float>(fb_height()) - 3.f), 6, 0.5f + strength);
         crashed_ = true;
     }
     scraping_ = false;
@@ -1969,7 +1980,7 @@ void Game::land(float impact) {
     const float strength = std::clamp(impact / 8000.f, 0.f, 1.f);
     if (strength < 0.1f) return;
     synth_.trigger_crash(0.2f + 0.5f * strength);
-    spawn_dust(static_cast<float>(width_) / 2.f, ground_y, 3 + static_cast<int>(6.f * strength), 0.4f + strength);
+    spawn_dust(static_cast<float>(width_) / 2.f, (static_cast<float>(fb_height()) - 3.f), 3 + static_cast<int>(6.f * strength), 0.4f + strength);
     if (strength > 0.4f) {
         crashed_ = true; // a strong rumble
         landing_time_ = 0.2f;
@@ -1982,7 +1993,7 @@ void Game::spawn_smoke(float speed_pct) {
     for (int side = -1; side <= 1; side += 2) {
         rng_ = rng_ * 1664525u + 1013904223u;
         const float a = static_cast<float>(rng_ >> 8) / 16777216.f;
-        particles_.push_back({static_cast<float>(width_) / 2.f + static_cast<float>(side) * (36.f + 8.f * a), ground_y - 3.f,
+        particles_.push_back({static_cast<float>(width_) / 2.f + static_cast<float>(side) * (36.f + 8.f * a), (static_cast<float>(fb_height()) - 3.f) - 3.f,
                               static_cast<float>(side) * 20.f * speed_pct, -15.f - 20.f * a, 0.6f, 0.6f, 2.f + 2.f * a,
                               Color{0xd8, 0xd8, 0xdc}, Particle::Kind::Dust});
     }
@@ -2001,13 +2012,13 @@ void Game::spawn_spray(float speed_pct) {
         for (int i = 0; i < 4; ++i) {
             const float a = random(), b = random();
             const float x = static_cast<float>(width_) / 2.f + sd * (40.f + 6.f * a);
-            particles_.push_back({x, ground_y - 2.f, sd * (40.f + 160.f * a) * speed_pct, -(80.f + 200.f * b) * speed_pct,
+            particles_.push_back({x, (static_cast<float>(fb_height()) - 3.f) - 2.f, sd * (40.f + 160.f * a) * speed_pct, -(80.f + 200.f * b) * speed_pct,
                                   0.3f + 0.3f * b, 0.3f + 0.3f * b, 1.f + b, blend(water, Color{0xff, 0xff, 0xff}, b),
                                   Particle::Kind::Spray});
         }
         if (random() < 0.5f) {
             const float a = random();
-            particles_.push_back({static_cast<float>(width_) / 2.f + sd * (30.f + 14.f * a), ground_y - 4.f,
+            particles_.push_back({static_cast<float>(width_) / 2.f + sd * (30.f + 14.f * a), (static_cast<float>(fb_height()) - 3.f) - 4.f,
                                   sd * 30.f * speed_pct, -25.f * speed_pct, 0.45f, 0.45f, 3.f + 3.f * a,
                                   blend(water, Color{0xff, 0xff, 0xff}, 0.5f), Particle::Kind::Dust});
         }
@@ -2021,15 +2032,15 @@ void Game::update_particles(float dt) {
         p.y += p.vy * dt;
         if (p.kind == Particle::Kind::Spray) {
             p.vy += 500.f * dt;
-            if (p.y > ground_y + 4.f) p.life = 0.f; // back on the road
+            if (p.y > (static_cast<float>(fb_height()) - 3.f) + 4.f) p.life = 0.f; // back on the road
         } else if (p.kind == Particle::Kind::Dust) {
             p.vx *= 1.f - 2.f * dt; // dust hangs in the air and spreads
             p.vy *= 1.f - 2.f * dt;
             p.size += 10.f * dt;
         } else {
             p.vy += 600.f * dt; // debris falls
-            if (p.y > ground_y) {
-                p.y = ground_y;
+            if (p.y > (static_cast<float>(fb_height()) - 3.f)) {
+                p.y = (static_cast<float>(fb_height()) - 3.f);
                 p.vy *= -0.3f;
                 p.vx *= 0.6f;
             }
@@ -2489,7 +2500,7 @@ void Game::render() {
     view.player_z = setup.distance;
     view.draw_distance = cam.draw_distance;
     view.fog_density = look.fog_density;
-    view.x_scale = x_unit;
+    view.x_scale = fb_x_unit();
     road_sprites_.clear();
     world_.view<Transform, Traffic>([&](Entity e, Transform& t, Traffic& traffic) {
         RoadSprite s;
@@ -2584,7 +2595,7 @@ void Game::render() {
         }
     }
     const Bitmap& car = player_bitmap_;
-    const float scale = setup.car ? cam.depth / setup.distance * x_unit : 1.f;
+    const float scale = setup.car ? cam.depth / setup.distance * fb_x_unit() : 1.f;
     RoadSprite me;
     me.z = tr.z + cam.player_z();
     me.bitmap = &car;
@@ -2592,9 +2603,9 @@ void Game::render() {
     me.sw = player.car_width * scale;
     me.sh = me.sw * static_cast<float>(car.h) / static_cast<float>(car.w);
     me.sx = (static_cast<float>(width_) - me.sw) / 2.f;
-    me.sy = (setup.car ? std::min(contact_row(setup, cam.depth, height), static_cast<float>(height)) : height) - me.sh -
+    me.sy = (setup.car ? std::min(contact_row(setup, cam.depth, fb_height()), static_cast<float>(fb_height())) : fb_height()) - me.sh -
             1.f + bounce_;
-    me.sy -= std::min(40.f, (1.f - camera_air_share) * air * scale * (static_cast<float>(height) / 2.f) / x_unit);
+    me.sy -= std::min(40.f * static_cast<float>(pixel_scale_), (1.f - camera_air_share) * air * scale * (static_cast<float>(fb_height()) / 2.f) / fb_x_unit());
     if (landing_time_ > 0.f) me.sy += 3.f; // squashed by a hard landing
     bool car_visible = setup.car && !attract_;
     if (crash_time_ >= 0.f && setup.car) {
@@ -2616,7 +2627,7 @@ void Game::render() {
             const int dx = static_cast<int>((rng_ >> 8) % 11) - 5 + scrape_side_ * 2;
             const int dy = static_cast<int>((rng_ >> 16) % 16);
             const bool bright = (rng_ >> 28) & 1;
-            const int px = static_cast<int>(x) + dx, py = height - 4 - dy + static_cast<int>(bounce_);
+            const int px = static_cast<int>(x) + dx, py = fb_height() - 4 * pixel_scale_ - dy + static_cast<int>(bounce_);
             // A short streak trailing away from the barrier, hot end first.
             fb_.put_pixel(px, py, bright ? Color{255, 240, 120} : Color{255, 170, 50});
             fb_.put_pixel(px - scrape_side_, py + 1, Color{255, 130, 30});
@@ -2666,19 +2677,23 @@ void Game::render() {
         // screen the dashboard is centred and its outer edges carry on to
         // the sides.
         const Bitmap& dash = sprites_.dashboard(car_model_);
-        const int dash_x = (width_ - dash.w) / 2;
-        const int dash_y = height - dashboard_height + static_cast<int>(bounce_);
-        for (int y = 0; y < dash.h; ++y) {
+        const int ps = pixel_scale_;
+        const int dash_w = dash.w * ps, dash_h = dash.h * ps;
+        const int dash_x = (width_ - dash_w) / 2;
+        const int dash_y = fb_height() - dashboard_height * ps + static_cast<int>(bounce_);
+        for (int y = 0; y < dash_h; ++y) {
             for (int x = 0; x < width_; ++x) {
-                const int dx = std::clamp(x - dash_x, 0, dash.w - 1);
-                const uint32_t p = dash.px[static_cast<size_t>(y) * dash.w + dx];
+                const int dx = std::clamp((x - dash_x) / ps, 0, dash.w - 1);
+                const int dy = std::clamp(y / ps, 0, dash.h - 1);
+                const uint32_t p = dash.px[static_cast<size_t>(dy) * dash.w + dx];
                 if (p >> 24) fb_.put_pixel(x, dash_y + y, Color{static_cast<uint8_t>(p >> 16), static_cast<uint8_t>(p >> 8),
                                                                 static_cast<uint8_t>(p)});
             }
         }
         const float twitch = spin_time_ > 0.f ? (static_cast<int>(clock_ * 16.f) % 2 ? 0.3f : -0.3f) : 0.f;
-        fb_.blit_rotated(sprites_.wheel(driver_), static_cast<float>(dash_x + dashboard_wheel_x),
-                         static_cast<float>(height) + 6.f + bounce_, wheel_size, wheel_size, wheel_angle_ + twitch);
+        fb_.blit_rotated(sprites_.wheel(driver_), static_cast<float>(dash_x + dashboard_wheel_x * ps),
+                         static_cast<float>(fb_height()) + 6.f * static_cast<float>(ps) + bounce_,
+                         static_cast<float>(wheel_size * ps), static_cast<float>(wheel_size * ps), wheel_angle_ + twitch);
     }
     if (debug_.mirror) render_mirror();
 
@@ -2688,20 +2703,20 @@ void Game::render() {
     const Daylight light = lit_by(daylight_at(hour_), look.night_glow);
     // (The picture before nightfall, for the light the headlights and the
     // street lamps bring back.)
-    if (headlights_ || !road_.lamps().empty()) day_picture_.assign(fb_.pixels(), fb_.pixels() + width_ * height);
+    if (headlights_ || !road_.lamps().empty()) day_picture_.assign(fb_.pixels(), fb_.pixels() + width_ * fb_height());
     apply_daylight(fb_, light);
-    street_lights(fb_, day_picture_, road_.ground(), light, road_.row_depth(), road_.lamps(), cam.depth, x_unit);
+    street_lights(fb_, day_picture_, road_.ground(), light, road_.row_depth(), road_.lamps(), cam.depth, fb_x_unit());
     if (headlights_ && debug_.headlights) {
         Beam beam;
         beam.start = setup.distance + 450.f; // the lamps, at the car's front
         beam.center = static_cast<float>(width_) / 2.f;
         beam.aim = 0.08f * static_cast<float>(shown_steer);
         beam.camera_depth = cam.depth;
-        beam.x_scale = x_unit;
-        beam.bottom = setup.cockpit ? height - dashboard_height : height;
+        beam.x_scale = fb_x_unit();
+        beam.bottom = setup.cockpit ? fb_height() - dashboard_height * pixel_scale_ : fb_height();
         // The car's own body stays dark: its pixels as they were before.
         const int cx0 = std::max(0, static_cast<int>(me.sx)), cx1 = std::min(width_, static_cast<int>(me.sx + me.sw) + 1);
-        const int cy0 = std::max(0, static_cast<int>(me.sy)), cy1 = std::min(height, static_cast<int>(me.sy + me.sh) + 1);
+        const int cy0 = std::max(0, static_cast<int>(me.sy)), cy1 = std::min(fb_height(), static_cast<int>(me.sy + me.sh) + 1);
         const bool mask = car_visible && me.angle == 0.f && cx0 < cx1 && cy0 < cy1;
         if (mask) {
             car_night_.clear();
@@ -2724,7 +2739,7 @@ void Game::render() {
     if (flash_time_ > 0.f) {
         // Lightning lights up everything for a moment.
         const float a = std::min(0.75f, flash_time_ * 5.f);
-        for (int y = 0; y < height; ++y) {
+        for (int y = 0; y < fb_height(); ++y) {
             for (int x = 0; x < width_; ++x) fb_.blend_pixel(x, y, Color{0xf0, 0xf4, 0xff}, a);
         }
     }
@@ -2814,10 +2829,10 @@ void Game::render_mirror() {
 
     // Keep the proportions of the main view, which maps a world unit to
     // x_unit pixels across and height/2 pixels up at scale 1.
-    const float half_w = static_cast<float>(mirror_width) / 2.f;
-    const float y_scale = half_w * (static_cast<float>(height) / 2.f) / x_unit;
-    const float zoom = mirror_depth * half_w / (cam.depth * x_unit);
-    background_.render(mirror_fb_, look, BackdropView{mirror_horizon, zoom, true});
+    const float half_w = static_cast<float>(mir_width()) / 2.f;
+    const float y_scale = half_w * (static_cast<float>(fb_height()) / 2.f) / fb_x_unit();
+    const float zoom = mirror_depth * half_w / (cam.depth * fb_x_unit());
+    background_.render(mirror_fb_, look, BackdropView{mirror_horizon * static_cast<float>(pixel_scale_), zoom, true});
 
     RoadView view;
     view.position = car_z;
@@ -2829,7 +2844,7 @@ void Game::render_mirror() {
     view.fog_density = look.fog_density;
     view.direction = -1;
     view.player_z = 0.f; // the mirror's camera is in the car
-    view.horizon = mirror_horizon;
+    view.horizon = mirror_horizon * static_cast<float>(pixel_scale_);
     view.y_scale = y_scale;
     mirror_sprites_.clear();
     world_.view<Transform, Traffic>([&](Entity e, Transform& t, Traffic& traffic) {
@@ -2845,10 +2860,10 @@ void Game::render_mirror() {
     });
     mirror_road_.render(mirror_fb_, track_, view, sprites_, mirror_sprites_);
 
-    const int mirror_x = (width_ - mirror_width) / 2;
-    draw_mirror_frame(fb_, mirror_x, mirror_y, mirror_width, mirror_height);
-    fb_.blit(mirror_fb_, mirror_x, mirror_y);
-    draw_mirror_sheen(fb_, mirror_x, mirror_y, mirror_width, mirror_height);
+    const int mirror_x = (width_ - mir_width()) / 2;
+    draw_mirror_frame(fb_, mirror_x, mirror_y * pixel_scale_, mir_width(), mir_height());
+    fb_.blit(mirror_fb_, mirror_x, mirror_y * pixel_scale_);
+    draw_mirror_sheen(fb_, mirror_x, mirror_y * pixel_scale_, mir_width(), mir_height());
 }
 
 } // namespace racer

@@ -101,32 +101,36 @@ std::string OptionsMenu::line(int item, const Options& o) {
 
 } // namespace racer
 
-bool VideoMenu::update(const MenuInput& in, bool& wide, bool& toggle_fullscreen) {
+bool VideoMenu::update(const MenuInput& in, bool& wide, bool& hd, bool& toggle_fullscreen) {
     if (in.back) return true;
     if (in.up) selected = ((selected - 1) % items + items) % items;
     if (in.down) selected = (selected + 1) % items;
     if (selected == Back) return in.confirm;
     if (selected == Wide && (in.left || in.right || in.confirm)) wide = !wide;
+    if (selected == Hd && (in.left || in.right || in.confirm)) hd = !hd;
     if (selected == Fullscreen && (in.left || in.right || in.confirm)) toggle_fullscreen = true;
     return false;
 }
 
-bool VideoMenu::choose(int item, int side, bool& wide, bool& toggle_fullscreen) {
+bool VideoMenu::choose(int item, int side, bool& wide, bool& hd, bool& toggle_fullscreen) {
     if (item < 0 || item >= items) return false;
     selected = item;
     if (item == Back) return true;
     if (item == Wide) wide = !wide;
+    if (item == Hd) hd = !hd;
     if (item == Fullscreen) toggle_fullscreen = true;
     return false;
 }
 
-std::string VideoMenu::line(int item, bool wide) {
+std::string VideoMenu::line(int item, bool wide, bool hd) {
     switch (item) {
         case Wide: return std::string("SCREEN: ") + (wide ? "WIDE" : "4:3");
+        case Hd: return std::string("RESOLUTION: ") + (hd ? "HD" : "SD");
         case Fullscreen: return "FULLSCREEN";
         default: return "BACK";
     }
 }
+
 
 bool AudioMenu::update(const MenuInput& in, bool& muted, int& music) {
     if (in.back) return true;

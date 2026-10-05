@@ -58,16 +58,16 @@ void change(Options& options, int item, int step);
 // Video: picture shape and fullscreen. The game owns the bools; the menu
 // only flips them.
 struct VideoMenu {
-    enum Item { Wide, Fullscreen, Back, items };
+    enum Item { Wide, Hd, Fullscreen, Back, items };
 
     int selected = Wide;
 
     void open() { selected = Wide; }
     // Sets *toggle_fullscreen when the player chooses FULLSCREEN.
     // Returns true when BACK closes the page.
-    bool update(const MenuInput& in, bool& wide, bool& toggle_fullscreen);
-    bool choose(int item, int side, bool& wide, bool& toggle_fullscreen);
-    static std::string line(int item, bool wide);
+    bool update(const MenuInput& in, bool& wide, bool& hd, bool& toggle_fullscreen);
+    bool choose(int item, int side, bool& wide, bool& hd, bool& toggle_fullscreen);
+    static std::string line(int item, bool wide, bool hd);
 };
 
 // Audio: mute and radio track.

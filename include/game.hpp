@@ -80,6 +80,14 @@ public:
     // Rear-view mirror: the glass, centred at the top of the screen.
     static constexpr int mirror_width = 112;
     static constexpr int mirror_height = 30;
+    // Internal resolution scale: 1 = 320x240 design, 2 = HD (double pixels).
+    int pixel_scale() const { return pixel_scale_; }
+    int fb_height() const { return height * pixel_scale_; }
+    int fb_base_width() const { return base_width * pixel_scale_; }
+    int fb_max_width() const { return max_width * pixel_scale_; }
+    int mir_width() const { return mirror_width * pixel_scale_; }
+    int mir_height() const { return mirror_height * pixel_scale_; }
+    float fb_x_unit() const { return x_unit * static_cast<float>(pixel_scale_); }
     static constexpr int mirror_y = 6;
 
     Game();
@@ -200,6 +208,8 @@ private:
     // The framebuffer this wide (clamped to base_width .. max_width), and the
     // width the screen asks for: 4:3, or as wide as the screen when wide_.
     void set_width(int w);
+    // Switch internal resolution (1 or 2); rebuilds framebuffers.
+    void set_pixel_scale(int scale);
     int screen_width() const;
     // The touch controls into overlay_, if shown.
     void draw_touch();
@@ -411,6 +421,7 @@ private:
     int width_ = base_width;           // the framebuffer's width now
     std::vector<uint32_t> car_night_;  // scratch: the car in the dark, kept out of its own headlights
     bool wide_ = false;                // the player chose a picture as wide as the screen
+    int pixel_scale_ = 1;              // 1 SD (320x240), 2 HD (640x480)
     Uint64 prev_counter_ = 0;
     float accumulator_ = 0.f;
 };
