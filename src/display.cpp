@@ -6,21 +6,137 @@
 #include "overlay.hpp"
 
 #include <algorithm>
+#include <cstddef>
 #include <cstring>
 #include <iostream>
+#include <type_traits>
 #include <vector>
 
+// GLES2 on the web and Android; desktop GL 2.x via SDL's loader. Entry points
+// are resolved with SDL_GL_GetProcAddress so we do not depend on GLEW/glad or
+// GL_GLEXT_PROTOTYPES (which many Linux toolchains leave undeclared).
 #if defined(__EMSCRIPTEN__) || defined(__ANDROID__)
 #include <SDL2/SDL_opengles2.h>
 #define KURVEN_GLES 1
 #else
 #include <SDL2/SDL_opengl.h>
 #define KURVEN_GLES 0
+#ifndef GL_CLAMP_TO_EDGE
+#define GL_CLAMP_TO_EDGE 0x812F
+#endif
 #endif
 
 namespace racer {
 
 namespace {
+
+// Minimal GL 2 / ES 2 API surface used by the present path.
+using GLenum = unsigned int;
+using GLuint = unsigned int;
+using GLint = int;
+using GLsizei = int;
+using GLfloat = float;
+using GLboolean = unsigned char;
+using GLchar = char;
+using GLsizeiptr = std::ptrdiff_t;
+
+constexpr GLenum GL_VERTEX_SHADER_ = 0x8B31;
+constexpr GLenum GL_FRAGMENT_SHADER_ = 0x8B30;
+constexpr GLenum GL_COMPILE_STATUS_ = 0x8B81;
+constexpr GLenum GL_LINK_STATUS_ = 0x8B82;
+constexpr GLenum GL_TEXTURE_2D_ = 0x0DE1;
+constexpr GLenum GL_TEXTURE_MIN_FILTER_ = 0x2801;
+constexpr GLenum GL_TEXTURE_MAG_FILTER_ = 0x2800;
+constexpr GLenum GL_TEXTURE_WRAP_S_ = 0x2802;
+constexpr GLenum GL_TEXTURE_WRAP_T_ = 0x2803;
+constexpr GLenum GL_NEAREST_ = 0x2600;
+constexpr GLenum GL_CLAMP_TO_EDGE_ = 0x812F;
+constexpr GLenum GL_RGBA_ = 0x1908;
+constexpr GLenum GL_BGRA_ = 0x80E1;
+constexpr GLenum GL_UNSIGNED_BYTE_ = 0x1401;
+constexpr GLenum GL_COLOR_BUFFER_BIT_ = 0x00004000;
+constexpr GLenum GL_ARRAY_BUFFER_ = 0x8892;
+constexpr GLenum GL_STREAM_DRAW_ = 0x88E0;
+constexpr GLenum GL_FLOAT_ = 0x1406;
+constexpr GLenum GL_TRIANGLE_STRIP_ = 0x0005;
+constexpr GLenum GL_BLEND_ = 0x0BE2;
+constexpr GLenum GL_SRC_ALPHA_ = 0x0302;
+constexpr GLenum GL_ONE_MINUS_SRC_ALPHA_ = 0x0303;
+constexpr GLenum GL_TEXTURE0_ = 0x84C0;
+constexpr GLboolean GL_FALSE_ = 0;
+
+struct GlApi {
+    GLuint (*CreateShader)(GLenum) = nullptr;
+    void (*ShaderSource)(GLuint, GLsizei, const GLchar* const*, const GLint*) = nullptr;
+    void (*CompileShader)(GLuint) = nullptr;
+    void (*GetShaderiv)(GLuint, GLenum, GLint*) = nullptr;
+    void (*GetShaderInfoLog)(GLuint, GLsizei, GLsizei*, GLchar*) = nullptr;
+    void (*DeleteShader)(GLuint) = nullptr;
+    GLuint (*CreateProgram)() = nullptr;
+    void (*AttachShader)(GLuint, GLuint) = nullptr;
+    void (*BindAttribLocation)(GLuint, GLuint, const GLchar*) = nullptr;
+    void (*LinkProgram)(GLuint) = nullptr;
+    void (*GetProgramiv)(GLuint, GLenum, GLint*) = nullptr;
+    void (*GetProgramInfoLog)(GLuint, GLsizei, GLsizei*, GLchar*) = nullptr;
+    void (*DeleteProgram)(GLuint) = nullptr;
+    GLint (*GetUniformLocation)(GLuint, const GLchar*) = nullptr;
+    void (*UseProgram)(GLuint) = nullptr;
+    void (*Uniform1i)(GLint, GLint) = nullptr;
+    void (*GenTextures)(GLsizei, GLuint*) = nullptr;
+    void (*DeleteTextures)(GLsizei, const GLuint*) = nullptr;
+    void (*BindTexture)(GLenum, GLuint) = nullptr;
+    void (*TexParameteri)(GLenum, GLenum, GLint) = nullptr;
+    void (*TexImage2D)(GLenum, GLint, GLint, GLsizei, GLsizei, GLint, GLenum, GLenum, const void*) = nullptr;
+    void (*TexSubImage2D)(GLenum, GLint, GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, const void*) = nullptr;
+    void (*GenBuffers)(GLsizei, GLuint*) = nullptr;
+    void (*DeleteBuffers)(GLsizei, const GLuint*) = nullptr;
+    void (*BindBuffer)(GLenum, GLuint) = nullptr;
+    void (*BufferData)(GLenum, GLsizeiptr, const void*, GLenum) = nullptr;
+    void (*EnableVertexAttribArray)(GLuint) = nullptr;
+    void (*DisableVertexAttribArray)(GLuint) = nullptr;
+    void (*VertexAttribPointer)(GLuint, GLint, GLenum, GLboolean, GLsizei, const void*) = nullptr;
+    void (*DrawArrays)(GLenum, GLint, GLsizei) = nullptr;
+    void (*Viewport)(GLint, GLint, GLsizei, GLsizei) = nullptr;
+    void (*ClearColor)(GLfloat, GLfloat, GLfloat, GLfloat) = nullptr;
+    void (*Clear)(GLenum) = nullptr;
+    void (*ActiveTexture)(GLenum) = nullptr;
+    void (*Enable)(GLenum) = nullptr;
+    void (*Disable)(GLenum) = nullptr;
+    void (*BlendFunc)(GLenum, GLenum) = nullptr;
+
+    bool load() {
+        auto get = [](const char* name) { return SDL_GL_GetProcAddress(name); };
+        auto need = [&](auto& fn, const char* name) {
+            fn = reinterpret_cast<std::decay_t<decltype(fn)>>(get(name));
+            if (!fn) {
+                std::cerr << "kurvenrausch: missing GL entry " << name << "\n";
+                return false;
+            }
+            return true;
+        };
+        return need(CreateShader, "glCreateShader") && need(ShaderSource, "glShaderSource") &&
+               need(CompileShader, "glCompileShader") && need(GetShaderiv, "glGetShaderiv") &&
+               need(GetShaderInfoLog, "glGetShaderInfoLog") && need(DeleteShader, "glDeleteShader") &&
+               need(CreateProgram, "glCreateProgram") && need(AttachShader, "glAttachShader") &&
+               need(BindAttribLocation, "glBindAttribLocation") && need(LinkProgram, "glLinkProgram") &&
+               need(GetProgramiv, "glGetProgramiv") && need(GetProgramInfoLog, "glGetProgramInfoLog") &&
+               need(DeleteProgram, "glDeleteProgram") && need(GetUniformLocation, "glGetUniformLocation") &&
+               need(UseProgram, "glUseProgram") && need(Uniform1i, "glUniform1i") &&
+               need(GenTextures, "glGenTextures") && need(DeleteTextures, "glDeleteTextures") &&
+               need(BindTexture, "glBindTexture") && need(TexParameteri, "glTexParameteri") &&
+               need(TexImage2D, "glTexImage2D") && need(TexSubImage2D, "glTexSubImage2D") &&
+               need(GenBuffers, "glGenBuffers") && need(DeleteBuffers, "glDeleteBuffers") &&
+               need(BindBuffer, "glBindBuffer") && need(BufferData, "glBufferData") &&
+               need(EnableVertexAttribArray, "glEnableVertexAttribArray") &&
+               need(DisableVertexAttribArray, "glDisableVertexAttribArray") &&
+               need(VertexAttribPointer, "glVertexAttribPointer") && need(DrawArrays, "glDrawArrays") &&
+               need(Viewport, "glViewport") && need(ClearColor, "glClearColor") && need(Clear, "glClear") &&
+               need(ActiveTexture, "glActiveTexture") && need(Enable, "glEnable") &&
+               need(Disable, "glDisable") && need(BlendFunc, "glBlendFunc");
+    }
+};
+
+GlApi g_gl;
 
 const char* k_vert =
 #if KURVEN_GLES
@@ -50,35 +166,35 @@ const char* k_frag =
 #endif
 
 unsigned compile_shader(unsigned type, const char* src) {
-    const unsigned s = glCreateShader(type);
-    glShaderSource(s, 1, &src, nullptr);
-    glCompileShader(s);
+    const unsigned s = g_gl.CreateShader(type);
+    g_gl.ShaderSource(s, 1, &src, nullptr);
+    g_gl.CompileShader(s);
     int ok = 0;
-    glGetShaderiv(s, GL_COMPILE_STATUS, &ok);
+    g_gl.GetShaderiv(s, GL_COMPILE_STATUS_, &ok);
     if (!ok) {
         char log[256];
-        glGetShaderInfoLog(s, sizeof log, nullptr, log);
+        g_gl.GetShaderInfoLog(s, sizeof log, nullptr, log);
         std::cerr << "kurvenrausch: shader: " << log << "\n";
-        glDeleteShader(s);
+        g_gl.DeleteShader(s);
         return 0;
     }
     return s;
 }
 
 unsigned link_program(unsigned vs, unsigned fs) {
-    const unsigned p = glCreateProgram();
-    glAttachShader(p, vs);
-    glAttachShader(p, fs);
-    glBindAttribLocation(p, 0, "a_pos");
-    glBindAttribLocation(p, 1, "a_uv");
-    glLinkProgram(p);
+    const unsigned p = g_gl.CreateProgram();
+    g_gl.AttachShader(p, vs);
+    g_gl.AttachShader(p, fs);
+    g_gl.BindAttribLocation(p, 0, "a_pos");
+    g_gl.BindAttribLocation(p, 1, "a_uv");
+    g_gl.LinkProgram(p);
     int ok = 0;
-    glGetProgramiv(p, GL_LINK_STATUS, &ok);
+    g_gl.GetProgramiv(p, GL_LINK_STATUS_, &ok);
     if (!ok) {
         char log[256];
-        glGetProgramInfoLog(p, sizeof log, nullptr, log);
+        g_gl.GetProgramInfoLog(p, sizeof log, nullptr, log);
         std::cerr << "kurvenrausch: program: " << log << "\n";
-        glDeleteProgram(p);
+        g_gl.DeleteProgram(p);
         return 0;
     }
     return p;
@@ -122,16 +238,16 @@ void Display::destroy_present() {
         SDL_DestroyRenderer(renderer_);
         renderer_ = nullptr;
     }
-    if (gl_fb_tex_) {
-        glDeleteTextures(1, &gl_fb_tex_);
+    if (gl_fb_tex_ && g_gl.DeleteTextures) {
+        g_gl.DeleteTextures(1, &gl_fb_tex_);
         gl_fb_tex_ = 0;
     }
-    if (gl_vbo_) {
-        glDeleteBuffers(1, &gl_vbo_);
+    if (gl_vbo_ && g_gl.DeleteBuffers) {
+        g_gl.DeleteBuffers(1, &gl_vbo_);
         gl_vbo_ = 0;
     }
-    if (gl_program_) {
-        glDeleteProgram(gl_program_);
+    if (gl_program_ && g_gl.DeleteProgram) {
+        g_gl.DeleteProgram(gl_program_);
         gl_program_ = 0;
     }
     if (gl_) {
@@ -277,32 +393,33 @@ bool Display::init_gl_present() {
         return false;
     }
     SDL_GL_MakeCurrent(window_, gl_);
+    if (!g_gl.load()) return false;
     SDL_GL_SetSwapInterval(1);
     vsync_ = true;
 
-    const unsigned vs = compile_shader(GL_VERTEX_SHADER, k_vert);
-    const unsigned fs = compile_shader(GL_FRAGMENT_SHADER, k_frag);
+    const unsigned vs = compile_shader(GL_VERTEX_SHADER_, k_vert);
+    const unsigned fs = compile_shader(GL_FRAGMENT_SHADER_, k_frag);
     if (!vs || !fs) {
-        if (vs) glDeleteShader(vs);
-        if (fs) glDeleteShader(fs);
+        if (vs) g_gl.DeleteShader(vs);
+        if (fs) g_gl.DeleteShader(fs);
         return false;
     }
     gl_program_ = link_program(vs, fs);
-    glDeleteShader(vs);
-    glDeleteShader(fs);
+    g_gl.DeleteShader(vs);
+    g_gl.DeleteShader(fs);
     if (!gl_program_) return false;
-    gl_u_tex_ = glGetUniformLocation(gl_program_, "u_tex");
+    gl_u_tex_ = g_gl.GetUniformLocation(gl_program_, "u_tex");
 
-    glGenTextures(1, &gl_fb_tex_);
-    glBindTexture(GL_TEXTURE_2D, gl_fb_tex_);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    // Allocate storage; upload each frame with TexSubImage.
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, fb_w_, fb_h_, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    g_gl.GenTextures(1, &gl_fb_tex_);
+    g_gl.BindTexture(GL_TEXTURE_2D_, gl_fb_tex_);
+    g_gl.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_MIN_FILTER_, GL_NEAREST_);
+    g_gl.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_MAG_FILTER_, GL_NEAREST_);
+    g_gl.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_WRAP_S_, GL_CLAMP_TO_EDGE_);
+    g_gl.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_WRAP_T_, GL_CLAMP_TO_EDGE_);
+    g_gl.TexImage2D(GL_TEXTURE_2D_, 0, static_cast<GLint>(GL_RGBA_), fb_w_, fb_h_, 0, GL_RGBA_,
+                    GL_UNSIGNED_BYTE_, nullptr);
 
-    glGenBuffers(1, &gl_vbo_);
+    g_gl.GenBuffers(1, &gl_vbo_);
     return true;
 }
 
@@ -418,14 +535,12 @@ void Display::present_gl(const uint32_t* argb_pixels, const Overlay& overlay) {
     SDL_GL_MakeCurrent(window_, gl_);
     const SDL_Rect s = screen();
     const SDL_Rect pic = picture();
-    glViewport(0, 0, s.w, s.h);
-    glClearColor(0.f, 0.f, 0.f, 1.f);
-    glClear(GL_COLOR_BUFFER_BIT);
+    g_gl.Viewport(0, 0, s.w, s.h);
+    g_gl.ClearColor(0.f, 0.f, 0.f, 1.f);
+    g_gl.Clear(GL_COLOR_BUFFER_BIT_);
 
-    // ARGB8888 in memory is B,G,R,A on little-endian; upload as BGRA when available.
-    glBindTexture(GL_TEXTURE_2D, gl_fb_tex_);
+    g_gl.BindTexture(GL_TEXTURE_2D_, gl_fb_tex_);
 #if KURVEN_GLES
-    // GLES2 has no BGRA without extension; swizzle by converting to RGBA.
     static thread_local std::vector<uint32_t> rgba;
     rgba.resize(static_cast<size_t>(fb_w_ * fb_h_));
     for (int i = 0; i < fb_w_ * fb_h_; ++i) {
@@ -433,21 +548,17 @@ void Display::present_gl(const uint32_t* argb_pixels, const Overlay& overlay) {
         rgba[static_cast<size_t>(i)] =
             ((p & 0x000000ffu) << 16) | (p & 0x0000ff00u) | ((p & 0x00ff0000u) >> 16) | (p & 0xff000000u);
     }
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, fb_w_, fb_h_, GL_RGBA, GL_UNSIGNED_BYTE, rgba.data());
+    g_gl.TexSubImage2D(GL_TEXTURE_2D_, 0, 0, 0, fb_w_, fb_h_, GL_RGBA_, GL_UNSIGNED_BYTE_, rgba.data());
 #else
-#ifdef GL_BGRA
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, fb_w_, fb_h_, GL_BGRA, GL_UNSIGNED_BYTE, argb_pixels);
-#else
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, fb_w_, fb_h_, GL_RGBA, GL_UNSIGNED_BYTE, argb_pixels);
-#endif
+    // ARGB8888 little-endian memory layout matches BGRA for TexSubImage.
+    g_gl.TexSubImage2D(GL_TEXTURE_2D_, 0, 0, 0, fb_w_, fb_h_, GL_BGRA_, GL_UNSIGNED_BYTE_, argb_pixels);
 #endif
 
-    glUseProgram(gl_program_);
-    glUniform1i(gl_u_tex_, 0);
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, gl_fb_tex_);
+    g_gl.UseProgram(gl_program_);
+    g_gl.Uniform1i(gl_u_tex_, 0);
+    g_gl.ActiveTexture(GL_TEXTURE0_);
+    g_gl.BindTexture(GL_TEXTURE_2D_, gl_fb_tex_);
 
-    // NDC quad for the letterboxed picture. V flips: FB origin top-left.
     const float x0 = 2.f * static_cast<float>(pic.x) / static_cast<float>(s.w) - 1.f;
     const float x1 = 2.f * static_cast<float>(pic.x + pic.w) / static_cast<float>(s.w) - 1.f;
     const float y0 = 1.f - 2.f * static_cast<float>(pic.y + pic.h) / static_cast<float>(s.h);
@@ -455,43 +566,38 @@ void Display::present_gl(const uint32_t* argb_pixels, const Overlay& overlay) {
     const float verts[] = {
         x0, y0, 0.f, 1.f, x1, y0, 1.f, 1.f, x0, y1, 0.f, 0.f, x1, y1, 1.f, 0.f,
     };
-    glBindBuffer(GL_ARRAY_BUFFER, gl_vbo_);
-    glBufferData(GL_ARRAY_BUFFER, sizeof verts, verts, GL_STREAM_DRAW);
-    glEnableVertexAttribArray(0);
-    glEnableVertexAttribArray(1);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), reinterpret_cast<void*>(0));
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float),
-                          reinterpret_cast<void*>(2 * sizeof(float)));
-    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    g_gl.BindBuffer(GL_ARRAY_BUFFER_, gl_vbo_);
+    g_gl.BufferData(GL_ARRAY_BUFFER_, static_cast<GLsizeiptr>(sizeof verts), verts, GL_STREAM_DRAW_);
+    g_gl.EnableVertexAttribArray(0);
+    g_gl.EnableVertexAttribArray(1);
+    g_gl.VertexAttribPointer(0, 2, GL_FLOAT_, GL_FALSE_, 4 * static_cast<GLsizei>(sizeof(float)),
+                             reinterpret_cast<void*>(0));
+    g_gl.VertexAttribPointer(1, 2, GL_FLOAT_, GL_FALSE_, 4 * static_cast<GLsizei>(sizeof(float)),
+                             reinterpret_cast<void*>(2 * sizeof(float)));
+    g_gl.DrawArrays(GL_TRIANGLE_STRIP_, 0, 4);
 
-    // Overlay: convert each item to a small texture upload when needed, same shader.
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    g_gl.Enable(GL_BLEND_);
+    g_gl.BlendFunc(GL_SRC_ALPHA_, GL_ONE_MINUS_SRC_ALPHA_);
     for (const Overlay::Item& item : overlay.items()) {
         if (!item.image || item.image->w <= 0 || item.image->h <= 0) continue;
-        unsigned tex = 0;
-        glGenTextures(1, &tex);
-        glBindTexture(GL_TEXTURE_2D, tex);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        GLuint tex = 0;
+        g_gl.GenTextures(1, &tex);
+        g_gl.BindTexture(GL_TEXTURE_2D_, tex);
+        g_gl.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_MIN_FILTER_, GL_NEAREST_);
+        g_gl.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_MAG_FILTER_, GL_NEAREST_);
+        g_gl.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_WRAP_S_, GL_CLAMP_TO_EDGE_);
+        g_gl.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_WRAP_T_, GL_CLAMP_TO_EDGE_);
 #if KURVEN_GLES
         std::vector<uint32_t> o(static_cast<size_t>(item.image->w * item.image->h));
         for (size_t i = 0; i < o.size(); ++i) {
             const uint32_t p = item.image->px[i];
             o[i] = ((p & 0x000000ffu) << 16) | (p & 0x0000ff00u) | ((p & 0x00ff0000u) >> 16) | (p & 0xff000000u);
         }
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, item.image->w, item.image->h, 0, GL_RGBA, GL_UNSIGNED_BYTE,
-                     o.data());
+        g_gl.TexImage2D(GL_TEXTURE_2D_, 0, static_cast<GLint>(GL_RGBA_), item.image->w, item.image->h, 0, GL_RGBA_,
+                        GL_UNSIGNED_BYTE_, o.data());
 #else
-#ifdef GL_BGRA
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, item.image->w, item.image->h, 0, GL_BGRA, GL_UNSIGNED_BYTE,
-                     item.image->px.data());
-#else
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, item.image->w, item.image->h, 0, GL_RGBA, GL_UNSIGNED_BYTE,
-                     item.image->px.data());
-#endif
+        g_gl.TexImage2D(GL_TEXTURE_2D_, 0, static_cast<GLint>(GL_RGBA_), item.image->w, item.image->h, 0, GL_BGRA_,
+                        GL_UNSIGNED_BYTE_, item.image->px.data());
 #endif
         const float ox0 = 2.f * static_cast<float>(item.x) / static_cast<float>(s.w) - 1.f;
         const float ox1 = 2.f * static_cast<float>(item.x + item.image->w) / static_cast<float>(s.w) - 1.f;
@@ -500,16 +606,15 @@ void Display::present_gl(const uint32_t* argb_pixels, const Overlay& overlay) {
         const float ov[] = {
             ox0, oy0, 0.f, 1.f, ox1, oy0, 1.f, 1.f, ox0, oy1, 0.f, 0.f, ox1, oy1, 1.f, 0.f,
         };
-        glBufferData(GL_ARRAY_BUFFER, sizeof ov, ov, GL_STREAM_DRAW);
-        glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-        glDeleteTextures(1, &tex);
+        g_gl.BufferData(GL_ARRAY_BUFFER_, static_cast<GLsizeiptr>(sizeof ov), ov, GL_STREAM_DRAW_);
+        g_gl.DrawArrays(GL_TRIANGLE_STRIP_, 0, 4);
+        g_gl.DeleteTextures(1, &tex);
     }
-    glDisable(GL_BLEND);
+    g_gl.Disable(GL_BLEND_);
 
-    glDisableVertexAttribArray(0);
-    glDisableVertexAttribArray(1);
+    g_gl.DisableVertexAttribArray(0);
+    g_gl.DisableVertexAttribArray(1);
     SDL_GL_SwapWindow(window_);
-    (void)overlay;
 }
 
 bool save_bmp(const std::string& path, const uint32_t* argb_pixels, int width, int height) {
