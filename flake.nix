@@ -132,6 +132,7 @@
             SDL2
             SDL2.dev
             gdb
+            # clangd + clang-tidy + clang-format (LSP / editor support).
             clang-tools
             # Validators for the desktop entry, AppStream data and man page,
             # run by ctest when present.
@@ -139,6 +140,12 @@
             appstream
             mandoc
           ];
+          # One-shot compile_commands.json for clangd if missing.
+          shellHook = ''
+            if [ ! -f build/compile_commands.json ]; then
+              echo "LSP: run  cmake -B build  (writes build/compile_commands.json for clangd)"
+            fi
+          '';
         };
       });
 }

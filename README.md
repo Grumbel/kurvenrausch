@@ -202,6 +202,11 @@ cmake --build build
 ./build/kurvenrausch
 ```
 
+CMake writes `build/compile_commands.json` (export is on by default) so
+clangd and other LSP clients can navigate the code. A `.clangd` file at the
+repo root points at that build directory. With `nix develop`, `clangd` comes
+from `clang-tools`.
+
 ### Install
 
 ```bash

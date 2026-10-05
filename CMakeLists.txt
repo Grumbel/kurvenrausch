@@ -20,6 +20,10 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# compile_commands.json in the build dir for clangd / other LSP clients.
+# Configure once: cmake -B build  (already on by default here).
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 if(EMSCRIPTEN)
     # WebAssembly. SDL2 is either a static build under SDL2_ROOT (headers
     # and libSDL2.a, as nix/wasm.nix makes it, offline) or Emscripten's own

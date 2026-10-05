@@ -2,6 +2,12 @@
 
 ## Current tip
 
+### Grok: LSP / clangd
+- `CMAKE_EXPORT_COMPILE_COMMANDS ON` in CMakeLists.txt; `.clangd` uses
+  `CompilationDatabase: build`; `.gitignore` for root `compile_commands.json`
+  and `.cache/`; `nix develop` shellHook hints if the database is missing;
+  AGENTS.md + README note. Open the repo root in the editor after `cmake -B build`.
+
 ### Grok: Time Car sprite from reference images
 - `Body::TimeCar` follows the pixel rear reference (angled body, not a slab):
   tapered stainless, **flux capacitor** visible in the rear window, tall

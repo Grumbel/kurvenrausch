@@ -6,3 +6,7 @@ build/
 result
 .direnv
 result-*
+
+# LSP / clangd (machine-local; prefer build/compile_commands.json)
+compile_commands.json
+.cache/

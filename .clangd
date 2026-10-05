@@ -1,0 +1,15 @@
+# SPDX-FileCopyrightText: 2026 Ingo Ruhnke <grumbel@gmail.com>
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+# clangd / LSP for Kurvenrausch.
+# After `cmake -B build`, the compilation database lives in build/.
+CompileFlags:
+  CompilationDatabase: build
+  Add:
+    - -std=c++17
+    - -Iinclude
+    # Quiet missing SDL headers until the package is installed / nix develop.
+    - -Wno-unknown-warning-option
+Diagnostics:
+  UnusedIncludes: None
+  MissingIncludes: None
