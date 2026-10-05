@@ -10,11 +10,16 @@ in the spirit of *OutRun* and *Lotus Esprit Turbo Challenge*, written in C++17
 with SDL2. All drawing is done in software into a low-resolution framebuffer
 that is scaled up with nearest-neighbour filtering for chunky pixels.
 
-- Build: `cmake -B build && cmake --build build` (or `nix build`).
-- LSP (clangd): `CMAKE_EXPORT_COMPILE_COMMANDS` is on; after `cmake -B build`
-  the database is `build/compile_commands.json`. `.clangd` points at `build/`.
-  `nix develop` provides `clang-tools` (clangd). Open the repo root in the
-  editor so clangd finds `.clangd`.
+- Build: `nix develop` then `kurvenrausch-run` (configure/build/run), or
+  `cmake -B build && cmake --build build`, or `nix build`.
+- Develop shell (biltoo/Pingus pattern): `kurvenrausch-configure`,
+  `kurvenrausch-build`, `kurvenrausch-run`, `kurvenrausch-run-gdb` are on
+  PATH; out-of-tree build in `$KURVENRAUSCH_BUILD_DIR` (default
+  `/tmp/kurvenrausch-build`); Debug + ccache; `KURVENRAUSCH_SOURCE` required
+  (set by shellHook). Package builds stay `nix build` (RelWithDebInfo).
+- LSP (clangd): `CMAKE_EXPORT_COMPILE_COMMANDS` is on; configure links
+  `build/` → the out-of-tree dir so `.clangd` finds `compile_commands.json`.
+  `nix develop` provides `clang-tools`. Open the repo root in the editor.
 - Tests: `ctest --test-dir build --output-on-failure` (`tests/tests.cpp`, no
   framework). Add a test for new pure logic.
 - Screenshots for the README: `tools/make_screenshots.py` (needs Pillow). Look

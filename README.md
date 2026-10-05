@@ -191,21 +191,26 @@ weather and road markings, fading smoothly into one another:
 ## Build
 
 ```bash
-# Nix: reproducible shell, or build the package
+# Nix develop: out-of-tree Debug build, edit → run in one command
 nix develop
+kurvenrausch-configure          # once (or when the tree moved)
+kurvenrausch-run                # build if needed, then run
+kurvenrausch-run-gdb --help     # same under gdb (auto-run; quit on exit 0)
+
+# Package (RelWithDebInfo, no ccache)
 nix build
 ./result/bin/kurvenrausch
 
-# or with CMake and SDL2 installed
-cmake -B build
-cmake --build build
+# Plain CMake + system SDL2
+cmake -B build && cmake --build build
 ./build/kurvenrausch
 ```
 
-CMake writes `build/compile_commands.json` (export is on by default) so
-clangd and other LSP clients can navigate the code. A `.clangd` file at the
-repo root points at that build directory. With `nix develop`, `clangd` comes
-from `clang-tools`.
+`nix develop` puts `kurvenrausch-configure` / `-build` / `-run` / `-run-gdb`
+on PATH (Pingus/biltoo pattern). The build directory defaults to
+`/tmp/kurvenrausch-build`; override with `KURVENRAUSCH_BUILD_DIR`. CMake
+exports `compile_commands.json`; configure symlinks `build/` there for
+clangd (see `.clangd`).
 
 ### Install
 

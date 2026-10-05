@@ -2,6 +2,12 @@
 
 ## Current tip
 
+### Grok: develop shell (biltoo/Pingus pattern)
+- `kurvenrausch-configure` / `-build` / `-run` / `-run-gdb` as PATH scripts;
+  `KURVENRAUSCH_SOURCE` + out-of-tree `$KURVENRAUSCH_BUILD_DIR`; reconfigure
+  when CMAKE_HOME_DIRECTORY drifts; ccacheStdenv + Debug; package is
+  RelWithDebInfo; configure symlinks `build/` for clangd.
+
 ### Grok: LSP / clangd
 - `CMAKE_EXPORT_COMPILE_COMMANDS ON` in CMakeLists.txt; `.clangd` uses
   `CompilationDatabase: build`; `.gitignore` for root `compile_commands.json`
