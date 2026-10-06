@@ -1518,7 +1518,14 @@ void GlesRenderer::render(const Track& track, const RoadView& view, const Sprite
     }
 
     clear_batch();
+    solid_.reserve(std::max(solid_.capacity(), static_cast<size_t>(48 * 1024)));
+    textured_.reserve(std::max(textured_.capacity(), static_cast<size_t>(16 * 1024)));
     draw_backdrop(theme, backdrop, hour, horizon);
+    // Coalesce consecutive segments that share the same scissor rect so we
+    // do not flush the solid batch on every slice (hill max_y often changes
+    // each segment, but tunnel mouths and flat runs share a box).
+    bool scissor_on = false;
+    int sc_x0 = 0, sc_y0 = 0, sc_x1 = 0, sc_y1 = 0;
     for (const Slice& s : slices_) {
         if (!s.road_visible) continue;
         // Match software set_clip: tunnel mouth and nearer-road occlusion.
@@ -1526,24 +1533,37 @@ void GlesRenderer::render(const Track& track, const RoadView& view, const Sprite
         const int clip_x1 = std::min(width_, static_cast<int>(std::ceil(s.right)));
         const int clip_y0 = std::max(0, pixel_edge(s.top));
         const int clip_y1 = std::min(height_, clip_row(s.clip));
-        const bool use_scissor = g.Scissor && g.Enable && clip_x1 > clip_x0 && clip_y1 > clip_y0 &&
-                                 (clip_x0 > 0 || clip_x1 < width_ || clip_y0 > 0 || clip_y1 < height_);
-        if (use_scissor) {
-            flush_solid();
-            g.Enable(GL_SCISSOR_TEST_);
-            g.Scissor(clip_x0, height_ - clip_y1, clip_x1 - clip_x0, clip_y1 - clip_y0);
-        }
-        draw_segment(track, s, theme);
-        if (use_scissor) {
+        const bool want_scissor = g.Scissor && g.Enable && clip_x1 > clip_x0 && clip_y1 > clip_y0 &&
+                                  (clip_x0 > 0 || clip_x1 < width_ || clip_y0 > 0 || clip_y1 < height_);
+        if (want_scissor) {
+            if (!scissor_on || clip_x0 != sc_x0 || clip_y0 != sc_y0 || clip_x1 != sc_x1 || clip_y1 != sc_y1) {
+                flush_solid();
+                g.Enable(GL_SCISSOR_TEST_);
+                g.Scissor(clip_x0, height_ - clip_y1, clip_x1 - clip_x0, clip_y1 - clip_y0);
+                scissor_on = true;
+                sc_x0 = clip_x0;
+                sc_y0 = clip_y0;
+                sc_x1 = clip_x1;
+                sc_y1 = clip_y1;
+            }
+        } else if (scissor_on) {
             flush_solid();
             g.Disable(GL_SCISSOR_TEST_);
+            scissor_on = false;
         }
+        draw_segment(track, s, theme);
+    }
+    if (scissor_on) {
+        flush_solid();
+        g.Disable(GL_SCISSOR_TEST_);
     }
     flush_solid();
 
-    // Ground snapshot (road/grass only) — software street_lights only relights
-    // pixels the sprites did not cover (day[i] == ground[i]).
-    std::vector<uint32_t> ground_argb;
+    // CPU night needs a pre-sprite ground mask and a post-sprite day buffer.
+    // Do NOT key this on lamps_.empty(): vehicle head/tail lamps are collected
+    // every frame, which forced two full ReadPixels even in broad daylight.
+    const bool need_cpu_night = light.level < 0.999f || headlight != nullptr;
+
     auto read_fbo_argb = [&](std::vector<uint32_t>& out) {
         out.resize(static_cast<size_t>(width_) * static_cast<size_t>(height_));
         if (!g.ReadPixels) {
@@ -1563,7 +1583,9 @@ void GlesRenderer::render(const Track& track, const RoadView& view, const Sprite
             }
         }
     };
-    read_fbo_argb(ground_argb);
+
+    std::vector<uint32_t> ground_argb;
+    if (need_cpu_night) read_fbo_argb(ground_argb);
 
     draw_sprites(track, sprites, objects);
     flush_textured();
@@ -1572,8 +1594,7 @@ void GlesRenderer::render(const Track& track, const RoadView& view, const Sprite
     flush_solid();
 
     // Day picture (full-bright albedo + sprites + weather).
-    // Skip the CPU night stack in full daylight with no beam.
-    if (light.level < 0.999f || headlight || !lamps_.empty()) {
+    if (need_cpu_night) {
     std::vector<uint32_t> day_argb;
     read_fbo_argb(day_argb);
 

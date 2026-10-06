@@ -2,6 +2,14 @@
 
 ## Current tip
 
+### Grok: GLES day path — no ReadPixels; coalesce scissor
+- CPU night was keyed on `!lamps_.empty()`, but vehicle head/tail lamps are
+  collected every frame → two full FBO ReadPixels even at noon. Gate is now
+  `light.level < 0.999 || headlight` only; ground snapshot skipped in day.
+- Road pass keeps the solid batch across consecutive slices that share the
+  same scissor rect (fewer BufferData/DrawArrays on long flat runs).
+
+
 ### Grok: GLES textured draw batching
 - No texture atlas yet: one GL texture per `Bitmap` (keyed by `px.data()`).
 - Was one `DrawArrays` per sprite (`flush_textured` after every quad).
