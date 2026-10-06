@@ -188,9 +188,11 @@ int main(int argc, char* argv[]) {
     }
 
     if (!shot.path.empty()) {
+        if (scene_backend_set) game->set_scene_backend(scene_backend);
         return game->screenshot(shot) ? 0 : 1;
     }
 
+    if (scene_backend_set) game->set_scene_backend(scene_backend);
     if (!game->init(fullscreen)) {
         std::cerr << "Failed to initialize game.\n";
         return 1;

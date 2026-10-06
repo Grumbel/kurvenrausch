@@ -2,6 +2,9 @@
 
 ## Current tip
 
+### Grok: --renderer actually applied in main
+-  was written but never used; call  before init.
+
 ### Grok: SceneBackend enum in display.hpp (build fix)
 - `enum class SceneBackend` and helpers were only in `display.cpp`; declare
   them in `display.hpp` so `game.hpp` / `main.cpp` compile.
