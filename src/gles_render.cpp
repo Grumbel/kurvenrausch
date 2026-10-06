@@ -888,6 +888,35 @@ void GlesRenderer::draw_sprites(const Track& track, const SpriteSheet& sprites, 
             draw_rail(+1);
         }
 
+        // Tunnel side walls: solid columns (same placement as software's
+        // tunnel_wall blit), banded like make_tunnel_wall — kerb / tile / upper.
+        // Drawn far→near with rails so nearer segments cover farther ones.
+        if (projectable && seg.tunnel) {
+            const float px = p0.scale * x_scale_;
+            const float wh = tunnel_height * p0.scale * y_scale_;
+            const float ww = std::max(8.f, track.segment_length * px * 1.2f);
+            const float fog_amount = 1.f - s.fog;
+            auto fogc = [&](Color c) { return fogged(c, fog_air_, fog_amount, daylight_); };
+            // Colours from make_tunnel_wall(); alternate tile course by segment.
+            const Color kerb = fogc(Color{0xe0, 0xdc, 0xd4});
+            const Color tile = fogc((s.index / 1) % 2 ? Color{0xc4, 0xbc, 0xb0} : Color{0xb8, 0xb0, 0xa4});
+            const Color upper = fogc(Color{0x7c, 0x78, 0x70});
+            for (int side = -1; side <= 1; side += 2) {
+                const float edge = p0.x + static_cast<float>(side) * p0.w;
+                const float left = side < 0 ? edge - ww : edge;
+                const float right = left + ww;
+                // Height fractions from road (0) up to ceiling (1), matching the sprite.
+                auto band = [&](float r0, float r1, Color c) {
+                    const float y0 = p0.y - wh * r1; // higher on screen = larger r
+                    const float y1 = p0.y - wh * r0;
+                    push_solid_quad(left, y0, right, y0, right, y1, left, y1, c);
+                };
+                band(0.f, 0.14f, kerb);
+                band(0.14f, 0.55f, tile);
+                band(0.55f, 1.f, upper);
+            }
+        }
+
         // Cliff billboards (subsampled like software).
         auto draw_cliff = [&](int side, const Bitmap& cliff) {
             const Edge kind = side < 0 ? seg.left : seg.right;

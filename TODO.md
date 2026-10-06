@@ -2,6 +2,12 @@
 
 ## Current tip
 
+### Grok: GLES tunnel side walls as solid bands
+- Software blits `tunnel_wall` columns at the road edge; GLES had none.
+- Same placement (far→near sprite pass), solid kerb/tile/upper bands matching
+  `make_tunnel_wall` colours — same idea as guardrail solid quads, no texture.
+
+
 ### Grok: GLES player car texture updates at dealers
 - Texture cache keyed only by `px.data()`; `player_bitmap_` is reused in place so
   changing car (or dirt/lightbar/tread) kept the old GL texture. Cache now stores
