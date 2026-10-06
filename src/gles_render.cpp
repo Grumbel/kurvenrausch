@@ -1802,7 +1802,6 @@ void GlesRenderer::draw_lamp_pools(float ambient) {
                 static_cast<uint8_t>(std::min(255.f, tint_b * k * 255.f + 0.5f)), 0};
         // One radial-falloff sprite per lamp.
         push_quad(cx - half, y0, half * 2.f, std::max(1.f, y1 - y0), 0.f, 0.f, 1.f, 1.f, c, false);
-        (void)world_off;
     }
     flush_textured();
     g.BlendFunc(GL_SRC_ALPHA_, GL_ONE_MINUS_SRC_ALPHA_);
