@@ -209,6 +209,10 @@ then exit.
 .B \-\-version
 Print the version and exit.
 .TP
+.B \-\-sprites
+Browse every sprite of the game in a window (left and right step through
+them, up and down through the categories), then exit.
+.TP
 .B \-\-help
 Print a summary of the options and exit.
 .SH CONTROLS
