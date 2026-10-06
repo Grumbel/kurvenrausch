@@ -21,6 +21,8 @@ int phase_depth[static_cast<int>(Phase::Count)]{};
 int open_stack[8]{};
 int open_n = 0;
 void (*sync_finish)() = nullptr;
+// Open GlesMirror phases: the phases inside them count as the mirror.
+int mirror_depth = 0;
 
 double ticks_to_ms(Uint64 delta) {
     const double freq = static_cast<double>(SDL_GetPerformanceFrequency());
@@ -33,6 +35,7 @@ double ticks_to_ms(Uint64 delta) {
 void begin_frame() {
     cur = Snapshot{};
     open_n = 0;
+    mirror_depth = 0;
     std::memset(phase_depth, 0, sizeof phase_depth);
     std::memset(phase_start, 0, sizeof phase_start);
 }
@@ -48,6 +51,8 @@ void end_frame(double frame_ms) {
 void begin(Phase p) {
     const int i = static_cast<int>(p);
     if (i < 0 || i >= static_cast<int>(Phase::Count)) return;
+    if (mirror_depth > 0 && p != Phase::GlesMirror) return;
+    if (p == Phase::GlesMirror) ++mirror_depth;
     if (open_n < static_cast<int>(sizeof open_stack / sizeof open_stack[0]))
         open_stack[open_n++] = i;
     if (phase_depth[i]++ == 0) {
@@ -59,6 +64,8 @@ void begin(Phase p) {
 void end(Phase p) {
     const int i = static_cast<int>(p);
     if (i < 0 || i >= static_cast<int>(Phase::Count)) return;
+    if (mirror_depth > 0 && p != Phase::GlesMirror) return;
+    if (p == Phase::GlesMirror) --mirror_depth;
     if (phase_depth[i] <= 0) return;
     if (--phase_depth[i] == 0) {
         if (sync_finish) sync_finish();

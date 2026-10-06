@@ -13,6 +13,7 @@
 #include "types.hpp"
 
 #include <cstdint>
+#include <memory>
 #include <unordered_map>
 #include <vector>
 
@@ -36,6 +37,14 @@ public:
     bool ready() const { return program_ != 0; }
 
     void set_size(int width, int height);
+    // Use other's uploaded bitmaps and atlas (same GL context).
+    void share_textures(const GlesRenderer& other) { tc_ = other.tc_; }
+    // How the backdrop is seen: zoom relative to the main view; a mirror shows
+    // the panorama behind, flipped, and no sun or moon (BackdropView).
+    void set_backdrop_view(float zoom, bool mirror) {
+        backdrop_zoom_ = zoom;
+        backdrop_mirror_ = mirror;
+    }
 
     // Draws the road scene into the internal FBO (not the window): full-bright
     // albedo, then at night a lightmap evaluating the software street_lights /
@@ -152,6 +161,8 @@ private:
     Color fog_air_{};
     float window_wake_ = 0.f;
     float daylight_ = 1.f;
+    float backdrop_zoom_ = 1.f;
+    bool backdrop_mirror_ = false;
 
     // Depth (NDC z) of the sprite pass and of the light quads tested against
     // it (GL_LESS against the depth buffer, cleared to 1 = bare ground).
@@ -218,15 +229,21 @@ private:
         float u0 = 0.f, v0 = 0.f, u1 = 1.f, v1 = 1.f;
         bool in_atlas = false;
     };
-    std::unordered_map<const uint32_t*, CachedTex> textures_;
-    // One or more atlas pages (scenery + static vehicles). atlas_tex_ is page 0
-    // (white tint texel lives there); textures_ point at whichever page holds them.
-    std::vector<unsigned> atlas_pages_;
-    unsigned atlas_tex_ = 0; // == atlas_pages_[0] when non-empty
-    int atlas_w_ = 0, atlas_h_ = 0; // size of each page (power of two)
-    bool atlas_ready_ = false;
-    // 1×1 white texel in the atlas — solid-coloured quads share the sprite batch.
-    float white_u_ = 0.f, white_v_ = 0.f;
+    // Uploaded bitmaps, shared by renderers drawing in the same GL context
+    // (the main view and the mirror) so the atlas exists once.
+    struct TextureCache {
+        std::unordered_map<const uint32_t*, CachedTex> textures;
+        // One or more atlas pages (scenery + static vehicles). atlas_tex is
+        // page 0 (the white tint texel lives there); textures point at
+        // whichever page holds them.
+        std::vector<unsigned> atlas_pages;
+        unsigned atlas_tex = 0; // == atlas_pages[0] when non-empty
+        int atlas_w = 0, atlas_h = 0; // size of each page (power of two)
+        bool atlas_ready = false;
+        // 1×1 white texel in the atlas — solid-coloured quads share the sprite batch.
+        float white_u = 0.f, white_v = 0.f;
+    };
+    std::shared_ptr<TextureCache> tc_ = std::make_shared<TextureCache>();
 };
 
 } // namespace racer

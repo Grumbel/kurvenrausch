@@ -244,10 +244,10 @@ private:
     Track track_;
     RoadRenderer road_;
     GlesRenderer gles_;
+    GlesRenderer mirror_gles_; // the mirror's view, sharing gles_'s textures
     bool use_gles_ = false;
     std::vector<RoadSprite> road_sprites_;
     Framebuffer mirror_fb_;
-    Bitmap mirror_bitmap_; // mirror_fb_'s pixels, for a Canvas
     RoadRenderer mirror_road_;
     std::vector<RoadSprite> mirror_sprites_;
     SpriteSheet sprites_;

@@ -177,13 +177,13 @@ void draw_mirror_frame(Canvas& fb, int x, int y, int w, int h) {
 }
 
 // Faint diagonal reflections across the glass.
-void draw_mirror_sheen(Canvas& fb, int x, int y, int w, int h) {
+void draw_mirror_sheen(Canvas& fb, int x, int y, int w, int h, float strength = 0.12f) {
     constexpr int streaks[][2] = {{0, 6}, {9, 2}}; // first column at the bottom, width
     for (int row = 0; row < h; ++row) {
         for (const auto& streak : streaks) {
             for (int i = 0; i < streak[1]; ++i) {
                 const int col = w / 5 + streak[0] + i + (h - 1 - row);
-                if (col < w) fb.blend_pixel(x + col, y + row, Color{255, 255, 255}, 0.12f);
+                if (col < w) fb.blend_pixel(x + col, y + row, Color{255, 255, 255}, strength);
             }
         }
     }
@@ -674,10 +674,17 @@ void Game::apply_scene_backend() {
     }
     // Context may have been rebuilt; always drop names and recreate.
     gles_.invalidate();
+    mirror_gles_.invalidate();
     if (!gles_.init()) {
         std::cout << "Kurvenrausch: software scene renderer (GLES init failed)\n";
         return;
     }
+    mirror_gles_.share_textures(gles_);
+    if (!mirror_gles_.init()) {
+        std::cout << "Kurvenrausch: software scene renderer (GLES mirror init failed)\n";
+        return;
+    }
+    mirror_gles_.set_backdrop_view(1.f, true);
     gles_.set_size(width_, fb_height());
     use_gles_ = true;
     if (!was) std::cout << "Kurvenrausch: GLES2 scene renderer\n";
@@ -2935,6 +2942,11 @@ void Game::render() {
             car_effects(scene_list_);
             scene_list_.set_layer(1);
             cockpit(scene_list_);
+            // The mirror's housing darkens at night with the scene; its glass
+            // goes on top afterwards (render_mirror).
+            if (debug_.mirror)
+                draw_mirror_frame(scene_list_, (width_ - mir_width()) / 2, mirror_y * pixel_scale_, mir_width(),
+                                  mir_height());
             gles_.render(track_, view, sprites_, road_sprites_, look, scene_light, &background_, hour_, beam_ptr,
                          weather_ptr, &scene_list_);
         }
@@ -3085,7 +3097,6 @@ void Game::render_mirror(Canvas& c) {
     const float half_w = static_cast<float>(mir_width()) / 2.f;
     const float y_scale = half_w * (static_cast<float>(fb_height()) / 2.f) / fb_x_unit();
     const float zoom = mirror_depth * half_w / (cam.depth * fb_x_unit());
-    background_.render(mirror_fb_, look, BackdropView{mirror_horizon * static_cast<float>(pixel_scale_), zoom, true}, hour_);
 
     RoadView view;
     view.position = car_z;
@@ -3127,10 +3138,30 @@ void Game::render_mirror(Canvas& c) {
     });
     // Mirror traffic: lights relative to the rear-facing camera (dir flipped).
     // (Set above when building sprites — add lights for night pools.)
+    const int mirror_x = (width_ - mir_width()) / 2;
+    const float mx = static_cast<float>(mirror_x), my = static_cast<float>(mirror_y * pixel_scale_);
+    if (use_gles_) {
+        // Rendered by its own GLES view (sharing the sprite atlas) and set
+        // into the housing as a texture.
+        frame_stats::Scope phase(frame_stats::Phase::GlesMirror);
+        if (!paused_) {
+            mirror_gles_.set_size(mir_width(), mir_height());
+            mirror_gles_.set_backdrop_view(zoom, true);
+            mirror_gles_.render(track_, view, sprites_, mirror_sprites_, look,
+                                lit_by(daylight_at(hour_), look.night_glow), &background_, hour_);
+        }
+        // The housing is in the scene (Game::render); the sheen reflects the
+        // light there is, as it does darkened with the software picture.
+        hud_list_.blit_texture(mirror_gles_.color_texture(), mx, my, static_cast<float>(mir_width()),
+                               static_cast<float>(mir_height()));
+        draw_mirror_sheen(c, mirror_x, mirror_y * pixel_scale_, mir_width(), mir_height(),
+                          0.12f * lit_by(daylight_at(hour_), look.night_glow).level);
+        return;
+    }
+    background_.render(mirror_fb_, look, BackdropView{mirror_horizon * static_cast<float>(pixel_scale_), zoom, true}, hour_);
     mirror_road_.render(mirror_fb_, track_, view, sprites_, mirror_sprites_);
 
-    // Night on the mirror glass (GLES composites the mirror over the scene
-    // without the main-view apply_daylight pass).
+    // Night on the mirror glass.
     {
         const Daylight light = lit_by(daylight_at(hour_), look.night_glow);
         if (light.level < 0.999f || !mirror_road_.lamps().empty()) {
@@ -3145,15 +3176,8 @@ void Game::render_mirror(Canvas& c) {
         }
     }
 
-    const int mirror_x = (width_ - mir_width()) / 2;
     draw_mirror_frame(c, mirror_x, mirror_y * pixel_scale_, mir_width(), mir_height());
-    mirror_bitmap_.w = mirror_fb_.width();
-    mirror_bitmap_.h = mirror_fb_.height();
-    mirror_bitmap_.px.assign(mirror_fb_.pixels(), mirror_fb_.pixels() + mirror_bitmap_.w * mirror_bitmap_.h);
-    if (use_gles_) hud_list_.set_dynamic(true);
-    c.blit(mirror_bitmap_, static_cast<float>(mirror_x), static_cast<float>(mirror_y * pixel_scale_),
-           static_cast<float>(mirror_bitmap_.w), static_cast<float>(mirror_bitmap_.h));
-    if (use_gles_) hud_list_.set_dynamic(false);
+    fb_.blit(mirror_fb_, mirror_x, mirror_y * pixel_scale_); // c is fb_ on the software path
     draw_mirror_sheen(c, mirror_x, mirror_y * pixel_scale_, mir_width(), mir_height());
 }
 

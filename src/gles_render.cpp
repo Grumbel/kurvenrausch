@@ -566,14 +566,14 @@ void GlesRenderer::invalidate() {
     font_tex_ = 0;
     present_tex_ = 0;
     fbo_w_ = fbo_h_ = 0;
-    textures_.clear();
-    // Must clear atlas state — otherwise atlas_ready_ stays true with dead GL
+    tc_->textures.clear();
+    // Must clear atlas state — otherwise tc_->atlas_ready stays true with dead GL
     // names after F8/software switch and every sprite becomes a solo texture.
-    atlas_pages_.clear();
-    atlas_tex_ = 0;
-    atlas_w_ = atlas_h_ = 0;
-    atlas_ready_ = false;
-    white_u_ = white_v_ = 0.f;
+    tc_->atlas_pages.clear();
+    tc_->atlas_tex = 0;
+    tc_->atlas_w = tc_->atlas_h = 0;
+    tc_->atlas_ready = false;
+    tc_->white_u = tc_->white_v = 0.f;
     // Force load_gl to re-resolve entry points if needed.
     g = {};
 }
@@ -583,20 +583,24 @@ void GlesRenderer::shutdown() {
         program_ = 0;
         vbo_ = 0;
         fbo_ = color_tex_ = depth_rb_ = light_fbo_ = light_tex_ = 0;
-        textures_.clear();
+        tc_->textures.clear();
         return;
     }
-    for (auto& [k, entry] : textures_) {
-        (void)k;
-        if (entry.id && !entry.in_atlas) g.DeleteTextures(1, &entry.id);
+    if (tc_.use_count() == 1) {
+        for (auto& [k, entry] : tc_->textures) {
+            (void)k;
+            if (entry.id && !entry.in_atlas) g.DeleteTextures(1, &entry.id);
+        }
+        tc_->textures.clear();
+        for (unsigned t : tc_->atlas_pages) {
+            if (t) g.DeleteTextures(1, &t);
+        }
+        tc_->atlas_pages.clear();
+        tc_->atlas_tex = 0;
+        tc_->atlas_ready = false;
+    } else {
+        tc_ = std::make_shared<TextureCache>(); // the other renderer still uses them
     }
-    textures_.clear();
-    for (unsigned t : atlas_pages_) {
-        if (t) g.DeleteTextures(1, &t);
-    }
-    atlas_pages_.clear();
-    atlas_tex_ = 0;
-    atlas_ready_ = false;
     if (depth_rb_ && g.DeleteRenderbuffers) {
         g.DeleteRenderbuffers(1, &depth_rb_);
         depth_rb_ = 0;
@@ -820,7 +824,7 @@ void GlesRenderer::push_solid_quad(float x0, float y0, float x1, float y1, float
 
 void GlesRenderer::push_tint_quad(float x0, float y0, float x1, float y1, float x2, float y2, float x3, float y3,
                                   Color c) {
-    if (!atlas_tex_) {
+    if (!tc_->atlas_tex) {
         push_solid_quad(x0, y0, x1, y1, x2, y2, x3, y3, c);
         return;
     }
@@ -835,9 +839,9 @@ void GlesRenderer::push_tint_quad(float x0, float y0, float x1, float y1, float 
         const float xmax = std::max(std::max(x0, x1), std::max(x2, x3));
         if (ymax <= cy0 || ymin >= cy1 || xmax <= cx0 || xmin >= cx1) return;
     }
-    set_textured(atlas_tex_);
+    set_textured(tc_->atlas_tex);
     const float r = c.r / 255.f, gch = c.g / 255.f, b = c.b / 255.f, a = c.a / 255.f;
-    const float u = white_u_, v = white_v_;
+    const float u = tc_->white_u, v = tc_->white_v;
     const Vertex verts[6] = {
         {x0, y0, u, v, r, gch, b, a}, {x1, y1, u, v, r, gch, b, a}, {x2, y2, u, v, r, gch, b, a},
         {x0, y0, u, v, r, gch, b, a}, {x2, y2, u, v, r, gch, b, a}, {x3, y3, u, v, r, gch, b, a},
@@ -1122,7 +1126,7 @@ GlesRenderer::TexRef GlesRenderer::texture_for(const Bitmap& bmp, bool dynamic) 
         }
     };
 
-    if (auto it = textures_.find(key); it != textures_.end()) {
+    if (auto it = tc_->textures.find(key); it != tc_->textures.end()) {
         CachedTex& entry = it->second;
         if (entry.id && entry.w == bmp.w && entry.h == bmp.h) {
             if (dynamic && !entry.in_atlas) upload_rgba(entry.id, 0, 0, false, bmp.w, bmp.h);
@@ -1136,12 +1140,12 @@ GlesRenderer::TexRef GlesRenderer::texture_for(const Bitmap& bmp, bool dynamic) 
     unsigned tex = 0;
     g.GenTextures(1, &tex);
     upload_rgba(tex, 0, 0, true, bmp.w, bmp.h);
-    textures_[key] = CachedTex{tex, bmp.w, bmp.h, 0.f, 0.f, 1.f, 1.f, false};
+    tc_->textures[key] = CachedTex{tex, bmp.w, bmp.h, 0.f, 0.f, 1.f, 1.f, false};
     return TexRef{tex, 0.f, 0.f, 1.f, 1.f};
 }
 
 void GlesRenderer::ensure_sprite_atlas(const SpriteSheet& sprites) {
-    if (atlas_ready_ || !g.GenTextures) return;
+    if (tc_->atlas_ready || !g.GenTextures) return;
 
     // Pack every static bitmap into as many 4096² atlas pages as needed so no
     // car falls back to a solo texture (each solo was a separate draw).
@@ -1221,14 +1225,14 @@ void GlesRenderer::ensure_sprite_atlas(const SpriteSheet& sprites) {
 
     const int n_pages = places.empty() ? 0 : places.back().page + 1;
     if (n_pages <= 0) {
-        atlas_ready_ = true;
+        tc_->atlas_ready = true;
         return;
     }
-    // Uniform page size (simplest UVs); all pages share atlas_w_/atlas_h_.
-    atlas_w_ = pot(std::max(global_max_w, 64));
-    atlas_h_ = pot(std::max(global_max_h, 64));
+    // Uniform page size (simplest UVs); all pages share tc_->atlas_w/tc_->atlas_h.
+    tc_->atlas_w = pot(std::max(global_max_w, 64));
+    tc_->atlas_h = pot(std::max(global_max_h, 64));
 
-    atlas_pages_.assign(static_cast<size_t>(n_pages), 0u);
+    tc_->atlas_pages.assign(static_cast<size_t>(n_pages), 0u);
     for (int p = 0; p < n_pages; ++p) {
         unsigned tex = 0;
         g.GenTextures(1, &tex);
@@ -1237,26 +1241,26 @@ void GlesRenderer::ensure_sprite_atlas(const SpriteSheet& sprites) {
         g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_MAG_FILTER_, GL_NEAREST_);
         g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_WRAP_S_, GL_CLAMP_TO_EDGE_);
         g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_WRAP_T_, GL_CLAMP_TO_EDGE_);
-        g.TexImage2D(GL_TEXTURE_2D_, 0, static_cast<int>(GL_RGBA_), atlas_w_, atlas_h_, 0, GL_RGBA_,
+        g.TexImage2D(GL_TEXTURE_2D_, 0, static_cast<int>(GL_RGBA_), tc_->atlas_w, tc_->atlas_h, 0, GL_RGBA_,
                      GL_UNSIGNED_BYTE_, nullptr);
-        atlas_pages_[static_cast<size_t>(p)] = tex;
+        tc_->atlas_pages[static_cast<size_t>(p)] = tex;
     }
-    atlas_tex_ = atlas_pages_[0];
+    tc_->atlas_tex = tc_->atlas_pages[0];
     // White tint texel on page 0 only (rails/tunnel push_tint_quad).
     {
         const uint8_t white[4] = {255, 255, 255, 255};
-        const int wx = atlas_w_ - 1, wy = atlas_h_ - 1;
-        g.BindTexture(GL_TEXTURE_2D_, atlas_tex_);
+        const int wx = tc_->atlas_w - 1, wy = tc_->atlas_h - 1;
+        g.BindTexture(GL_TEXTURE_2D_, tc_->atlas_tex);
         if (g.TexSubImage2D)
             g.TexSubImage2D(GL_TEXTURE_2D_, 0, wx, wy, 1, 1, GL_RGBA_, GL_UNSIGNED_BYTE_, white);
-        white_u_ = (static_cast<float>(wx) + 0.5f) / static_cast<float>(atlas_w_);
-        white_v_ = (static_cast<float>(wy) + 0.5f) / static_cast<float>(atlas_h_);
+        tc_->white_u = (static_cast<float>(wx) + 0.5f) / static_cast<float>(tc_->atlas_w);
+        tc_->white_v = (static_cast<float>(wy) + 0.5f) / static_cast<float>(tc_->atlas_h);
     }
     g.PixelStorei(0x0CF5 /* GL_UNPACK_ALIGNMENT */, 1);
 
     for (const Place& pl : places) {
         const Bitmap& bmp = *pl.b;
-        const unsigned tex = atlas_pages_[static_cast<size_t>(pl.page)];
+        const unsigned tex = tc_->atlas_pages[static_cast<size_t>(pl.page)];
         std::vector<uint8_t> rgba(static_cast<size_t>(bmp.w) * static_cast<size_t>(bmp.h) * 4);
         for (size_t i = 0; i < bmp.px.size(); ++i) {
             const uint32_t p = bmp.px[i];
@@ -1269,17 +1273,17 @@ void GlesRenderer::ensure_sprite_atlas(const SpriteSheet& sprites) {
         if (g.TexSubImage2D) {
             g.TexSubImage2D(GL_TEXTURE_2D_, 0, pl.x, pl.y, bmp.w, bmp.h, GL_RGBA_, GL_UNSIGNED_BYTE_, rgba.data());
         }
-        const float u0 = static_cast<float>(pl.x) / static_cast<float>(atlas_w_);
-        const float v0 = static_cast<float>(pl.y) / static_cast<float>(atlas_h_);
-        const float u1 = static_cast<float>(pl.x + bmp.w) / static_cast<float>(atlas_w_);
-        const float v1 = static_cast<float>(pl.y + bmp.h) / static_cast<float>(atlas_h_);
-        textures_[bmp.px.data()] = CachedTex{tex, bmp.w, bmp.h, u0, v0, u1, v1, true};
+        const float u0 = static_cast<float>(pl.x) / static_cast<float>(tc_->atlas_w);
+        const float v0 = static_cast<float>(pl.y) / static_cast<float>(tc_->atlas_h);
+        const float u1 = static_cast<float>(pl.x + bmp.w) / static_cast<float>(tc_->atlas_w);
+        const float v1 = static_cast<float>(pl.y + bmp.h) / static_cast<float>(tc_->atlas_h);
+        tc_->textures[bmp.px.data()] = CachedTex{tex, bmp.w, bmp.h, u0, v0, u1, v1, true};
     }
     if (n_pages > 1) {
-        std::cerr << "kurvenrausch: sprite atlas " << n_pages << " pages (" << atlas_w_ << "x" << atlas_h_
+        std::cerr << "kurvenrausch: sprite atlas " << n_pages << " pages (" << tc_->atlas_w << "x" << tc_->atlas_h
                   << "), " << places.size() << " sprites\n";
     }
-    atlas_ready_ = true;
+    tc_->atlas_ready = true;
 }
 
 void GlesRenderer::project_point(ScreenPoint& p, float world_x, float world_y, float world_z, float cam_x, float cam_y,
@@ -1310,6 +1314,7 @@ void GlesRenderer::draw_backdrop(const RoadTheme& theme, const Background* backd
         flush_solid();
         return;
     }
+    const float half_w = wf * 0.5f;
     // Mountain / hill ridges as continuous quads with slanted tops.
     // Sample the height profile at a coarse step (≈ width/100 columns) and
     // connect consecutive samples so the silhouette is smooth without one
@@ -1319,21 +1324,30 @@ void GlesRenderer::draw_backdrop(const RoadTheme& theme, const Background* backd
         if (h.empty()) return;
         const int period = static_cast<int>(h.size());
         const int step = std::max(1, width_ / 100);
-        auto height_at = [&](int x) -> float {
-            const int i = ((static_cast<int>(std::lround(offset)) + x) % period + period) % period;
-            return h[static_cast<size_t>(i)] * scale_mul;
+        const float zoom = backdrop_zoom_;
+        // The layer's sample at screen column x (Background::render's layer_x).
+        auto index_at = [&](int x) {
+            if (!backdrop_mirror_ && zoom == 1.f)
+                return ((static_cast<int>(std::lround(offset)) + x) % period + period) % period;
+            const float fp = static_cast<float>(period);
+            const float fx = static_cast<float>(x) + 0.5f;
+            float p = backdrop_mirror_ ? offset + fp / 2.f - (fx - half_w) / zoom : offset + fx / zoom;
+            p = std::fmod(p, fp);
+            if (p < 0.f) p += fp;
+            return std::min(period - 1, static_cast<int>(p));
         };
+        auto height_at = [&](int x) -> float { return h[static_cast<size_t>(index_at(x))] * scale_mul * zoom; };
         auto slope_light = [&](int x) -> float {
-            const int i = ((static_cast<int>(std::lround(offset)) + x) % period + period) % period;
+            const int i = index_at(x);
             const float slope =
                 h[static_cast<size_t>((i + 6) % period)] - h[static_cast<size_t>((i + period - 6) % period)];
             return std::clamp(0.5f - slope * 0.08f, 0.f, 1.f);
         };
         auto haze_at = [&](float alt) {
-            return std::max(theme.haze, std::clamp(1.f - alt / (14.f * scale_mul + 1.f), 0.f, 1.f) * 0.75f);
+            return std::max(theme.haze, std::clamp(1.f - alt / zoom / (14.f * scale_mul + 1.f), 0.f, 1.f) * 0.75f);
         };
         const bool do_snow = snow_line < 1.0e8f;
-        const float snow_y = horizon - snow_line;
+        const float snow_y = horizon - snow_line * zoom;
         for (int x = 0; x < width_; x += step) {
             const float h0 = height_at(x);
             const float h1 = height_at(std::min(width_, x + step));
@@ -1400,10 +1414,9 @@ void GlesRenderer::draw_backdrop(const RoadTheme& theme, const Background* backd
 
     const SkyBody sun = sun_position(hour);
     const SkyBody moon = moon_position(hour);
-    const float half_w = wf * 0.5f;
     // Match Background::body_screen placement (0.88 band).
     auto body_xy = [&](const SkyBody& body, float& sx, float& sy) -> bool {
-        if (body.elevation < -0.08f) return false;
+        if (backdrop_mirror_ || body.elevation < -0.08f) return false; // never in the mirror
         const float elev = std::clamp(body.elevation, 0.f, 1.f);
         const float band = horizon * 0.88f;
         sx = half_w + body.azimuth * half_w * 0.88f;
@@ -1487,14 +1500,18 @@ void GlesRenderer::draw_backdrop(const RoadTheme& theme, const Background* backd
             v = std::fmod(v, p);
             return v < 0.f ? v + p : v;
         };
-        const float x = wrap(c.x - offset, period);
-        for (float rep : {x, x - period}) {
-            if (rep + bw <= 0.f || rep >= wf) continue;
+        // Left edge on screen, before and after the wrap of the sky layer.
+        const float zoom = backdrop_zoom_;
+        const float x = backdrop_mirror_ ? half_w + (wrap(offset + period / 2.f - c.x - bw, period) - period) * zoom
+                                         : wrap(c.x - offset, period) * zoom;
+        for (float rep : {x, backdrop_mirror_ ? x + period * zoom : x - period * zoom}) {
+            if (rep + bw * zoom <= 0.f || rep >= wf) continue;
             // Tint only (software blit_scaled with cloud_tint_amount) — no distance fog.
             Color tint = blend(Color{255, 255, 255}, theme.cloud_tint, theme.cloud_tint_amount);
             tint.a = 0; // fog amount 0
             set_textured(tex.id);
-            push_quad(rep, horizon - c.altitude, bw, bh, tex.u0, tex.v0, tex.u1, tex.v1, tint, false);
+            push_quad(backdrop_mirror_ ? std::floor(rep) : rep, horizon - c.altitude * zoom, bw * zoom, bh * zoom,
+                      tex.u0, tex.v0, tex.u1, tex.v1, tint, backdrop_mirror_);
         }
     }
     flush_textured();
@@ -2640,8 +2657,9 @@ void GlesRenderer::render(const Track& track, const RoadView& view, const Sprite
     present_tex_ = color_tex_;
     // As apply_daylight(): nothing to do in plain daylight.
     if (light.level < 0.999f || light.glow > 0.001f) apply_night(light, headlight);
-    frame_stats::set_scene_counts(static_cast<int>(slices_.size()), static_cast<int>(objects.size()),
-                                  static_cast<int>(lamps_.size()), true, width_ * height_);
+    if (!backdrop_mirror_) // the main view's counts, not the mirror's
+        frame_stats::set_scene_counts(static_cast<int>(slices_.size()), static_cast<int>(objects.size()),
+                                      static_cast<int>(lamps_.size()), true, width_ * height_);
 
 
 
