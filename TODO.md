@@ -2,6 +2,13 @@
 
 ## Current tip
 
+### Grok: smooth GPU headlight + lamp falloff (no rings)
+- Headlight: 1D linear-filtered texture with software lateral shape, one
+  textured strip per row (vertex colour = distance falloff).
+- Lamps: per-row strips, strength (1-dz²/R²)² × texture (1-across²)² =
+  software street_lights formula.
+
+
 ### Grok: PortMaster conf next to binary when env unset
 - Direct ./kurvenrausch left XDG/KURVEN unset → $HOME/.local/state. Prefer
   SDL_GetBasePath()/conf when under …/ports/… or conf already exists there.

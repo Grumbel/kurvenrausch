@@ -115,6 +115,7 @@ private:
     void copy_tex_to_fbo(unsigned src_tex, unsigned dst_fbo);
     void ensure_emissive_lut();
     void ensure_falloff_tex();
+    void ensure_beam_falloff_tex();
     void draw_segment(const Track& track, const Slice& s, const RoadTheme& theme);
     void draw_sprites(const Track& track, const SpriteSheet& sprites, std::vector<RoadSprite>& objects);
     void project_point(ScreenPoint& p, float world_x, float world_y, float world_z, float cam_x, float cam_y,
@@ -160,6 +161,7 @@ private:
     unsigned copy_program_ = 0;
     unsigned emissive_tex_ = 0;
     unsigned falloff_tex_ = 0; // soft radial (1-r^2)^2 for lamp pools
+    unsigned beam_falloff_tex_ = 0; // 1D lateral headlight falloff (software shape)
     int emissive_count_ = 0;
     int fbo_w_ = 0, fbo_h_ = 0;
 

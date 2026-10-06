@@ -406,6 +406,7 @@ void GlesRenderer::invalidate() {
     ground_tex_ = 0;
     emissive_tex_ = 0;
     falloff_tex_ = 0;
+    beam_falloff_tex_ = 0;
     present_tex_ = 0;
     fbo_w_ = fbo_h_ = 0;
     textures_.clear();
@@ -452,6 +453,7 @@ void GlesRenderer::shutdown() {
     del_tex(ground_tex_);
     del_tex(emissive_tex_);
     del_tex(falloff_tex_);
+    del_tex(beam_falloff_tex_);
     present_tex_ = 0;
     auto del_fbo = [&](unsigned& f) {
         if (f && g.DeleteFramebuffers) { g.DeleteFramebuffers(1, &f); f = 0; }
@@ -1733,58 +1735,61 @@ void GlesRenderer::draw_lamp_pools(float ambient) {
     if (lamps_.empty()) return;
     const float dark = 1.f - ambient;
     if (dark <= 0.02f) return;
+    // Lateral texture: (1-across^2)^2 — with row strength (1-dz^2/R^2)^2 this
+    // matches software street_lights falloff exactly, linearly filtered.
     ensure_falloff_tex();
     if (!falloff_tex_) return;
-    // One additive textured quad per lamp — continuous (1-r^2)^2 falloff, no rings.
     g.BlendFunc(GL_ONE_, GL_ONE_);
     flush_solid();
     flush_textured();
     set_textured(falloff_tex_);
+    const float screen_c = 0.5f * static_cast<float>(width_);
+    const bool have_rc = row_center_x_.size() >= static_cast<size_t>(height_);
     for (const LampSpot& lamp : lamps_) {
         if (lamp.depth <= 1e-3f) continue;
         const float tint_r = 1.f;
         const float tint_g = lamp.glow == Glow::Street ? 0.85f : lamp.glow == Glow::Tail ? 0.35f : 1.f;
         const float tint_b = lamp.glow == Glow::Street ? 0.55f : lamp.glow == Glow::Tail ? 0.2f : 0.95f;
         const float strength = lamp.glow == Glow::Tail ? 0.85f : lamp.glow == Glow::Head ? 0.8f : 0.9f;
-        // Screen Y of the lamp's depth (nearest row).
-        int cy = -1;
-        float best = 1.0e9f;
-        for (int y = 0; y < height_; ++y) {
-            const float d = row_depth_[static_cast<size_t>(y)];
-            if (d <= 0.f) continue;
-            const float err = std::abs(d - lamp.depth);
-            if (err < best) {
-                best = err;
-                cy = y;
+        // World lateral offset from road centre at lamp depth (same as software).
+        float road_c_lamp = screen_c;
+        if (have_rc) {
+            float best = 1.0e9f;
+            for (int yy = 0; yy < height_; ++yy) {
+                const float d = row_depth_[static_cast<size_t>(yy)];
+                if (d <= 0.f) continue;
+                const float err = std::abs(d - lamp.depth);
+                if (err < best) {
+                    best = err;
+                    road_c_lamp = row_center_x_[static_cast<size_t>(yy)];
+                }
             }
         }
-        if (cy < 0) continue;
-        const float px = camera_depth_ / lamp.depth * x_scale_;
-        const float half = lamp.reach * px;
-        if (half < 1.f) continue;
-        // Perspective: nearer rows stretch the pool; approximate vertical radius
-        // from the depth span of the sphere section.
-        float y0 = static_cast<float>(cy), y1 = static_cast<float>(cy);
+        const float px_lamp = camera_depth_ / lamp.depth * x_scale_;
+        const float world_off = (lamp.x - road_c_lamp) / px_lamp;
         for (int y = 0; y < height_; ++y) {
-            const float d = row_depth_[static_cast<size_t>(y)];
-            if (d <= 0.f) continue;
-            if (std::abs(d - lamp.depth) < lamp.reach) {
-                y0 = std::min(y0, static_cast<float>(y));
-                y1 = std::max(y1, static_cast<float>(y + 1));
-            }
+            const float depth = row_depth_[static_cast<size_t>(y)];
+            if (depth <= 0.f) continue;
+            const float dz = depth - lamp.depth;
+            if (std::abs(dz) >= lamp.reach) continue;
+            const float px_per_unit = camera_depth_ / depth * x_scale_;
+            const float half = std::sqrt(lamp.reach * lamp.reach - dz * dz) * px_per_unit;
+            if (half < 0.5f) continue;
+            const float road_c = have_rc ? row_center_x_[static_cast<size_t>(y)] : screen_c;
+            const float cx = road_c + world_off * px_per_unit;
+            // Centre intensity (1 - dz^2/R^2)^2; lateral (1-across^2)^2 from texture.
+            // Radial texture is circular in UV; map strip to horizontal diameter.
+            const float nz = dz / lamp.reach;
+            const float centre = (1.f - nz * nz);
+            const float fall = centre * centre;
+            const float k = strength * dark * fall;
+            if (k < 0.008f) continue;
+            Color c{static_cast<uint8_t>(std::min(255.f, tint_r * k * 255.f + 0.5f)),
+                    static_cast<uint8_t>(std::min(255.f, tint_g * k * 255.f + 0.5f)),
+                    static_cast<uint8_t>(std::min(255.f, tint_b * k * 255.f + 0.5f)), 0};
+            // Sample horizontal mid-line of radial tex (v=0.5): (1-across^2)^2 shape.
+            push_quad(cx - half, static_cast<float>(y), half * 2.f, 1.f, 0.f, 0.5f, 1.f, 0.5f, c, false);
         }
-        const float cx = lamp.depth > 1e-3f && !row_center_x_.empty()
-                             ? (row_center_x_[static_cast<size_t>(cy)] +
-                                (lamp.x - (row_center_x_[static_cast<size_t>(cy)])) *
-                                    1.f) // already at lamp depth screen x
-                             : lamp.x;
-        const float k = strength * dark;
-        // a=0 → shader fog amount 0 (lightmap is unfogged additive lift).
-        Color c{static_cast<uint8_t>(std::min(255.f, tint_r * k * 255.f + 0.5f)),
-                static_cast<uint8_t>(std::min(255.f, tint_g * k * 255.f + 0.5f)),
-                static_cast<uint8_t>(std::min(255.f, tint_b * k * 255.f + 0.5f)), 0};
-        // Axis-aligned quad covering the pool; radial texture supplies falloff.
-        push_quad(cx - half, y0, half * 2.f, std::max(1.f, y1 - y0), 0.f, 0.f, 1.f, 1.f, c, false);
     }
     flush_textured();
     g.BlendFunc(GL_SRC_ALPHA_, GL_ONE_MINUS_SRC_ALPHA_);
@@ -1996,6 +2001,36 @@ void GlesRenderer::ensure_falloff_tex() {
     g.TexImage2D(GL_TEXTURE_2D_, 0, static_cast<int>(GL_RGBA_), n, n, 0, GL_RGBA_, GL_UNSIGNED_BYTE_, rgba.data());
 }
 
+void GlesRenderer::ensure_beam_falloff_tex() {
+    if (beam_falloff_tex_ || !g.GenTextures) return;
+    // 1×N strip: software lateral shape
+    //   edge = smoothstep(1, 0.55, across) * (0.75 + 0.25 * (1 - across^2))
+    // across = |x| from centre, 0 at mid, 1 at edge. Linear filtered → smooth.
+    constexpr int n = 256;
+    std::vector<uint8_t> rgba(static_cast<size_t>(n) * 4);
+    auto smoothstep = [](float a, float b, float x) {
+        const float t = std::clamp((x - a) / (b - a), 0.f, 1.f);
+        return t * t * (3.f - 2.f * t);
+    };
+    for (int i = 0; i < n; ++i) {
+        const float across = std::abs((static_cast<float>(i) + 0.5f) / static_cast<float>(n) * 2.f - 1.f);
+        const float edge = smoothstep(1.f, 0.55f, across) * (0.75f + 0.25f * (1.f - across * across));
+        const uint8_t g8 = static_cast<uint8_t>(std::min(255.f, edge * 255.f + 0.5f));
+        rgba[static_cast<size_t>(i) * 4 + 0] = g8;
+        rgba[static_cast<size_t>(i) * 4 + 1] = g8;
+        rgba[static_cast<size_t>(i) * 4 + 2] = g8;
+        rgba[static_cast<size_t>(i) * 4 + 3] = 255;
+    }
+    g.GenTextures(1, &beam_falloff_tex_);
+    g.BindTexture(GL_TEXTURE_2D_, beam_falloff_tex_);
+    g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_MIN_FILTER_, GL_LINEAR_);
+    g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_MAG_FILTER_, GL_LINEAR_);
+    g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_WRAP_S_, GL_CLAMP_TO_EDGE_);
+    g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_WRAP_T_, GL_CLAMP_TO_EDGE_);
+    g.PixelStorei(0x0CF5 /* GL_UNPACK_ALIGNMENT */, 1);
+    g.TexImage2D(GL_TEXTURE_2D_, 0, static_cast<int>(GL_RGBA_), n, 1, 0, GL_RGBA_, GL_UNSIGNED_BYTE_, rgba.data());
+}
+
 void GlesRenderer::read_fbo_argb(std::vector<uint32_t>& out) {
 
     out.resize(static_cast<size_t>(width_) * static_cast<size_t>(height_));
@@ -2098,7 +2133,12 @@ void GlesRenderer::apply_gpu_night(const Daylight& light, const Beam* headlight)
 void GlesRenderer::draw_headlight(const Beam& beam, float ambient) {
     const float dark = 1.f - ambient;
     if (dark <= 0.01f) return;
+    ensure_beam_falloff_tex();
+    if (!beam_falloff_tex_) return;
     g.BlendFunc(GL_ONE_, GL_ONE_);
+    flush_solid();
+    flush_textured();
+    set_textured(beam_falloff_tex_);
     auto smoothstep = [](float a, float b, float x) {
         const float t = std::clamp((x - a) / (b - a), 0.f, 1.f);
         return t * t * (3.f - 2.f * t);
@@ -2112,7 +2152,10 @@ void GlesRenderer::draw_headlight(const Beam& beam, float ambient) {
             break;
         }
     }
-    for (int y = 0; y < std::min(beam.bottom, height_); ++y) {
+    // One textured strip per row: horizontal UV samples the software lateral
+    // falloff (linear filtered), vertex colour carries distance/air strength.
+    const int y_lim = std::min(beam.bottom, height_);
+    for (int y = 0; y < y_lim; ++y) {
         float depth = row_depth_[static_cast<size_t>(y)];
         float air = 1.f;
         if (depth <= 0.f) {
@@ -2126,30 +2169,19 @@ void GlesRenderer::draw_headlight(const Beam& beam, float ambient) {
         const float reach = smoothstep(0.f, 200.f, ahead) / (1.f + (ahead / beam_reach) * (ahead / beam_reach));
         const float px_per_unit = beam.camera_depth / depth * beam.x_scale;
         const float half = (beam_half_width + beam_spread * ahead) * px_per_unit;
+        if (half < 0.5f) continue;
         const float mid = beam.center + beam.aim * ahead * px_per_unit;
-        const float k0 = 0.75f * dark * reach * air;
-        if (k0 < 0.01f) continue;
-        // Soft lateral falloff (software uses continuous smoothstep across).
-        constexpr int rings = 12;
-        for (int ring = 0; ring < rings; ++ring) {
-            const float edge0 = 1.f - static_cast<float>(ring) / static_cast<float>(rings);
-            const float edge1 = 1.f - static_cast<float>(ring + 1) / static_cast<float>(rings);
-            const float edge = 0.5f * (edge0 + edge1);
-            const float across = 1.f - edge;
-            const float side = (1.f - across) * (1.f - across);
-            const float k = k0 * side * (edge0 - edge1) * static_cast<float>(rings) * 0.5f;
-            if (k < 0.008f) continue;
-            Color c{static_cast<uint8_t>(std::min(255.f, k * 255.f + 0.5f)),
-                    static_cast<uint8_t>(std::min(255.f, k * 245.f + 0.5f)),
-                    static_cast<uint8_t>(std::min(255.f, k * 220.f + 0.5f)), 255};
-            const float h = half * edge0;
-            push_trap(static_cast<float>(y), mid - h, mid + h, static_cast<float>(y + 1), mid - h, mid + h, c);
-        }
+        // Match software peak: 0.9 * dark * reach * edge * air; edge ≤ 1 from texture.
+        const float k = 0.9f * dark * reach * air;
+        if (k < 0.01f) continue;
+        Color c{static_cast<uint8_t>(std::min(255.f, k * 255.f + 0.5f)),
+                static_cast<uint8_t>(std::min(255.f, k * 245.f + 0.5f)),
+                static_cast<uint8_t>(std::min(255.f, k * 220.f + 0.5f)), 0};
+        push_quad(mid - half, static_cast<float>(y), half * 2.f, 1.f, 0.f, 0.f, 1.f, 1.f, c, false);
     }
-    flush_solid();
+    flush_textured();
     g.BlendFunc(GL_SRC_ALPHA_, GL_ONE_MINUS_SRC_ALPHA_);
 }
-
 
 void GlesRenderer::render(const Track& track, const RoadView& view, const SpriteSheet& sprites,
                           std::vector<RoadSprite>& objects, const RoadTheme& theme, const Daylight& light,
