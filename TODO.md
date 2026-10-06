@@ -2,6 +2,12 @@
 
 ## Current tip
 
+### Grok: GLES coastal rails / beyond less chatty
+- Sprite-pass scissor now coalesces like the road pass (no flush per slice).
+- Far guardrails: bars only; lip + posts only when on-screen height is readable.
+- Beyond water/rock strips skipped when fog has already erased them.
+
+
 ### Grok: GLES GPU night (no ReadPixels)
 - Dropped CPU night (ReadPixels → apply_daylight / street_lights / upload).
 - Passes: full-bright albedo FBO → lightmap FBO (ambient clear + additive

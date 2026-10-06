@@ -866,15 +866,18 @@ void GlesRenderer::draw_segment(const Track& track, const Slice& s, const RoadTh
     }
 
     // Ground beyond a rail or cliff: sea/valley or rock (mostly hidden by the edge).
-    for (int side = -1; side <= 1; side += 2) {
-        const Edge kind = side < 0 ? seg.left : seg.right;
-        if (kind == Edge::None) continue;
-        const float off = kind == Edge::Rail ? rail_offset : cliff_offset;
-        const Color c = kind == Edge::Rail ? fogc(theme.beyond[band]) : fogc(theme.rock[0]);
-        const float xa = a.x + static_cast<float>(side) * off * a.w;
-        const float xb = b.x + static_cast<float>(side) * off * b.w;
-        if (side < 0) push_trap(b.y, 0.f, xb, a.y, 0.f, xa, c);
-        else push_trap(b.y, xb, wf, a.y, xa, wf, c);
+    // Skip strips that fog has already erased (long coastal runs were pure fill cost).
+    if (s.fog > 0.06f) {
+        for (int side = -1; side <= 1; side += 2) {
+            const Edge kind = side < 0 ? seg.left : seg.right;
+            if (kind == Edge::None) continue;
+            const float off = kind == Edge::Rail ? rail_offset : cliff_offset;
+            const Color c = kind == Edge::Rail ? fogc(theme.beyond[band]) : fogc(theme.rock[0]);
+            const float xa = a.x + static_cast<float>(side) * off * a.w;
+            const float xb = b.x + static_cast<float>(side) * off * b.w;
+            if (side < 0) push_trap(b.y, 0.f, xb, a.y, 0.f, xa, c);
+            else push_trap(b.y, xb, wf, a.y, xa, wf, c);
+        }
     }
 
     // Tunnel mouth: solid wall around the opening so scenery cannot show past
@@ -1023,6 +1026,8 @@ void GlesRenderer::draw_segment(const Track& track, const Slice& s, const RoadTh
 
 void GlesRenderer::draw_sprites(const Track& track, const SpriteSheet& sprites, std::vector<RoadSprite>& objects) {
     const float seg_len = track.segment_length;
+    bool scissor_on = false;
+    int sc_x0 = 0, sc_y0 = 0, sc_x1 = 0, sc_y1 = 0;
     for (auto it = slices_.rbegin(); it != slices_.rend(); ++it) {
         const Slice& s = *it;
         const bool projectable = s.p1.cam_z > camera_depth_;
@@ -1031,17 +1036,29 @@ void GlesRenderer::draw_sprites(const Track& track, const SpriteSheet& sprites, 
         const ScreenPoint& p0 = direction_ > 0 ? s.p1 : s.p2;
 
         // Clip to the tunnel mouth / nearer-road occlusion (software set_clip).
-        // GL scissor origin is bottom-left; our y grows downward.
+        // Coalesce consecutive slices with the same rect so rails/beyond solids
+        // stay in one batch (per-slice flush was the coastal-road stall).
         const int clip_x0 = std::max(0, static_cast<int>(s.left));
         const int clip_x1 = std::min(width_, static_cast<int>(std::ceil(s.right)));
         const int clip_y0 = std::max(0, pixel_edge(s.top));
         const int clip_y1 = std::min(height_, clip_row(s.clip));
-        const bool use_scissor = clip_x1 > clip_x0 && clip_y1 > clip_y0 &&
-                                 (clip_x0 > 0 || clip_x1 < width_ || clip_y0 > 0 || clip_y1 < height_);
-        if (use_scissor && g.Scissor && g.Enable) {
+        const bool want_scissor = g.Scissor && g.Enable && clip_x1 > clip_x0 && clip_y1 > clip_y0 &&
+                                  (clip_x0 > 0 || clip_x1 < width_ || clip_y0 > 0 || clip_y1 < height_);
+        if (want_scissor) {
+            if (!scissor_on || clip_x0 != sc_x0 || clip_y0 != sc_y0 || clip_x1 != sc_x1 || clip_y1 != sc_y1) {
+                flush_solid();
+                g.Enable(GL_SCISSOR_TEST_);
+                g.Scissor(clip_x0, height_ - clip_y1, clip_x1 - clip_x0, clip_y1 - clip_y0);
+                scissor_on = true;
+                sc_x0 = clip_x0;
+                sc_y0 = clip_y0;
+                sc_x1 = clip_x1;
+                sc_y1 = clip_y1;
+            }
+        } else if (scissor_on) {
             flush_solid();
-            g.Enable(GL_SCISSOR_TEST_);
-            g.Scissor(clip_x0, height_ - clip_y1, clip_x1 - clip_x0, clip_y1 - clip_y0);
+            g.Disable(GL_SCISSOR_TEST_);
+            scissor_on = false;
         }
 
         // Guard rails: same bands as software RoadRenderer::draw_edge (posts +
@@ -1078,31 +1095,35 @@ void GlesRenderer::draw_sprites(const Track& track, const SpriteSheet& sprites, 
                 const float h = ha + (hb - ha) * t;
                 return std::pair<float, float>{x, base - h * r};
             };
-            // Lower bar 0.20 .. 0.42
+            // Lower + upper bars (always). Lip and posts only when near enough
+            // to read — far coastal rails were 4 quads × 2 sides × hundreds of
+            // segments for detail that collapses to a few pixels.
+            const float ppu = std::max(ppu_a, ppu_b);
+            const bool near_detail = ppu > 0.14f;
             {
                 const auto n0 = at(0.f, 0.42f), n1 = at(0.f, 0.20f);
                 const auto f0 = at(1.f, 0.42f), f1 = at(1.f, 0.20f);
                 push_solid_quad(n0.first, n0.second, f0.first, f0.second, f1.first, f1.second, n1.first, n1.second,
                                 bar_c);
             }
-            // Upper bar 0.60 .. 0.95 (bright lip on the top edge via top_c on the upper half)
             {
                 const auto n0 = at(0.f, 0.95f), n1 = at(0.f, 0.60f);
                 const auto f0 = at(1.f, 0.95f), f1 = at(1.f, 0.60f);
                 push_solid_quad(n0.first, n0.second, f0.first, f0.second, f1.first, f1.second, n1.first, n1.second,
                                 bar_c);
-                const auto lip_n0 = at(0.f, 0.95f), lip_n1 = at(0.f, 0.88f);
-                const auto lip_f0 = at(1.f, 0.95f), lip_f1 = at(1.f, 0.88f);
-                push_solid_quad(lip_n0.first, lip_n0.second, lip_f0.first, lip_f0.second, lip_f1.first, lip_f1.second,
-                                lip_n1.first, lip_n1.second, top_c);
+                if (near_detail) {
+                    const auto lip_n0 = at(0.f, 0.95f), lip_n1 = at(0.f, 0.88f);
+                    const auto lip_f0 = at(1.f, 0.95f), lip_f1 = at(1.f, 0.88f);
+                    push_solid_quad(lip_n0.first, lip_n0.second, lip_f0.first, lip_f0.second, lip_f1.first, lip_f1.second,
+                                    lip_n1.first, lip_n1.second, top_c);
+                }
             }
-            // Post at the near end of the segment (first ~10% of the run).
-            {
+            // Posts: every segment when near; every 2nd when mid; skip when tiny.
+            if (near_detail || (ppu > 0.07f && (s.index & 1) == 0)) {
                 const float t0 = direction_ > 0 ? 0.f : 0.9f;
                 const float t1 = direction_ > 0 ? 0.1f : 1.f;
                 const auto n0 = at(t0, 1.f), n1 = at(t0, 0.f);
                 const auto f0 = at(t1, 1.f), f1 = at(t1, 0.f);
-                // Widen slightly in x so the post reads as a column.
                 const float pw = std::max(1.5f, std::min(std::abs(xb - xa) * 0.08f, 4.f));
                 const float sx = static_cast<float>(side);
                 push_solid_quad(n0.first - sx * pw * 0.5f, n0.second, f0.first - sx * pw * 0.5f, f0.second,
@@ -1287,10 +1308,13 @@ void GlesRenderer::draw_sprites(const Track& track, const SpriteSheet& sprites, 
             for (auto o = first; o != last; ++o) draw_object(*o);
         }
 
+    }
+    if (scissor_on) {
         flush_solid();
-        if (use_scissor && g.Disable) g.Disable(GL_SCISSOR_TEST_);
+        g.Disable(GL_SCISSOR_TEST_);
     }
     flush_textured();
+    flush_solid();
 }
 
 
