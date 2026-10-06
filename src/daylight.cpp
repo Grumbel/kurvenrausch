@@ -74,8 +74,6 @@ RoadTheme at_daytime(const RoadTheme& look, const Daylight& light) {
     return r;
 }
 
-bool night_emissive(Color c) { return is_emissive_argb(c.argb()); }
-
 void apply_daylight(Framebuffer& fb, const Daylight& light) {
     if (light.level >= 0.999f && light.glow <= 0.001f) return;
     // Per channel: blue at night, warm in the glow of dawn and dusk.
@@ -91,10 +89,7 @@ void apply_daylight(Framebuffer& fb, const Daylight& light) {
     const int n = fb.width() * fb.height();
     for (int i = 0; i < n; ++i) {
         const uint32_t p = px[i];
-        // Reconstruct Color with opaque alpha so it matches the emissive table.
-        if (night_emissive(Color{static_cast<uint8_t>(p >> 16), static_cast<uint8_t>(p >> 8),
-                                 static_cast<uint8_t>(p)}))
-            continue;
+        if (is_glowing(p)) continue; // a light
         int r = ((static_cast<int>((p >> 16) & 0xff) * r_scale) >> 8);
         int g = ((static_cast<int>((p >> 8) & 0xff) * g_scale) >> 8);
         int b = ((static_cast<int>(p & 0xff) * b_scale) >> 8);

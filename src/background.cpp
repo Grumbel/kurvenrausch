@@ -164,7 +164,7 @@ void Background::render(Framebuffer& fb, const RoadTheme& theme, const BackdropV
     fb.fill_rect(0, horizon, w, fb.height() - horizon, atmosphere_air(theme));
 
     // Stars at night, in a fixed field above the horizon (so the mirror
-    // shows them too). Their colours are lights: they keep shining in the
+    // shows them too). They are lights: they keep shining in the
     // darkened picture (see apply_daylight()).
     if (theme.stars > 0.02f) {
         uint32_t seed = 0x51a7f00du;
@@ -175,7 +175,7 @@ void Background::render(Framebuffer& fb, const RoadTheme& theme, const BackdropV
             const int y = static_cast<int>(static_cast<float>((seed >> 8) % 1000u) / 1000.f * static_cast<float>(horizon) * 0.9f);
             const bool bright = (seed >> 28) < 4;
             if (static_cast<float>((seed >> 4) & 0xff) / 255.f > theme.stars) continue; // fewer at dusk
-            fb.put_pixel(x, y, bright ? Color{0xe8, 0xee, 0xff} : Color{0xb8, 0xc8, 0xff});
+            fb.put_pixel(x, y, glowing(bright ? Color{0xe8, 0xee, 0xff} : Color{0xb8, 0xc8, 0xff}));
         }
     }
 
@@ -218,10 +218,10 @@ void Background::render(Framebuffer& fb, const RoadTheme& theme, const BackdropV
                 if (d <= radius) {
                     // Slight shading on the left for a bit of form.
                     const float shade = std::clamp((static_cast<float>(x) - moon_sx) / radius * 0.5f + 0.5f, 0.f, 1.f);
-                    fb.put_pixel(x, y, blend(limb, disc, shade));
+                    fb.put_pixel(x, y, glowing(blend(limb, disc, shade)));
                 } else if (d < radius * 1.45f && theme.stars > 0.2f) {
                     if (bayer4(x, y) < 0.2f * (1.f - (d - radius) / (0.45f * radius)))
-                        fb.put_pixel(x, y, Color{0xc8, 0xd0, 0xe0});
+                        fb.put_pixel(x, y, glowing(Color{0xc8, 0xd0, 0xe0}));
                 }
             }
         }

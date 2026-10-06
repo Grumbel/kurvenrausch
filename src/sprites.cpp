@@ -205,7 +205,7 @@ Bitmap make_gas_station() {
     }
     paint::rect(b, 0, 8, 122, 22, white);
     paint::rect(b, 0, 12, 122, 14, red);
-    paint::rect(b, 0, 28, 122, 2, Color{0xff, 0xf4, 0xc0}); // lights underneath
+    paint::rect(b, 0, 28, 122, 2, glowing(Color{0xff, 0xf4, 0xc0})); // lights underneath
     const int tx = (122 - font::text_width("FUEL", 2)) / 2;
     paint::text(b, tx, 13, "FUEL", white, 2);
 
@@ -304,7 +304,7 @@ Bitmap make_victorian(Color body, Color accent) {
 }
 
 // Window glass lit from inside: a light at night (see daylight.cpp).
-constexpr Color WindowLit{0xff, 0xd8, 0x88};
+constexpr Color WindowLit = glowing(Color{0xff, 0xd8, 0x88});
 
 // A window with its frame, lit or dark, at (x, y), w x h.
 void town_window(Bitmap& b, int x, int y, int w, int h, Color frame, bool lit) {
@@ -425,7 +425,7 @@ Bitmap make_tower(Color glass, Color frame) {
     Bitmap b(120, 260);
     const Color glass_hi = blend(glass, Color{0xff, 0xff, 0xff}, 0.35f), dark = blend(frame, Color{0, 0, 0}, 0.3f);
     paint::rect(b, 20, 0, 80, 12, dark); // the crown
-    paint::rect(b, 56, 0, 4, 4, Color{0xff, 0x30, 0x20});
+    paint::rect(b, 56, 0, 4, 4, glowing(Color{0xff, 0x30, 0x20})); // aircraft warning light
     paint::rect(b, 4, 12, 112, 248, frame);
     uint32_t r = glass.argb();
     for (int y = 16; y < 236; y += 14) {
@@ -810,7 +810,7 @@ Bitmap make_hospital() {
     paint::rect(b, 72, 76, 48, 20, glass);
     paint::rect(b, 95, 76, 2, 20, Color{0x50, 0x70, 0x88});
     paint::rect(b, 64, 64, 64, 8, red);
-    paint::text(b, (192 - font::text_width("HOSPITAL")) / 2, 64, "HOSPITAL", Color{0xff, 0xff, 0xff});
+    paint::text(b, (192 - font::text_width("HOSPITAL")) / 2, 64, "HOSPITAL", glowing(Color{0xff, 0xff, 0xff}));
     // The cross on the roof.
     paint::rect(b, 86, 0, 20, 20, wall);
     paint::rect(b, 93, 3, 6, 14, red);
@@ -869,7 +869,8 @@ Bitmap make_truck_sign() {
 // A chemical plant: round storage tanks, a tall flare stack with its
 // flame, pipes between them, a hazard sign on the fence.
 // Neon, the Strip's colours: lights at night (see daylight.cpp).
-constexpr Color NeonPink{0xff, 0x40, 0xc0}, NeonCyan{0x40, 0xf0, 0xff}, Bulb{0xff, 0xe0, 0x60};
+constexpr Color NeonPink = glowing(Color{0xff, 0x40, 0xc0}), NeonCyan = glowing(Color{0x40, 0xf0, 0xff}),
+                Bulb = glowing(Color{0xff, 0xe0, 0x60});
 
 // Light bulbs round a rectangle, every other one.
 void bulbs(Bitmap& b, int x, int y, int w, int h) {
@@ -919,8 +920,8 @@ Bitmap make_casino_pyramid() {
         b.set(80 - half, y, edge);
         b.set(80 + half, y, edge);
     }
-    paint::rect(b, 79, 0, 3, 100, Color{0xf0, 0xf4, 0xff}); // the beam
-    paint::rect(b, 80, 0, 1, 100, Color{0xff, 0xff, 0xff});
+    paint::rect(b, 79, 0, 3, 100, glowing(Color{0xf0, 0xf4, 0xff})); // the beam
+    paint::rect(b, 80, 0, 1, 100, glowing(Color{0xff, 0xff, 0xff}));
     paint::rect(b, 60, 200, 40, 20, WindowLit);
     paint::outline(b, Outline);
     return b;
@@ -950,7 +951,7 @@ Bitmap make_chemical_plant() {
     paint::rect(b, 128, 8, 8, 104, steel_dark);
     for (int y = 14; y < 112; y += 12) paint::rect(b, 126, y, 12, 2, Color{0xd0, 0x30, 0x30});
     paint::ellipse(b, 132.f, 6.f, 4.f, 6.f, Color{0xff, 0x90, 0x20});
-    paint::ellipse(b, 132.f, 7.f, 2.f, 3.f, Color{0xff, 0xf0, 0xa0});
+    paint::ellipse(b, 132.f, 7.f, 2.f, 3.f, glowing(Color{0xff, 0xf0, 0xa0}));
     // Two tanks, banded, with their ladders.
     for (int k = 0; k < 2; ++k) {
         const float cx = 30.f + 52.f * static_cast<float>(k);
@@ -1236,8 +1237,8 @@ Bitmap make_street_lamp() {
     paint::rect(b, 10, 22, 4, 84, pole);
     paint::rect(b, 10, 22, 1, 84, pole_hi);
     paint::rect(b, 5, 8, 14, 14, pole);
-    paint::rect(b, 7, 10, 10, 10, Color{0xff, 0xec, 0xb0});
-    paint::rect(b, 8, 11, 4, 4, Color{0xff, 0xff, 0xf0});
+    paint::rect(b, 7, 10, 10, 10, glowing(Color{0xff, 0xec, 0xb0}));
+    paint::rect(b, 8, 11, 4, 4, glowing(Color{0xff, 0xff, 0xf0}));
     paint::rect(b, 3, 6, 18, 3, pole);
     paint::rect(b, 11, 2, 2, 4, pole);
     paint::outline(b, Outline);
@@ -1497,9 +1498,9 @@ Bitmap make_car(const CarStyle& style, int turn, int signal, bool brake, int tre
     const Color tire{0x18, 0x18, 0x1c}, tread{0x60, 0x60, 0x6a};
     const Color chrome{0x9a, 0x9a, 0xa8}, grille{0x14, 0x14, 0x18}, slat{0x3a, 0x3a, 0x42};
     // Tail lights glow; brake lights burn, white-hot in the middle.
-    const Color lamp = brake ? Color{0xff, 0x54, 0x3c} : Color{0xc0, 0x18, 0x18};
-    const Color lamp_hi = brake ? Color{0xff, 0xf0, 0xe0} : Color{0xe8, 0x50, 0x40};
-    const Color glow{0xff, 0x30, 0x20};
+    const Color lamp = glowing(brake ? Color{0xff, 0x54, 0x3c} : Color{0xc0, 0x18, 0x18});
+    const Color lamp_hi = glowing(brake ? Color{0xff, 0xf0, 0xe0} : Color{0xe8, 0x50, 0x40});
+    const Color glow = glowing(Color{0xff, 0x30, 0x20});
 
     // Shadow and tyres stay planted while the body shifts into the turn.
     paint::ellipse(b, 48.f, 41.f, 46.f, 3.f, Color{0x22, 0x22, 0x22});
@@ -1539,8 +1540,8 @@ Bitmap make_car(const CarStyle& style, int turn, int signal, bool brake, int tre
     for (int side = -1; side <= 1; side += 2) {
         const int x = (side < 0 ? 12 : 80) + s;
         const bool on = lit(signal, side);
-        paint::rect(b, x, 22, 4, 6, on ? Color{0xff, 0xc0, 0x38} : Color{0xa8, 0x5c, 0x18});
-        if (on) paint::rect(b, x + 1, 23, 2, 2, Color{0xff, 0xf4, 0xc0});
+        paint::rect(b, x, 22, 4, 6, on ? glowing(Color{0xff, 0xc0, 0x38}) : Color{0xa8, 0x5c, 0x18});
+        if (on) paint::rect(b, x + 1, 23, 2, 2, glowing(Color{0xff, 0xf4, 0xc0}));
     }
     paint::rect(b, 34 + s, 22, 28, 9, grille);
     for (int y = 23; y < 31; y += 2) paint::rect(b, 35 + s, y, 26, 1, slat);
@@ -1590,7 +1591,7 @@ Bitmap make_car_front(const CarStyle& style, int signal, int tread_frame) {
     Bitmap b(96, 44);
     const Color tire{0x18, 0x18, 0x1c}, tread{0x60, 0x60, 0x6a};
     const Color chrome{0x9a, 0x9a, 0xa8}, grille{0x14, 0x14, 0x18}, slat{0x3a, 0x3a, 0x42};
-    const Color lamp{0xf0, 0xec, 0xc8}, lamp_hi{0xff, 0xff, 0xff};
+    const Color lamp = glowing(Color{0xf0, 0xec, 0xc8}), lamp_hi = glowing(Color{0xff, 0xff, 0xff});
     const Color glass{0x2c, 0x3c, 0x54}, shine{0x70, 0x88, 0xa8};
 
     paint::ellipse(b, 48.f, 41.f, 46.f, 3.f, Color{0x22, 0x22, 0x22});
@@ -1617,8 +1618,8 @@ Bitmap make_car_front(const CarStyle& style, int signal, int tread_frame) {
     for (int side = -1; side <= 1; side += 2) {
         const int x = side < 0 ? 11 : 79;
         if (lit(signal, side)) {
-            paint::rect(b, x, 27, 6, 3, Color{0xff, 0xc0, 0x38});
-            paint::rect(b, x + 2, 28, 2, 1, Color{0xff, 0xf4, 0xc0});
+            paint::rect(b, x, 27, 6, 3, glowing(Color{0xff, 0xc0, 0x38}));
+            paint::rect(b, x + 2, 28, 2, 1, glowing(Color{0xff, 0xf4, 0xc0}));
         } else {
             paint::rect(b, x, 28, 6, 2, Color{0xb8, 0x6c, 0x1c});
         }
@@ -1928,8 +1929,8 @@ Bitmap make_golden_gate() {
     paint::stroke(b, 230.f, 12.f, 128.f, 4.f, 2.f, 2.f, cable);
 
     // Navigation lights on the crowns.
-    paint::rect(b, 14, 1, 2, 2, Color{0xff, 0xf0, 0xa0});
-    paint::rect(b, 240, 1, 2, 2, Color{0xff, 0xf0, 0xa0});
+    paint::rect(b, 14, 1, 2, 2, glowing(Color{0xff, 0xf0, 0xa0}));
+    paint::rect(b, 240, 1, 2, 2, glowing(Color{0xff, 0xf0, 0xa0}));
 
     paint::outline(b, Outline);
     return b;
@@ -1965,8 +1966,8 @@ Bitmap make_crossing_sign(int lit) {
     for (int side = -1; side <= 1; side += 2) {
         const float x = side < 0 ? 7.f : 25.f;
         paint::ellipse(b, x, 38.f, 6.f, 6.f, black);
-        paint::ellipse(b, x, 38.f, 4.f, 4.f, lit == side ? Color{0xff, 0x30, 0x30} : Color{0x58, 0x10, 0x10});
-        if (lit == side) paint::rect(b, static_cast<int>(x) - 1, 36, 2, 2, Color{0xff, 0xf8, 0xf0});
+        paint::ellipse(b, x, 38.f, 4.f, 4.f, lit == side ? glowing(Color{0xff, 0x30, 0x30}) : Color{0x58, 0x10, 0x10});
+        if (lit == side) paint::rect(b, static_cast<int>(x) - 1, 36, 2, 2, glowing(Color{0xff, 0xf8, 0xf0}));
     }
     paint::outline(b, Outline);
     return b;
@@ -2002,7 +2003,7 @@ Bitmap make_train_car(int kind) {
             paint::rect(b, 100, 6, 20, 12, Color{0x2c, 0x3c, 0x54}); // the cab's window
             paint::rect(b, 4, 26, 120, 4, stripe);
             for (int x = 10; x < 92; x += 8) paint::rect(b, x, 15, 4, 8, blend(body, Color{0, 0, 0}, 0.3f)); // vents
-            paint::rect(b, 122, 30, 4, 4, Color{0xff, 0xf4, 0xc0}); // headlight
+            paint::rect(b, 122, 30, 4, 4, glowing(Color{0xff, 0xf4, 0xc0})); // headlight
             paint::rect(b, 30, 6, 6, 6, frame); // exhaust stack
             break;
         }
@@ -2221,21 +2222,21 @@ namespace {
 
 // A tail light panel; braking it burns brighter, white-hot in the middle.
 void tail_lamp(Bitmap& b, int x, int y, int w, int h, bool brake) {
-    paint::rect(b, x, y, w, h, brake ? Color{0xff, 0x54, 0x3c} : Color{0xc0, 0x18, 0x18});
+    paint::rect(b, x, y, w, h, glowing(brake ? Color{0xff, 0x54, 0x3c} : Color{0xc0, 0x18, 0x18}));
     if (w > 2 && h > 2) {
         paint::rect(b, x + 1, y + 1, w - 2, std::max(1, h / 4),
-                    brake ? Color{0xff, 0xf0, 0xe0} : Color{0xc8, 0x44, 0x38});
+                    glowing(brake ? Color{0xff, 0xf0, 0xe0} : Color{0xc8, 0x44, 0x38}));
     }
 }
 
 void indicator(Bitmap& b, int x, int y, int w, int h, bool on) {
-    paint::rect(b, x, y, w, h, on ? Color{0xff, 0xc0, 0x38} : Color{0xa8, 0x5c, 0x18});
-    if (on && w > 2 && h > 2) paint::rect(b, x + 1, y + 1, w - 2, h - 2, Color{0xff, 0xf4, 0xc0});
+    paint::rect(b, x, y, w, h, on ? glowing(Color{0xff, 0xc0, 0x38}) : Color{0xa8, 0x5c, 0x18});
+    if (on && w > 2 && h > 2) paint::rect(b, x + 1, y + 1, w - 2, h - 2, glowing(Color{0xff, 0xf4, 0xc0}));
 }
 
 void headlight(Bitmap& b, int x, int y, int w, int h) {
-    paint::rect(b, x, y, w, h, Color{0xf0, 0xec, 0xc8});
-    paint::rect(b, x + 1, y + 1, std::max(1, w / 2), std::max(1, h / 2), Color{0xff, 0xff, 0xff});
+    paint::rect(b, x, y, w, h, glowing(Color{0xf0, 0xec, 0xc8}));
+    paint::rect(b, x + 1, y + 1, std::max(1, w / 2), std::max(1, h / 2), glowing(Color{0xff, 0xff, 0xff}));
 }
 
 // A tyre with tread rows; `tread` (0 .. 2) shifts them down a pixel per
@@ -2412,7 +2413,7 @@ Bitmap make_bus(const CarStyle& st, int signal, bool brake, int tread) {
     paint::rect(b, 14, 10, 87, 26, Color{0x2c, 0x3c, 0x54}); // the back window
     paint::stroke(b, 22.f, 32.f, 32.f, 13.f, 1.f, 1.f, Color{0x70, 0x88, 0xa8});
     paint::rect(b, 44, 2, 28, 7, Color{0x14, 0x14, 0x18}); // route number
-    paint::text(b, 52, 2, "42", Color{0xff, 0xc0, 0x38});
+    paint::text(b, 52, 2, "42", glowing(Color{0xff, 0xc0, 0x38}));
     for (int y = 52; y < 78; y += 4) paint::rect(b, 30, y, 55, 2, st.body_dark); // engine louvres
     for (int side = -1; side <= 1; side += 2) {
         const int x = side < 0 ? 5 : 102;
@@ -2430,8 +2431,8 @@ Bitmap make_movie_car(Body body, const CarStyle& st, int turn, bool brake, int s
     Bitmap b(96, 44 + h);
     const int s = turn, u = 2 * turn; // the body leans, the cabin further
     const Color glass{0x2c, 0x3c, 0x54}, glint{0x70, 0x88, 0xa8}, chrome{0xc4, 0xc8, 0xd0}, black{0x14, 0x14, 0x18};
-    const Color lamp = brake ? Color{0xff, 0x54, 0x3c} : Color{0xc0, 0x18, 0x18};
-    const Color lamp_hi = brake ? Color{0xff, 0xf0, 0xe0} : Color{0xe8, 0x50, 0x40};
+    const Color lamp = glowing(brake ? Color{0xff, 0x54, 0x3c} : Color{0xc0, 0x18, 0x18});
+    const Color lamp_hi = glowing(brake ? Color{0xff, 0xf0, 0xe0} : Color{0xe8, 0x50, 0x40});
     const auto at = [h](int y) { return y + h; };
     paint::ellipse(b, 48.f, static_cast<float>(at(41)), 46.f, 3.f, Color{0x22, 0x22, 0x22});
     // The cabin's rear window, where the people show: the same for all.
@@ -2538,7 +2539,7 @@ Bitmap make_movie_car(Body body, const CarStyle& st, int turn, bool brake, int s
             const Color rubber{0x12, 0x12, 0x16}, plate{0xe8, 0xe8, 0xe0};
             const Color box{0x0c, 0x0c, 0x10}, box_slot{0x2a, 0x2a, 0x32};
             const Color cable{0x18, 0x18, 0x20};
-            const Color flux{0xe8, 0x78, 0x18}, flux_hi{0xff, 0xd0, 0x40}, flux_core{0xff, 0xf0, 0xa0};
+            const Color flux{0xe8, 0x78, 0x18}, flux_hi{0xff, 0xd0, 0x40}, flux_core = glowing(Color{0xff, 0xf0, 0xa0});
             const Color amber{0xc0, 0x70, 0x14}, amber_on{0xff, 0xb8, 0x30};
             const Color mast{0xc8, 0xcc, 0xd0};
 
@@ -2662,7 +2663,7 @@ Bitmap make_movie_car(Body body, const CarStyle& st, int turn, bool brake, int s
                 paint::ellipse(b, x, static_cast<float>(at(20)), 2.5f, 2.5f, lamp);
                 paint::ellipse(b, x, static_cast<float>(at(25)), 2.5f, 2.5f, lamp);
                 paint::ellipse(b, x, static_cast<float>(at(30)), 2.5f, 2.5f,
-                               lit(signal, side) ? Color{0xff, 0xc0, 0x38} : Color{0xa8, 0x5c, 0x18});
+                               lit(signal, side) ? glowing(Color{0xff, 0xc0, 0x38}) : Color{0xa8, 0x5c, 0x18});
                 if (brake) paint::rect(b, static_cast<int>(x) - 1, at(19), 2, 1, lamp_hi);
             }
             paint::rect(b, 38 + s, at(24), 20, 5, Color{0xe8, 0xe8, 0xd8}); // the plate
@@ -2713,7 +2714,7 @@ Bitmap make_bus_front(const CarStyle& st, int signal, int tread) {
     tyre(b, 89, 96, 18, 20, tread);
     paint::rect(b, 3, 0, 109, 100, st.body);
     paint::rect(b, 12, 2, 91, 10, Color{0x14, 0x14, 0x18}); // destination
-    paint::text(b, 46, 4, "CITY", Color{0xff, 0xc0, 0x38});
+    paint::text(b, 46, 4, "CITY", glowing(Color{0xff, 0xc0, 0x38}));
     paint::rect(b, 8, 14, 99, 50, Color{0x2c, 0x3c, 0x54}); // the great windscreen
     paint::rect(b, 56, 14, 3, 50, st.body);
     driver(b, 30.f, 46.f);
@@ -2806,9 +2807,9 @@ Bitmap make_rival(const CarStyle& st, int signal, bool brake, int tread) {
         paint::rect(b, x, 15, 4, 9, st.body_light);
     }
     for (int x : {16, 28, 72, 84}) {
-        const Color lamp = brake ? Color{0xff, 0x54, 0x3c} : Color{0x8c, 0x12, 0x12};
+        const Color lamp = glowing(brake ? Color{0xff, 0x54, 0x3c} : Color{0x8c, 0x12, 0x12});
         paint::ellipse(b, static_cast<float>(x), 21.f, 3.5f, 3.f, lamp);
-        if (brake) paint::rect(b, x - 1, 20, 2, 2, Color{0xff, 0xf0, 0xe0});
+        if (brake) paint::rect(b, x - 1, 20, 2, 2, glowing(Color{0xff, 0xf0, 0xe0}));
     }
     indicator(b, 7, 19, 3, 4, lit(signal, -1));
     indicator(b, 90, 19, 3, 4, lit(signal, 1));
@@ -2822,7 +2823,8 @@ Bitmap make_rival(const CarStyle& st, int signal, bool brake, int tread) {
 
 void paint_lightbar(Bitmap& b, int lit, int cx, int y) {
     const Color red_off{0x70, 0x10, 0x14}, blue_off{0x10, 0x20, 0x70};
-    const Color red{0xff, 0x30, 0x30}, blue{0x40, 0x70, 0xff}, core{0xff, 0xf8, 0xf0};
+    const Color red = glowing(Color{0xff, 0x30, 0x30}), blue = glowing(Color{0x40, 0x70, 0xff}),
+                core = glowing(Color{0xff, 0xf8, 0xf0});
     const int x = cx - 18;
     paint::rect(b, x, y, 36, 3, Color{0x30, 0x30, 0x34});
     paint::rect(b, x + 1, y, 16, 2, lit < 0 ? red : red_off);
@@ -2915,10 +2917,10 @@ Bitmap make_player_truck(const CarStyle& style, int turn, bool brake, int signal
     paint::shaded_ellipse(b, 48.f, static_cast<float>(h) - 23.f, 18.f, 4.f, frame, steel, chrome_dark);
     paint::rect(b, 14, h - 14, 68, 5, steel);
     paint::rect(b, 14, h - 14, 68, 1, chrome);
-    const Color lamp = brake ? Color{0xff, 0x54, 0x3c} : Color{0x8c, 0x12, 0x12};
+    const Color lamp = glowing(brake ? Color{0xff, 0x54, 0x3c} : Color{0x8c, 0x12, 0x12});
     for (int x : {16, 70}) {
         paint::rect(b, x, h - 14, 10, 5, lamp);
-        if (brake) paint::rect(b, x + 1, h - 13, 8, 2, Color{0xff, 0xf0, 0xe0});
+        if (brake) paint::rect(b, x + 1, h - 13, 8, 2, glowing(Color{0xff, 0xf0, 0xe0}));
     }
     paint::rect(b, 42, h - 13, 12, 4, Color{0xe8, 0xe8, 0xd8}); // plate
     indicator(b, 10, h - 14, 4, 5, lit(signal, -1));
@@ -3288,9 +3290,7 @@ SpriteSheet::SpriteSheet() {
         make_billboard("ROUTE", " 66 ", Color{0xb0, 0x18, 0x28}, Color{0x1c, 0x2c, 0x8c}, Color{0xff, 0xff, 0xff});
 
     // The player's cars, one per CarModel: its colours, and a sign on the
-    // roof for the taxi (else it would be the yellow Hot Hatch). White
-    // bodies light up to 0xfcfcfc, not 0xffffff: pure white is a lamp colour
-    // (is_emissive_argb) and would glow at night.
+    // roof for the taxi (else it would be the yellow Hot Hatch).
     struct PlayerLook {
         CarStyle style;
         bool taxi_sign;
@@ -3304,16 +3304,16 @@ SpriteSheet::SpriteSheet() {
         {{{0x14, 0x2c, 0x80}, {0x24, 0x50, 0xc8}, {0x70, 0x98, 0xf0}, false}, false}, // Saloon
         {{{0xa0, 0x80, 0x10}, {0xe8, 0xc0, 0x20}, {0xf8, 0xe8, 0x80}, false}, true},  // Taxi
         {{{0x14, 0x5c, 0x30}, {0x24, 0x8c, 0x48}, {0x70, 0xc8, 0x88}, false}, false}, // Estate
-        {{{0x10, 0x10, 0x14}, {0xf0, 0xf0, 0xf4}, {0xfc, 0xfc, 0xfc}, false}, false}, // Patrol
+        {{{0x10, 0x10, 0x14}, {0xf0, 0xf0, 0xf4}, {0xff, 0xff, 0xff}, false}, false}, // Patrol
         {{{0x0c, 0x0c, 0x10}, {0x20, 0x20, 0x26}, {0xf0, 0xc0, 0x30}, false}, false}, // Racer
-        {{{0xb8, 0xb8, 0xc0}, {0xf0, 0xf0, 0xf4}, {0xfc, 0xfc, 0xfc}, false}, false}, // Van
+        {{{0xb8, 0xb8, 0xc0}, {0xf0, 0xf0, 0xf4}, {0xff, 0xff, 0xff}, false}, false}, // Van
         {{{0x8c, 0x18, 0x18}, {0xc0, 0x28, 0x24}, {0xe8, 0x60, 0x50}, false}, false}, // Box truck
         {{{0x18, 0x6c, 0x58}, {0x28, 0xa0, 0x80}, {0x80, 0xd8, 0xc0}, false}, false}, // Mini
         {{{0x1c, 0x24, 0x40}, {0x30, 0x3c, 0x68}, {0x70, 0x80, 0xa8}, false}, false}, // Pickup
-        {{{0x98, 0x98, 0xa4}, {0xe0, 0xe0, 0xe8}, {0xfc, 0xfc, 0xfc}, false}, false}, // Coach
+        {{{0x98, 0x98, 0xa4}, {0xe0, 0xe0, 0xe8}, {0xff, 0xff, 0xff}, false}, false}, // Coach
         {{{0x8c, 0x6c, 0x20}, {0xd0, 0xa8, 0x40}, {0xf0, 0xd8, 0x90}, true}, false},  // Roadster
         {{{0x58, 0x6c, 0x08}, {0x9c, 0xc8, 0x10}, {0xf0, 0xf0, 0xf8}, false}, false}, // Supercar
-        {{{0xc0, 0xc0, 0xc8}, {0xf4, 0xf4, 0xf8}, {0xfc, 0xfc, 0xfc}, false}, false}, // Ambulance
+        {{{0xc0, 0xc0, 0xc8}, {0xf4, 0xf4, 0xf8}, {0xff, 0xff, 0xff}, false}, false}, // Ambulance
         {{{0x06, 0x06, 0x08}, {0x16, 0x16, 0x1a}, {0x48, 0x48, 0x52}, false}, false}, // Scanner
         {{{0x70, 0x74, 0x7a}, {0xa8, 0xac, 0xb2}, {0xd4, 0xd8, 0xde}, false}, false}, // Time car
         {{{0x6c, 0x74, 0x6c}, {0xa4, 0xac, 0xa4}, {0xd4, 0xdc, 0xd4}, false}, false}, // Spy car
@@ -3387,7 +3387,6 @@ SpriteSheet::SpriteSheet() {
     }
 
     // Colour schemes per vehicle kind: dark, body, light (stripes on the rival).
-    // No pure white light: that is a lamp colour and glows at night.
     const std::vector<CarStyle> styles[] = {
         /* Car */ {{{0x14, 0x2c, 0x80}, {0x24, 0x50, 0xc8}, {0x70, 0x98, 0xf0}, false},
                    {{0xa0, 0x80, 0x10}, {0xe8, 0xc0, 0x20}, {0xf8, 0xe8, 0x80}, false},
@@ -3396,7 +3395,7 @@ SpriteSheet::SpriteSheet() {
                    {{0x50, 0x10, 0x18}, {0x80, 0x1c, 0x2c}, {0xc0, 0x50, 0x60}, false},
                    {{0x10, 0x10, 0x14}, {0x30, 0x30, 0x38}, {0x70, 0x70, 0x80}, false},
                    {{0xa0, 0x48, 0x08}, {0xe0, 0x78, 0x18}, {0xf8, 0xb0, 0x60}, false}},
-        /* Van */ {{{0xb8, 0xb8, 0xc0}, {0xf0, 0xf0, 0xf4}, {0xfc, 0xfc, 0xfc}, false},
+        /* Van */ {{{0xb8, 0xb8, 0xc0}, {0xf0, 0xf0, 0xf4}, {0xff, 0xff, 0xff}, false},
                    {{0x7c, 0x50, 0x14}, {0xb8, 0x7c, 0x24}, {0xe0, 0xa8, 0x50}, false},
                    {{0x1c, 0x4c, 0x6c}, {0x2c, 0x74, 0x9c}, {0x68, 0xa8, 0xcc}, false}},
         /* Truck */ {{{0xb0, 0xb0, 0xb8}, {0xdc, 0xdc, 0xe0}, {0xf4, 0xf4, 0xf8}, false},
@@ -3404,7 +3403,7 @@ SpriteSheet::SpriteSheet() {
                      {{0x20, 0x50, 0x28}, {0x30, 0x78, 0x3c}, {0x68, 0xb0, 0x70}, false}},
         /* Rival */ {{{0x0c, 0x0c, 0x10}, {0x20, 0x20, 0x26}, {0xf0, 0xc0, 0x30}, false},
                      {{0x3c, 0x10, 0x58}, {0x64, 0x20, 0x8c}, {0xf0, 0xf0, 0xf8}, false}},
-        /* Police */ {{{0x10, 0x10, 0x14}, {0xf0, 0xf0, 0xf4}, {0xfc, 0xfc, 0xfc}, false}},
+        /* Police */ {{{0x10, 0x10, 0x14}, {0xf0, 0xf0, 0xf4}, {0xff, 0xff, 0xff}, false}},
         /* Hatch */ {{{0x18, 0x5c, 0x7c}, {0x2c, 0x90, 0xb8}, {0x80, 0xc8, 0xe0}, false},
                      {{0x88, 0x10, 0x14}, {0xc8, 0x24, 0x28}, {0xf0, 0x70, 0x68}, false},
                      {{0x70, 0x78, 0x18}, {0xa8, 0xb4, 0x30}, {0xd8, 0xe0, 0x78}, false},
@@ -3414,9 +3413,9 @@ SpriteSheet::SpriteSheet() {
                       {{0x1c, 0x24, 0x40}, {0x30, 0x3c, 0x68}, {0x70, 0x80, 0xa8}, false},
                       {{0x8c, 0x84, 0x70}, {0xc8, 0xbc, 0xa0}, {0xe8, 0xe0, 0xcc}, false}},
         /* Bus */ {{{0x9c, 0x14, 0x14}, {0xd8, 0x28, 0x24}, {0xf0, 0x70, 0x60}, false},   // city bus
-                   {{0x98, 0x98, 0xa4}, {0xe0, 0xe0, 0xe8}, {0xfc, 0xfc, 0xfc}, false},   // coach
+                   {{0x98, 0x98, 0xa4}, {0xe0, 0xe0, 0xe8}, {0xff, 0xff, 0xff}, false},   // coach
                    {{0xb0, 0x88, 0x08}, {0xf0, 0xc0, 0x10}, {0xff, 0xe8, 0x70}, false}},  // school bus
-        /* Ambulance */ {{{0xc0, 0xc0, 0xc8}, {0xf4, 0xf4, 0xf8}, {0xfc, 0xfc, 0xfc}, false}},
+        /* Ambulance */ {{{0xc0, 0xc0, 0xc8}, {0xf4, 0xf4, 0xf8}, {0xff, 0xff, 0xff}, false}},
     };
     static_assert(sizeof(styles) / sizeof(styles[0]) == static_cast<size_t>(Vehicle::Count),
                   "every vehicle kind needs its colours");
@@ -3562,7 +3561,9 @@ void apply_dirt(Bitmap& car, float mud, float oil) {
         for (int x = 0; x < car.w; ++x) {
             uint32_t& p = car.px[static_cast<size_t>(y) * car.w + x];
             if (!(p >> 24) || p == outline) continue;
-            const Color c{static_cast<uint8_t>(p >> 16), static_cast<uint8_t>(p >> 8), static_cast<uint8_t>(p)};
+            // The pixel's alpha stays: a muddy lamp still shines (glowing()).
+            const Color c{static_cast<uint8_t>(p >> 16), static_cast<uint8_t>(p >> 8), static_cast<uint8_t>(p),
+                          static_cast<uint8_t>(p >> 24)};
             // Splotches: smooth noise above a threshold that falls with the
             // dirt, plus a fine grain at their edges.
             const float grain = static_cast<float>((static_cast<uint32_t>(x * 7 + y * 13) * 2654435761u) >> 28) / 64.f;

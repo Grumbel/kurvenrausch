@@ -2,6 +2,23 @@
 
 ## Current tip
 
+### Claude: lights are marked, not told by colour
+- A light pixel has alpha `glow_alpha` (0xfe, types.hpp `glowing()` /
+  `is_glowing()`), set where the sprite is painted. The 28-colour emissive
+  table (is_emissive_argb, the GLES (r,g)→b LUT) is gone.
+- Software: apply_daylight skips glowing pixels; blit_scaled keeps the mark
+  and fogs lights at 0.18× (as before); FbCanvas::blit and apply_dirt keep it.
+- GLES: textures carry the mark; the scene FBO uses scene_blend()
+  (BlendFuncSeparate …, ONE, ZERO) so albedo alpha keeps it; k_frag fogs
+  lights 0.18× (replaces the "bright texels skip fog" rule); the compose keeps
+  pixels with albedo alpha 254. Translucent effects in the scene must stay
+  below 254/255 alpha (snow streaks capped at 0.99).
+- New lights must use glowing(...) when painted. Accidental glows are gone
+  (white van roofs, clouds, guardrail lips, HOSPITAL… only where marked);
+  far street-lamp heads and the whole moon disc now glow in both renderers.
+  The vans' and clouds' 0xfcfcfc palette workaround is reverted.
+
+
 ### Claude: (almost) everything over the scene on the GPU
 - `Canvas` (include/canvas.hpp): HUD, menus, FPS overlay, particles, nitro
   flame, cockpit, mirror housing/sheen, touch overlay (headless) draw through

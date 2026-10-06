@@ -187,7 +187,7 @@ void RoadRenderer::draw_segment(Framebuffer& fb, const Track& track, const Slice
         if (s.index % 6 == 0) {
             const float lw = a.w * 0.08f;
             fb.fill_trapezoid(ca, a.x - lw, a.x + lw, std::max(cb, ca + 1.f), b.x - lw, b.x + lw,
-                              Color{0xff, 0xec, 0xb0});
+                              glowing(Color{0xff, 0xec, 0xb0}));
         }
     }
 

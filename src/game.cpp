@@ -1186,6 +1186,9 @@ bool Game::screenshot(const ScreenshotOptions& opts) {
         gles_.read_scene_argb(picture);
         std::copy(picture.begin(), picture.end(), fb_.pixels_mut());
     }
+    // Opaque: the light marks (glow_alpha) are not transparency.
+    for (size_t i = 0; i < static_cast<size_t>(width_) * static_cast<size_t>(fb_height()); ++i)
+        fb_.pixels_mut()[i] |= 0xff000000u;
     return save_bmp(opts.path, fb_.pixels(), width_, fb_height());
 }
 
@@ -1879,14 +1882,14 @@ void Game::movie_car_extras(Bitmap& car, int turn) const {
             paint::rect(car, 20 + s, h + 29, 56, 2, Color{0x30, 0x04, 0x04});
             const float t = std::fmod(clock_ * 1.2f, 2.f);
             const int x = 20 + s + static_cast<int>((t < 1.f ? t : 2.f - t) * 50.f);
-            paint::rect(car, x, h + 29, 6, 2, Color{0xff, 0x30, 0x30});
-            paint::rect(car, x + 2, h + 29, 2, 1, Color{0xff, 0xf8, 0xf0});
+            paint::rect(car, x, h + 29, 6, 2, glowing(Color{0xff, 0x30, 0x30}));
+            paint::rect(car, x + 2, h + 29, 2, 1, glowing(Color{0xff, 0xf8, 0xf0}));
             break;
         }
         case time_car_model: {
             // The coils glowing in the vents, pulsing.
             const bool on = std::fmod(clock_, 0.3f) < 0.15f;
-            const Color glow = on ? Color{0x80, 0xc0, 0xff} : Color{0x30, 0x60, 0xa0};
+            const Color glow = on ? glowing(Color{0x80, 0xc0, 0xff}) : Color{0x30, 0x60, 0xa0};
             for (int x : {33, 53}) paint::rect(car, x + s, h + 21, 10, 5, glow);
             break;
         }

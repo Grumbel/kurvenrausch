@@ -64,11 +64,9 @@ void street_lights(Framebuffer& fb, const std::vector<uint32_t>& day, const std:
                    float camera_depth, float x_scale, const std::vector<float>& row_center_x = {});
 
 // The picture for the light: darkened (warm at dusk, blue at night), except
-// lamps and stars, which keep shining (night_emissive()).
+// the lights (pixels marked glowing(): lamps, lit windows, stars), which keep
+// shining.
 void apply_daylight(Framebuffer& fb, const Daylight& light);
-// Is this colour a light (tail and brake lights, indicators, headlights,
-// the police lightbar, stars)?
-bool night_emissive(Color c);
 
 // Where the headlights shine, in the camera's world: the lamps `start`
 // world units ahead of the camera, which looks straight down screen column

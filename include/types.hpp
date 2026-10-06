@@ -36,6 +36,14 @@ constexpr Color blend(Color a, Color b, float t) {
     return Color(mix(a.r, b.r), mix(a.g, b.g), mix(a.b, b.b), a.a);
 }
 
+// A light: its pixels keep their colour at night (apply_daylight leaves them,
+// fog dims them less, the GLES compose keeps them). Marked in the alpha
+// channel, which is otherwise 0 (transparent) or 255 (opaque), where the
+// sprite is painted, so no other colour ever glows by accident.
+constexpr uint8_t glow_alpha = 0xfe;
+constexpr Color glowing(Color c) { return Color(c.r, c.g, c.b, glow_alpha); }
+constexpr bool is_glowing(uint32_t argb) { return (argb >> 24) == glow_alpha; }
+
 // 4x4 ordered-dither (Bayer) threshold in [0, 1).
 constexpr float bayer4(int x, int y) {
     constexpr int m[4][4] = {{0, 8, 2, 10}, {12, 4, 14, 6}, {3, 11, 1, 9}, {15, 7, 13, 5}};

@@ -1210,26 +1210,41 @@ void test_daylight() {
     look.sun_amount = 0.5f;
     CHECK(at_daytime(look, midnight).stars == 1.f && at_daytime(look, midnight).sun_amount == 0.f);
     CHECK(at_daytime(look, noon).sun_amount == 0.5f && at_daytime(look, noon).stars == 0.f);
-    // Night darkens everything but the lamps; daylight leaves it alone.
+    // Night darkens everything but the lights; daylight leaves it alone. A
+    // light is marked where it is painted (glowing()), not told by its
+    // colour: the same red unmarked darkens.
     Framebuffer fb(4, 1);
-    const Color grass{0x40, 0xa0, 0x30}, tail{0x8c, 0x12, 0x12};
+    const Color grass{0x40, 0xa0, 0x30}, tail = glowing(Color{0x8c, 0x12, 0x12});
     fb.put_pixel(0, 0, grass);
     fb.put_pixel(1, 0, tail);
+    fb.put_pixel(2, 0, Color{0x8c, 0x12, 0x12});
     const std::vector<uint32_t> before(fb.pixels(), fb.pixels() + 4);
     apply_daylight(fb, noon);
     CHECK(std::vector<uint32_t>(fb.pixels(), fb.pixels() + 4) == before);
     apply_daylight(fb, midnight);
-    CHECK(fb.pixels()[1] == tail.argb() && night_emissive(tail));
-    // The GLES compose looks emissive colours up by red and green, with room
-    // for two blues each (GlesRenderer::ensure_emissive_lut).
-    for (const uint32_t c : emissive_colors()) {
-        int same = 0;
-        for (const uint32_t o : emissive_colors()) same += (o >> 8) == (c >> 8);
-        CHECK(same <= 2 && (c >> 24) == 0xff && is_emissive_argb(c));
+    CHECK(fb.pixels()[1] == tail.argb() && is_glowing(fb.pixels()[1]));
+    CHECK(fb.pixels()[2] != before[2] && !is_glowing(fb.pixels()[2]));
+    {
+        // Blits keep the mark, and fog dims a light less than the rest.
+        Bitmap two(2, 1);
+        two.set(0, 0, glowing(Color{0xff, 0xf0, 0xe0}));
+        two.set(1, 0, Color{0xff, 0xf0, 0xe0});
+        Framebuffer f(2, 1);
+        f.blit_scaled(two, 0.f, 0.f, 2.f, 1.f, false, 0.5f, Color{0, 0, 0});
+        CHECK(is_glowing(f.pixels()[0]) && !is_glowing(f.pixels()[1]));
+        CHECK(((f.pixels()[0] >> 16) & 0xff) > ((f.pixels()[1] >> 16) & 0xff));
+        Framebuffer f2(2, 1);
+        FbCanvas canvas(f2);
+        canvas.blit(two, 0.f, 0.f, 2.f, 1.f);
+        CHECK(is_glowing(f2.pixels()[0]) && !is_glowing(f2.pixels()[1]));
+        // The sprites mark their lights: a braking car's lamps glow, a tree
+        // has none, however white or red its pixels.
+        const SpriteSheet sheet;
+        const Bitmap& car = sheet.vehicle(Vehicle::Car, 0, 0, true);
+        const Bitmap& tree = sheet.scenery(Scenery::Tree);
+        CHECK(std::any_of(car.px.begin(), car.px.end(), is_glowing));
+        CHECK(std::none_of(tree.px.begin(), tree.px.end(), is_glowing));
     }
-    // Nothing but lamps may wear a lamp colour: the cloud shades stay dark.
-    for (const Color c : RoadTheme{}.cloud) CHECK(!night_emissive(c));
-    for (const Color c : RoadTheme{}.rail) CHECK(!night_emissive(c) && !night_emissive(blend(c, Color{255, 255, 255}, 0.4f)));
     const uint32_t dark = fb.pixels()[0];
     CHECK(((dark >> 8) & 0xff) < grass.g / 3);
     // The headlights' beam brings the road ahead back, not the sky.

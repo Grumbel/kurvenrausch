@@ -65,8 +65,9 @@ void FbCanvas::blit(const Bitmap& bmp, float sx0, float sy0, float sx1, float sy
             if (flip) tu = 1.f - tu;
             const int u = std::clamp(static_cast<int>(sx0 == sx1 ? sx0 : sx0 + tu * (sx1 - sx0)), 0, bmp.w - 1);
             const uint32_t p = bmp.get(u, v);
-            if (p >> 24) fb_.put_pixel(i, j, Color{static_cast<uint8_t>(p >> 16), static_cast<uint8_t>(p >> 8),
-                                                  static_cast<uint8_t>(p)});
+            if (p >> 24)
+                fb_.put_pixel(i, j, Color{static_cast<uint8_t>(p >> 16), static_cast<uint8_t>(p >> 8),
+                                          static_cast<uint8_t>(p), is_glowing(p) ? glow_alpha : uint8_t{255}});
         }
     }
 }

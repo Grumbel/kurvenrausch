@@ -15,33 +15,6 @@ int pixel_edge(float v) {
     return static_cast<int>(std::ceil(std::clamp(v, -limit, limit) - 0.5f));
 }
 
-const std::vector<uint32_t>& emissive_colors() {
-    static const std::vector<uint32_t> sorted = [] {
-        // Keep in sync with lamps / stars / neon in sprites and daylight.
-        std::vector<uint32_t> a = {
-            0xffff543c, 0xfffff0e0, 0xff8c1212, 0xffc01818, 0xffc84438, 0xffe85040, 0xffff3020,
-            0xffffc038, 0xfffff4c0,
-            0xfff0ecc8, 0xffffffff,
-            0xffff3030, 0xff4070ff, 0xfffff8f0,
-            0xffe8eeff, 0xffb8c8ff,
-            0xffffd888,
-            0xffffecb0, 0xfffffff0,
-            0xffff40c0, 0xff40f0ff, 0xffffe060, 0xfff0f4ff,
-            0xff80c0ff,
-            0xfffff0a0,
-            0xffe0e4ec, 0xffb0b8c8, 0xffc8d0e0,
-        };
-        std::sort(a.begin(), a.end());
-        return a;
-    }();
-    return sorted;
-}
-
-bool is_emissive_argb(uint32_t argb) {
-    const std::vector<uint32_t>& sorted = emissive_colors();
-    return std::binary_search(sorted.begin(), sorted.end(), argb);
-}
-
 Framebuffer::Framebuffer(int width, int height)
     : w_(width), h_(height),
       pixels_(static_cast<size_t>(width) * static_cast<size_t>(height), 0u) {
@@ -235,11 +208,12 @@ void Framebuffer::blit_scaled(const Bitmap& bmp, float x, float y, float w, floa
             const int pr = static_cast<int>((p >> 16) & 0xff);
             const int pg = static_cast<int>((p >> 8) & 0xff);
             const int pb = static_cast<int>(p & 0xff);
-            // Only true lamp / neon / star colours keep through fog — a red
-            // body panel must fog like the rest of the sprite.
+            // Lights keep through fog, mostly — a red body panel must fog
+            // like the rest of the sprite.
             float fa = fog_amount;
             float kp = keep;
-            if (is_emissive_argb(p | 0xff000000u)) {
+            const bool glow = is_glowing(p);
+            if (glow) {
                 fa = fog_amount * 0.18f;
                 kp = 1.f - fa;
             }
@@ -249,8 +223,8 @@ void Framebuffer::blit_scaled(const Bitmap& bmp, float x, float y, float w, floa
             const int r = static_cast<int>(static_cast<float>(pr) * kp + static_cast<float>(fr) * fa + 0.5f);
             const int g = static_cast<int>(static_cast<float>(pg) * kp + static_cast<float>(fg) * fa + 0.5f);
             const int b = static_cast<int>(static_cast<float>(pb) * kp + static_cast<float>(fb_c) * fa + 0.5f);
-            dst[x0 + i] = 0xff000000u | static_cast<uint32_t>(r) << 16 | static_cast<uint32_t>(g) << 8 |
-                          static_cast<uint32_t>(b);
+            dst[x0 + i] = (glow ? static_cast<uint32_t>(glow_alpha) << 24 : 0xff000000u) |
+                          static_cast<uint32_t>(r) << 16 | static_cast<uint32_t>(g) << 8 | static_cast<uint32_t>(b);
         }
     }
 }

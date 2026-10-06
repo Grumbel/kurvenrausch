@@ -239,6 +239,10 @@ const char* k_vert =
     "}\n";
 #endif
 
+// Scene: textured sprites tinted by v_col.rgb and fogged by v_col.a, lights
+// (texel alpha glow_alpha) fogged less, as Framebuffer::blit_scaled does;
+// solid quads take v_col as is. The output alpha is the texel's, which the
+// scene's blending (scene_blend) stores, so the compose can tell the lights.
 const char* k_frag =
 #if KURVEN_GLES
     "precision mediump float;\n"
@@ -253,8 +257,7 @@ const char* k_frag =
     "    if (t.a < 0.01) discard;\n"
     "    vec3 lit = t.rgb * v_col.rgb;\n"
     "    float fa = v_col.a;\n"
-    "    float lum = max(t.r, max(t.g, t.b));\n"
-    "    if (lum > 0.72 && t.a > 0.9) fa = 0.0;\n"
+    "    if (abs(t.a * 255.0 - 254.0) < 0.5) fa *= 0.18;\n"
     "    gl_FragColor = vec4(mix(lit, u_fog_air, fa), t.a);\n"
     "  } else {\n"
     "    gl_FragColor = v_col;\n"
@@ -273,8 +276,7 @@ const char* k_frag =
     "    if (t.a < 0.01) discard;\n"
     "    vec3 lit = t.rgb * v_col.rgb;\n"
     "    float fa = v_col.a;\n"
-    "    float lum = max(t.r, max(t.g, t.b));\n"
-    "    if (lum > 0.72 && t.a > 0.9) fa = 0.0;\n"
+    "    if (abs(t.a * 255.0 - 254.0) < 0.5) fa *= 0.18;\n"
     "    gl_FragColor = vec4(mix(lit, u_fog_air, fa), t.a);\n"
     "  } else {\n"
     "    gl_FragColor = v_col;\n"
@@ -283,7 +285,7 @@ const char* k_frag =
 #endif
 
 
-// Fullscreen composite: albedo × lightmap, keep bright emissives near full.
+// Fullscreen pass: vertex shader for the compose.
 const char* k_compose_vert =
 #if KURVEN_GLES
     "attribute vec2 a_pos;\n"
@@ -306,21 +308,17 @@ const char* k_compose_vert =
 
 // Night composite. The lightmap holds what the software light stack does to
 // each pixel, applied in order: alpha is the share of the night colour left,
-// RGB the tinted share of the day colour (see k_light_frag). Emissive
-// albedo (lamps, windows, stars) stays at full day colour, as in
-// apply_daylight(); u_emissive is a 256×256 (red, green) table holding up to
-// two matching blues in R and G, A = 1 where there is any.
+// RGB the tinted share of the day colour (see k_light_frag). Lights (albedo
+// alpha glow_alpha, see k_frag) stay at full day colour, as in
+// apply_daylight().
 #define KURVEN_COMPOSE_BODY \
     "varying vec2 v_uv;\n" \
     "uniform sampler2D u_albedo;\n" \
     "uniform sampler2D u_light;\n" \
-    "uniform sampler2D u_emissive;\n" \
     "uniform vec3 u_day_scale;\n" \
     "void main(){\n" \
     "  vec4 a = texture2D(u_albedo, v_uv);\n" \
-    "  vec4 e = texture2D(u_emissive, (floor(a.rg * 255.0 + 0.5) + 0.5) / 256.0);\n" \
-    "  float tol = 0.5 / 255.0;\n" \
-    "  if (e.a > 0.5 && (abs(a.b - e.r) < tol || abs(a.b - e.g) < tol)) {\n" \
+    "  if (abs(a.a * 255.0 - 254.0) < 0.5) {\n" \
     "    gl_FragColor = vec4(a.rgb, 1.0);\n" \
     "    return;\n" \
     "  }\n" \
@@ -559,7 +557,6 @@ void GlesRenderer::invalidate() {
     night_tex_ = 0;
     rows_tex_ = 0;
     rows_tex_h_ = 0;
-    emissive_tex_ = 0;
     compose_program_ = 0;
     light_program_ = 0;
     ui_program_ = 0;
@@ -613,7 +610,6 @@ void GlesRenderer::shutdown() {
     del_tex(light_tex_);
     del_tex(rows_tex_);
     rows_tex_h_ = 0;
-    del_tex(emissive_tex_);
     del_tex(font_tex_);
     present_tex_ = 0;
     auto del_fbo = [&](unsigned& f) {
@@ -688,7 +684,6 @@ bool GlesRenderer::init() {
     if (!compose_program_) return false;
     u_albedo_ = g.GetUniformLocation(compose_program_, "u_albedo");
     u_light_ = g.GetUniformLocation(compose_program_, "u_light");
-    u_emissive_ = g.GetUniformLocation(compose_program_, "u_emissive");
     u_day_scale_ = g.GetUniformLocation(compose_program_, "u_day_scale");
 
     light_program_ = link(k_light_vert, k_light_frag, "light");
@@ -967,7 +962,7 @@ void GlesRenderer::ensure_font_tex() {
                  rgba.data());
 }
 
-void GlesRenderer::draw_list(const DrawList& list, int layer, float z) {
+void GlesRenderer::draw_list(const DrawList& list, int layer, float z, bool scene) {
     if (list.empty() || !ui_program_) return;
     ensure_font_tex();
     g.UseProgram(ui_program_);
@@ -975,8 +970,12 @@ void GlesRenderer::draw_list(const DrawList& list, int layer, float z) {
     g.Uniform1f(u_ui_z_, z);
     g.Uniform1i(u_ui_tex_, 0);
     g.ActiveTexture(GL_TEXTURE0_);
-    g.Enable(GL_BLEND_);
-    g.BlendFunc(GL_SRC_ALPHA_, GL_ONE_MINUS_SRC_ALPHA_);
+    if (scene) {
+        scene_blend();
+    } else {
+        g.Enable(GL_BLEND_);
+        g.BlendFunc(GL_SRC_ALPHA_, GL_ONE_MINUS_SRC_ALPHA_);
+    }
     unsigned bound = 0;
     auto flush = [&] {
         if (ui_batch_.empty()) return;
@@ -1379,7 +1378,7 @@ void GlesRenderer::draw_backdrop(const RoadTheme& theme, const Background* backd
 
     // Stars as solid 2×2 traps.
     if (theme.stars > 0.02f) {
-        // Exact emissive colours (no fog) so apply_daylight keeps them lit.
+        // Lights: they keep shining at night (no fog either).
         uint32_t seed = 0x51a7f00du;
         for (int i = 0; i < 90; ++i) {
             seed = seed * 1664525u + 1013904223u;
@@ -1388,7 +1387,7 @@ void GlesRenderer::draw_backdrop(const RoadTheme& theme, const Background* backd
             const float y = static_cast<float>((seed >> 8) % 1000u) / 1000.f * horizon * 0.9f;
             if (static_cast<float>((seed >> 4) & 0xff) / 255.f > theme.stars) continue;
             const bool bright = (seed >> 28) < 4;
-            const Color c = bright ? Color{0xe8, 0xee, 0xff} : Color{0xb8, 0xc8, 0xff};
+            const Color c = glowing(bright ? Color{0xe8, 0xee, 0xff} : Color{0xb8, 0xc8, 0xff});
             push_trap(y, x, x + 1.f, y + 1.f, x, x + 1.f, c);
         }
         flush_solid();
@@ -1461,7 +1460,7 @@ void GlesRenderer::draw_backdrop(const RoadTheme& theme, const Background* backd
                            (theme.stars > 0.05f || sun.elevation < 0.25f);
     if (moon_show) {
         const float radius = 5.5f;
-        const Color disc_c{0xe0, 0xe4, 0xec}, limb{0xb0, 0xb8, 0xc8};
+        const Color disc_c = glowing(Color{0xe0, 0xe4, 0xec}), limb = glowing(Color{0xb0, 0xb8, 0xc8});
         // Left-shaded disc: two half soft discs (limb on the left, bright on the right).
         disc_soft(moon_sx - radius * 0.15f, moon_sy, radius * 0.95f, limb, limb, 3);
         disc_soft(moon_sx + radius * 0.1f, moon_sy, radius, disc_c, blend(limb, disc_c, 0.5f), 5);
@@ -1587,7 +1586,7 @@ void GlesRenderer::draw_segment(const Track& track, const Slice& s, const RoadTh
         if (s.index % 6 == 0) {
             const float lw = a.w * 0.08f;
             push_trap(ca, a.x - lw, a.x + lw, std::max(cb, ca + 1.f), b.x - lw, b.x + lw,
-                      Color{0xff, 0xec, 0xb0});
+                      glowing(Color{0xff, 0xec, 0xb0}));
         }
     }
 
@@ -2059,7 +2058,8 @@ void GlesRenderer::draw_weather(const Weather& weather) {
         const float len = std::min(p.outflow * streak_seconds * 0.6f, 4.f + 10.f * p.depth);
         if (len > 1.5f && v > 1e-3f) {
             const float ux = p.vx / v, uy = p.vy / v;
-            const float alpha = 0.55f + 0.45f * p.depth;
+            // Below glow_alpha: a translucent streak must not read as a light.
+            const float alpha = std::min(0.55f + 0.45f * p.depth, 0.99f);
             const int steps = static_cast<int>(len);
             push_streak(p.x, p.y, ux, uy, steps, Color{255, 255, 255}, alpha,
                         alpha * (1.f - 0.7f * static_cast<float>(steps - 1) / len));
@@ -2162,34 +2162,6 @@ void GlesRenderer::draw_fullscreen_quad() {
     frame_stats::add_fill(static_cast<double>(width_) * static_cast<double>(height_));
 }
 
-void GlesRenderer::ensure_emissive_lut() {
-    if (emissive_tex_ || !g.GenTextures) return;
-    // Texel (red, green) holds the blues that make an emissive colour with
-    // them (at most two share a red and green), A = 255 where any does.
-    constexpr int n = 256;
-    std::vector<uint8_t> rgba(static_cast<size_t>(n) * n * 4, 0);
-    for (const uint32_t c : emissive_colors()) {
-        const size_t i = ((static_cast<size_t>((c >> 8) & 0xff) * n) + ((c >> 16) & 0xff)) * 4;
-        const uint8_t b = static_cast<uint8_t>(c & 0xff);
-        if (rgba[i + 3] == 0) {
-            rgba[i + 0] = rgba[i + 1] = b;
-            rgba[i + 3] = 255;
-        } else if (rgba[i + 0] == rgba[i + 1] && rgba[i + 0] != b) {
-            rgba[i + 1] = b;
-        } else if (rgba[i + 0] != b && rgba[i + 1] != b) {
-            std::cerr << "kurvenrausch: gles: more than two emissive blues share a red and green\n";
-        }
-    }
-    g.GenTextures(1, &emissive_tex_);
-    g.BindTexture(GL_TEXTURE_2D_, emissive_tex_);
-    g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_MIN_FILTER_, GL_NEAREST_);
-    g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_MAG_FILTER_, GL_NEAREST_);
-    g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_WRAP_S_, GL_CLAMP_TO_EDGE_);
-    g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_WRAP_T_, GL_CLAMP_TO_EDGE_);
-    g.PixelStorei(0x0CF5 /* GL_UNPACK_ALIGNMENT */, 1);
-    g.TexImage2D(GL_TEXTURE_2D_, 0, static_cast<int>(GL_RGBA_), n, n, 0, GL_RGBA_, GL_UNSIGNED_BYTE_, rgba.data());
-}
-
 void GlesRenderer::read_fbo_argb(std::vector<uint32_t>& out) {
 
     out.resize(static_cast<size_t>(width_) * static_cast<size_t>(height_));
@@ -2211,10 +2183,16 @@ void GlesRenderer::read_fbo_argb(std::vector<uint32_t>& out) {
     }
 }
 
+void GlesRenderer::scene_blend() {
+    // Colour blends by coverage; the alpha channel keeps what was drawn last,
+    // so lights (glow_alpha) stay marked for the compose.
+    g.Enable(GL_BLEND_);
+    g.BlendFuncSeparate(GL_SRC_ALPHA_, GL_ONE_MINUS_SRC_ALPHA_, GL_ONE_, GL_ZERO_);
+}
+
 void GlesRenderer::use_scene_program() {
     g.UseProgram(program_);
-    g.Enable(GL_BLEND_);
-    g.BlendFunc(GL_SRC_ALPHA_, GL_ONE_MINUS_SRC_ALPHA_);
+    scene_blend();
 }
 
 void GlesRenderer::draw_over_scene(const DrawList& list) {
@@ -2308,7 +2286,6 @@ void GlesRenderer::flush_light() {
 
 void GlesRenderer::apply_night(const Daylight& light, const Beam* headlight) {
     clear_draw_clip();
-    ensure_emissive_lut();
     const float dark = 1.f - light.level;
     // Daylight channel scales — same formulas as apply_daylight().
     const float night = (1.f - light.level) / (1.f - night_level);
@@ -2368,9 +2345,6 @@ void GlesRenderer::apply_night(const Daylight& light, const Beam* headlight) {
     g.ActiveTexture(0x84C1u); // GL_TEXTURE1
     g.BindTexture(GL_TEXTURE_2D_, light_tex_);
     g.Uniform1i(u_light_, 1);
-    g.ActiveTexture(0x84C2u); // GL_TEXTURE2
-    g.BindTexture(GL_TEXTURE_2D_, emissive_tex_);
-    g.Uniform1i(u_emissive_, 2);
     g.Uniform3f(u_day_scale_, rf, gf, bf);
     draw_fullscreen_quad();
     g.ActiveTexture(GL_TEXTURE0_);
@@ -2601,8 +2575,7 @@ void GlesRenderer::render(const Track& track, const RoadView& view, const Sprite
     g.DepthMask(1);
     g.Clear(GL_COLOR_BUFFER_BIT_ | GL_DEPTH_BUFFER_BIT_);
     g.Disable(GL_DEPTH_TEST_);
-    g.Enable(GL_BLEND_);
-    g.BlendFunc(GL_SRC_ALPHA_, GL_ONE_MINUS_SRC_ALPHA_);
+    scene_blend();
     g.UseProgram(program_);
     g.Uniform2f(u_screen_, static_cast<float>(width_), static_cast<float>(height_));
     depth_z_ = sprite_z;
@@ -2651,12 +2624,12 @@ void GlesRenderer::render(const Track& track, const RoadView& view, const Sprite
         // standing on the ground, for the lights); the cockpit over the weather
         // and out of the headlights.
         if (overlay) {
-            draw_list(*overlay, 0, sprite_z);
+            draw_list(*overlay, 0, sprite_z, true);
             use_scene_program();
         }
         if (weather) draw_weather(*weather);
         flush_solid();
-        if (overlay) draw_list(*overlay, 1, player_z);
+        if (overlay) draw_list(*overlay, 1, player_z, true);
         g.Disable(GL_DEPTH_TEST_);
     }
 

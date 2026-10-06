@@ -62,7 +62,8 @@ public:
     // A DrawList's runs of `layer` into the current framebuffer and viewport,
     // which map list.width() x list.height() framebuffer pixels; z is the
     // depth written where depth testing is on.
-    void draw_list(const DrawList& list, int layer = 0, float z = 0.f);
+    // scene: drawing into the scene FBO (keep the lights' alpha marks).
+    void draw_list(const DrawList& list, int layer = 0, float z = 0.f, bool scene = false);
 
     // The presentable scene as ARGB pixels, top row first (headless screenshots).
     void read_scene_argb(std::vector<uint32_t>& out);
@@ -109,6 +110,9 @@ private:
     void ensure_font_tex();
     // Back to the scene program after a draw_list in the sprite pass.
     void use_scene_program();
+    // Blending for the scene FBO: colour by coverage, alpha replaced (the
+    // light marks, glow_alpha).
+    void scene_blend();
     void flush_solid();
     // Draw pending textured_ with active_tex_, then clear the batch.
     void flush_textured();
@@ -137,7 +141,6 @@ private:
     void apply_night(const Daylight& light, const Beam* headlight);
     void read_fbo_argb(std::vector<uint32_t>& out);
     void draw_fullscreen_quad();
-    void ensure_emissive_lut();
     // Depth written by the following sprite draws (flushes on change).
     void set_depth(float z);
     // rows_ texel (lane, row) = value as 24-bit fixed point.
@@ -192,7 +195,6 @@ private:
     int u_z_ = -1;
     int u_albedo_ = -1;
     int u_light_ = -1;
-    int u_emissive_ = -1;
     int u_day_scale_ = -1;
     int u_light_screen_ = -1;
     int u_light_z_ = -1;
@@ -208,7 +210,6 @@ private:
     unsigned light_fbo_ = 0;
     unsigned light_tex_ = 0;   // RGB: day colour share (tinted), A: night colour share
     unsigned night_fbo_ = 0;
-    unsigned emissive_tex_ = 0; // (red, green) → emissive blues, see k_compose_frag
     unsigned rows_tex_ = 0;     // per-row lanes for the light program (rows_)
     int rows_tex_h_ = 0;        // rows (texture width) rows_tex_ was allocated for
     std::vector<uint8_t> rows_;
