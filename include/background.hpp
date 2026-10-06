@@ -38,6 +38,13 @@ public:
     void render(Framebuffer& fb, const RoadTheme& theme, const BackdropView& view,
                 float hour = 12.f) const;
 
+    // Parallax state for the GLES backdrop path.
+    float sky_offset() const { return sky_offset_ + drift_; }
+    float mountain_offset() const { return mountain_offset_; }
+    float hill_offset() const { return hill_offset_; }
+    const std::vector<float>& mountains() const { return mountains_; }
+    const std::vector<float>& hills() const { return hills_; }
+
 private:
     struct Cloud {
         int bitmap;

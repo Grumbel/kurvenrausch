@@ -2697,7 +2697,7 @@ void Game::render() {
     if (use_gles_ && display_ && display_->make_gl_current()) {
         gles_.set_size(width_, fb_height());
         const float day_level = lit_by(daylight_at(hour_), look.night_glow).level;
-        gles_.render(track_, view, sprites_, road_sprites_, look, day_level);
+        gles_.render(track_, view, sprites_, road_sprites_, look, day_level, &background_, hour_);
         // Pause / options: full software frame underneath the menus.
         if (paused_ || options_open_ || video_open_ || audio_open_ || debug_open_) {
             background_.render(fb_, look, hour_);

@@ -692,7 +692,41 @@ void Display::present_gles_scene(unsigned scene_tex, int tex_w, int tex_h, const
         g_gl.DrawArrays(GL_TRIANGLE_STRIP_, 0, 4);
         g_gl.Disable(GL_BLEND_);
     }
-    (void)overlay;
+    g_gl.Enable(GL_BLEND_);
+    g_gl.BlendFunc(GL_SRC_ALPHA_, GL_ONE_MINUS_SRC_ALPHA_);
+    for (const Overlay::Item& item : overlay.items()) {
+        if (!item.image || item.image->w <= 0 || item.image->h <= 0) continue;
+        GLuint tex = 0;
+        g_gl.GenTextures(1, &tex);
+        g_gl.BindTexture(GL_TEXTURE_2D_, tex);
+        g_gl.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_MIN_FILTER_, GL_NEAREST_);
+        g_gl.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_MAG_FILTER_, GL_NEAREST_);
+        g_gl.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_WRAP_S_, GL_CLAMP_TO_EDGE_);
+        g_gl.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_WRAP_T_, GL_CLAMP_TO_EDGE_);
+#if KURVEN_GLES
+        std::vector<uint32_t> o(static_cast<size_t>(item.image->w * item.image->h));
+        for (size_t i = 0; i < o.size(); ++i) {
+            const uint32_t p = item.image->px[i];
+            o[i] = ((p & 0x000000ffu) << 16) | (p & 0x0000ff00u) | ((p & 0x00ff0000u) >> 16) | (p & 0xff000000u);
+        }
+        g_gl.TexImage2D(GL_TEXTURE_2D_, 0, static_cast<GLint>(GL_RGBA_), item.image->w, item.image->h, 0, GL_RGBA_,
+                        GL_UNSIGNED_BYTE_, o.data());
+#else
+        g_gl.TexImage2D(GL_TEXTURE_2D_, 0, static_cast<GLint>(GL_RGBA_), item.image->w, item.image->h, 0, GL_BGRA_,
+                        GL_UNSIGNED_BYTE_, item.image->px.data());
+#endif
+        const float ox0 = 2.f * static_cast<float>(item.x) / static_cast<float>(s.w) - 1.f;
+        const float ox1 = 2.f * static_cast<float>(item.x + item.image->w) / static_cast<float>(s.w) - 1.f;
+        const float oy0 = 1.f - 2.f * static_cast<float>(item.y + item.image->h) / static_cast<float>(s.h);
+        const float oy1 = 1.f - 2.f * static_cast<float>(item.y) / static_cast<float>(s.h);
+        const float ov[] = {
+            ox0, oy0, 0.f, 1.f, ox1, oy0, 1.f, 1.f, ox0, oy1, 0.f, 0.f, ox1, oy1, 1.f, 0.f,
+        };
+        g_gl.BufferData(GL_ARRAY_BUFFER_, static_cast<GLsizeiptr>(sizeof ov), ov, GL_STREAM_DRAW_);
+        g_gl.DrawArrays(GL_TRIANGLE_STRIP_, 0, 4);
+        g_gl.DeleteTextures(1, &tex);
+    }
+    g_gl.Disable(GL_BLEND_);
     (void)tex_w;
     (void)tex_h;
     SDL_GL_SwapWindow(window_);

@@ -2,6 +2,12 @@
 
 ## Current tip
 
+### Grok: GLES backdrop, markings, overlay
+- Sky gradient + mountain/hill ridge columns from Background profiles.
+- US / lane road markings on the GLES road.
+- present_gles_scene draws touch overlay items (same as present_gl).
+
+
 ### Grok: GLES FBO + HUD composite
 - GlesRenderer draws into an internal RGBA FBO at framebuffer resolution.
 - `Display::present_gles_scene` letterboxes that texture, then blends the

@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "background.hpp"
 #include "road.hpp"
 #include "sprites.hpp"
 #include "track.hpp"
@@ -33,7 +34,8 @@ public:
 
     // Draws the road scene into the internal FBO (not the window).
     void render(const Track& track, const RoadView& view, const SpriteSheet& sprites,
-                std::vector<RoadSprite>& objects, const RoadTheme& theme, float daylight = 1.f);
+                std::vector<RoadSprite>& objects, const RoadTheme& theme, float daylight = 1.f,
+                const Background* backdrop = nullptr, float hour = 12.f);
 
     // Colour attachment of the scene FBO (RGBA, size width_ × height_).
     unsigned color_texture() const { return color_tex_; }
@@ -65,6 +67,7 @@ private:
     void flush_solid();
     void flush_textured(unsigned tex);
     unsigned texture_for(const Bitmap& bmp);
+    void draw_backdrop(const RoadTheme& theme, const Background* backdrop, float hour, float horizon);
     void draw_segment(const Track& track, const Slice& s, const RoadTheme& theme);
     void draw_sprites(const Track& track, const SpriteSheet& sprites, std::vector<RoadSprite>& objects);
     void project_point(ScreenPoint& p, float world_x, float world_y, float world_z, float cam_x, float cam_y,

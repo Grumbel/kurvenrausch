@@ -442,6 +442,53 @@ void GlesRenderer::project_point(ScreenPoint& p, float world_x, float world_y, f
     p.w = p.scale * road_width * x_scale;
 }
 
+
+void GlesRenderer::draw_backdrop(const RoadTheme& theme, const Background* backdrop, float hour, float horizon) {
+    // Extreme fog: solid air only (already cleared).
+    if (theme.haze >= 0.99f || theme.fog_density >= 80.f) return;
+    const float wf = static_cast<float>(width_);
+    // Sky gradient: a few horizontal bands from top to horizon.
+    const Color top = fogged(theme.sky_top, fog_air_, theme.haze * 0.5f, daylight_);
+    const Color bot = fogged(theme.sky_horizon, fog_air_, theme.haze * 0.35f, daylight_);
+    constexpr int bands = 8;
+    for (int i = 0; i < bands; ++i) {
+        const float t0 = static_cast<float>(i) / bands;
+        const float t1 = static_cast<float>(i + 1) / bands;
+        const Color c = blend(top, bot, (t0 + t1) * 0.5f);
+        const float y0 = horizon * t0;
+        const float y1 = horizon * t1;
+        push_trap(y0, 0.f, wf, y1, 0.f, wf, c);
+    }
+    if (!backdrop) {
+        flush_solid();
+        return;
+    }
+    // Column strips from ridge top down to the horizon.
+    auto ridge2 = [&](const std::vector<float>& h, float offset, Color lit, Color shade, float scale_mul) {
+        if (h.empty()) return;
+        const int period = static_cast<int>(h.size());
+        const int step = std::max(2, width_ / 128);
+        for (int x = 0; x < width_; x += step) {
+            const int i = ((static_cast<int>(std::lround(offset)) + x) % period + period) % period;
+            const float here = h[static_cast<size_t>(i)] * scale_mul;
+            const float top_y = horizon - here;
+            if (top_y >= horizon - 0.5f) continue;
+            const float slope = h[static_cast<size_t>((i + 6) % period)] - h[static_cast<size_t>((i + period - 6) % period)];
+            const Color face = slope < 0.f ? lit : shade;
+            const float haze = std::max(theme.haze, std::clamp(1.f - here / (14.f * scale_mul + 1.f), 0.f, 1.f) * 0.75f);
+            const Color c = fogged(face, fog_air_, haze, daylight_);
+            const float x0 = static_cast<float>(x);
+            const float x1 = std::min(wf, static_cast<float>(x + step));
+            push_trap(top_y, x0, x1, horizon, x0, x1, c);
+        }
+    };
+    (void)hour;
+    ridge2(backdrop->mountains(), backdrop->mountain_offset(), theme.mountain_lit, theme.mountain_shade,
+           theme.mountain_scale);
+    ridge2(backdrop->hills(), backdrop->hill_offset(), theme.hill_lit, theme.hill_shade, theme.hill_scale);
+    flush_solid();
+}
+
 void GlesRenderer::draw_segment(const Track& track, const Slice& s, const RoadTheme& theme) {
     const ScreenPoint& a = direction_ > 0 ? s.p1 : s.p2;
     const ScreenPoint& b = direction_ > 0 ? s.p2 : s.p1;
@@ -470,12 +517,32 @@ void GlesRenderer::draw_segment(const Track& track, const Slice& s, const RoadTh
         }
     } else {
         push_trap(b.y, b.x - b.w, b.x + b.w, a.y, a.x - a.w, a.x + a.w, fogc(theme.road[band]));
-        const Color lane = fogc(theme.lane);
-        for (int i = 1; i < theme.lanes; ++i) {
-            const float t = static_cast<float>(i) / static_cast<float>(theme.lanes);
-            const float xa = a.x - a.w + 2.f * a.w * t, xb = b.x - b.w + 2.f * b.w * t;
-            const float la = a.w * 0.02f, lb = b.w * 0.02f;
-            push_trap(b.y, xb - lb, xb + lb, a.y, xa - la, xa + la, lane);
+        const int lanes = std::max(1, theme.lanes);
+        if (theme.us_markings) {
+            const Color white = fogc(theme.lane);
+            const float e = 0.93f, th = 1.f / 60.f;
+            for (int side = -1; side <= 1; side += 2) {
+                const float sd = static_cast<float>(side);
+                push_trap(b.y, b.x + sd * e * b.w - b.w * th, b.x + sd * e * b.w + b.w * th, a.y,
+                          a.x + sd * e * a.w - a.w * th, a.x + sd * e * a.w + a.w * th, white);
+            }
+            if (lanes == 2) {
+                const Color yellow = fogc(theme.center_line);
+                const float gap = 0.035f, yt = 1.f / 80.f;
+                for (int side = -1; side <= 1; side += 2) {
+                    const float sd = static_cast<float>(side);
+                    push_trap(b.y, b.x + sd * gap * b.w - b.w * yt, b.x + sd * gap * b.w + b.w * yt, a.y,
+                              a.x + sd * gap * a.w - a.w * yt, a.x + sd * gap * a.w + a.w * yt, yellow);
+                }
+            }
+        } else {
+            const Color lane = fogc(theme.lane);
+            for (int i = 1; i < lanes; ++i) {
+                const float f = static_cast<float>(i) / static_cast<float>(lanes);
+                const float xa = a.x - a.w + 2.f * a.w * f, xb = b.x - b.w + 2.f * b.w * f;
+                const float la = a.w * 0.02f, lb = b.w * 0.02f;
+                push_trap(b.y, xb - lb, xb + lb, a.y, xa - la, xa + la, lane);
+            }
         }
     }
 }
@@ -625,7 +692,8 @@ bool GlesRenderer::ensure_fbo() {
 }
 
 void GlesRenderer::render(const Track& track, const RoadView& view, const SpriteSheet& sprites,
-                          std::vector<RoadSprite>& objects, const RoadTheme& theme, float daylight) {
+                          std::vector<RoadSprite>& objects, const RoadTheme& theme, float daylight,
+                          const Background* backdrop, float hour) {
     if (!program_ || !ensure_fbo()) return;
     daylight_ = std::clamp(daylight, 0.05f, 1.f);
     fog_air_ = view.fog_air;
@@ -696,12 +764,15 @@ void GlesRenderer::render(const Track& track, const RoadView& view, const Sprite
     for (RoadSprite& o : objects) o.z = track.wrap(o.z);
     std::sort(objects.begin(), objects.end(), [](const RoadSprite& a, const RoadSprite& b) { return a.z < b.z; });
 
-    // GL frame
+    // GL frame into the internal FBO
     Color air = fog_air_;
     if (theme.haze >= 0.99f || theme.fog_density >= 80.f) {
         air = theme.fog;
     }
-    g.Viewport(0, 0, width_, height_); // caller may scale via present; scene uses internal size
+    int prev_fbo = 0;
+    if (g.GetIntegerv) g.GetIntegerv(GL_FRAMEBUFFER_BINDING_, &prev_fbo);
+    g.BindFramebuffer(GL_FRAMEBUFFER_, fbo_);
+    g.Viewport(0, 0, width_, height_);
     g.ClearColor(air.r / 255.f * daylight_, air.g / 255.f * daylight_, air.b / 255.f * daylight_, 1.f);
     g.Clear(GL_COLOR_BUFFER_BIT_);
     g.Enable(GL_BLEND_);
@@ -710,12 +781,14 @@ void GlesRenderer::render(const Track& track, const RoadView& view, const Sprite
     g.Uniform2f(u_screen_, static_cast<float>(width_), static_cast<float>(height_));
 
     clear_batch();
+    draw_backdrop(theme, backdrop, hour, horizon);
     for (const Slice& s : slices_) {
         if (s.road_visible) draw_segment(track, s, theme);
     }
     flush_solid();
     draw_sprites(track, sprites, objects);
     flush_solid();
+    g.BindFramebuffer(GL_FRAMEBUFFER_, static_cast<unsigned>(prev_fbo));
 }
 
 } // namespace racer
