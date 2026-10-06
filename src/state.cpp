@@ -276,8 +276,7 @@ std::optional<Choices> Store::load_choices() const {
 
 void Store::save_choices(const Choices& c) const {
     if (dir_.empty()) {
-        std::cerr << "Kurvenrausch: save_choices skipped (empty state dir)
-";
+        std::cerr << "Kurvenrausch: save_choices skipped (empty state dir)\n";
         return;
     }
     if (!make_dir()) return;
@@ -295,8 +294,7 @@ void Store::save_choices(const Choices& c) const {
     fs::rename(temp, file, ec);
     if (ec) {
         std::cerr << "Kurvenrausch: rename " << temp << " -> " << file << " failed: " << ec.message()
-                  << "
-";
+                  << "\n";
         fail("Cannot rename the choices file");
     } else {
         persist();
