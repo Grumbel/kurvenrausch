@@ -2,6 +2,12 @@
 
 ## Current tip
 
+### Grok: present path — no CPU HUD swizzle; cache overlays; pause FBO reuse
+- GLES present: upload ARGB as RGBA, shader swaps R/B (was full-buffer loop).
+- Overlay bitmaps: cache GL textures by px.data(); no Gen/Delete per frame.
+- Pause: skip gles_.render(), keep last scene FBO under the menu.
+
+
 ### Grok: menu dim was the 45fps stall
 - Not font draw calls — full-screen blend_pixel (W×H float blends) every
   frame. Replaced with fill (GLES transparent HUD) or integer row blend.

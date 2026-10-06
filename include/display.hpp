@@ -128,6 +128,9 @@ private:
     unsigned gl_fb_tex_ = 0;
     unsigned gl_vbo_ = 0;
     int gl_u_tex_ = -1;
+    int gl_u_swizzle_ = -1; // 1: sample ARGB uploaded as RGBA (swap R/B)
+    // Cached GL textures for overlay bitmaps (key = px.data()).
+    std::map<const void*, unsigned> gl_overlay_tex_;
 };
 
 // Writes an ARGB8888 pixel buffer as a BMP file. Works without a window.

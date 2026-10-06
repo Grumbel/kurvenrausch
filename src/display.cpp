@@ -165,12 +165,22 @@ const char* k_frag =
     "precision mediump float;\n"
     "varying vec2 v_uv;\n"
     "uniform sampler2D u_tex;\n"
-    "void main(){ gl_FragColor = texture2D(u_tex, v_uv); }\n";
+    "uniform int u_swizzle_rb;\n"
+    "void main(){\n"
+    "  vec4 t = texture2D(u_tex, v_uv);\n"
+    "  if (u_swizzle_rb != 0) gl_FragColor = vec4(t.b, t.g, t.r, t.a);\n"
+    "  else gl_FragColor = t;\n"
+    "}\n";
 #else
     "#version 110\n"
     "varying vec2 v_uv;\n"
     "uniform sampler2D u_tex;\n"
-    "void main(){ gl_FragColor = texture2D(u_tex, v_uv); }\n";
+    "uniform int u_swizzle_rb;\n"
+    "void main(){\n"
+    "  vec4 t = texture2D(u_tex, v_uv);\n"
+    "  if (u_swizzle_rb != 0) gl_FragColor = vec4(t.b, t.g, t.r, t.a);\n"
+    "  else gl_FragColor = t;\n"
+    "}\n";
 #endif
 
 unsigned compile_shader(unsigned type, const char* src) {
@@ -286,6 +296,12 @@ void Display::destroy_present() {
             g_gl.DeleteBuffers(1, &gl_vbo_);
             gl_vbo_ = 0;
         }
+        if (g_gl.DeleteTextures) {
+            for (auto& kv : gl_overlay_tex_) {
+                if (kv.second) g_gl.DeleteTextures(1, &kv.second);
+            }
+        }
+        gl_overlay_tex_.clear();
         if (gl_program_ && g_gl.DeleteProgram) {
             g_gl.DeleteProgram(gl_program_);
             gl_program_ = 0;
@@ -468,6 +484,7 @@ bool Display::init_gl_present() {
     g_gl.DeleteShader(fs);
     if (!gl_program_) return false;
     gl_u_tex_ = g_gl.GetUniformLocation(gl_program_, "u_tex");
+    gl_u_swizzle_ = g_gl.GetUniformLocation(gl_program_, "u_swizzle_rb");
 
     g_gl.GenTextures(1, &gl_fb_tex_);
     g_gl.BindTexture(GL_TEXTURE_2D_, gl_fb_tex_);
@@ -600,21 +617,15 @@ void Display::present_gl(const uint32_t* argb_pixels, const Overlay& overlay) {
 
     g_gl.BindTexture(GL_TEXTURE_2D_, gl_fb_tex_);
 #if KURVEN_GLES
-    static thread_local std::vector<uint32_t> rgba;
-    rgba.resize(static_cast<size_t>(fb_w_ * fb_h_));
-    for (int i = 0; i < fb_w_ * fb_h_; ++i) {
-        const uint32_t p = argb_pixels[i];
-        rgba[static_cast<size_t>(i)] =
-            ((p & 0x000000ffu) << 16) | (p & 0x0000ff00u) | ((p & 0x00ff0000u) >> 16) | (p & 0xff000000u);
-    }
-    g_gl.TexSubImage2D(GL_TEXTURE_2D_, 0, 0, 0, fb_w_, fb_h_, GL_RGBA_, GL_UNSIGNED_BYTE_, rgba.data());
+    // Upload ARGB bytes as RGBA; shader swaps R/B (avoids full-buffer CPU swizzle).
+    g_gl.TexSubImage2D(GL_TEXTURE_2D_, 0, 0, 0, fb_w_, fb_h_, GL_RGBA_, GL_UNSIGNED_BYTE_, argb_pixels);
 #else
-    // ARGB8888 little-endian memory layout matches BGRA for TexSubImage.
     g_gl.TexSubImage2D(GL_TEXTURE_2D_, 0, 0, 0, fb_w_, fb_h_, GL_BGRA_, GL_UNSIGNED_BYTE_, argb_pixels);
 #endif
 
     g_gl.UseProgram(gl_program_);
     g_gl.Uniform1i(gl_u_tex_, 0);
+    if (gl_u_swizzle_ >= 0) g_gl.Uniform1i(gl_u_swizzle_, 1); // CPU ARGB as RGBA
     g_gl.ActiveTexture(GL_TEXTURE0_);
     g_gl.BindTexture(GL_TEXTURE_2D_, gl_fb_tex_);
 
@@ -637,27 +648,30 @@ void Display::present_gl(const uint32_t* argb_pixels, const Overlay& overlay) {
 
     g_gl.Enable(GL_BLEND_);
     g_gl.BlendFunc(GL_SRC_ALPHA_, GL_ONE_MINUS_SRC_ALPHA_);
+    if (gl_u_swizzle_ >= 0) g_gl.Uniform1i(gl_u_swizzle_, 1); // overlay bitmaps are ARGB
     for (const Overlay::Item& item : overlay.items()) {
-        if (!item.image || item.image->w <= 0 || item.image->h <= 0) continue;
-        GLuint tex = 0;
-        g_gl.GenTextures(1, &tex);
-        g_gl.BindTexture(GL_TEXTURE_2D_, tex);
-        g_gl.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_MIN_FILTER_, GL_NEAREST_);
-        g_gl.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_MAG_FILTER_, GL_NEAREST_);
-        g_gl.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_WRAP_S_, GL_CLAMP_TO_EDGE_);
-        g_gl.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_WRAP_T_, GL_CLAMP_TO_EDGE_);
+        if (!item.image || item.image->w <= 0 || item.image->h <= 0 || item.image->px.empty()) continue;
+        const void* key = item.image->px.data();
+        unsigned tex = 0;
+        if (auto it = gl_overlay_tex_.find(key); it != gl_overlay_tex_.end()) {
+            tex = it->second;
+        } else {
+            g_gl.GenTextures(1, &tex);
+            g_gl.BindTexture(GL_TEXTURE_2D_, tex);
+            g_gl.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_MIN_FILTER_, GL_NEAREST_);
+            g_gl.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_MAG_FILTER_, GL_NEAREST_);
+            g_gl.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_WRAP_S_, GL_CLAMP_TO_EDGE_);
+            g_gl.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_WRAP_T_, GL_CLAMP_TO_EDGE_);
 #if KURVEN_GLES
-        std::vector<uint32_t> o(static_cast<size_t>(item.image->w * item.image->h));
-        for (size_t i = 0; i < o.size(); ++i) {
-            const uint32_t p = item.image->px[i];
-            o[i] = ((p & 0x000000ffu) << 16) | (p & 0x0000ff00u) | ((p & 0x00ff0000u) >> 16) | (p & 0xff000000u);
-        }
-        g_gl.TexImage2D(GL_TEXTURE_2D_, 0, static_cast<GLint>(GL_RGBA_), item.image->w, item.image->h, 0, GL_RGBA_,
-                        GL_UNSIGNED_BYTE_, o.data());
+            g_gl.TexImage2D(GL_TEXTURE_2D_, 0, static_cast<GLint>(GL_RGBA_), item.image->w, item.image->h, 0, GL_RGBA_,
+                            GL_UNSIGNED_BYTE_, item.image->px.data());
 #else
-        g_gl.TexImage2D(GL_TEXTURE_2D_, 0, static_cast<GLint>(GL_RGBA_), item.image->w, item.image->h, 0, GL_BGRA_,
-                        GL_UNSIGNED_BYTE_, item.image->px.data());
+            g_gl.TexImage2D(GL_TEXTURE_2D_, 0, static_cast<GLint>(GL_RGBA_), item.image->w, item.image->h, 0, GL_BGRA_,
+                            GL_UNSIGNED_BYTE_, item.image->px.data());
 #endif
+            gl_overlay_tex_[key] = tex;
+        }
+        g_gl.BindTexture(GL_TEXTURE_2D_, tex);
         const float ox0 = 2.f * static_cast<float>(item.x) / static_cast<float>(s.w) - 1.f;
         const float ox1 = 2.f * static_cast<float>(item.x + item.image->w) / static_cast<float>(s.w) - 1.f;
         const float oy0 = 1.f - 2.f * static_cast<float>(item.y + item.image->h) / static_cast<float>(s.h);
@@ -667,7 +681,6 @@ void Display::present_gl(const uint32_t* argb_pixels, const Overlay& overlay) {
         };
         g_gl.BufferData(GL_ARRAY_BUFFER_, static_cast<GLsizeiptr>(sizeof ov), ov, GL_STREAM_DRAW_);
         g_gl.DrawArrays(GL_TRIANGLE_STRIP_, 0, 4);
-        g_gl.DeleteTextures(1, &tex);
     }
     g_gl.Disable(GL_BLEND_);
 
@@ -695,6 +708,7 @@ void Display::present_gles_scene(unsigned scene_tex, int tex_w, int tex_h, const
 
     g_gl.UseProgram(gl_program_);
     g_gl.Uniform1i(gl_u_tex_, 0);
+    if (gl_u_swizzle_ >= 0) g_gl.Uniform1i(gl_u_swizzle_, 0); // FBO is true RGBA
     g_gl.ActiveTexture(GL_TEXTURE0_);
     g_gl.BindTexture(GL_TEXTURE_2D_, scene_tex);
 
@@ -721,17 +735,11 @@ void Display::present_gles_scene(unsigned scene_tex, int tex_w, int tex_h, const
         g_gl.BlendFunc(GL_SRC_ALPHA_, GL_ONE_MINUS_SRC_ALPHA_);
         g_gl.BindTexture(GL_TEXTURE_2D_, gl_fb_tex_);
 #if KURVEN_GLES
-        static thread_local std::vector<uint32_t> rgba;
-        rgba.resize(static_cast<size_t>(fb_w_ * fb_h_));
-        for (int i = 0; i < fb_w_ * fb_h_; ++i) {
-            const uint32_t p = hud_argb[i];
-            rgba[static_cast<size_t>(i)] =
-                ((p & 0x000000ffu) << 16) | (p & 0x0000ff00u) | ((p & 0x00ff0000u) >> 16) | (p & 0xff000000u);
-        }
-        g_gl.TexSubImage2D(GL_TEXTURE_2D_, 0, 0, 0, fb_w_, fb_h_, GL_RGBA_, GL_UNSIGNED_BYTE_, rgba.data());
+        g_gl.TexSubImage2D(GL_TEXTURE_2D_, 0, 0, 0, fb_w_, fb_h_, GL_RGBA_, GL_UNSIGNED_BYTE_, hud_argb);
 #else
         g_gl.TexSubImage2D(GL_TEXTURE_2D_, 0, 0, 0, fb_w_, fb_h_, GL_BGRA_, GL_UNSIGNED_BYTE_, hud_argb);
 #endif
+        if (gl_u_swizzle_ >= 0) g_gl.Uniform1i(gl_u_swizzle_, 1);
         const float hud_verts[] = {
             x0, y0, 0.f, 1.f, x1, y0, 1.f, 1.f, x0, y1, 0.f, 0.f, x1, y1, 1.f, 0.f,
         };
@@ -742,27 +750,30 @@ void Display::present_gles_scene(unsigned scene_tex, int tex_w, int tex_h, const
     }
     g_gl.Enable(GL_BLEND_);
     g_gl.BlendFunc(GL_SRC_ALPHA_, GL_ONE_MINUS_SRC_ALPHA_);
+    if (gl_u_swizzle_ >= 0) g_gl.Uniform1i(gl_u_swizzle_, 1); // overlay bitmaps are ARGB
     for (const Overlay::Item& item : overlay.items()) {
-        if (!item.image || item.image->w <= 0 || item.image->h <= 0) continue;
-        GLuint tex = 0;
-        g_gl.GenTextures(1, &tex);
-        g_gl.BindTexture(GL_TEXTURE_2D_, tex);
-        g_gl.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_MIN_FILTER_, GL_NEAREST_);
-        g_gl.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_MAG_FILTER_, GL_NEAREST_);
-        g_gl.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_WRAP_S_, GL_CLAMP_TO_EDGE_);
-        g_gl.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_WRAP_T_, GL_CLAMP_TO_EDGE_);
+        if (!item.image || item.image->w <= 0 || item.image->h <= 0 || item.image->px.empty()) continue;
+        const void* key = item.image->px.data();
+        unsigned tex = 0;
+        if (auto it = gl_overlay_tex_.find(key); it != gl_overlay_tex_.end()) {
+            tex = it->second;
+        } else {
+            g_gl.GenTextures(1, &tex);
+            g_gl.BindTexture(GL_TEXTURE_2D_, tex);
+            g_gl.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_MIN_FILTER_, GL_NEAREST_);
+            g_gl.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_MAG_FILTER_, GL_NEAREST_);
+            g_gl.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_WRAP_S_, GL_CLAMP_TO_EDGE_);
+            g_gl.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_WRAP_T_, GL_CLAMP_TO_EDGE_);
 #if KURVEN_GLES
-        std::vector<uint32_t> o(static_cast<size_t>(item.image->w * item.image->h));
-        for (size_t i = 0; i < o.size(); ++i) {
-            const uint32_t p = item.image->px[i];
-            o[i] = ((p & 0x000000ffu) << 16) | (p & 0x0000ff00u) | ((p & 0x00ff0000u) >> 16) | (p & 0xff000000u);
-        }
-        g_gl.TexImage2D(GL_TEXTURE_2D_, 0, static_cast<GLint>(GL_RGBA_), item.image->w, item.image->h, 0, GL_RGBA_,
-                        GL_UNSIGNED_BYTE_, o.data());
+            g_gl.TexImage2D(GL_TEXTURE_2D_, 0, static_cast<GLint>(GL_RGBA_), item.image->w, item.image->h, 0, GL_RGBA_,
+                            GL_UNSIGNED_BYTE_, item.image->px.data());
 #else
-        g_gl.TexImage2D(GL_TEXTURE_2D_, 0, static_cast<GLint>(GL_RGBA_), item.image->w, item.image->h, 0, GL_BGRA_,
-                        GL_UNSIGNED_BYTE_, item.image->px.data());
+            g_gl.TexImage2D(GL_TEXTURE_2D_, 0, static_cast<GLint>(GL_RGBA_), item.image->w, item.image->h, 0, GL_BGRA_,
+                            GL_UNSIGNED_BYTE_, item.image->px.data());
 #endif
+            gl_overlay_tex_[key] = tex;
+        }
+        g_gl.BindTexture(GL_TEXTURE_2D_, tex);
         const float ox0 = 2.f * static_cast<float>(item.x) / static_cast<float>(s.w) - 1.f;
         const float ox1 = 2.f * static_cast<float>(item.x + item.image->w) / static_cast<float>(s.w) - 1.f;
         const float oy0 = 1.f - 2.f * static_cast<float>(item.y + item.image->h) / static_cast<float>(s.h);
@@ -772,7 +783,6 @@ void Display::present_gles_scene(unsigned scene_tex, int tex_w, int tex_h, const
         };
         g_gl.BufferData(GL_ARRAY_BUFFER_, static_cast<GLsizeiptr>(sizeof ov), ov, GL_STREAM_DRAW_);
         g_gl.DrawArrays(GL_TRIANGLE_STRIP_, 0, 4);
-        g_gl.DeleteTextures(1, &tex);
     }
     g_gl.Disable(GL_BLEND_);
     (void)tex_w;

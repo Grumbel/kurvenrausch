@@ -2745,8 +2745,11 @@ void Game::render() {
         const Weather* weather_ptr = nullptr;
         if (debug_.weather && !track_.segment_at(world_.get<Transform>(player_).z + cam.player_z()).tunnel)
             weather_ptr = &weather_;
-        gles_.render(track_, view, sprites_, road_sprites_, look, scene_light, &background_, hour_, beam_ptr,
-                     weather_ptr);
+        // Pause menus reuse the last scene FBO — no full road rebuild.
+        if (!paused_) {
+            gles_.render(track_, view, sprites_, road_sprites_, look, scene_light, &background_, hour_, beam_ptr,
+                         weather_ptr);
+        }
         // Transparent buffer so only HUD / menus / cockpit composite over the
         // GLES scene (including pause and options — no software backdrop).
         std::fill(fb_.pixels_mut(), fb_.pixels_mut() + width_ * fb_height(), 0u);
