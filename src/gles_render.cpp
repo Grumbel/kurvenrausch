@@ -1014,11 +1014,15 @@ void GlesRenderer::draw_sprites(const Track& track, const SpriteSheet& sprites, 
             flush_solid();
             push_quad(cx - width / 2.f, y - height, width, height, 0.f, 0.f, 1.f, 1.f, tint, o.flip);
             flush_textured(tex);
-            if (o.lights != 0) {
-                const float depth = camera_depth_ / std::max(1e-4f, scale);
-                const float ahead = static_cast<float>(o.lights);
-                lamps_.push_back({cx, depth + ahead * 1100.f, 1000.f, Glow::Head});
-                lamps_.push_back({cx, depth - ahead * 350.f, 560.f, Glow::Tail});
+            if (o.lights != 0 && scale > 1e-4f) {
+                // Interpolate cam_z at the object (same units as row_depth_), not
+                // 1/scale which is noisier near the horizon and can "park" pools.
+                const float depth = p0.cam_z + (p1.cam_z - p0.cam_z) * t;
+                if (depth > camera_depth_ * 0.5f) {
+                    const float ahead = static_cast<float>(o.lights);
+                    lamps_.push_back({cx, depth + ahead * 1100.f, 1000.f, Glow::Head});
+                    lamps_.push_back({cx, depth - ahead * 350.f, 560.f, Glow::Tail});
+                }
             }
         };
         if (direction_ > 0) {

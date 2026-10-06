@@ -519,7 +519,8 @@ bool Game::frame() {
 
     if (!paused_) switch_lights(input); // paused, the D-pad moves the menu
     if (input.toggle_renderer) {
-        scene_backend_ = next_scene_backend(scene_backend_);
+        // F8 flips the effective path only (GLES ↔ software), never Auto.
+        scene_backend_ = use_gles_ ? SceneBackend::Software : SceneBackend::Gles;
         apply_scene_backend();
         std::cout << "Kurvenrausch: scene renderer " << scene_backend_name(scene_backend_)
                   << (use_gles_ ? " (GLES active)" : " (software active)") << "\n";
@@ -3004,6 +3005,7 @@ void Game::render_mirror() {
     view.y_scale = y_scale;
     if (window_wake_time_ > 0.f && daylight_at(hour_).level < 0.5f)
         view.window_wake = 55.f * track_.segment_length;
+    view.x_scale = static_cast<float>(mir_width()) / 2.f;
     mirror_sprites_.clear();
     world_.view<Transform, Traffic>([&](Entity e, Transform& t, Traffic& traffic) {
         RoadSprite s;
@@ -3014,9 +3016,29 @@ void Game::render_mirror() {
                                                        SpriteSheet::tyre_frame(t.z));
         s.offset = t.x;
         s.world_width = vehicle_info(traffic.kind).width;
+        // Mirror looks back: same dir sign as main (pools from vehicle lamps).
+        s.lights = traffic.dir;
         mirror_sprites_.push_back(s);
     });
+    // Mirror traffic: lights relative to the rear-facing camera (dir flipped).
+    // (Set above when building sprites — add lights for night pools.)
     mirror_road_.render(mirror_fb_, track_, view, sprites_, mirror_sprites_);
+
+    // Night on the mirror glass (GLES composites the mirror over the scene
+    // without the main-view apply_daylight pass).
+    {
+        const Daylight light = lit_by(daylight_at(hour_), look.night_glow);
+        if (light.level < 0.999f || !mirror_road_.lamps().empty()) {
+            const int mw = mir_width(), mh = mir_height();
+            std::vector<uint32_t> day(static_cast<size_t>(mw) * static_cast<size_t>(mh));
+            std::copy(mirror_fb_.pixels(), mirror_fb_.pixels() + day.size(), day.begin());
+            apply_daylight(mirror_fb_, light);
+            const float mir_x_scale =
+                view.x_scale > 0.f ? view.x_scale : static_cast<float>(mw) / 2.f;
+            street_lights(mirror_fb_, day, mirror_road_.ground(), light, mirror_road_.row_depth(),
+                          mirror_road_.lamps(), mirror_depth, mir_x_scale);
+        }
+    }
 
     const int mirror_x = (width_ - mir_width()) / 2;
     draw_mirror_frame(fb_, mirror_x, mirror_y * pixel_scale_, mir_width(), mir_height());

@@ -2,6 +2,12 @@
 
 ## Current tip
 
+### Grok: mirror night, F8 GLES↔software, vehicle lamp depth
+- Mirror glass runs apply_daylight + street_lights (GLES skips main-view night).
+- F8 toggles Software ↔ Gles only (not Auto).
+- Vehicle head/tail pools use interpolated cam_z (row_depth units).
+
+
 ### Grok: pixel-perfect night via software light functions
 - GLES draws full-bright albedo (road → ground snapshot → sprites → weather).
 - `apply_daylight` / `street_lights` / `headlight_beam` run on a CPU copy of the

@@ -213,12 +213,8 @@ const char* scene_backend_name(SceneBackend b) {
 }
 
 SceneBackend next_scene_backend(SceneBackend b) {
-    switch (b) {
-        case SceneBackend::Auto: return SceneBackend::Software;
-        case SceneBackend::Software: return SceneBackend::Gles;
-        case SceneBackend::Gles:
-        default: return SceneBackend::Auto;
-    }
+    // Hotkey toggles the two concrete backends only (not Auto).
+    return b == SceneBackend::Gles ? SceneBackend::Software : SceneBackend::Gles;
 }
 
 bool parse_scene_backend(const char* s, SceneBackend& out) {
