@@ -418,10 +418,11 @@ void GlesRenderer::shutdown() {
         if (entry.id && !entry.in_atlas) g.DeleteTextures(1, &entry.id);
     }
     textures_.clear();
-    if (atlas_tex_) {
-        g.DeleteTextures(1, &atlas_tex_);
-        atlas_tex_ = 0;
+    for (unsigned t : atlas_pages_) {
+        if (t) g.DeleteTextures(1, &t);
     }
+    atlas_pages_.clear();
+    atlas_tex_ = 0;
     atlas_ready_ = false;
     if (depth_rb_ && g.DeleteRenderbuffers) {
         g.DeleteRenderbuffers(1, &depth_rb_);
@@ -857,9 +858,8 @@ GlesRenderer::TexRef GlesRenderer::texture_for(const Bitmap& bmp, bool dynamic) 
 void GlesRenderer::ensure_sprite_atlas(const SpriteSheet& sprites) {
     if (atlas_ready_ || !g.GenTextures) return;
 
-    // Pack as many static sprites as fit into one atlas. Never abandon the
-    // atlas on overflow — partial pack still collapses scenery + most cars
-    // into one textured batch (overflow used to mean one draw per sprite).
+    // Pack every static bitmap into as many 4096² atlas pages as needed so no
+    // car falls back to a solo texture (each solo was a separate draw).
     std::vector<const Bitmap*> bitmaps;
     sprites.append_static_bitmaps(bitmaps);
 
@@ -875,22 +875,39 @@ void GlesRenderer::ensure_sprite_atlas(const SpriteSheet& sprites) {
         }
         if (!seen) unique.push_back(b);
     }
-    // Keep append_static_bitmaps order: scenery first, then vehicles, so if the
-    // atlas fills, traffic variants are the ones left as solo textures.
+
     constexpr int pad = 1;
     constexpr int atlas_limit = 4096;
+    auto pot = [](int v) {
+        int p = 64;
+        while (p < v && p < atlas_limit) p *= 2;
+        return std::min(p, atlas_limit);
+    };
+
     struct Place {
         const Bitmap* b;
         int x, y;
+        int page;
     };
     std::vector<Place> places;
     places.reserve(unique.size());
-    int shelf_x = pad, shelf_y = pad, shelf_h = 0, max_w = 64, max_h = 64;
-    int skipped = 0;
-    for (size_t i = 0; i < unique.size(); ++i) {
-        const Bitmap* b = unique[i];
+
+    // Greedy multi-page shelf pack. Scenery is first in unique (append order).
+    int page = 0;
+    int shelf_x = pad, shelf_y = pad, shelf_h = 0;
+    int page_max_w = 64, page_max_h = 64;
+    int global_max_w = 64, global_max_h = 64;
+    auto new_page = [&]() {
+        page += 1;
+        shelf_x = pad;
+        shelf_y = pad;
+        shelf_h = 0;
+        page_max_w = 64;
+        page_max_h = 64;
+    };
+    for (const Bitmap* b : unique) {
         if (b->w + 2 * pad > atlas_limit || b->h + 2 * pad > atlas_limit) {
-            ++skipped;
+            // Larger than a full page — leave as solo (rare).
             continue;
         }
         if (shelf_x + b->w + pad > atlas_limit) {
@@ -899,45 +916,51 @@ void GlesRenderer::ensure_sprite_atlas(const SpriteSheet& sprites) {
             shelf_h = 0;
         }
         if (shelf_y + b->h + pad > atlas_limit) {
-            skipped += static_cast<int>(unique.size() - i);
-            break;
+            new_page();
+            // After new page, still place this bitmap.
+            if (shelf_x + b->w + pad > atlas_limit) {
+                shelf_x = pad;
+                shelf_y += shelf_h + pad;
+                shelf_h = 0;
+            }
         }
-        places.push_back({b, shelf_x, shelf_y});
+        places.push_back({b, shelf_x, shelf_y, page});
         shelf_x += b->w + pad;
         shelf_h = std::max(shelf_h, b->h);
-        max_w = std::max(max_w, shelf_x);
-        max_h = std::max(max_h, shelf_y + b->h + pad);
+        page_max_w = std::max(page_max_w, shelf_x);
+        page_max_h = std::max(page_max_h, shelf_y + b->h + pad);
+        global_max_w = std::max(global_max_w, page_max_w);
+        global_max_h = std::max(global_max_h, page_max_h);
     }
-    auto pot = [](int v) {
-        int p = 64;
-        while (p < v && p < atlas_limit) p *= 2;
-        return std::min(p, atlas_limit);
-    };
-    atlas_w_ = pot(std::max(max_w, 64));
-    atlas_h_ = pot(std::max(max_h, 64));
-    if (places.empty() || atlas_w_ * atlas_h_ <= 0) {
-        std::cerr << "kurvenrausch: sprite atlas empty, sprites use solo textures\n";
+
+    const int n_pages = places.empty() ? 0 : places.back().page + 1;
+    if (n_pages <= 0) {
         atlas_ready_ = true;
         return;
     }
-    if (skipped > 0) {
-        std::cerr << "kurvenrausch: sprite atlas packed " << places.size() << "/"
-                  << places.size() + skipped << " (" << atlas_w_ << "x" << atlas_h_ << "), "
-                  << skipped << " solo\n";
-    }
+    // Uniform page size (simplest UVs); all pages share atlas_w_/atlas_h_.
+    atlas_w_ = pot(std::max(global_max_w, 64));
+    atlas_h_ = pot(std::max(global_max_h, 64));
 
-    g.GenTextures(1, &atlas_tex_);
-    g.BindTexture(GL_TEXTURE_2D_, atlas_tex_);
-    g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_MIN_FILTER_, GL_NEAREST_);
-    g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_MAG_FILTER_, GL_NEAREST_);
-    g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_WRAP_S_, GL_CLAMP_TO_EDGE_);
-    g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_WRAP_T_, GL_CLAMP_TO_EDGE_);
-    g.TexImage2D(GL_TEXTURE_2D_, 0, static_cast<int>(GL_RGBA_), atlas_w_, atlas_h_, 0, GL_RGBA_, GL_UNSIGNED_BYTE_,
-                 nullptr);
-    // Opaque white texel in the corner, clear of shelf packing (starts at pad).
+    atlas_pages_.assign(static_cast<size_t>(n_pages), 0u);
+    for (int p = 0; p < n_pages; ++p) {
+        unsigned tex = 0;
+        g.GenTextures(1, &tex);
+        g.BindTexture(GL_TEXTURE_2D_, tex);
+        g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_MIN_FILTER_, GL_NEAREST_);
+        g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_MAG_FILTER_, GL_NEAREST_);
+        g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_WRAP_S_, GL_CLAMP_TO_EDGE_);
+        g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_WRAP_T_, GL_CLAMP_TO_EDGE_);
+        g.TexImage2D(GL_TEXTURE_2D_, 0, static_cast<int>(GL_RGBA_), atlas_w_, atlas_h_, 0, GL_RGBA_,
+                     GL_UNSIGNED_BYTE_, nullptr);
+        atlas_pages_[static_cast<size_t>(p)] = tex;
+    }
+    atlas_tex_ = atlas_pages_[0];
+    // White tint texel on page 0 only (rails/tunnel push_tint_quad).
     {
         const uint8_t white[4] = {255, 255, 255, 255};
         const int wx = atlas_w_ - 1, wy = atlas_h_ - 1;
+        g.BindTexture(GL_TEXTURE_2D_, atlas_tex_);
         if (g.TexSubImage2D)
             g.TexSubImage2D(GL_TEXTURE_2D_, 0, wx, wy, 1, 1, GL_RGBA_, GL_UNSIGNED_BYTE_, white);
         white_u_ = (static_cast<float>(wx) + 0.5f) / static_cast<float>(atlas_w_);
@@ -947,6 +970,7 @@ void GlesRenderer::ensure_sprite_atlas(const SpriteSheet& sprites) {
 
     for (const Place& pl : places) {
         const Bitmap& bmp = *pl.b;
+        const unsigned tex = atlas_pages_[static_cast<size_t>(pl.page)];
         std::vector<uint8_t> rgba(static_cast<size_t>(bmp.w) * static_cast<size_t>(bmp.h) * 4);
         for (size_t i = 0; i < bmp.px.size(); ++i) {
             const uint32_t p = bmp.px[i];
@@ -955,6 +979,7 @@ void GlesRenderer::ensure_sprite_atlas(const SpriteSheet& sprites) {
             rgba[i * 4 + 2] = static_cast<uint8_t>(p & 0xff);
             rgba[i * 4 + 3] = static_cast<uint8_t>((p >> 24) & 0xff);
         }
+        g.BindTexture(GL_TEXTURE_2D_, tex);
         if (g.TexSubImage2D) {
             g.TexSubImage2D(GL_TEXTURE_2D_, 0, pl.x, pl.y, bmp.w, bmp.h, GL_RGBA_, GL_UNSIGNED_BYTE_, rgba.data());
         }
@@ -962,7 +987,11 @@ void GlesRenderer::ensure_sprite_atlas(const SpriteSheet& sprites) {
         const float v0 = static_cast<float>(pl.y) / static_cast<float>(atlas_h_);
         const float u1 = static_cast<float>(pl.x + bmp.w) / static_cast<float>(atlas_w_);
         const float v1 = static_cast<float>(pl.y + bmp.h) / static_cast<float>(atlas_h_);
-        textures_[bmp.px.data()] = CachedTex{atlas_tex_, bmp.w, bmp.h, u0, v0, u1, v1, true};
+        textures_[bmp.px.data()] = CachedTex{tex, bmp.w, bmp.h, u0, v0, u1, v1, true};
+    }
+    if (n_pages > 1) {
+        std::cerr << "kurvenrausch: sprite atlas " << n_pages << " pages (" << atlas_w_ << "x" << atlas_h_
+                  << "), " << places.size() << " sprites\n";
     }
     atlas_ready_ = true;
 }

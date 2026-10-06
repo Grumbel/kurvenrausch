@@ -2,10 +2,9 @@
 
 ## Current tip
 
-### Grok: sprite atlas never fully abandoned
-- Overflow used to skip the whole atlas → one GL texture/draw per sprite
-  (~150+ draws). Now pack what fits (scenery first); remainder stays solo.
-- Expect a console line only if some vehicle variants did not fit.
+### Grok: multi-page sprite atlas
+- Overflow no longer uses solo textures per sprite. Extra 4096² atlas pages
+  hold the rest so every static vehicle stays on an atlas texture.
 
 
 ### Grok: stable player car layer order
