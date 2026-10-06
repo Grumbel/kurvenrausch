@@ -2,6 +2,15 @@
 
 ## Current tip
 
+### Grok: R36S GLES2 present path (ArkOS / Mali)
+- R36S is aarch64 Linux, so the build used desktop GL 2.1 COMPATIBILITY and
+  fell back to SDL when the Mali driver refused the context.
+- `ENABLE_OPENGLES2` CMake option → `KURVEN_OPENGLES2=1`: ES 2.0 profile,
+  GLES shaders, no desktop `OpenGL::GL` link. `nix/r36s.nix` turns it on.
+- `SDL_HINT_OPENGL_ES_DRIVER=1` before window creation (SuperTux Origins /
+  ArkOS pattern) so SDL picks the EGL/GLES path on Mali.
+
+
 ### Grok: sky haze only at horizon
 - GLES sky: pure sky_top at zenith; horizon blends sky_horizon → atmosphere_air by theme.haze.
 - Clouds: tint only (no distance fog), matching software.
