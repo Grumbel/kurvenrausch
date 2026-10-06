@@ -306,11 +306,8 @@ const char* k_compose_frag =
     "  vec4 a = texture2D(u_albedo, v_uv);\n"
     "  if (is_emissive(a.rgb)) { gl_FragColor = vec4(a.rgb, 1.0); return; }\n"
     "  vec3 night = a.rgb * u_day_scale;\n"
-    "  vec3 L = texture2D(u_light, v_uv).rgb;\n"
-    "  vec3 gnd = texture2D(u_ground, v_uv).rgb;\n"
-    "  float ground = step(distance(a.rgb, gnd), 0.004);\n"
-    "  vec3 k = clamp(L, 0.0, 1.0) * ground;\n"
-    "  vec3 lit = mix(night, a.rgb, k);\n"
+    "  vec3 L = clamp(texture2D(u_light, v_uv).rgb, 0.0, 1.0);\n"
+    "  vec3 lit = mix(night, a.rgb, L);\n"
     "  gl_FragColor = vec4(lit, 1.0);\n"
     "}\n";
 #else
@@ -334,11 +331,8 @@ const char* k_compose_frag =
     "  vec4 a = texture2D(u_albedo, v_uv);\n"
     "  if (is_emissive(a.rgb)) { gl_FragColor = vec4(a.rgb, 1.0); return; }\n"
     "  vec3 night = a.rgb * u_day_scale;\n"
-    "  vec3 L = texture2D(u_light, v_uv).rgb;\n"
-    "  vec3 gnd = texture2D(u_ground, v_uv).rgb;\n"
-    "  float ground = step(distance(a.rgb, gnd), 0.004);\n"
-    "  vec3 k = clamp(L, 0.0, 1.0) * ground;\n"
-    "  vec3 lit = mix(night, a.rgb, k);\n"
+    "  vec3 L = clamp(texture2D(u_light, v_uv).rgb, 0.0, 1.0);\n"
+    "  vec3 lit = mix(night, a.rgb, L);\n"
     "  gl_FragColor = vec4(lit, 1.0);\n"
     "}\n";
 #endif
