@@ -2,6 +2,10 @@
 
 ## Current tip
 
+### Grok: -Wno-psabi for GCC pair ABI notes
+- C++17 std::pair notes on aarch64 are ABI chatter; not fixed by C++20.
+
+
 ### Grok: smooth GPU headlight + lamp falloff (no rings)
 - Headlight: 1D linear-filtered texture with software lateral shape, one
   textured strip per row (vertex colour = distance falloff).

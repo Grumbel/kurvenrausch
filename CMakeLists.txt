@@ -20,6 +20,12 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# GCC 10+ notes ABI changes for trivial std::pair under C++17 (-Wpsabi).
+# Harmless noise on aarch64 (R36S); not fixed by bumping the language standard.
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    add_compile_options(-Wno-psabi)
+endif()
+
 # compile_commands.json in the build dir for clangd / other LSP clients.
 # Configure once: cmake -B build  (already on by default here).
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)

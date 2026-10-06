@@ -9,7 +9,7 @@ include $(CLEAR_VARS)
 LOCAL_MODULE := main
 LOCAL_SRC_FILES := $(patsubst $(LOCAL_PATH)/%,%,$(wildcard $(LOCAL_PATH)/*.cpp))
 LOCAL_C_INCLUDES := $(LOCAL_PATH)/include $(LOCAL_PATH)/../SDL/include
-LOCAL_CPPFLAGS += -std=c++17 -Wall -Wextra -Wpedantic -O2 \
+LOCAL_CPPFLAGS += -std=c++17 -Wno-psabi -Wall -Wextra -Wpedantic -O2 \
 	-DKURVENRAUSCH_VERSION=\"$(KURVENRAUSCH_VERSION)\"
 LOCAL_CPP_FEATURES := exceptions rtti
 LOCAL_SHARED_LIBRARIES := SDL2
