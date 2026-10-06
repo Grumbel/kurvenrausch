@@ -27,6 +27,8 @@ constexpr unsigned GL_COLOR_BUFFER_BIT_ = 0x00004000;
 constexpr unsigned GL_BLEND_ = 0x0BE2;
 constexpr unsigned GL_SRC_ALPHA_ = 0x0302;
 constexpr unsigned GL_ONE_ = 1;
+constexpr unsigned GL_ZERO_ = 0;
+constexpr unsigned GL_DST_COLOR_ = 0x0306;
 constexpr unsigned GL_ONE_MINUS_SRC_ALPHA_ = 0x0303;
 constexpr unsigned GL_TEXTURE_2D_ = 0x0DE1;
 constexpr unsigned GL_TEXTURE0_ = 0x84C0;
@@ -293,6 +295,8 @@ void GlesRenderer::invalidate() {
     fbo_ = 0;
     color_tex_ = 0;
     depth_rb_ = 0;
+    light_fbo_ = 0;
+    light_tex_ = 0;
     fbo_w_ = fbo_h_ = 0;
     textures_.clear();
     // Force load_gl to re-resolve entry points if needed.
@@ -303,7 +307,7 @@ void GlesRenderer::shutdown() {
     if (!g.DeleteTextures) {
         program_ = 0;
         vbo_ = 0;
-        fbo_ = color_tex_ = depth_rb_ = 0;
+        fbo_ = color_tex_ = depth_rb_ = light_fbo_ = light_tex_ = 0;
         textures_.clear();
         return;
     }
@@ -1029,21 +1033,18 @@ void GlesRenderer::draw_sprites(const Track& track, const SpriteSheet& sprites, 
 
 
 
-void GlesRenderer::draw_lamp_pools(float dark) {
-    if (dark <= 0.02f || lamps_.empty()) return;
-    // Software street_lights() mixes the pre-night ground back in with a
-    // circular (1−r²)² falloff. We only have the already-darkened FBO, so
-    // approximate that lift with soft additive rings (GL_ONE, GL_ONE) — not
-    // solid sodium ovals.
+void GlesRenderer::draw_lamp_pools(float ambient) {
+    if (lamps_.empty()) return;
+    const float dark = 1.f - ambient;
+    if (dark <= 0.02f) return;
+    // Lightmap is cleared to ambient; add the remaining headroom toward the tint
+    // so albedo × lightmap restores day colour under the lamp (software mix).
     g.BlendFunc(GL_ONE_, GL_ONE_);
     for (const LampSpot& lamp : lamps_) {
+        const float tint_r = 1.f;
         const float tint_g = lamp.glow == Glow::Street ? 0.85f : lamp.glow == Glow::Tail ? 0.35f : 1.f;
         const float tint_b = lamp.glow == Glow::Street ? 0.55f : lamp.glow == Glow::Tail ? 0.2f : 0.95f;
-        const float strength = lamp.glow == Glow::Tail ? 0.55f : lamp.glow == Glow::Head ? 0.5f : 0.65f;
-        // Peak lift toward a warm day-ish asphalt (software restores day pixels).
-        const float peak_r = lamp.glow == Glow::Tail ? 48.f : 42.f;
-        const float peak_g = lamp.glow == Glow::Tail ? 14.f : 36.f * tint_g;
-        const float peak_b = lamp.glow == Glow::Tail ? 8.f : 28.f * tint_b;
+        const float strength = lamp.glow == Glow::Tail ? 0.85f : lamp.glow == Glow::Head ? 0.8f : 0.9f;
         for (int y = 0; y < height_; ++y) {
             const float depth = row_depth_[static_cast<size_t>(y)];
             if (depth <= 0.f) continue;
@@ -1051,19 +1052,21 @@ void GlesRenderer::draw_lamp_pools(float dark) {
             if (std::abs(dz) >= lamp.reach) continue;
             const float px_per_unit = camera_depth_ / depth * x_scale_;
             const float half = std::sqrt(lamp.reach * lamp.reach - dz * dz) * px_per_unit;
-            if (half < 0.75f) continue;
-            // Three concentric strips so the disc falls off in x, not a flat oval.
-            static constexpr float frac[3] = {1.f, 0.62f, 0.28f};
-            static constexpr float weight[3] = {0.22f, 0.38f, 0.55f};
-            for (int ring = 0; ring < 3; ++ring) {
+            if (half < 0.5f) continue;
+            // Concentric rings approximate radial (1−r²)² falloff.
+            static constexpr float frac[4] = {1.f, 0.72f, 0.45f, 0.2f};
+            static constexpr float wgt[4] = {0.15f, 0.3f, 0.45f, 0.7f};
+            for (int ring = 0; ring < 4; ++ring) {
                 const float edge = frac[ring];
-                const float r2 = (dz * dz) / (lamp.reach * lamp.reach) + (1.f - edge) * (1.f - edge) * 0.35f;
+                const float r_lat = 1.f - edge;
+                const float r2 = (dz * dz) / (lamp.reach * lamp.reach) + r_lat * r_lat * 0.5f;
                 if (r2 >= 1.f) continue;
-                const float k = strength * dark * (1.f - r2) * (1.f - r2) * weight[ring];
-                if (k < 0.015f) continue;
-                Color c{static_cast<uint8_t>(std::min(255.f, peak_r * k)),
-                        static_cast<uint8_t>(std::min(255.f, peak_g * k)),
-                        static_cast<uint8_t>(std::min(255.f, peak_b * k)), 255};
+                const float k = strength * dark * (1.f - r2) * (1.f - r2) * wgt[ring];
+                if (k < 0.01f) continue;
+                // Additive headroom toward tint (lightmap ends ≤ ~1).
+                Color c{static_cast<uint8_t>(std::min(255.f, tint_r * k * 255.f)),
+                        static_cast<uint8_t>(std::min(255.f, tint_g * k * 255.f)),
+                        static_cast<uint8_t>(std::min(255.f, tint_b * k * 255.f)), 255};
                 const float h = half * edge;
                 push_trap(static_cast<float>(y), lamp.x - h, lamp.x + h, static_cast<float>(y + 1), lamp.x - h,
                           lamp.x + h, c);
@@ -1125,41 +1128,58 @@ void GlesRenderer::draw_weather(const Weather& weather) {
 }
 
 bool GlesRenderer::ensure_fbo() {
-    if (fbo_ && fbo_w_ == width_ && fbo_h_ == height_) return true;
+    if (fbo_ && light_fbo_ && fbo_w_ == width_ && fbo_h_ == height_) return true;
     if (depth_rb_ && g.DeleteRenderbuffers) g.DeleteRenderbuffers(1, &depth_rb_);
     if (color_tex_) g.DeleteTextures(1, &color_tex_);
+    if (light_tex_) g.DeleteTextures(1, &light_tex_);
+    if (light_fbo_ && g.DeleteFramebuffers) g.DeleteFramebuffers(1, &light_fbo_);
     if (fbo_ && g.DeleteFramebuffers) g.DeleteFramebuffers(1, &fbo_);
-    fbo_ = color_tex_ = depth_rb_ = 0;
+    fbo_ = color_tex_ = depth_rb_ = light_fbo_ = light_tex_ = 0;
+
+    auto make_color_tex = [&](unsigned& tex) {
+        g.GenTextures(1, &tex);
+        g.BindTexture(GL_TEXTURE_2D_, tex);
+        g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_MIN_FILTER_, GL_NEAREST_);
+        g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_MAG_FILTER_, GL_NEAREST_);
+        g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_WRAP_S_, GL_CLAMP_TO_EDGE_);
+        g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_WRAP_T_, GL_CLAMP_TO_EDGE_);
+        g.TexImage2D(GL_TEXTURE_2D_, 0, static_cast<int>(GL_RGBA_), width_, height_, 0, GL_RGBA_, GL_UNSIGNED_BYTE_,
+                     nullptr);
+    };
+
     g.GenFramebuffers(1, &fbo_);
-    g.GenTextures(1, &color_tex_);
-    g.BindTexture(GL_TEXTURE_2D_, color_tex_);
-    g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_MIN_FILTER_, GL_NEAREST_);
-    g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_MAG_FILTER_, GL_NEAREST_);
-    g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_WRAP_S_, GL_CLAMP_TO_EDGE_);
-    g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_WRAP_T_, GL_CLAMP_TO_EDGE_);
-    g.TexImage2D(GL_TEXTURE_2D_, 0, static_cast<int>(GL_RGBA_), width_, height_, 0, GL_RGBA_, GL_UNSIGNED_BYTE_,
-                 nullptr);
+    make_color_tex(color_tex_);
     g.GenRenderbuffers(1, &depth_rb_);
     g.BindRenderbuffer(GL_RENDERBUFFER_, depth_rb_);
     g.RenderbufferStorage(GL_RENDERBUFFER_, GL_DEPTH_COMPONENT16_, width_, height_);
     g.BindFramebuffer(GL_FRAMEBUFFER_, fbo_);
     g.FramebufferTexture2D(GL_FRAMEBUFFER_, GL_COLOR_ATTACHMENT0_, GL_TEXTURE_2D_, color_tex_, 0);
     g.FramebufferRenderbuffer(GL_FRAMEBUFFER_, GL_DEPTH_ATTACHMENT_, GL_RENDERBUFFER_, depth_rb_);
-    const unsigned status = g.CheckFramebufferStatus(GL_FRAMEBUFFER_);
-    g.BindFramebuffer(GL_FRAMEBUFFER_, 0);
-    if (status != GL_FRAMEBUFFER_COMPLETE_) {
-        std::cerr << "kurvenrausch: gles FBO incomplete (" << status << ")\n";
+    if (g.CheckFramebufferStatus(GL_FRAMEBUFFER_) != GL_FRAMEBUFFER_COMPLETE_) {
+        std::cerr << "kurvenrausch: gles color FBO incomplete\n";
+        g.BindFramebuffer(GL_FRAMEBUFFER_, 0);
         return false;
     }
+
+    // Lightmap: ambient + additive lamps; no depth.
+    g.GenFramebuffers(1, &light_fbo_);
+    make_color_tex(light_tex_);
+    g.BindFramebuffer(GL_FRAMEBUFFER_, light_fbo_);
+    g.FramebufferTexture2D(GL_FRAMEBUFFER_, GL_COLOR_ATTACHMENT0_, GL_TEXTURE_2D_, light_tex_, 0);
+    if (g.CheckFramebufferStatus(GL_FRAMEBUFFER_) != GL_FRAMEBUFFER_COMPLETE_) {
+        std::cerr << "kurvenrausch: gles light FBO incomplete\n";
+        g.BindFramebuffer(GL_FRAMEBUFFER_, 0);
+        return false;
+    }
+    g.BindFramebuffer(GL_FRAMEBUFFER_, 0);
     fbo_w_ = width_;
     fbo_h_ = height_;
     return true;
 }
 
-void GlesRenderer::draw_headlight(const Beam& beam, float dark) {
+void GlesRenderer::draw_headlight(const Beam& beam, float ambient) {
+    const float dark = 1.f - ambient;
     if (dark <= 0.01f) return;
-    // Software headlight_beam mixes pre-night day pixels back in a soft cone.
-    // Approximate with low additive lift and lateral falloff rings.
     g.BlendFunc(GL_ONE_, GL_ONE_);
     auto smoothstep = [](float a, float b, float x) {
         const float t = std::clamp((x - a) / (b - a), 0.f, 1.f);
@@ -1189,20 +1209,20 @@ void GlesRenderer::draw_headlight(const Beam& beam, float dark) {
         const float px_per_unit = beam.camera_depth / depth * beam.x_scale;
         const float half = (beam_half_width + beam_spread * ahead) * px_per_unit;
         const float mid = beam.center + beam.aim * ahead * px_per_unit;
-        const float k0 = 0.5f * dark * reach * air;
-        if (k0 < 0.015f) continue;
-        // Lateral rings: software uses a smooth across curve; three widths.
-        static constexpr float frac[3] = {1.f, 0.55f, 0.22f};
-        static constexpr float weight[3] = {0.2f, 0.4f, 0.55f};
-        for (int ring = 0; ring < 3; ++ring) {
-            const float across = 1.f - frac[ring]; // 0 at centre ring
+        const float k0 = 0.75f * dark * reach * air;
+        if (k0 < 0.01f) continue;
+        static constexpr float frac[4] = {1.f, 0.7f, 0.4f, 0.18f};
+        static constexpr float wgt[4] = {0.12f, 0.28f, 0.45f, 0.65f};
+        for (int ring = 0; ring < 4; ++ring) {
+            const float edge = frac[ring];
+            const float across = 1.f - edge;
             const float side = (1.f - across) * (1.f - across);
-            const float k = k0 * side * weight[ring];
-            if (k < 0.012f) continue;
-            Color c{static_cast<uint8_t>(std::min(255.f, 38.f * k)),
-                    static_cast<uint8_t>(std::min(255.f, 36.f * k)),
-                    static_cast<uint8_t>(std::min(255.f, 30.f * k)), 255};
-            const float h = half * frac[ring];
+            const float k = k0 * side * wgt[ring];
+            if (k < 0.01f) continue;
+            Color c{static_cast<uint8_t>(std::min(255.f, k * 255.f)),
+                    static_cast<uint8_t>(std::min(255.f, k * 245.f)),
+                    static_cast<uint8_t>(std::min(255.f, k * 220.f)), 255};
+            const float h = half * edge;
             push_trap(static_cast<float>(y), mid - h, mid + h, static_cast<float>(y + 1), mid - h, mid + h, c);
         }
     }
@@ -1216,7 +1236,9 @@ void GlesRenderer::render(const Track& track, const RoadView& view, const Sprite
                           const Background* backdrop, float hour, const Beam* headlight,
                           const Weather* weather) {
     if (!program_ || !ensure_fbo()) return;
-    daylight_ = std::clamp(daylight, 0.05f, 1.f);
+    const float ambient = std::clamp(daylight, 0.05f, 1.f);
+    // Albedo pass draws full day colours; night is applied via lightmap multiply.
+    daylight_ = 1.f;
     fog_air_ = view.fog_air;
     window_wake_ = view.window_wake;
     camera_depth_ = view.camera_depth;
@@ -1309,18 +1331,14 @@ void GlesRenderer::render(const Track& track, const RoadView& view, const Sprite
     if (g.GetIntegerv) g.GetIntegerv(GL_FRAMEBUFFER_BINDING_, &prev_fbo);
     g.BindFramebuffer(GL_FRAMEBUFFER_, fbo_);
     g.Viewport(0, 0, width_, height_);
-    g.ClearColor(air.r / 255.f * daylight_, air.g / 255.f * daylight_, air.b / 255.f * daylight_, 1.f);
+    g.ClearColor(air.r / 255.f, air.g / 255.f, air.b / 255.f, 1.f);
     g.Clear(GL_COLOR_BUFFER_BIT_);
     g.Enable(GL_BLEND_);
     g.BlendFunc(GL_SRC_ALPHA_, GL_ONE_MINUS_SRC_ALPHA_);
     g.UseProgram(program_);
     g.Uniform2f(u_screen_, static_cast<float>(width_), static_cast<float>(height_));
     if (g.Uniform3f && u_fog_air_ >= 0) {
-        const float d = daylight_;
-        g.Uniform3f(u_fog_air_,
-                    fog_air_.r / 255.f * d,
-                    fog_air_.g / 255.f * d,
-                    fog_air_.b / 255.f * d);
+        g.Uniform3f(u_fog_air_, fog_air_.r / 255.f, fog_air_.g / 255.f, fog_air_.b / 255.f);
     }
 
     clear_batch();
@@ -1348,9 +1366,36 @@ void GlesRenderer::render(const Track& track, const RoadView& view, const Sprite
     flush_solid();
     draw_sprites(track, sprites, objects);
     flush_solid();
-    if (headlight) draw_headlight(*headlight, 1.f - daylight_);
-    // Night lamp pools on the ground (software street_lights equivalent).
-    draw_lamp_pools(1.f - daylight_);
+
+    // --- Lightmap pass: ambient + additive lamps ---
+    if (ambient < 0.98f && light_fbo_ && light_tex_) {
+        g.BindFramebuffer(GL_FRAMEBUFFER_, light_fbo_);
+        g.Viewport(0, 0, width_, height_);
+        g.Disable(GL_SCISSOR_TEST_);
+        g.ClearColor(ambient, ambient, ambient, 1.f);
+        g.Clear(GL_COLOR_BUFFER_BIT_);
+        if (headlight) draw_headlight(*headlight, ambient);
+        draw_lamp_pools(ambient);
+
+        // albedo × lightmap → color FBO (DST_COLOR, ZERO: out = src * dst)
+        g.BindFramebuffer(GL_FRAMEBUFFER_, fbo_);
+        g.Viewport(0, 0, width_, height_);
+        g.Disable(GL_SCISSOR_TEST_);
+        g.BlendFunc(GL_DST_COLOR_, GL_ZERO_); // need GL_ZERO
+        // Fullscreen textured quad of the lightmap.
+        g.Uniform1i(u_use_tex_, 1);
+        if (g.ActiveTexture) g.ActiveTexture(GL_TEXTURE0_);
+        g.BindTexture(GL_TEXTURE_2D_, light_tex_);
+        g.Uniform1i(u_tex_, 0);
+        // Fog uniform unused for this blit; v_col white, fog amount 0.
+        const float wf = static_cast<float>(width_), hf = static_cast<float>(height_);
+        Color white{255, 255, 255, 0}; // a = fog amount 0 for textured path
+        // FBO texture: top of scene is high V (same as present_gles_scene).
+        push_quad(0.f, 0.f, wf, hf, 0.f, 1.f, 1.f, 0.f, white, false);
+        flush_textured(light_tex_);
+        g.BlendFunc(GL_SRC_ALPHA_, GL_ONE_MINUS_SRC_ALPHA_);
+    }
+
     if (weather) draw_weather(*weather);
     g.BindFramebuffer(GL_FRAMEBUFFER_, static_cast<unsigned>(prev_fbo));
 }

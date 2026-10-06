@@ -2,6 +2,13 @@
 
 ## Current tip
 
+### Grok: night lights via albedo × lightmap
+- Scene draws at full day colours into the color FBO.
+- Lightmap FBO cleared to ambient, additive circular lamp/headlight headroom.
+- Multiply (`GL_DST_COLOR, GL_ZERO`) so result matches software's mix-back under
+  lamps without painting solid sodium ovals.
+
+
 ### Grok: softer GLES night lights (no solid sodium ovals)
 - Software mixes pre-night ground back in; solid SRC_ALPHA additive yellow ovals
   could not match. Use GL_ONE,GL_ONE multi-ring circular falloff with a small

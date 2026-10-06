@@ -106,6 +106,8 @@ private:
     unsigned fbo_ = 0;
     unsigned color_tex_ = 0;
     unsigned depth_rb_ = 0;
+    unsigned light_fbo_ = 0;
+    unsigned light_tex_ = 0;
     int fbo_w_ = 0, fbo_h_ = 0;
 
     std::vector<Vertex> solid_;
