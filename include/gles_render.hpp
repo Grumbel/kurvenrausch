@@ -111,7 +111,13 @@ private:
     std::vector<Slice> slices_;
     std::vector<float> row_depth_;
     std::vector<LampSpot> lamps_;
-    std::unordered_map<const uint32_t*, unsigned> textures_;
+    struct CachedTex {
+        unsigned id = 0;
+        int w = 0;
+        int h = 0;
+        uint32_t fingerprint = 0;
+    };
+    std::unordered_map<const uint32_t*, CachedTex> textures_;
 };
 
 } // namespace racer

@@ -2,6 +2,12 @@
 
 ## Current tip
 
+### Grok: GLES player car texture updates at dealers
+- Texture cache keyed only by `px.data()`; `player_bitmap_` is reused in place so
+  changing car (or dirt/lightbar/tread) kept the old GL texture. Cache now stores
+  a content fingerprint and re-uploads via TexSubImage2D when pixels change.
+
+
 ### Grok: GLES guard rails match software bands
 - Removed thin segment-pass rail straps. Rails drawn far→near with sprites using
   `edge_height`, filled lower (0.20–0.42) / upper (0.60–0.95) bars, top lip, and

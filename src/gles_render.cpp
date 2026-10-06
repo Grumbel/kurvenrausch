@@ -96,6 +96,7 @@ struct GlApi {
     void (*BindTexture)(unsigned, unsigned) = nullptr;
     void (*ActiveTexture)(unsigned) = nullptr;
     void (*TexImage2D)(unsigned, int, int, int, int, int, unsigned, unsigned, const void*) = nullptr;
+    void (*TexSubImage2D)(unsigned, int, int, int, int, int, unsigned, unsigned, const void*) = nullptr;
     void (*TexParameteri)(unsigned, unsigned, int) = nullptr;
     void (*PixelStorei)(unsigned, int) = nullptr;
     void (*GenFramebuffers)(int, unsigned*) = nullptr;
@@ -156,6 +157,7 @@ bool load_gl() {
     g.BindTexture = load<decltype(g.BindTexture)>("glBindTexture");
     g.ActiveTexture = load<decltype(g.ActiveTexture)>("glActiveTexture");
     g.TexImage2D = load<decltype(g.TexImage2D)>("glTexImage2D");
+    g.TexSubImage2D = load<decltype(g.TexSubImage2D)>("glTexSubImage2D");
     g.TexParameteri = load<decltype(g.TexParameteri)>("glTexParameteri");
     g.PixelStorei = load<decltype(g.PixelStorei)>("glPixelStorei");
     g.GenFramebuffers = load<decltype(g.GenFramebuffers)>("glGenFramebuffers");
@@ -305,9 +307,9 @@ void GlesRenderer::shutdown() {
         textures_.clear();
         return;
     }
-    for (auto& [k, tex] : textures_) {
+    for (auto& [k, entry] : textures_) {
         (void)k;
-        if (tex) g.DeleteTextures(1, &tex);
+        if (entry.id) g.DeleteTextures(1, &entry.id);
     }
     textures_.clear();
     if (depth_rb_ && g.DeleteRenderbuffers) {
@@ -449,29 +451,65 @@ void GlesRenderer::flush_textured(unsigned tex) {
     textured_.clear();
 }
 
+// Cheap content id so mutable bitmaps (player_bitmap_ reused in place) re-upload
+// when their pixels change while keeping the same px.data() pointer.
+static uint32_t bitmap_fingerprint(const Bitmap& bmp) {
+    uint32_t h = static_cast<uint32_t>(bmp.w) * 73856093u ^ static_cast<uint32_t>(bmp.h) * 19349663u;
+    const size_t n = bmp.px.size();
+    if (n == 0) return h;
+    h ^= bmp.px.front() + 0x9e3779b9u;
+    h ^= bmp.px.back() * 0x85ebca6bu;
+    h ^= bmp.px[n / 2] * 0xc2b2ae35u;
+    const size_t step = std::max<size_t>(1, n / 16);
+    for (size_t i = 0; i < n; i += step) h = h * 16777619u ^ bmp.px[i];
+    return h;
+}
+
 unsigned GlesRenderer::texture_for(const Bitmap& bmp) {
-    if (bmp.w <= 0 || bmp.h <= 0 || bmp.px.empty()) return 0;
+    if (bmp.w <= 0 || bmp.h <= 0 || bmp.px.empty() || !g.GenTextures) return 0;
     const uint32_t* key = bmp.px.data();
-    if (auto it = textures_.find(key); it != textures_.end()) return it->second;
+    const uint32_t fp = bitmap_fingerprint(bmp);
+    auto upload = [&](unsigned tex, bool allocate) {
+        g.BindTexture(GL_TEXTURE_2D_, tex);
+        if (allocate) {
+            g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_MIN_FILTER_, GL_NEAREST_);
+            g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_MAG_FILTER_, GL_NEAREST_);
+            g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_WRAP_S_, GL_CLAMP_TO_EDGE_);
+            g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_WRAP_T_, GL_CLAMP_TO_EDGE_);
+        }
+        std::vector<uint8_t> rgba(static_cast<size_t>(bmp.w) * static_cast<size_t>(bmp.h) * 4);
+        for (size_t i = 0; i < bmp.px.size(); ++i) {
+            const uint32_t p = bmp.px[i];
+            rgba[i * 4 + 0] = static_cast<uint8_t>((p >> 16) & 0xff);
+            rgba[i * 4 + 1] = static_cast<uint8_t>((p >> 8) & 0xff);
+            rgba[i * 4 + 2] = static_cast<uint8_t>(p & 0xff);
+            rgba[i * 4 + 3] = static_cast<uint8_t>((p >> 24) & 0xff);
+        }
+        g.PixelStorei(0x0CF5 /* GL_UNPACK_ALIGNMENT */, 1);
+        if (allocate || !g.TexSubImage2D) {
+            g.TexImage2D(GL_TEXTURE_2D_, 0, static_cast<int>(GL_RGBA_), bmp.w, bmp.h, 0, GL_RGBA_, GL_UNSIGNED_BYTE_,
+                         rgba.data());
+        } else {
+            g.TexSubImage2D(GL_TEXTURE_2D_, 0, 0, 0, bmp.w, bmp.h, GL_RGBA_, GL_UNSIGNED_BYTE_, rgba.data());
+        }
+    };
+
+    if (auto it = textures_.find(key); it != textures_.end()) {
+        CachedTex& entry = it->second;
+        if (entry.id && entry.w == bmp.w && entry.h == bmp.h && entry.fingerprint == fp) return entry.id;
+        if (entry.id && entry.w == bmp.w && entry.h == bmp.h) {
+            upload(entry.id, false);
+            entry.fingerprint = fp;
+            return entry.id;
+        }
+        // Size changed: replace the texture object.
+        if (entry.id) g.DeleteTextures(1, &entry.id);
+        entry = {};
+    }
     unsigned tex = 0;
     g.GenTextures(1, &tex);
-    g.BindTexture(GL_TEXTURE_2D_, tex);
-    g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_MIN_FILTER_, GL_NEAREST_);
-    g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_MAG_FILTER_, GL_NEAREST_);
-    g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_WRAP_S_, GL_CLAMP_TO_EDGE_);
-    g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_WRAP_T_, GL_CLAMP_TO_EDGE_);
-    std::vector<uint8_t> rgba(static_cast<size_t>(bmp.w) * static_cast<size_t>(bmp.h) * 4);
-    for (size_t i = 0; i < bmp.px.size(); ++i) {
-        const uint32_t p = bmp.px[i];
-        rgba[i * 4 + 0] = static_cast<uint8_t>((p >> 16) & 0xff);
-        rgba[i * 4 + 1] = static_cast<uint8_t>((p >> 8) & 0xff);
-        rgba[i * 4 + 2] = static_cast<uint8_t>(p & 0xff);
-        rgba[i * 4 + 3] = static_cast<uint8_t>((p >> 24) & 0xff);
-    }
-    g.PixelStorei(0x0CF5 /* GL_UNPACK_ALIGNMENT */, 1);
-    g.TexImage2D(GL_TEXTURE_2D_, 0, static_cast<int>(GL_RGBA_), bmp.w, bmp.h, 0, GL_RGBA_, GL_UNSIGNED_BYTE_,
-                 rgba.data());
-    textures_[key] = tex;
+    upload(tex, true);
+    textures_[key] = CachedTex{tex, bmp.w, bmp.h, fp};
     return tex;
 }
 
