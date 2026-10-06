@@ -15,9 +15,12 @@ namespace racer {
 // Where the game keeps what it remembers between runs.
 // Prefer $KURVENRAUSCH_STATE_DIR when set (PortMaster: …/ports/kurvenrausch/conf).
 // Else XDG: $XDG_STATE_HOME/kurvenrausch, except when XDG_STATE_HOME already ends
-// in conf/ (PortMaster sets that to the port conf directory). Else
-// $HOME/.local/state/kurvenrausch. Empty when no absolute path is available.
-std::string state_dir(const char* xdg_state_home, const char* home);
+// in conf/ (PortMaster sets that to the port conf directory). Else, when the
+// binary lives under …/ports/… (or app_base/conf already exists), use
+// app_base/conf so a direct ./kurvenrausch still keeps state with the port.
+// Else $HOME/.local/state/kurvenrausch. Empty when no absolute path is available.
+// app_base is the directory containing the executable (SDL_GetBasePath), or null.
+std::string state_dir(const char* xdg_state_home, const char* home, const char* app_base = nullptr);
 
 // What the player chose last time: indices of car_model(), driver() and
 // passenger(), the camera view and the radio.

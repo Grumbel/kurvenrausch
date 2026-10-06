@@ -431,7 +431,15 @@ std::string Game::user_state_dir() {
     while (!dir.empty() && (dir.back() == '/' || dir.back() == '\\')) dir.pop_back();
     return dir;
 #else
-    return state_dir(std::getenv("XDG_STATE_HOME"), std::getenv("HOME"));
+    std::string base;
+    if (char* p = SDL_GetBasePath()) {
+        base = p;
+        SDL_free(p);
+        while (!base.empty() && (base.back() == '/' || base.back() == '\\')) base.pop_back();
+    }
+    std::cerr << "Kurvenrausch: app base path=" << (base.empty() ? "(none)" : base) << "\n";
+    return state_dir(std::getenv("XDG_STATE_HOME"), std::getenv("HOME"),
+                     base.empty() ? nullptr : base.c_str());
 #endif
 }
 

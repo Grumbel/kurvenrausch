@@ -32,7 +32,7 @@ void persist() {
 
 } // namespace
 
-std::string state_dir(const char* xdg_state_home, const char* home) {
+std::string state_dir(const char* xdg_state_home, const char* home, const char* app_base) {
     // PortMaster / handheld: explicit root (e.g. /roms/ports/kurvenrausch/conf).
     if (const char* forced = std::getenv("KURVENRAUSCH_STATE_DIR"); forced && forced[0] == '/')
         return forced;
@@ -42,6 +42,17 @@ std::string state_dir(const char* xdg_state_home, const char* home) {
         // do not nest another kurvenrausch/ under it.
         if (base.filename() == "conf") return base.string();
         return (base / "kurvenrausch").string();
+    }
+    // Binary next to conf/ under a PortMaster ports/ tree (or conf already there).
+    if (app_base && app_base[0] == '/') {
+        std::string root = app_base;
+        while (!root.empty() && (root.back() == '/' || root.back() == '\\')) root.pop_back();
+        const fs::path base(root);
+        const fs::path conf = base / "conf";
+        std::error_code ec;
+        const bool under_ports =
+            root.find("/ports/") != std::string::npos || root.find("/Ports/") != std::string::npos;
+        if (under_ports || fs::is_directory(conf, ec)) return conf.string();
     }
     if (home && home[0] == '/') return (fs::path(home) / ".local" / "state" / "kurvenrausch").string();
     return {};

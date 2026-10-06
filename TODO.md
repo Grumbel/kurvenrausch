@@ -2,6 +2,11 @@
 
 ## Current tip
 
+### Grok: PortMaster conf next to binary when env unset
+- Direct ./kurvenrausch left XDG/KURVEN unset → $HOME/.local/state. Prefer
+  SDL_GetBasePath()/conf when under …/ports/… or conf already exists there.
+
+
 ### Grok: state-dir diagnostics on startup
 - Store::diagnose() logs env, resolved path, mkdir, write/rename probe, and
   whether choices exists. save_choices logs rename errors explicitly.
