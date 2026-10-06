@@ -1926,8 +1926,8 @@ void GlesRenderer::apply_cpu_night(const Daylight& light, const Beam* headlight,
     Framebuffer night(width_, height_);
     std::copy(day_argb.begin(), day_argb.end(), night.pixels_mut());
     apply_daylight(night, light);
-    street_lights(night, day_argb, ground_argb, light, row_depth_, lamps_, camera_depth_, x_scale_);
-    if (headlight) headlight_beam(night, day_argb, light, row_depth_, *headlight);
+    street_lights(night, day_argb, ground_argb, light, row_depth_, lamps_, camera_depth_, x_scale_, row_center_x_);
+    if (headlight) headlight_beam(night, day_argb, light, row_depth_, *headlight, row_center_x_);
 
     if (!g.TexSubImage2D || !color_tex_) return;
     std::vector<uint8_t> rgba(static_cast<size_t>(width_) * static_cast<size_t>(height_) * 4);
@@ -2086,6 +2086,7 @@ void GlesRenderer::render(const Track& track, const RoadView& view, const Sprite
     slices_.clear();
     slices_.reserve(static_cast<size_t>(count));
     row_depth_.assign(static_cast<size_t>(height_), 0.f);
+    row_center_x_.assign(static_cast<size_t>(height_), 0.f);
     lamps_.clear();
 
     for (int n = 0; n < count; ++n) {
@@ -2136,6 +2137,9 @@ void GlesRenderer::render(const Track& track, const RoadView& view, const Sprite
                 const float t = (static_cast<float>(y) + 0.5f - s.p1.y) / (s.p2.y - s.p1.y);
                 const float inv = 1.f / s.p1.cam_z + t * (1.f / s.p2.cam_z - 1.f / s.p1.cam_z);
                 row_depth_[static_cast<size_t>(y)] = inv > 0.f ? 1.f / inv : 0.f;
+                const float cx = (s.p1.x / s.p1.cam_z + t * (s.p2.x / s.p2.cam_z - s.p1.x / s.p1.cam_z))
+                                 * (inv > 0.f ? 1.f / inv : 0.f);
+                row_center_x_[static_cast<size_t>(y)] = cx;
             }
             max_y = s.p2.y;
         }

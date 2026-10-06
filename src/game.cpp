@@ -2893,7 +2893,8 @@ void Game::render() {
     if (!use_gles_) {
     if (headlights_ || !road_.lamps().empty()) day_picture_.assign(fb_.pixels(), fb_.pixels() + width_ * fb_height());
     apply_daylight(fb_, light);
-    street_lights(fb_, day_picture_, road_.ground(), light, road_.row_depth(), road_.lamps(), cam.depth, fb_x_unit());
+    street_lights(fb_, day_picture_, road_.ground(), light, road_.row_depth(), road_.lamps(), cam.depth, fb_x_unit(),
+                  road_.row_center_x());
     if (headlights_ && debug_.headlights) {
         Beam beam;
         beam.start = setup.distance + 450.f; // the lamps, at the car's front
@@ -2912,7 +2913,7 @@ void Game::render() {
                 car_night_.insert(car_night_.end(), fb_.pixels() + y * width_ + cx0, fb_.pixels() + y * width_ + cx1);
             }
         }
-        headlight_beam(fb_, day_picture_, light, road_.row_depth(), beam);
+        headlight_beam(fb_, day_picture_, light, road_.row_depth(), beam, road_.row_center_x());
         if (mask) {
             const uint32_t* night = car_night_.data();
             for (int y = cy0; y < cy1; ++y) {
@@ -3077,7 +3078,7 @@ void Game::render_mirror() {
             const float mir_x_scale =
                 view.x_scale > 0.f ? view.x_scale : static_cast<float>(mw) / 2.f;
             street_lights(mirror_fb_, day, mirror_road_.ground(), light, mirror_road_.row_depth(),
-                          mirror_road_.lamps(), mirror_depth, mir_x_scale);
+                          mirror_road_.lamps(), mirror_depth, mir_x_scale, mirror_road_.row_center_x());
         }
     }
 

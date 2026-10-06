@@ -85,6 +85,8 @@ public:
     // After render(): how far ahead of the camera (world units) the road or
     // ground seen in each screen row lies; 0 where none is seen (the sky).
     const std::vector<float>& row_depth() const { return row_depth_; }
+    // Screen X of the road centre on each row (0 if no ground); for lamp reprojection.
+    const std::vector<float>& row_center_x() const { return row_center_x_; }
     // After render(): the street lamps and the lit vehicles drawn, where
     // their light falls.
     const std::vector<LampSpot>& lamps() const { return lamps_; }
@@ -117,6 +119,7 @@ private:
 
     std::vector<Slice> slices_;
     std::vector<float> row_depth_;
+    std::vector<float> row_center_x_;
     mutable std::vector<LampSpot> lamps_; // found while drawing the scenery
     std::vector<uint32_t> ground_;
     float camera_depth_ = 1.f;

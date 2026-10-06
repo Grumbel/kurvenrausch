@@ -61,7 +61,7 @@ struct LampSpot {
 // on what stands on it.
 void street_lights(Framebuffer& fb, const std::vector<uint32_t>& day, const std::vector<uint32_t>& ground,
                    const Daylight& light, const std::vector<float>& row_depth, const std::vector<LampSpot>& lamps,
-                   float camera_depth, float x_scale);
+                   float camera_depth, float x_scale, const std::vector<float>& row_center_x = {});
 
 // The picture for the light: darkened (warm at dusk, blue at night), except
 // lamps and stars, which keep shining (night_emissive()).
@@ -93,6 +93,7 @@ constexpr float beam_spread = 0.7f;      // ... widening by this per unit ahead 
 // widening ahead, fading with distance and to the sides, nothing over the
 // horizon. Nothing to do in full daylight.
 void headlight_beam(Framebuffer& fb, const std::vector<uint32_t>& day, const Daylight& light,
-                    const std::vector<float>& row_depth, const Beam& beam);
+                    const std::vector<float>& row_depth, const Beam& beam,
+                    const std::vector<float>& row_center_x = {});
 
 } // namespace racer

@@ -51,6 +51,7 @@ public:
     int texture_height() const { return height_; }
 
     const std::vector<float>& row_depth() const { return row_depth_; }
+    const std::vector<float>& row_center_x() const { return row_center_x_; }
     const std::vector<LampSpot>& lamps() const { return lamps_; }
 
 private:

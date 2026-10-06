@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <vector>
 
 namespace racer {
 
@@ -106,11 +107,13 @@ void apply_daylight(Framebuffer& fb, const Daylight& light) {
 }
 
 void headlight_beam(Framebuffer& fb, const std::vector<uint32_t>& day, const Daylight& light,
-                    const std::vector<float>& row_depth, const Beam& beam) {
+                    const std::vector<float>& row_depth, const Beam& beam,
+                    const std::vector<float>& row_center_x) {
     const float dark = 1.f - light.level;
     if (dark <= 0.01f) return;
     uint32_t* px = fb.pixels_mut();
     const int w = fb.width(), h = std::min(fb.height(), static_cast<int>(row_depth.size()));
+    const bool have_rc = row_center_x.size() >= static_cast<size_t>(h);
     // First road row from the top of the screen (far crest / horizon). Above it,
     // row_depth is 0 — in fog that made the cone look flat-topped. Extend a
     // softer volumetric cone into that air using the horizon depth.
@@ -138,7 +141,10 @@ void headlight_beam(Framebuffer& fb, const std::vector<uint32_t>& day, const Day
         const float reach = smoothstep(0.f, 200.f, ahead) / (1.f + (ahead / beam_reach) * (ahead / beam_reach));
         const float px_per_unit = beam.camera_depth / depth * beam.x_scale;
         const float half = (beam_half_width + beam_spread * ahead) * px_per_unit;
-        const float mid = beam.center + beam.aim * ahead * px_per_unit;
+        // Follow the road centre (not a fixed screen column) so the cone stays
+        // in front of the car through bends; aim still steers within that frame.
+        const float base = have_rc ? row_center_x[static_cast<size_t>(y)] : beam.center;
+        const float mid = base + beam.aim * ahead * px_per_unit;
         const int x0 = std::max(0, static_cast<int>(mid - half)), x1 = std::min(w, static_cast<int>(mid + half) + 1);
         for (int x = x0; x < x1; ++x) {
             const float across = std::abs(static_cast<float>(x) + 0.5f - mid) / half;
@@ -160,27 +166,61 @@ void headlight_beam(Framebuffer& fb, const std::vector<uint32_t>& day, const Day
 
 void street_lights(Framebuffer& fb, const std::vector<uint32_t>& day, const std::vector<uint32_t>& ground,
                    const Daylight& light, const std::vector<float>& row_depth, const std::vector<LampSpot>& lamps,
-                   float camera_depth, float x_scale) {
+                   float camera_depth, float x_scale, const std::vector<float>& row_center_x) {
     const float dark = 1.f - light.level;
     if (dark <= 0.01f || lamps.empty() || ground.size() != day.size()) return;
     uint32_t* px = fb.pixels_mut();
     const int w = fb.width(), h = std::min(fb.height(), static_cast<int>(row_depth.size()));
+    const float screen_c = 0.5f * static_cast<float>(w);
+    const bool have_rc = row_center_x.size() >= static_cast<size_t>(h);
+
+    // World lateral offset of each lamp from the road centre at its depth, so
+    // pools stay under the vehicle on every row (perspective + road curve).
+    struct Placed {
+        float world_off;
+        float depth;
+        float reach;
+        Glow glow;
+    };
+    std::vector<Placed> placed;
+    placed.reserve(lamps.size());
+    for (const LampSpot& lamp : lamps) {
+        if (lamp.depth <= 1e-3f) continue;
+        float road_c = screen_c;
+        if (have_rc) {
+            float best = 1.0e9f;
+            for (int yy = 0; yy < h; ++yy) {
+                const float d = row_depth[static_cast<size_t>(yy)];
+                if (d <= 0.f) continue;
+                const float err = std::abs(d - lamp.depth);
+                if (err < best) {
+                    best = err;
+                    road_c = row_center_x[static_cast<size_t>(yy)];
+                }
+            }
+        }
+        const float px_lamp = camera_depth / lamp.depth * x_scale;
+        placed.push_back({(lamp.x - road_c) / px_lamp, lamp.depth, lamp.reach, lamp.glow});
+    }
+
     for (int y = 0; y < h; ++y) {
         const float depth = row_depth[static_cast<size_t>(y)];
         if (depth <= 0.f) continue;
         const float px_per_unit = camera_depth / depth * x_scale;
-        for (const LampSpot& lamp : lamps) {
+        const float road_c = have_rc ? row_center_x[static_cast<size_t>(y)] : screen_c;
+        for (const Placed& lamp : placed) {
             const float dz = depth - lamp.depth;
             if (std::abs(dz) >= lamp.reach) continue;
+            const float cx = road_c + lamp.world_off * px_per_unit;
             // Sodium yellow, headlight white, tail light red; the red only a glow.
             const float tint_g = lamp.glow == Glow::Street ? 0.85f : lamp.glow == Glow::Tail ? 0.35f : 1.f;
             const float tint_b = lamp.glow == Glow::Street ? 0.55f : lamp.glow == Glow::Tail ? 0.2f : 0.95f;
             const float strength = lamp.glow == Glow::Tail ? 0.85f : lamp.glow == Glow::Head ? 0.8f : 0.9f;
             const float half = std::sqrt(lamp.reach * lamp.reach - dz * dz);
-            const int x0 = std::max(0, static_cast<int>(lamp.x - half * px_per_unit));
-            const int x1 = std::min(w, static_cast<int>(lamp.x + half * px_per_unit) + 1);
+            const int x0 = std::max(0, static_cast<int>(cx - half * px_per_unit));
+            const int x1 = std::min(w, static_cast<int>(cx + half * px_per_unit) + 1);
             for (int x = x0; x < x1; ++x) {
-                const float dx = (static_cast<float>(x) + 0.5f - lamp.x) / px_per_unit;
+                const float dx = (static_cast<float>(x) + 0.5f - cx) / px_per_unit;
                 const float r2 = (dx * dx + dz * dz) / (lamp.reach * lamp.reach);
                 if (r2 >= 1.f) continue;
                 const float k = strength * dark * (1.f - r2) * (1.f - r2);

@@ -67,6 +67,7 @@ void RoadRenderer::render(Framebuffer& fb, const Track& track, const RoadView& v
     slices_.clear();
     slices_.reserve(static_cast<size_t>(count));
     row_depth_.assign(static_cast<size_t>(fb.height()), 0.f);
+    row_center_x_.assign(static_cast<size_t>(fb.height()), 0.f);
     lamps_.clear();
 
     for (int n = 0; n < count; ++n) {
@@ -141,6 +142,10 @@ void RoadRenderer::render(Framebuffer& fb, const Track& track, const RoadView& v
                 const float t = (static_cast<float>(y) + 0.5f - s.p1.y) / (s.p2.y - s.p1.y);
                 const float inv = 1.f / s.p1.cam_z + t * (1.f / s.p2.cam_z - 1.f / s.p1.cam_z);
                 row_depth_[static_cast<size_t>(y)] = inv > 0.f ? 1.f / inv : 0.f;
+                // Perspective-correct road centre (lerp in 1/z, same as depth).
+                const float cx = (s.p1.x / s.p1.cam_z + t * (s.p2.x / s.p2.cam_z - s.p1.x / s.p1.cam_z))
+                                 * (inv > 0.f ? 1.f / inv : 0.f);
+                row_center_x_[static_cast<size_t>(y)] = cx;
             }
             max_y = s.p2.y;
         }

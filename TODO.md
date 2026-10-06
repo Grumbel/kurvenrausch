@@ -2,6 +2,13 @@
 
 ## Current tip
 
+### Grok: lock light pools to vehicles (perspective + road centre)
+- Pools used a fixed screen X from the car's depth, so on other rows they
+  slid toward the vanishing point. Now each lamp stores a world lateral
+  offset from the road centre; each row reprojects with row_center_x.
+- Headlight cone also follows row road centre through bends (aim still steers).
+
+
 ### Grok: restore pixel-perfect GLES night (software light stack)
 - FBO ring lightmap produced harsh banded headlights/pools vs software.
 - Night again: ReadPixels ground + day albedo, then the same
