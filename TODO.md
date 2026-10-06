@@ -2,6 +2,19 @@
 
 ## Current tip
 
+### Grok: GLES tunnel occlusion + edge/rail parity
+- Projection loop now updates tunnel `ceiling` / `mouth_left` / `mouth_right` like
+  software `RoadRenderer`, so farther slices clip to the portal.
+- `draw_segment`: alternating tunnel wall tones, ceiling lamps every 6 segments,
+  ground beyond rail/cliff (`beyond` / `rock`), way-out mouth side walls,
+  `seg.rails` railway crossing (sleepers + steel).
+- `glScissor` on road segments and sprites for tunnel-mouth / nearer-road clip
+  (GL origin bottom-left; y converted from top-down screen space).
+- Stale "Still incomplete vs software" bullet for beams/backdrop/weather/HUD
+  removed; remaining gaps are intentional approximations (rail mesh detail,
+  oil sheen bands, full-frame `apply_daylight`).
+
+
 ### Grok: GLES lamp pools, finer rails, GPU weather
 - Street-lamp / head / tail pools on GLES via `draw_lamp_pools` (row_depth
   discs, additive blend); lamps collected while planting StreetLamp scenery
@@ -46,8 +59,9 @@
 - Sprite **construction** stays CPU (`SpriteSheet`); bitmaps upload to textures.
 - Window path prefers GL present + GLES scene; software `RoadRenderer` remains
   for headless screenshots and when GL init fails / pause menus.
-- Still incomplete vs software: full marking detail, rails, weather particles,
-  night beams, backdrop hills/clouds, HUD on the GL path.
+- GLES parity vs software (post tunnel/edge pass): rail mesh still approximate;
+  oil/water sheen simplified; night is vertex daylight + lamp pools (no full-frame
+  `apply_daylight` / `street_lights` post-process).
 
 
 ### Grok: fog on all non-lamp sprite pixels

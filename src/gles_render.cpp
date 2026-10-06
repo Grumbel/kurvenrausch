@@ -573,10 +573,44 @@ void GlesRenderer::draw_segment(const Track& track, const Slice& s, const RoadTh
     const float wf = static_cast<float>(width_);
     auto fogc = [&](Color c) { return fogged(c, fog_air_, fog_amount, daylight_); };
 
-    push_trap(b.y, 0.f, wf, a.y, 0.f, wf, fogc(seg.tunnel ? Color{0x6c, 0x68, 0x62} : theme.grass[band]));
+    const Color wall[2] = {{0x6c, 0x68, 0x62}, {0x60, 0x5c, 0x56}};
+    push_trap(b.y, 0.f, wf, a.y, 0.f, wf, fogc(seg.tunnel ? wall[band] : theme.grass[band]));
     if (seg.tunnel) {
         const float ca = a.y - a.scale * tunnel_height * y_scale_, cb = b.y - b.scale * tunnel_height * y_scale_;
         push_trap(ca, 0.f, wf, cb, 0.f, wf, fogc(Color{0x34, 0x32, 0x30}));
+        // Ceiling lamps every few segments (software uses unfogged warm yellow).
+        if (s.index % 6 == 0) {
+            const float lw = a.w * 0.08f;
+            push_trap(ca, a.x - lw, a.x + lw, std::max(cb, ca + 1.f), b.x - lw, b.x + lw,
+                      Color{0xff, 0xec, 0xb0});
+        }
+    }
+
+    // Ground beyond a rail or cliff: sea/valley or rock (mostly hidden by the edge).
+    for (int side = -1; side <= 1; side += 2) {
+        const Edge kind = side < 0 ? seg.left : seg.right;
+        if (kind == Edge::None) continue;
+        const float off = kind == Edge::Rail ? rail_offset : cliff_offset;
+        const Color c = kind == Edge::Rail ? fogc(theme.beyond[band]) : fogc(theme.rock[0]);
+        const float xa = a.x + static_cast<float>(side) * off * a.w;
+        const float xb = b.x + static_cast<float>(side) * off * b.w;
+        if (side < 0) push_trap(b.y, 0.f, xb, a.y, 0.f, xa, c);
+        else push_trap(b.y, xb, wf, a.y, xa, wf, c);
+    }
+
+    // Tunnel exit mouth: wall around the opening (way out, seen from inside).
+    {
+        const int dir = direction_;
+        const bool way_out = seg.tunnel && !track.segment(s.index + dir).tunnel;
+        if (way_out) {
+            const ScreenPoint& mouth = b; // far end of this segment
+            const float half = mouth.scale * tunnel_half_width * track.road_width * x_scale_;
+            const float x0 = mouth.x - half, x1 = mouth.x + half;
+            const float far_ceiling = b.y - b.scale * tunnel_height * y_scale_;
+            const Color mouth_wall = fogc(Color{0x6c, 0x68, 0x62});
+            push_trap(far_ceiling, 0.f, x0, b.y, 0.f, x0, mouth_wall);
+            push_trap(far_ceiling, x1, wf, b.y, x1, wf, mouth_wall);
+        }
     }
 
     const float oa = track.branch_offset(near), ob = track.branch_offset(near + direction_);
@@ -696,6 +730,21 @@ void GlesRenderer::draw_segment(const Track& track, const Slice& s, const RoadTh
             }
         }
     }
+
+    // Railway crossing the road and the land on either side.
+    if (seg.rails) {
+        const auto across = [&](float t0, float t1, Color c) {
+            const float y0 = a.y + (b.y - a.y) * t1, y1 = a.y + (b.y - a.y) * t0;
+            if (y1 - y0 < 1.f) {
+                push_trap(y0, 0.f, wf, y0 + 1.f, 0.f, wf, c);
+                return;
+            }
+            push_trap(y0, 0.f, wf, y1, 0.f, wf, c);
+        };
+        across(0.15f, 0.85f, fogc(Color{0x3c, 0x30, 0x28}));
+        across(0.28f, 0.36f, fogc(Color{0xb8, 0xbc, 0xc4}));
+        across(0.64f, 0.72f, fogc(Color{0xb8, 0xbc, 0xc4}));
+    }
 }
 
 void GlesRenderer::draw_sprites(const Track& track, const SpriteSheet& sprites, std::vector<RoadSprite>& objects) {
@@ -706,6 +755,20 @@ void GlesRenderer::draw_sprites(const Track& track, const SpriteSheet& sprites, 
         const Segment& seg = track.segment(s.index);
         const float fog_amount = 1.f - s.fog;
         const ScreenPoint& p0 = direction_ > 0 ? s.p1 : s.p2;
+
+        // Clip to the tunnel mouth / nearer-road occlusion (software set_clip).
+        // GL scissor origin is bottom-left; our y grows downward.
+        const int clip_x0 = std::max(0, static_cast<int>(s.left));
+        const int clip_x1 = std::min(width_, static_cast<int>(std::ceil(s.right)));
+        const int clip_y0 = std::max(0, pixel_edge(s.top));
+        const int clip_y1 = std::min(height_, clip_row(s.clip));
+        const bool use_scissor = clip_x1 > clip_x0 && clip_y1 > clip_y0 &&
+                                 (clip_x0 > 0 || clip_x1 < width_ || clip_y0 > 0 || clip_y1 < height_);
+        if (use_scissor && g.Scissor && g.Enable) {
+            flush_solid();
+            g.Enable(GL_SCISSOR_TEST_);
+            g.Scissor(clip_x0, height_ - clip_y1, clip_x1 - clip_x0, clip_y1 - clip_y0);
+        }
 
         // Cliff billboards (subsampled like software).
         auto draw_cliff = [&](int side, const Bitmap& cliff) {
@@ -821,6 +884,9 @@ void GlesRenderer::draw_sprites(const Track& track, const SpriteSheet& sprites, 
         } else {
             for (auto o = first; o != last; ++o) draw_object(*o);
         }
+
+        flush_solid();
+        if (use_scissor && g.Disable) g.Disable(GL_SCISSOR_TEST_);
     }
 }
 
@@ -1053,6 +1119,21 @@ void GlesRenderer::render(const Track& track, const RoadView& view, const Sprite
         s.fog = exp_fog(static_cast<float>(n) / static_cast<float>(count), view.fog_density);
         s.road_visible = s.p1.cam_z > view.camera_depth && s.p2.y < s.p1.y && s.p2.y < max_y;
         if (s.road_visible) {
+            // Tunnel ceiling hides what lies beyond above it; mouths restrict the
+            // horizontal aperture for farther slices (same as RoadRenderer).
+            const float far_ceiling = s.p2.y - s.p2.scale * tunnel_height * y_scale_;
+            if (seg.tunnel) ceiling = std::max(ceiling, far_ceiling);
+            const bool way_in = seg.tunnel && !track.segment(index - dir).tunnel;
+            const bool way_out = seg.tunnel && !track.segment(index + dir).tunnel;
+            if (way_in || way_out) {
+                const ScreenPoint& mouth = way_out ? s.p2 : s.p1;
+                const float half = mouth.scale * tunnel_half_width * track.road_width * x_scale_;
+                const float x0 = mouth.x - half, x1 = mouth.x + half;
+                const float mouth_top = mouth.y - mouth.scale * tunnel_height * y_scale_;
+                ceiling = std::max(ceiling, mouth_top);
+                mouth_left = std::max(mouth_left, x0);
+                mouth_right = std::min(mouth_right, x1);
+            }
             const int y0 = std::max(0, pixel_edge(s.p2.y));
             const int y1 = std::min(height_, pixel_edge(std::min(s.p1.y, max_y)));
             for (int y = y0; y < y1; ++y) {
@@ -1087,7 +1168,24 @@ void GlesRenderer::render(const Track& track, const RoadView& view, const Sprite
     clear_batch();
     draw_backdrop(theme, backdrop, hour, horizon);
     for (const Slice& s : slices_) {
-        if (s.road_visible) draw_segment(track, s, theme);
+        if (!s.road_visible) continue;
+        // Match software set_clip: tunnel mouth and nearer-road occlusion.
+        const int clip_x0 = std::max(0, static_cast<int>(s.left));
+        const int clip_x1 = std::min(width_, static_cast<int>(std::ceil(s.right)));
+        const int clip_y0 = std::max(0, pixel_edge(s.top));
+        const int clip_y1 = std::min(height_, clip_row(s.clip));
+        const bool use_scissor = g.Scissor && g.Enable && clip_x1 > clip_x0 && clip_y1 > clip_y0 &&
+                                 (clip_x0 > 0 || clip_x1 < width_ || clip_y0 > 0 || clip_y1 < height_);
+        if (use_scissor) {
+            flush_solid();
+            g.Enable(GL_SCISSOR_TEST_);
+            g.Scissor(clip_x0, height_ - clip_y1, clip_x1 - clip_x0, clip_y1 - clip_y0);
+        }
+        draw_segment(track, s, theme);
+        if (use_scissor) {
+            flush_solid();
+            g.Disable(GL_SCISSOR_TEST_);
+        }
     }
     flush_solid();
     draw_sprites(track, sprites, objects);
