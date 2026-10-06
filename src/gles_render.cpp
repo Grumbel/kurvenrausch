@@ -996,12 +996,15 @@ void GlesRenderer::draw_backdrop(const RoadTheme& theme, const Background* backd
         flush_solid();
         return;
     }
-    // Mountain / hill ridges as continuous quads along the height profile
-    // (slanted tops), not vertical column rects.
+    // Mountain / hill ridges as continuous quads with slanted tops.
+    // Sample the height profile at a coarse step (≈ width/100 columns) and
+    // connect consecutive samples so the silhouette is smooth without one
+    // solid quad per screen pixel.
     auto ridge2 = [&](const std::vector<float>& h, float offset, Color lit, Color shade, float scale_mul,
                       float snow_line) {
         if (h.empty()) return;
         const int period = static_cast<int>(h.size());
+        const int step = std::max(1, width_ / 100);
         auto height_at = [&](int x) -> float {
             const int i = ((static_cast<int>(std::lround(offset)) + x) % period + period) % period;
             return h[static_cast<size_t>(i)] * scale_mul;
@@ -1017,15 +1020,15 @@ void GlesRenderer::draw_backdrop(const RoadTheme& theme, const Background* backd
         };
         const bool do_snow = snow_line < 1.0e8f;
         const float snow_y = horizon - snow_line;
-        for (int x = 0; x < width_; ++x) {
+        for (int x = 0; x < width_; x += step) {
             const float h0 = height_at(x);
-            const float h1 = height_at(x + 1);
+            const float h1 = height_at(std::min(width_, x + step));
             if (h0 < 0.5f && h1 < 0.5f) continue;
             const float x0 = static_cast<float>(x);
-            const float x1 = static_cast<float>(x + 1);
+            const float x1 = std::min(wf, static_cast<float>(x + step));
             const float top0 = horizon - h0;
             const float top1 = horizon - h1;
-            const float light = 0.5f * (slope_light(x) + slope_light(x + 1));
+            const float light = 0.5f * (slope_light(x) + slope_light(x + step));
             const Color rock = blend(shade, lit, light);
             const Color snowc = light > 0.45f ? theme.snow : blend(theme.snow, theme.mountain_shade, 0.5f);
             // Quad order: top-left, top-right, bottom-right, bottom-left.
@@ -1035,7 +1038,7 @@ void GlesRenderer::draw_backdrop(const RoadTheme& theme, const Background* backd
                 push_solid_quad(x0, ty0, x1, ty1, x1, by1, x0, by0, c);
             };
             if (do_snow && (top0 < snow_y || top1 < snow_y)) {
-                // Snow cap above snow_line, rock below.
+                // Snow cap above snow_line (horizontal altitude), rock below.
                 const float st0 = std::min(top0, snow_y);
                 const float st1 = std::min(top1, snow_y);
                 face(top0, top1, st0, st1, snowc, (h0 + h1) * 0.25f + snow_line * 0.5f);

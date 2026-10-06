@@ -2,6 +2,12 @@
 
 ## Current tip
 
+### Grok: GLES mountains — fewer wider slanted ridge quads
+- Keep continuous slanted tops (height profile between samples) but sample
+  at step ≈ width/100 instead of every pixel. ~100 quads/layer instead of
+  width_ solid quads; silhouette still smooth. Snow/rock split unchanged.
+
+
 ### Grok: GLES mountains as continuous ridge quads
 - Replaced vertical step columns with 1px-wide quads along the height profile
   (slanted tops). Snow/rock split preserved.
