@@ -1757,9 +1757,11 @@ void GlesRenderer::draw_lamp_pools(float ambient) {
     flush_solid();
     flush_textured();
     set_textured(falloff_tex_);
+    const float max_hx = 0.65f * static_cast<float>(width_);
+    const float max_hy = 0.35f * static_cast<float>(height_);
+
     for (const LampSpot& lamp : lamps_) {
         if (lamp.depth <= 1e-3f) continue;
-        // Screen position of the lamp pool centre (nearest row to lamp.depth).
         int cy = -1;
         float best = 1.0e9f;
         for (int y = 0; y < height_; ++y) {
@@ -1772,20 +1774,28 @@ void GlesRenderer::draw_lamp_pools(float ambient) {
             }
         }
         if (cy < 0) continue;
-        const float px = camera_depth_ / lamp.depth * x_scale_;
-        const float half = lamp.reach * px;
-        if (half < 1.f) continue;
-        // Vertical span from depth ± reach (cheap bounds for the one quad).
-        float y0 = static_cast<float>(cy), y1 = static_cast<float>(cy + 1);
-        for (int y = 0; y < height_; ++y) {
-            const float d = row_depth_[static_cast<size_t>(y)];
-            if (d <= 0.f) continue;
-            if (std::abs(d - lamp.depth) < lamp.reach) {
-                y0 = std::min(y0, static_cast<float>(y));
-                y1 = std::max(y1, static_cast<float>(y + 1));
-            }
-        }
+        const float depth = row_depth_[static_cast<size_t>(cy)];
+        if (depth <= 1e-3f) continue;
+        // Skip pools glued to the bumper: projection blows up at tiny depth.
+        if (depth < camera_depth_ * 0.35f) continue;
+
+        const float px = camera_depth_ / depth * x_scale_;
+        float half_x = lamp.reach * px;
+        // Vertical radius from local depth gradient (world reach → screen px).
+        float d_lo = depth, d_hi = depth;
+        if (cy > 0 && row_depth_[static_cast<size_t>(cy - 1)] > 0.f)
+            d_lo = row_depth_[static_cast<size_t>(cy - 1)];
+        if (cy + 1 < height_ && row_depth_[static_cast<size_t>(cy + 1)] > 0.f)
+            d_hi = row_depth_[static_cast<size_t>(cy + 1)];
+        const float dd = std::max(std::abs(d_hi - d_lo) * 0.5f, 1.f);
+        float half_y = lamp.reach / dd;
+
+        half_x = std::min(half_x, max_hx);
+        half_y = std::min(half_y, max_hy);
+        if (half_x < 1.f || half_y < 1.f) continue;
+
         const float cx = lamp.x;
+        const float cy_f = static_cast<float>(cy) + 0.5f;
         const float tint_r = 1.f;
         const float tint_g = lamp.glow == Glow::Street ? 0.85f : lamp.glow == Glow::Tail ? 0.35f : 1.f;
         const float tint_b = lamp.glow == Glow::Street ? 0.55f : lamp.glow == Glow::Tail ? 0.2f : 0.95f;
@@ -1794,8 +1804,9 @@ void GlesRenderer::draw_lamp_pools(float ambient) {
         Color c{static_cast<uint8_t>(std::min(255.f, tint_r * k * 255.f + 0.5f)),
                 static_cast<uint8_t>(std::min(255.f, tint_g * k * 255.f + 0.5f)),
                 static_cast<uint8_t>(std::min(255.f, tint_b * k * 255.f + 0.5f)), 0};
-        // One radial-falloff sprite per lamp.
-        push_quad(cx - half, y0, half * 2.f, std::max(1.f, y1 - y0), 0.f, 0.f, 1.f, 1.f, c, false);
+        // Ellipse centred on the lamp: radial texture maps cleanly without
+        // stretching across the whole depth±reach span.
+        push_quad(cx - half_x, cy_f - half_y, half_x * 2.f, half_y * 2.f, 0.f, 0.f, 1.f, 1.f, c, false);
     }
     flush_textured();
     g.BlendFunc(GL_SRC_ALPHA_, GL_ONE_MINUS_SRC_ALPHA_);
@@ -2152,14 +2163,16 @@ void GlesRenderer::draw_headlight(const Beam& beam, float ambient) {
     flush_textured();
     set_textured(beam_falloff_tex_);
 
-    // Find near (just past lamps) and far (end of useful beam) ground rows.
+    // Near edge: first ground row with enough ahead that projection stays sane.
+    // Far edge: last lit ground row. Avoid pinning the trapezoid to the bumper.
+    constexpr float min_ahead = 180.f;
     int y_near = -1, y_far = -1;
     float depth_near = 0.f, depth_far = 0.f;
     for (int y = 0; y < std::min(beam.bottom, height_); ++y) {
         const float d = row_depth_[static_cast<size_t>(y)];
         if (d <= 0.f) continue;
         const float ahead = d - beam.start;
-        if (ahead <= 0.f || ahead > 4.f * beam_reach) continue;
+        if (ahead <= min_ahead || ahead > 4.f * beam_reach) continue;
         if (y_near < 0) {
             y_near = y;
             depth_near = d;
@@ -2172,10 +2185,11 @@ void GlesRenderer::draw_headlight(const Beam& beam, float ambient) {
         return;
     }
 
+    const float max_half = 0.55f * static_cast<float>(width_);
     auto half_at = [&](float depth) {
         const float ahead = depth - beam.start;
         const float px = beam.camera_depth / depth * beam.x_scale;
-        return (beam_half_width + beam_spread * ahead) * px;
+        return std::min((beam_half_width + beam_spread * ahead) * px, max_half);
     };
     auto mid_at = [&](float depth) {
         const float ahead = depth - beam.start;
@@ -2189,8 +2203,6 @@ void GlesRenderer::draw_headlight(const Beam& beam, float ambient) {
     Color c{static_cast<uint8_t>(std::min(255.f, k * 255.f + 0.5f)),
             static_cast<uint8_t>(std::min(255.f, k * 245.f + 0.5f)),
             static_cast<uint8_t>(std::min(255.f, k * 220.f + 0.5f)), 0};
-    // One textured trapezoid: near edge V=0, far edge V=1; U spans the beam width.
-    // verts: near-left, near-right, far-right, far-left
     push_tex_quad(mn - hn, yn, 0.f, 0.f, mn + hn, yn, 1.f, 0.f, mf + hf, yf, 1.f, 1.f, mf - hf, yf, 0.f, 1.f, c);
 
     flush_textured();
