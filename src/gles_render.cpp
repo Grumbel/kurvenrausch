@@ -1174,11 +1174,6 @@ void GlesRenderer::draw_backdrop(const RoadTheme& theme, const Background* backd
             }
         }
     };
-    ridge2(backdrop->mountains(), backdrop->mountain_offset(), theme.mountain_lit, theme.mountain_shade,
-           theme.mountain_scale, theme.snow_line);
-    ridge2(backdrop->hills(), backdrop->hill_offset(), theme.hill_lit, theme.hill_shade, theme.hill_scale,
-           1.0e9f); // hills never snow
-    flush_solid();
 
     // Stars as solid 2×2 traps.
     if (theme.stars > 0.02f) {
@@ -1315,6 +1310,14 @@ void GlesRenderer::draw_backdrop(const RoadTheme& theme, const Background* backd
         }
     }
     flush_textured();
+
+    // The ridges last, in front of the stars, sun, moon and clouds (as
+    // Background::render draws them).
+    ridge2(backdrop->mountains(), backdrop->mountain_offset(), theme.mountain_lit, theme.mountain_shade,
+           theme.mountain_scale, theme.snow_line);
+    ridge2(backdrop->hills(), backdrop->hill_offset(), theme.hill_lit, theme.hill_shade, theme.hill_scale,
+           1.0e9f); // hills never snow
+    flush_solid();
 }
 
 void GlesRenderer::draw_segment(const Track& track, const Slice& s, const RoadTheme& theme) {
