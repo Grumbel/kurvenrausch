@@ -2,6 +2,11 @@
 
 ## Current tip
 
+### Grok: night light strips step 2 on HD
+- Per-pixel-row strips × every lamp was too much geometry on R36S night
+  (20–30 fps). Step 2 when height≥300; still linear-filtered smooth.
+
+
 ### Grok: -Wno-psabi for GCC pair ABI notes
 - C++17 std::pair notes on aarch64 are ABI chatter; not fixed by C++20.
 

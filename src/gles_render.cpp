@@ -1735,8 +1735,6 @@ void GlesRenderer::draw_lamp_pools(float ambient) {
     if (lamps_.empty()) return;
     const float dark = 1.f - ambient;
     if (dark <= 0.02f) return;
-    // Lateral texture: (1-across^2)^2 — with row strength (1-dz^2/R^2)^2 this
-    // matches software street_lights falloff exactly, linearly filtered.
     ensure_falloff_tex();
     if (!falloff_tex_) return;
     g.BlendFunc(GL_ONE_, GL_ONE_);
@@ -1745,29 +1743,39 @@ void GlesRenderer::draw_lamp_pools(float ambient) {
     set_textured(falloff_tex_);
     const float screen_c = 0.5f * static_cast<float>(width_);
     const bool have_rc = row_center_x_.size() >= static_cast<size_t>(height_);
+    // HD: every 2nd row is enough — linear-filtered falloff stays smooth; cuts
+    // geometry ~2× (night was 20–30 fps on R36S with a strip per pixel row).
+    const int y_step = height_ >= 300 ? 2 : 1;
+
     for (const LampSpot& lamp : lamps_) {
         if (lamp.depth <= 1e-3f) continue;
         const float tint_r = 1.f;
         const float tint_g = lamp.glow == Glow::Street ? 0.85f : lamp.glow == Glow::Tail ? 0.35f : 1.f;
         const float tint_b = lamp.glow == Glow::Street ? 0.55f : lamp.glow == Glow::Tail ? 0.2f : 0.95f;
         const float strength = lamp.glow == Glow::Tail ? 0.85f : lamp.glow == Glow::Head ? 0.8f : 0.9f;
-        // World lateral offset from road centre at lamp depth (same as software).
+
+        // One scan: y-range + road centre at lamp depth.
+        int y0 = height_, y1 = 0;
         float road_c_lamp = screen_c;
-        if (have_rc) {
-            float best = 1.0e9f;
-            for (int yy = 0; yy < height_; ++yy) {
-                const float d = row_depth_[static_cast<size_t>(yy)];
-                if (d <= 0.f) continue;
-                const float err = std::abs(d - lamp.depth);
-                if (err < best) {
-                    best = err;
-                    road_c_lamp = row_center_x_[static_cast<size_t>(yy)];
-                }
+        float best = 1.0e9f;
+        for (int y = 0; y < height_; ++y) {
+            const float d = row_depth_[static_cast<size_t>(y)];
+            if (d <= 0.f) continue;
+            if (std::abs(d - lamp.depth) < lamp.reach) {
+                y0 = std::min(y0, y);
+                y1 = std::max(y1, y + 1);
+            }
+            const float err = std::abs(d - lamp.depth);
+            if (err < best) {
+                best = err;
+                if (have_rc) road_c_lamp = row_center_x_[static_cast<size_t>(y)];
             }
         }
+        if (y0 >= y1) continue;
         const float px_lamp = camera_depth_ / lamp.depth * x_scale_;
         const float world_off = (lamp.x - road_c_lamp) / px_lamp;
-        for (int y = 0; y < height_; ++y) {
+
+        for (int y = y0; y < y1; y += y_step) {
             const float depth = row_depth_[static_cast<size_t>(y)];
             if (depth <= 0.f) continue;
             const float dz = depth - lamp.depth;
@@ -1777,8 +1785,6 @@ void GlesRenderer::draw_lamp_pools(float ambient) {
             if (half < 0.5f) continue;
             const float road_c = have_rc ? row_center_x_[static_cast<size_t>(y)] : screen_c;
             const float cx = road_c + world_off * px_per_unit;
-            // Centre intensity (1 - dz^2/R^2)^2; lateral (1-across^2)^2 from texture.
-            // Radial texture is circular in UV; map strip to horizontal diameter.
             const float nz = dz / lamp.reach;
             const float centre = (1.f - nz * nz);
             const float fall = centre * centre;
@@ -1787,8 +1793,8 @@ void GlesRenderer::draw_lamp_pools(float ambient) {
             Color c{static_cast<uint8_t>(std::min(255.f, tint_r * k * 255.f + 0.5f)),
                     static_cast<uint8_t>(std::min(255.f, tint_g * k * 255.f + 0.5f)),
                     static_cast<uint8_t>(std::min(255.f, tint_b * k * 255.f + 0.5f)), 0};
-            // Sample horizontal mid-line of radial tex (v=0.5): (1-across^2)^2 shape.
-            push_quad(cx - half, static_cast<float>(y), half * 2.f, 1.f, 0.f, 0.5f, 1.f, 0.5f, c, false);
+            const float h = static_cast<float>(std::min(y_step, y1 - y));
+            push_quad(cx - half, static_cast<float>(y), half * 2.f, h, 0.f, 0.5f, 1.f, 0.5f, c, false);
         }
     }
     flush_textured();
@@ -2152,10 +2158,9 @@ void GlesRenderer::draw_headlight(const Beam& beam, float ambient) {
             break;
         }
     }
-    // One textured strip per row: horizontal UV samples the software lateral
-    // falloff (linear filtered), vertex colour carries distance/air strength.
     const int y_lim = std::min(beam.bottom, height_);
-    for (int y = 0; y < y_lim; ++y) {
+    const int y_step = y_lim >= 300 ? 2 : 1;
+    for (int y = 0; y < y_lim; y += y_step) {
         float depth = row_depth_[static_cast<size_t>(y)];
         float air = 1.f;
         if (depth <= 0.f) {
@@ -2171,13 +2176,13 @@ void GlesRenderer::draw_headlight(const Beam& beam, float ambient) {
         const float half = (beam_half_width + beam_spread * ahead) * px_per_unit;
         if (half < 0.5f) continue;
         const float mid = beam.center + beam.aim * ahead * px_per_unit;
-        // Match software peak: 0.9 * dark * reach * edge * air; edge ≤ 1 from texture.
         const float k = 0.9f * dark * reach * air;
         if (k < 0.01f) continue;
         Color c{static_cast<uint8_t>(std::min(255.f, k * 255.f + 0.5f)),
                 static_cast<uint8_t>(std::min(255.f, k * 245.f + 0.5f)),
                 static_cast<uint8_t>(std::min(255.f, k * 220.f + 0.5f)), 0};
-        push_quad(mid - half, static_cast<float>(y), half * 2.f, 1.f, 0.f, 0.f, 1.f, 1.f, c, false);
+        const float h = static_cast<float>(std::min(y_step, y_lim - y));
+        push_quad(mid - half, static_cast<float>(y), half * 2.f, h, 0.f, 0.f, 1.f, 1.f, c, false);
     }
     flush_textured();
     g.BlendFunc(GL_SRC_ALPHA_, GL_ONE_MINUS_SRC_ALPHA_);
