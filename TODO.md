@@ -2,6 +2,15 @@
 
 ## Current tip
 
+### Grok: GLES atlas vehicles — one textured batch for cars
+- Sprite atlas now packs traffic vehicles (all kinds/styles/signal/brake/tread
+  rear+front), animals, pedestrians, trains, ramp trucks, crossing signs
+  alongside scenery/cliffs.
+- `set_textured` no longer flushes per car; traffic + scenery share atlas_tex_.
+- Player car stays dynamic (`texture_for(..., true)`) — dirt/people/lightbar.
+- Atlas shelf raised to 4096 so the larger pack fits (was scenery-only 2048).
+
+
 ### Grok: GLES mountains — fewer wider slanted ridge quads
 - Keep continuous slanted tops (height profile between samples) but sample
   at step ≈ width/100 instead of every pixel. ~100 quads/layer instead of

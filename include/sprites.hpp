@@ -226,6 +226,11 @@ public:
         return f < 0 ? f + tyre_frames : f;
     }
 
+    // Append every static sprite bitmap that can live in the GLES atlas
+    // (scenery, traffic vehicles, animals, trains, …). Player body bases are
+    // included for optional packing; the live player car is still dynamic.
+    void append_static_bitmaps(std::vector<const Bitmap*>& out) const;
+
     // Empty rows above the player's car for a waving arm; the car itself is
     // the usual 96x44 below them.
     static constexpr int player_headroom = 12;

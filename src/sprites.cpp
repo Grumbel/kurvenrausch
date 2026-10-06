@@ -3196,6 +3196,39 @@ bool SpriteSheet::scenery_has_windows(Scenery kind) {
     }
 }
 
+void SpriteSheet::append_static_bitmaps(std::vector<const Bitmap*>& out) const {
+    auto add = [&](const Bitmap& b) {
+        if (b.w > 0 && b.h > 0 && !b.px.empty()) out.push_back(&b);
+    };
+    for (size_t i = 0; i < static_cast<size_t>(Scenery::Count); ++i) {
+        add(scenery_[i]);
+        add(scenery_lit_[i]);
+    }
+    add(billboard_back_);
+    add(tunnel_wall_);
+    for (const Bitmap& b : cliff_faces_) add(b);
+    for (const Bitmap& b : cliff_faces_snow_) add(b);
+    for (const auto& styles : vehicles_) {
+        for (const VehicleSprites& vs : styles) {
+            for (const auto& signal : vs.rear)
+                for (const auto& brake : signal)
+                    for (const Bitmap& b : brake) add(b);
+            for (const auto& signal : vs.front)
+                for (const Bitmap& b : signal) add(b);
+        }
+    }
+    for (const Bitmap& b : ramp_trucks_) add(b);
+    for (const Bitmap& b : crossing_signs_) add(b);
+    for (const Bitmap& b : train_cars_) add(b);
+    for (const auto& frames : animals_)
+        for (const Bitmap& b : frames) add(b);
+    for (const auto& frames : pedestrians_)
+        for (const Bitmap& b : frames) add(b);
+    // Player base sprites are large (steer × brake × signal × tread × model).
+    // Omit them from the atlas: the live player car is composited every frame
+    // into player_bitmap_ and uploaded as a dynamic texture.
+}
+
 SpriteSheet::SpriteSheet() {
     scenery_[static_cast<size_t>(Scenery::Palm)] = make_palm();
     scenery_[static_cast<size_t>(Scenery::Tree)] = make_tree();

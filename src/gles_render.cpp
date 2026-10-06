@@ -857,19 +857,10 @@ GlesRenderer::TexRef GlesRenderer::texture_for(const Bitmap& bmp, bool dynamic) 
 void GlesRenderer::ensure_sprite_atlas(const SpriteSheet& sprites) {
     if (atlas_ready_ || !g.GenTextures) return;
 
+    // Scenery + all static traffic/animal/train sprites share one atlas so
+    // cars no longer force a texture bind (and draw) each.
     std::vector<const Bitmap*> bitmaps;
-    auto add = [&](const Bitmap& b) {
-        if (b.w > 0 && b.h > 0 && !b.px.empty()) bitmaps.push_back(&b);
-    };
-    for (size_t i = 0; i < static_cast<size_t>(Scenery::Count); ++i) {
-        add(sprites.scenery(static_cast<Scenery>(i), false));
-        add(sprites.scenery(static_cast<Scenery>(i), true));
-    }
-    for (int i = 0; i < SpriteSheet::cliff_faces; ++i) {
-        add(sprites.cliff_face(i, false));
-        add(sprites.cliff_face(i, true));
-    }
-    add(sprites.scenery_back(Scenery::Billboard));
+    sprites.append_static_bitmaps(bitmaps);
 
     // Deduplicate by px.data()
     std::vector<const Bitmap*> unique;
@@ -885,9 +876,9 @@ void GlesRenderer::ensure_sprite_atlas(const SpriteSheet& sprites) {
         if (!seen) unique.push_back(b);
     }
 
-    // Shelf pack into a power-of-two atlas (width chosen after measuring).
+    // Shelf pack into a power-of-two atlas (vehicles dominate the size).
     const int pad = 1;
-    const int shelf_limit = 2048;
+    const int shelf_limit = 4096;
     int shelf_x = pad, shelf_y = pad, shelf_h = 0, max_w = 64, max_h = 64;
     struct Place {
         const Bitmap* b;
