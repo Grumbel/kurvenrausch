@@ -824,33 +824,6 @@ void GlesRenderer::draw_segment(const Track& track, const Slice& s, const RoadTh
         push_trap(b.y, ocb - b.w, ocb + b.w, a.y, oca - a.w, oca + a.w, fogc(theme.road[band]));
     }
 
-    // Oil / water patches — same bands as software RoadRenderer.
-    const float wa = track.patch_width_at(near), wb = track.patch_width_at(near + direction_);
-    if (seg.patch != Patch::None && (wa > 0.f || wb > 0.f)) {
-        const float ca = track.patch_center_at(near), cb = track.patch_center_at(near + direction_);
-        const float xa = a.x + ca * a.w, xb = b.x + cb * b.w;
-        auto band_of = [&](float from, float to, Color c) {
-            push_trap(b.y, xb + from * wb * b.w, xb + to * wb * b.w, a.y, xa + from * wa * a.w, xa + to * wa * a.w,
-                      fogc(c));
-        };
-        const int glint = s.index % 4;
-        if (seg.patch == Patch::Oil) {
-            const Color slick{0x16, 0x14, 0x1a};
-            const Color sheen[3] = {{0x6c, 0x3c, 0x7c}, {0x2c, 0x74, 0x7c}, {0x8c, 0x7c, 0x34}};
-            band_of(-1.f, 1.f, slick);
-            band_of(-0.55f, -0.35f, blend(slick, sheen[s.index % 3], 0.8f));
-            band_of(0.05f, 0.2f, blend(slick, sheen[(s.index + 1) % 3], 0.7f));
-            if (glint == 2) band_of(0.4f, 0.55f, blend(slick, sheen[(s.index + 2) % 3], 0.6f));
-        } else {
-            const Color edge = blend(theme.road[band], Color{0x10, 0x12, 0x18}, 0.4f);
-            const Color mirror = blend(edge, theme.sky_horizon, 0.35f);
-            band_of(-1.f, 1.f, edge);
-            band_of(-0.75f, 0.75f, mirror);
-            if (glint == 1) band_of(-0.45f, -0.3f, blend(mirror, Color{0xff, 0xff, 0xff}, 0.45f));
-            if (glint == 3) band_of(0.2f, 0.32f, blend(mirror, Color{0xff, 0xff, 0xff}, 0.35f));
-        }
-    }
-
     if (seg.checker) {
         for (int i = 0; i < 8; ++i) {
             const float f0 = static_cast<float>(i) / 8.f, f1 = static_cast<float>(i + 1) / 8.f;
@@ -896,6 +869,39 @@ void GlesRenderer::draw_segment(const Track& track, const Slice& s, const RoadTh
                 const float xa = oca - a.w + 2.f * a.w * f, xb = ocb - b.w + 2.f * b.w * f;
                 push_trap(b.y, xb - lb, xb + lb, a.y, xa - la, xa + la,
                           fogc(theme.us_markings ? theme.center_line : theme.lane));
+            }
+        }
+    }
+
+    // Oil / water patches on top of the road (software draws them after the
+    // surface; drawing them earlier left them fully covered by the road trap).
+    {
+        const float wa = track.patch_width_at(near), wb = track.patch_width_at(near + direction_);
+        if (seg.patch != Patch::None && (wa > 0.f || wb > 0.f)) {
+            const float ca = track.patch_center_at(near), cb = track.patch_center_at(near + direction_);
+            const float xa = a.x + ca * a.w, xb = b.x + cb * b.w;
+            auto band_of = [&](float from, float to, Color c) {
+                push_trap(b.y, xb + from * wb * b.w, xb + to * wb * b.w, a.y, xa + from * wa * a.w,
+                          xa + to * wa * a.w, fogc(c));
+            };
+            const int glint = s.index % 4;
+            if (seg.patch == Patch::Oil) {
+                const Color slick{0x16, 0x14, 0x1a};
+                const Color sheen[3] = {{0x6c, 0x3c, 0x7c}, {0x2c, 0x74, 0x7c}, {0x8c, 0x7c, 0x34}};
+                band_of(-1.f, 1.f, slick);
+                band_of(-0.55f, -0.35f, blend(slick, sheen[s.index % 3], 0.8f));
+                band_of(0.05f, 0.2f, blend(slick, sheen[(s.index + 1) % 3], 0.7f));
+                if (glint == 2) band_of(0.4f, 0.55f, blend(slick, sheen[(s.index + 2) % 3], 0.6f));
+            } else {
+                // Cooler, slightly brighter than the asphalt so wet patches
+                // read as water without the software sky-mirror bands.
+                const Color edge = blend(theme.road[band], Color{0x18, 0x28, 0x38}, 0.55f);
+                const Color mid = blend(edge, Color{0x50, 0x78, 0x98}, 0.45f);
+                const Color glint_c = blend(mid, Color{0xe8, 0xf0, 0xff}, 0.55f);
+                band_of(-1.f, 1.f, edge);
+                band_of(-0.7f, 0.7f, mid);
+                if (glint == 1) band_of(-0.4f, -0.22f, glint_c);
+                if (glint == 3) band_of(0.15f, 0.32f, glint_c);
             }
         }
     }
@@ -1049,19 +1055,27 @@ void GlesRenderer::draw_sprites(const Track& track, const SpriteSheet& sprites, 
             }
         }
 
-        // Cliff billboards (subsampled like software).
+        // Cliff billboards (subsampled like software; nested strides so
+        // columns never pop out as they approach).
         auto draw_cliff = [&](int side, const Bitmap& cliff) {
             const Edge kind = side < 0 ? seg.left : seg.right;
-            if (kind != Edge::Cliff || cliff.w <= 0) return;
+            if (kind != Edge::Cliff || cliff.w <= 0 || cliff.h <= 0) return;
             const float off = cliff_offset * static_cast<float>(side);
             const float xa = p0.x + off * p0.w;
             const int near = direction_ > 0 ? s.index : s.index + 1;
             const float h1 = track.edge_height(near, side);
-            if (!(h1 > 50.f)) return;
+            const float h2 = track.edge_height(near + direction_, side);
+            if (!(h1 > 50.f) && !(h2 > 50.f)) return;
             const float ppu = std::max(p0.scale * x_scale_, 1e-4f);
-            const int stride = ppu > 0.12f ? 2 : 3;
-            if ((s.index % stride) != 0) return;
-            const float height = h1 * ppu;
+            // Nested: far=4, near=2 (superset of far). See RoadRenderer::draw_edge.
+            const int stride = ppu > 0.12f ? 2 : 4;
+            const Edge prev_e = side < 0 ? track.segment(s.index - direction_).left
+                                         : track.segment(s.index - direction_).right;
+            const Edge next_e = side < 0 ? track.segment(s.index + direction_).left
+                                         : track.segment(s.index + direction_).right;
+            const bool run_end = prev_e != Edge::Cliff || next_e != Edge::Cliff;
+            if ((s.index % stride) != 0 && !run_end) return;
+            const float height = std::max(h1, h2 * 0.5f) * ppu;
             const float segs = static_cast<float>(stride) + 0.25f;
             const float width = std::max(track.segment_length * ppu * segs, height * 1.05f);
             if (!(height > 2.f) || !(width > 2.f)) return;
