@@ -2,6 +2,12 @@
 
 ## Current tip
 
+### Grok: softer GLES night lights (no solid sodium ovals)
+- Software mixes pre-night ground back in; solid SRC_ALPHA additive yellow ovals
+  could not match. Use GL_ONE,GL_ONE multi-ring circular falloff with a small
+  warm lift so road texture stays visible.
+
+
 ### Grok: night lamp pools and headlight additive fix
 - Lamp pools used full `reach` width (horizontal bars) instead of software's
   circular `sqrt(reach²−dz²)`. Fixed geometry + additive rgb/alpha packing.
