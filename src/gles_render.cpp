@@ -369,9 +369,14 @@ void GlesRenderer::shutdown() {
     }
     for (auto& [k, entry] : textures_) {
         (void)k;
-        if (entry.id) g.DeleteTextures(1, &entry.id);
+        if (entry.id && !entry.in_atlas) g.DeleteTextures(1, &entry.id);
     }
     textures_.clear();
+    if (atlas_tex_) {
+        g.DeleteTextures(1, &atlas_tex_);
+        atlas_tex_ = 0;
+    }
+    atlas_ready_ = false;
     if (depth_rb_ && g.DeleteRenderbuffers) {
         g.DeleteRenderbuffers(1, &depth_rb_);
         depth_rb_ = 0;
@@ -586,18 +591,12 @@ void GlesRenderer::set_textured(unsigned tex) {
     active_tex_ = tex;
 }
 
-unsigned GlesRenderer::texture_for(const Bitmap& bmp, bool dynamic) {
-    if (bmp.w <= 0 || bmp.h <= 0 || bmp.px.empty() || !g.GenTextures) return 0;
+GlesRenderer::TexRef GlesRenderer::texture_for(const Bitmap& bmp, bool dynamic) {
+    TexRef none{};
+    if (bmp.w <= 0 || bmp.h <= 0 || bmp.px.empty() || !g.GenTextures) return none;
     const uint32_t* key = bmp.px.data();
 
-    auto upload_rgba = [&](unsigned tex, bool allocate) {
-        g.BindTexture(GL_TEXTURE_2D_, tex);
-        if (allocate) {
-            g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_MIN_FILTER_, GL_NEAREST_);
-            g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_MAG_FILTER_, GL_NEAREST_);
-            g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_WRAP_S_, GL_CLAMP_TO_EDGE_);
-            g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_WRAP_T_, GL_CLAMP_TO_EDGE_);
-        }
+    auto upload_rgba = [&](unsigned tex, int dst_x, int dst_y, bool allocate_full, int full_w, int full_h) {
         std::vector<uint8_t> rgba(static_cast<size_t>(bmp.w) * static_cast<size_t>(bmp.h) * 4);
         for (size_t i = 0; i < bmp.px.size(); ++i) {
             const uint32_t p = bmp.px[i];
@@ -606,30 +605,137 @@ unsigned GlesRenderer::texture_for(const Bitmap& bmp, bool dynamic) {
             rgba[i * 4 + 2] = static_cast<uint8_t>(p & 0xff);
             rgba[i * 4 + 3] = static_cast<uint8_t>((p >> 24) & 0xff);
         }
+        g.BindTexture(GL_TEXTURE_2D_, tex);
         g.PixelStorei(0x0CF5 /* GL_UNPACK_ALIGNMENT */, 1);
-        if (allocate || !g.TexSubImage2D) {
+        if (allocate_full) {
+            g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_MIN_FILTER_, GL_NEAREST_);
+            g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_MAG_FILTER_, GL_NEAREST_);
+            g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_WRAP_S_, GL_CLAMP_TO_EDGE_);
+            g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_WRAP_T_, GL_CLAMP_TO_EDGE_);
+            g.TexImage2D(GL_TEXTURE_2D_, 0, static_cast<int>(GL_RGBA_), full_w, full_h, 0, GL_RGBA_, GL_UNSIGNED_BYTE_,
+                         nullptr);
+        }
+        if (g.TexSubImage2D) {
+            g.TexSubImage2D(GL_TEXTURE_2D_, 0, dst_x, dst_y, bmp.w, bmp.h, GL_RGBA_, GL_UNSIGNED_BYTE_, rgba.data());
+        } else {
             g.TexImage2D(GL_TEXTURE_2D_, 0, static_cast<int>(GL_RGBA_), bmp.w, bmp.h, 0, GL_RGBA_, GL_UNSIGNED_BYTE_,
                          rgba.data());
-        } else {
-            g.TexSubImage2D(GL_TEXTURE_2D_, 0, 0, 0, bmp.w, bmp.h, GL_RGBA_, GL_UNSIGNED_BYTE_, rgba.data());
         }
     };
 
     if (auto it = textures_.find(key); it != textures_.end()) {
         CachedTex& entry = it->second;
         if (entry.id && entry.w == bmp.w && entry.h == bmp.h) {
-            // Immutable: keep GPU copy. Dynamic (player composite): refresh pixels.
-            if (dynamic) upload_rgba(entry.id, false);
-            return entry.id;
+            if (dynamic && !entry.in_atlas) upload_rgba(entry.id, 0, 0, false, bmp.w, bmp.h);
+            return TexRef{entry.id, entry.u0, entry.v0, entry.u1, entry.v1};
         }
-        if (entry.id) g.DeleteTextures(1, &entry.id);
+        if (entry.id && !entry.in_atlas) g.DeleteTextures(1, &entry.id);
         entry = {};
     }
+
+    // Dynamic (player) and late-seen bitmaps: own texture, full UVs.
     unsigned tex = 0;
     g.GenTextures(1, &tex);
-    upload_rgba(tex, true);
-    textures_[key] = CachedTex{tex, bmp.w, bmp.h};
-    return tex;
+    upload_rgba(tex, 0, 0, true, bmp.w, bmp.h);
+    textures_[key] = CachedTex{tex, bmp.w, bmp.h, 0.f, 0.f, 1.f, 1.f, false};
+    return TexRef{tex, 0.f, 0.f, 1.f, 1.f};
+}
+
+void GlesRenderer::ensure_sprite_atlas(const SpriteSheet& sprites) {
+    if (atlas_ready_ || !g.GenTextures) return;
+
+    std::vector<const Bitmap*> bitmaps;
+    auto add = [&](const Bitmap& b) {
+        if (b.w > 0 && b.h > 0 && !b.px.empty()) bitmaps.push_back(&b);
+    };
+    for (size_t i = 0; i < static_cast<size_t>(Scenery::Count); ++i) {
+        add(sprites.scenery(static_cast<Scenery>(i), false));
+        add(sprites.scenery(static_cast<Scenery>(i), true));
+    }
+    for (int i = 0; i < SpriteSheet::cliff_faces; ++i) {
+        add(sprites.cliff_face(i, false));
+        add(sprites.cliff_face(i, true));
+    }
+    add(sprites.scenery_back(Scenery::Billboard));
+
+    // Deduplicate by px.data()
+    std::vector<const Bitmap*> unique;
+    unique.reserve(bitmaps.size());
+    for (const Bitmap* b : bitmaps) {
+        bool seen = false;
+        for (const Bitmap* u : unique) {
+            if (u->px.data() == b->px.data()) {
+                seen = true;
+                break;
+            }
+        }
+        if (!seen) unique.push_back(b);
+    }
+
+    // Shelf pack into a power-of-two atlas.
+    const int pad = 1;
+    int shelf_x = pad, shelf_y = pad, shelf_h = 0, max_w = 64, max_h = 64;
+    struct Place {
+        const Bitmap* b;
+        int x, y;
+    };
+    std::vector<Place> places;
+    places.reserve(unique.size());
+    for (const Bitmap* b : unique) {
+        if (shelf_x + b->w + pad > 2048) {
+            shelf_x = pad;
+            shelf_y += shelf_h + pad;
+            shelf_h = 0;
+        }
+        places.push_back({b, shelf_x, shelf_y});
+        shelf_x += b->w + pad;
+        shelf_h = std::max(shelf_h, b->h);
+        max_w = std::max(max_w, shelf_x);
+        max_h = std::max(max_h, shelf_y + b->h + pad);
+    }
+    auto pot = [](int v) {
+        int p = 64;
+        while (p < v && p < 4096) p *= 2;
+        return p;
+    };
+    atlas_w_ = pot(max_w);
+    atlas_h_ = pot(max_h);
+    if (atlas_w_ * atlas_h_ <= 0) {
+        atlas_ready_ = true;
+        return;
+    }
+
+    g.GenTextures(1, &atlas_tex_);
+    g.BindTexture(GL_TEXTURE_2D_, atlas_tex_);
+    g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_MIN_FILTER_, GL_NEAREST_);
+    g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_MAG_FILTER_, GL_NEAREST_);
+    g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_WRAP_S_, GL_CLAMP_TO_EDGE_);
+    g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_WRAP_T_, GL_CLAMP_TO_EDGE_);
+    g.TexImage2D(GL_TEXTURE_2D_, 0, static_cast<int>(GL_RGBA_), atlas_w_, atlas_h_, 0, GL_RGBA_, GL_UNSIGNED_BYTE_,
+                 nullptr);
+    g.PixelStorei(0x0CF5 /* GL_UNPACK_ALIGNMENT */, 1);
+
+    for (const Place& pl : places) {
+        const Bitmap& bmp = *pl.b;
+        std::vector<uint8_t> rgba(static_cast<size_t>(bmp.w) * static_cast<size_t>(bmp.h) * 4);
+        for (size_t i = 0; i < bmp.px.size(); ++i) {
+            const uint32_t p = bmp.px[i];
+            rgba[i * 4 + 0] = static_cast<uint8_t>((p >> 16) & 0xff);
+            rgba[i * 4 + 1] = static_cast<uint8_t>((p >> 8) & 0xff);
+            rgba[i * 4 + 2] = static_cast<uint8_t>(p & 0xff);
+            rgba[i * 4 + 3] = static_cast<uint8_t>((p >> 24) & 0xff);
+        }
+        if (g.TexSubImage2D) {
+            g.TexSubImage2D(GL_TEXTURE_2D_, 0, pl.x, pl.y, bmp.w, bmp.h, GL_RGBA_, GL_UNSIGNED_BYTE_, rgba.data());
+        }
+        // Shelf y grows downward; GL texture v=0 is the bottom row — flip V.
+        const float u0 = static_cast<float>(pl.x) / static_cast<float>(atlas_w_);
+        const float u1 = static_cast<float>(pl.x + bmp.w) / static_cast<float>(atlas_w_);
+        const float v1 = 1.f - static_cast<float>(pl.y) / static_cast<float>(atlas_h_);
+        const float v0 = 1.f - static_cast<float>(pl.y + bmp.h) / static_cast<float>(atlas_h_);
+        textures_[bmp.px.data()] = CachedTex{atlas_tex_, bmp.w, bmp.h, u0, v0, u1, v1, true};
+    }
+    atlas_ready_ = true;
 }
 
 void GlesRenderer::project_point(ScreenPoint& p, float world_x, float world_y, float world_z, float cam_x, float cam_y,
@@ -820,7 +926,7 @@ void GlesRenderer::draw_backdrop(const RoadTheme& theme, const Background* backd
     const float offset = backdrop->sky_offset();
     for (const Background::CloudSprite& c : backdrop->cloud_sprites()) {
         if (!c.bitmap || c.bitmap->w <= 0) continue;
-        const unsigned tex = texture_for(*c.bitmap);
+        const TexRef tex = texture_for(*c.bitmap);
         if (!tex) continue;
         const float bw = static_cast<float>(c.bitmap->w);
         const float bh = static_cast<float>(c.bitmap->h);
@@ -834,8 +940,8 @@ void GlesRenderer::draw_backdrop(const RoadTheme& theme, const Background* backd
             // Tint only (software blit_scaled with cloud_tint_amount) — no distance fog.
             Color tint = blend(Color{255, 255, 255}, theme.cloud_tint, theme.cloud_tint_amount);
             tint.a = 0; // fog amount 0
-            set_textured(tex);
-            push_quad(rep, horizon - c.altitude, bw, bh, 0.f, 0.f, 1.f, 1.f, tint, false);
+            set_textured(tex.id);
+            push_quad(rep, horizon - c.altitude, bw, bh, tex.u0, tex.v0, tex.u1, tex.v1, tint, false);
         }
     }
     flush_textured();
@@ -866,18 +972,15 @@ void GlesRenderer::draw_segment(const Track& track, const Slice& s, const RoadTh
     }
 
     // Ground beyond a rail or cliff: sea/valley or rock (mostly hidden by the edge).
-    // Skip strips that fog has already erased (long coastal runs were pure fill cost).
-    if (s.fog > 0.06f) {
-        for (int side = -1; side <= 1; side += 2) {
-            const Edge kind = side < 0 ? seg.left : seg.right;
-            if (kind == Edge::None) continue;
-            const float off = kind == Edge::Rail ? rail_offset : cliff_offset;
-            const Color c = kind == Edge::Rail ? fogc(theme.beyond[band]) : fogc(theme.rock[0]);
-            const float xa = a.x + static_cast<float>(side) * off * a.w;
-            const float xb = b.x + static_cast<float>(side) * off * b.w;
-            if (side < 0) push_trap(b.y, 0.f, xb, a.y, 0.f, xa, c);
-            else push_trap(b.y, xb, wf, a.y, xa, wf, c);
-        }
+    for (int side = -1; side <= 1; side += 2) {
+        const Edge kind = side < 0 ? seg.left : seg.right;
+        if (kind == Edge::None) continue;
+        const float off = kind == Edge::Rail ? rail_offset : cliff_offset;
+        const Color c = kind == Edge::Rail ? fogc(theme.beyond[band]) : fogc(theme.rock[0]);
+        const float xa = a.x + static_cast<float>(side) * off * a.w;
+        const float xb = b.x + static_cast<float>(side) * off * b.w;
+        if (side < 0) push_trap(b.y, 0.f, xb, a.y, 0.f, xa, c);
+        else push_trap(b.y, xb, wf, a.y, xa, wf, c);
     }
 
     // Tunnel mouth: solid wall around the opening so scenery cannot show past
@@ -1095,31 +1198,26 @@ void GlesRenderer::draw_sprites(const Track& track, const SpriteSheet& sprites, 
                 const float h = ha + (hb - ha) * t;
                 return std::pair<float, float>{x, base - h * r};
             };
-            // Lower + upper bars (always). Lip and posts only when near enough
-            // to read — far coastal rails were 4 quads × 2 sides × hundreds of
-            // segments for detail that collapses to a few pixels.
-            const float ppu = std::max(ppu_a, ppu_b);
-            const bool near_detail = ppu > 0.14f;
+            // Lower bar 0.20 .. 0.42
             {
                 const auto n0 = at(0.f, 0.42f), n1 = at(0.f, 0.20f);
                 const auto f0 = at(1.f, 0.42f), f1 = at(1.f, 0.20f);
                 push_solid_quad(n0.first, n0.second, f0.first, f0.second, f1.first, f1.second, n1.first, n1.second,
                                 bar_c);
             }
+            // Upper bar 0.60 .. 0.95 (bright lip on the top edge via top_c)
             {
                 const auto n0 = at(0.f, 0.95f), n1 = at(0.f, 0.60f);
                 const auto f0 = at(1.f, 0.95f), f1 = at(1.f, 0.60f);
                 push_solid_quad(n0.first, n0.second, f0.first, f0.second, f1.first, f1.second, n1.first, n1.second,
                                 bar_c);
-                if (near_detail) {
-                    const auto lip_n0 = at(0.f, 0.95f), lip_n1 = at(0.f, 0.88f);
-                    const auto lip_f0 = at(1.f, 0.95f), lip_f1 = at(1.f, 0.88f);
-                    push_solid_quad(lip_n0.first, lip_n0.second, lip_f0.first, lip_f0.second, lip_f1.first, lip_f1.second,
-                                    lip_n1.first, lip_n1.second, top_c);
-                }
+                const auto lip_n0 = at(0.f, 0.95f), lip_n1 = at(0.f, 0.88f);
+                const auto lip_f0 = at(1.f, 0.95f), lip_f1 = at(1.f, 0.88f);
+                push_solid_quad(lip_n0.first, lip_n0.second, lip_f0.first, lip_f0.second, lip_f1.first, lip_f1.second,
+                                lip_n1.first, lip_n1.second, top_c);
             }
-            // Posts: every segment when near; every 2nd when mid; skip when tiny.
-            if (near_detail || (ppu > 0.07f && (s.index & 1) == 0)) {
+            // Post at the near end of the segment (first ~10% of the run).
+            {
                 const float t0 = direction_ > 0 ? 0.f : 0.9f;
                 const float t1 = direction_ > 0 ? 0.1f : 1.f;
                 const auto n0 = at(t0, 1.f), n1 = at(t0, 0.f);
@@ -1199,11 +1297,11 @@ void GlesRenderer::draw_sprites(const Track& track, const SpriteSheet& sprites, 
             const uint8_t day = static_cast<uint8_t>(std::min(255.f, daylight_ * 255.f + 0.5f));
             const uint8_t fa = static_cast<uint8_t>(std::min(255.f, fog_amount * 255.f + 0.5f));
             Color tint{day, day, day, fa};
-            const unsigned tex = texture_for(cliff);
+            const TexRef tex = texture_for(cliff);
             if (!tex) return;
             flush_solid();
-            set_textured(tex);
-            push_quad(left, p0.y - height, width, height, 0.f, 0.f, 1.f, 1.f, tint, side < 0);
+            set_textured(tex.id);
+            push_quad(left, p0.y - height, width, height, tex.u0, tex.v0, tex.u1, tex.v1, tint, side < 0);
         };
         if (projectable) {
             const bool snow = track.look(s.index).cap_amount > 0.45f;
@@ -1230,11 +1328,11 @@ void GlesRenderer::draw_sprites(const Track& track, const SpriteSheet& sprites, 
             const uint8_t day = static_cast<uint8_t>(std::min(255.f, daylight_ * 255.f + 0.5f));
             const uint8_t fa = static_cast<uint8_t>(std::min(255.f, fog_amount * 255.f + 0.5f));
             Color tint{day, day, day, fa};
-            const unsigned tex = texture_for(bmp);
+            const TexRef tex = texture_for(bmp);
             if (!tex) return;
             flush_solid();
-            set_textured(tex);
-            push_quad(left, p0.y - height, width, height, 0.f, 0.f, 1.f, 1.f, tint, flip);
+            set_textured(tex.id);
+            push_quad(left, p0.y - height, width, height, tex.u0, tex.v0, tex.u1, tex.v1, tint, flip);
             if (obj.kind == Scenery::StreetLamp) {
                 // Pool centre sits a little toward the road from the pole base.
                 const float toward_road = (obj.offset < 0.f ? 1.f : -1.f) * width * 0.15f;
@@ -1260,15 +1358,15 @@ void GlesRenderer::draw_sprites(const Track& track, const SpriteSheet& sprites, 
                 // Player composite: reused buffer, near plane (no fog).
                 const uint8_t day = static_cast<uint8_t>(std::min(255.f, daylight_ * 255.f + 0.5f));
                 Color tint{day, day, day, 0};
-                const unsigned tex = texture_for(bmp, true);
+                const TexRef tex = texture_for(bmp, true);
                 if (!tex) return;
                 flush_solid();
-                set_textured(tex);
+                set_textured(tex.id);
                 if (o.angle != 0.f) {
-                    push_quad_rotated(o.sx + o.sw * 0.5f, o.sy + o.sh * 0.5f, o.sw, o.sh, o.angle, 0.f, 0.f, 1.f,
-                                      1.f, tint);
+                    push_quad_rotated(o.sx + o.sw * 0.5f, o.sy + o.sh * 0.5f, o.sw, o.sh, o.angle, tex.u0, tex.v0,
+                                      tex.u1, tex.v1, tint);
                 } else {
-                    push_quad(o.sx, o.sy, o.sw, o.sh, 0.f, 0.f, 1.f, 1.f, tint, false);
+                    push_quad(o.sx, o.sy, o.sw, o.sh, tex.u0, tex.v0, tex.u1, tex.v1, tint, false);
                 }
                 return;
             }
@@ -1285,11 +1383,11 @@ void GlesRenderer::draw_sprites(const Track& track, const SpriteSheet& sprites, 
             const uint8_t day = static_cast<uint8_t>(std::min(255.f, daylight_ * 255.f + 0.5f));
             const uint8_t fa = static_cast<uint8_t>(std::min(255.f, fog_amount * 255.f + 0.5f));
             Color tint{day, day, day, fa};
-            const unsigned tex = texture_for(bmp);
+            const TexRef tex = texture_for(bmp);
             if (!tex) return;
             flush_solid();
-            set_textured(tex);
-            push_quad(cx - width / 2.f, y - height, width, height, 0.f, 0.f, 1.f, 1.f, tint, o.flip);
+            set_textured(tex.id);
+            push_quad(cx - width / 2.f, y - height, width, height, tex.u0, tex.v0, tex.u1, tex.v1, tint, o.flip);
             if (o.lights != 0 && scale > 1e-4f) {
                 // Interpolate cam_z at the object (same units as row_depth_), not
                 // 1/scale which is noisier near the horizon and can "park" pools.
@@ -1579,8 +1677,9 @@ void GlesRenderer::render(const Track& track, const RoadView& view, const Sprite
                           std::vector<RoadSprite>& objects, const RoadTheme& theme, const Daylight& light,
                           const Background* backdrop, float hour, const Beam* headlight,
                           const Weather* weather) {
-    if (!program_ || !compose_program_ || !ensure_fbo()) return;
+    if (!program_ || !ensure_fbo()) return;
     present_tex_ = color_tex_;
+    ensure_sprite_atlas(sprites);
     // Albedo at full day colour; night is a separate lightmap + composite pass.
     daylight_ = 1.f;
     fog_air_ = view.fog_air;
@@ -1727,16 +1826,73 @@ void GlesRenderer::render(const Track& track, const RoadView& view, const Sprite
     }
     flush_solid();
 
+    ground_argb_.clear();
+    if ((light.level < 0.999f || headlight != nullptr) && g.ReadPixels) {
+        ground_argb_.resize(static_cast<size_t>(width_) * static_cast<size_t>(height_));
+        std::vector<uint8_t> rgba(static_cast<size_t>(width_) * static_cast<size_t>(height_) * 4);
+        g.ReadPixels(0, 0, width_, height_, GL_RGBA_, GL_UNSIGNED_BYTE_, rgba.data());
+        for (int y = 0; y < height_; ++y) {
+            const int src_y = height_ - 1 - y;
+            for (int x = 0; x < width_; ++x) {
+                const size_t si = (static_cast<size_t>(src_y) * static_cast<size_t>(width_) + static_cast<size_t>(x)) * 4;
+                ground_argb_[static_cast<size_t>(y) * static_cast<size_t>(width_) + static_cast<size_t>(x)] =
+                    (static_cast<uint32_t>(rgba[si + 3]) << 24) | (static_cast<uint32_t>(rgba[si]) << 16) |
+                    (static_cast<uint32_t>(rgba[si + 1]) << 8) | static_cast<uint32_t>(rgba[si + 2]);
+            }
+        }
+    }
+
     draw_sprites(track, sprites, objects);
     flush_textured();
     flush_solid();
     if (weather) draw_weather(*weather);
     flush_solid();
 
-    // GPU night: lightmap pass + multiply composite (no ReadPixels).
+    // Software-equivalent night only when dark / headlight (never keyed on
+    // lamps_ — those are collected every frame). Daytime: zero ReadPixels.
     present_tex_ = color_tex_;
-    if ((light.level < 0.999f || headlight != nullptr) && compose_program_ && light_fbo_ && night_fbo_) {
-        apply_gpu_night(light, headlight);
+    const bool need_night = light.level < 0.999f || headlight != nullptr;
+    if (need_night && g.ReadPixels && g.TexSubImage2D && color_tex_) {
+        auto read_fbo_argb = [&](std::vector<uint32_t>& out) {
+            out.resize(static_cast<size_t>(width_) * static_cast<size_t>(height_));
+            std::vector<uint8_t> rgba(static_cast<size_t>(width_) * static_cast<size_t>(height_) * 4);
+            g.ReadPixels(0, 0, width_, height_, GL_RGBA_, GL_UNSIGNED_BYTE_, rgba.data());
+            for (int y = 0; y < height_; ++y) {
+                const int src_y = height_ - 1 - y;
+                for (int x = 0; x < width_; ++x) {
+                    const size_t si = (static_cast<size_t>(src_y) * static_cast<size_t>(width_) + static_cast<size_t>(x)) * 4;
+                    out[static_cast<size_t>(y) * static_cast<size_t>(width_) + static_cast<size_t>(x)] =
+                        (static_cast<uint32_t>(rgba[si + 3]) << 24) | (static_cast<uint32_t>(rgba[si]) << 16) |
+                        (static_cast<uint32_t>(rgba[si + 1]) << 8) | static_cast<uint32_t>(rgba[si + 2]);
+                }
+            }
+        };
+        // Ground was snapshotted before sprites when need_night (see below).
+        std::vector<uint32_t> day_argb;
+        read_fbo_argb(day_argb);
+        Framebuffer night(width_, height_);
+        std::copy(day_argb.begin(), day_argb.end(), night.pixels_mut());
+        apply_daylight(night, light);
+        if (!ground_argb_.empty()) {
+            street_lights(night, day_argb, ground_argb_, light, row_depth_, lamps_, camera_depth_, x_scale_);
+        }
+        if (headlight) headlight_beam(night, day_argb, light, row_depth_, *headlight);
+        std::vector<uint8_t> rgba(static_cast<size_t>(width_) * static_cast<size_t>(height_) * 4);
+        const uint32_t* src = night.pixels();
+        for (int y = 0; y < height_; ++y) {
+            const int dst_y = height_ - 1 - y;
+            for (int x = 0; x < width_; ++x) {
+                const uint32_t p = src[static_cast<size_t>(y) * static_cast<size_t>(width_) + static_cast<size_t>(x)];
+                const size_t di = (static_cast<size_t>(dst_y) * static_cast<size_t>(width_) + static_cast<size_t>(x)) * 4;
+                rgba[di + 0] = static_cast<uint8_t>((p >> 16) & 0xff);
+                rgba[di + 1] = static_cast<uint8_t>((p >> 8) & 0xff);
+                rgba[di + 2] = static_cast<uint8_t>(p & 0xff);
+                rgba[di + 3] = static_cast<uint8_t>((p >> 24) & 0xff);
+            }
+        }
+        g.BindTexture(GL_TEXTURE_2D_, color_tex_);
+        g.PixelStorei(0x0CF5 /* GL_UNPACK_ALIGNMENT */, 1);
+        g.TexSubImage2D(GL_TEXTURE_2D_, 0, 0, 0, width_, height_, GL_RGBA_, GL_UNSIGNED_BYTE_, rgba.data());
     }
 
 

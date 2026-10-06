@@ -83,9 +83,16 @@ private:
     // Bind tex for subsequent push_quad* into textured_. Flushes if the
     // active texture changes so consecutive same-tex quads share one draw.
     void set_textured(unsigned tex);
-    // Immutable scenery: cache by px.data(). dynamic=true re-uploads pixels
-    // each call (player_bitmap_ is composited into a reused buffer).
-    unsigned texture_for(const Bitmap& bmp, bool dynamic = false);
+    // GPU texture + UV rect (atlas or whole texture). dynamic=true re-uploads
+    // pixels each call (player composite).
+    struct TexRef {
+        unsigned id = 0;
+        float u0 = 0.f, v0 = 0.f, u1 = 1.f, v1 = 1.f;
+        explicit operator bool() const { return id != 0; }
+    };
+    TexRef texture_for(const Bitmap& bmp, bool dynamic = false);
+    // Pack static SpriteSheet bitmaps into one atlas (idempotent).
+    void ensure_sprite_atlas(const SpriteSheet& sprites);
     void draw_backdrop(const RoadTheme& theme, const Background* backdrop, float hour, float horizon);
     void draw_headlight(const Beam& beam, float dark);
     void draw_lamp_pools(float dark);
@@ -136,12 +143,18 @@ private:
     std::vector<Slice> slices_;
     std::vector<float> row_depth_;
     std::vector<LampSpot> lamps_;
+    std::vector<uint32_t> ground_argb_; // pre-sprite ground for night street_lights
     struct CachedTex {
         unsigned id = 0;
         int w = 0;
         int h = 0;
+        float u0 = 0.f, v0 = 0.f, u1 = 1.f, v1 = 1.f;
+        bool in_atlas = false;
     };
     std::unordered_map<const uint32_t*, CachedTex> textures_;
+    unsigned atlas_tex_ = 0;
+    int atlas_w_ = 0, atlas_h_ = 0;
+    bool atlas_ready_ = false;
 };
 
 } // namespace racer

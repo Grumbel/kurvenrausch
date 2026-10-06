@@ -2,6 +2,14 @@
 
 ## Current tip
 
+### Grok: restore visual parity + sprite atlas
+- Reverted far-rail LOD and beyond-fog skips (looked wrong).
+- Night: software-equivalent path again when dark/headlight only (day still
+  skips ReadPixels). Approximate GPU composite was messy.
+- Sprite atlas: pack scenery + cliffs into one GL texture; quads use atlas UVs
+  so same-kind draws share one bind (with existing texture batching).
+
+
 ### Grok: GLES coastal rails / beyond less chatty
 - Sprite-pass scissor now coalesces like the road pass (no flush per slice).
 - Far guardrails: bars only; lip + posts only when on-screen height is readable.
