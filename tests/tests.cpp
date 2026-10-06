@@ -1227,6 +1227,8 @@ void test_daylight() {
         for (const uint32_t o : emissive_colors()) same += (o >> 8) == (c >> 8);
         CHECK(same <= 2 && (c >> 24) == 0xff && is_emissive_argb(c));
     }
+    // Nothing but lamps may wear a lamp colour: the cloud shades stay dark.
+    for (const Color c : RoadTheme{}.cloud) CHECK(!night_emissive(c));
     const uint32_t dark = fb.pixels()[0];
     CHECK(((dark >> 8) & 0xff) < grass.g / 3);
     // The headlights' beam brings the road ahead back, not the sky.
