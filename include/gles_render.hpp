@@ -37,8 +37,8 @@ public:
     void set_size(int width, int height);
 
     // Draws the road scene into the internal FBO (not the window).
-    // Full-bright albedo pass, then (when dark / headlights) a lightmap FBO
-    // pass and a multiply composite — no ReadPixels.
+    // Full-bright albedo → (optional) ground snapshot FBO → sprites → lightmap
+    // FBO → compose FBO. No ReadPixels.
     void render(const Track& track, const RoadView& view, const SpriteSheet& sprites,
                 std::vector<RoadSprite>& objects, const RoadTheme& theme, const Daylight& light,
                 const Background* backdrop = nullptr, float hour = 12.f,
@@ -97,9 +97,11 @@ private:
     void draw_headlight(const Beam& beam, float dark);
     void draw_lamp_pools(float dark);
     void draw_weather(const Weather& weather);
-    // Build lightmap in light_tex_, composite albedo×light into night_tex_.
+    // Lightmap + compose into night_tex_ (ground_tex_ must already hold pre-sprite).
     void apply_gpu_night(const Daylight& light, const Beam* headlight);
     void draw_fullscreen_quad();
+    void copy_tex_to_fbo(unsigned src_tex, unsigned dst_fbo);
+    void ensure_emissive_lut();
     void draw_segment(const Track& track, const Slice& s, const RoadTheme& theme);
     void draw_sprites(const Track& track, const SpriteSheet& sprites, std::vector<RoadSprite>& objects);
     void project_point(ScreenPoint& p, float world_x, float world_y, float world_z, float cam_x, float cam_y,
@@ -126,15 +128,25 @@ private:
     int u_compose_screen_ = -1;
     int u_albedo_ = -1;
     int u_light_ = -1;
+    int u_ground_ = -1;
+    int u_emissive_ = -1;
+    int u_day_scale_ = -1;
+    int u_emissive_count_ = -1;
+    int u_copy_tex_ = -1;
 
     unsigned fbo_ = 0;
-    unsigned color_tex_ = 0;   // albedo (and default present)
-    unsigned night_tex_ = 0;   // albedo × lightmap composite
-    unsigned present_tex_ = 0; // color_tex_ or night_tex_ for this frame
+    unsigned color_tex_ = 0;   // albedo
+    unsigned night_tex_ = 0;   // composed night
+    unsigned present_tex_ = 0; // color_tex_ or night_tex_
     unsigned depth_rb_ = 0;
     unsigned light_fbo_ = 0;
-    unsigned light_tex_ = 0;
+    unsigned light_tex_ = 0;   // per-channel mix-to-day factors
     unsigned night_fbo_ = 0;
+    unsigned ground_fbo_ = 0;
+    unsigned ground_tex_ = 0;  // pre-sprite road/backdrop copy
+    unsigned copy_program_ = 0;
+    unsigned emissive_tex_ = 0;
+    int emissive_count_ = 0;
     int fbo_w_ = 0, fbo_h_ = 0;
 
     std::vector<Vertex> solid_;
@@ -143,7 +155,6 @@ private:
     std::vector<Slice> slices_;
     std::vector<float> row_depth_;
     std::vector<LampSpot> lamps_;
-    std::vector<uint32_t> ground_argb_; // pre-sprite ground for night street_lights
     struct CachedTex {
         unsigned id = 0;
         int w = 0;

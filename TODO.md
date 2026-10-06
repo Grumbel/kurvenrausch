@@ -2,6 +2,13 @@
 
 ## Current tip
 
+### Grok: GLES night is pure RTT (no ReadPixels)
+- Ground mask: fullscreen copy of color_tex_ → ground_tex_ after road.
+- Lightmap FBO: additive mix-to-day factors (lamps + headlight).
+- Compose FBO: day_scale (same as apply_daylight), emissive LUT (same
+  colours as is_emissive_argb), ground equality, mix toward albedo under lamps.
+
+
 ### Grok: restore visual parity + sprite atlas
 - Reverted far-rail LOD and beyond-fog skips (looked wrong).
 - Night: software-equivalent path again when dark/headlight only (day still
