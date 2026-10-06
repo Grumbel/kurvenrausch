@@ -275,4 +275,14 @@ void Background::render(Framebuffer& fb, const RoadTheme& theme, const BackdropV
     ridge(hills_, hill_offset_, theme.hill_lit, theme.hill_shade, 1.0e9f, theme.hill_scale);
 }
 
+std::vector<Background::CloudSprite> Background::cloud_sprites() const {
+    std::vector<CloudSprite> out;
+    out.reserve(clouds_.size());
+    for (const Cloud& c : clouds_) {
+        if (c.bitmap < 0 || static_cast<size_t>(c.bitmap) >= cloud_bitmaps_.size()) continue;
+        out.push_back({&cloud_bitmaps_[static_cast<size_t>(c.bitmap)], c.x, c.altitude});
+    }
+    return out;
+}
+
 } // namespace racer

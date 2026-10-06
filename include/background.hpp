@@ -39,11 +39,19 @@ public:
                 float hour = 12.f) const;
 
     // Parallax state for the GLES backdrop path.
+    static constexpr float sky_layer_period = 1280.f;
     float sky_offset() const { return sky_offset_ + drift_; }
     float mountain_offset() const { return mountain_offset_; }
     float hill_offset() const { return hill_offset_; }
     const std::vector<float>& mountains() const { return mountains_; }
     const std::vector<float>& hills() const { return hills_; }
+
+    struct CloudSprite {
+        const Bitmap* bitmap = nullptr;
+        float x = 0.f;         // position in the sky period
+        float altitude = 0.f;  // top edge above the horizon (main-view pixels)
+    };
+    std::vector<CloudSprite> cloud_sprites() const;
 
 private:
     struct Cloud {

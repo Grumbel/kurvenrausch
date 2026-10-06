@@ -2,6 +2,11 @@
 
 ## Current tip
 
+### Grok: GLES clouds, sun/moon, rails, patches
+- Stars, sun disc, moon disc, and cloud billboards in the GLES backdrop.
+- Simplified guard rails and oil/water patches on the GLES road.
+
+
 ### Grok: GLES backdrop, markings, overlay
 - Sky gradient + mountain/hill ridge columns from Background profiles.
 - US / lane road markings on the GLES road.

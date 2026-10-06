@@ -482,11 +482,83 @@ void GlesRenderer::draw_backdrop(const RoadTheme& theme, const Background* backd
             push_trap(top_y, x0, x1, horizon, x0, x1, c);
         }
     };
-    (void)hour;
     ridge2(backdrop->mountains(), backdrop->mountain_offset(), theme.mountain_lit, theme.mountain_shade,
            theme.mountain_scale);
     ridge2(backdrop->hills(), backdrop->hill_offset(), theme.hill_lit, theme.hill_shade, theme.hill_scale);
     flush_solid();
+
+    // Stars as solid 2×2 traps.
+    if (theme.stars > 0.02f) {
+        uint32_t seed = 0x51a7f00du;
+        for (int i = 0; i < 90; ++i) {
+            seed = seed * 1664525u + 1013904223u;
+            const float x = static_cast<float>((seed >> 8) % static_cast<uint32_t>(width_));
+            seed = seed * 1664525u + 1013904223u;
+            const float y = static_cast<float>((seed >> 8) % 1000u) / 1000.f * horizon * 0.9f;
+            if (static_cast<float>((seed >> 4) & 0xff) / 255.f > theme.stars) continue;
+            const bool bright = (seed >> 28) < 4;
+            Color c = bright ? Color{0xe8, 0xee, 0xff} : Color{0xb8, 0xc8, 0xff};
+            c = fogged(c, fog_air_, theme.haze * 0.2f, daylight_);
+            push_trap(y, x, x + 2.f, y + 2.f, x, x + 2.f, c);
+        }
+        flush_solid();
+    }
+
+    auto disc = [&](float cx, float cy, float radius, Color fill) {
+        const int y0 = std::max(0, static_cast<int>(cy - radius));
+        const int y1 = std::min(static_cast<int>(horizon), static_cast<int>(cy + radius) + 1);
+        for (int y = y0; y < y1; ++y) {
+            const float dy = (static_cast<float>(y) + 0.5f - cy) / radius;
+            if (dy * dy >= 1.f) continue;
+            const float half = radius * std::sqrt(1.f - dy * dy);
+            const float x0 = cx - half, x1 = cx + half;
+            push_trap(static_cast<float>(y), x0, x1, static_cast<float>(y + 1), x0, x1, fill);
+        }
+    };
+
+    const SkyBody sun = sun_position(hour);
+    const SkyBody moon = moon_position(hour);
+    const float half_w = wf * 0.5f;
+    if (theme.sun_amount > 0.02f && sun.elevation > -0.02f) {
+        const float low = std::clamp(1.f - sun.elevation, 0.f, 1.f);
+        const float radius = 5.f + 4.f * theme.sun_amount + 6.f * low;
+        const float sx = half_w + sun.azimuth * half_w * 0.85f;
+        const float sy = horizon - sun.elevation * horizon * 0.85f;
+        Color c = fogged(theme.sun, fog_air_, theme.haze * 0.15f, daylight_);
+        disc(sx, sy, radius, c);
+        flush_solid();
+    }
+    if (theme.stars > 0.05f && moon.elevation > 0.f) {
+        const float radius = 5.5f;
+        const float sx = half_w + moon.azimuth * half_w * 0.85f;
+        const float sy = horizon - moon.elevation * horizon * 0.85f;
+        disc(sx, sy, radius, fogged(Color{0xe0, 0xe4, 0xec}, fog_air_, theme.haze * 0.1f, daylight_));
+        flush_solid();
+    }
+
+    // Clouds
+    const float period = Background::sky_layer_period;
+    const float offset = backdrop->sky_offset();
+    for (const Background::CloudSprite& c : backdrop->cloud_sprites()) {
+        if (!c.bitmap || c.bitmap->w <= 0) continue;
+        const unsigned tex = texture_for(*c.bitmap);
+        if (!tex) continue;
+        const float bw = static_cast<float>(c.bitmap->w);
+        const float bh = static_cast<float>(c.bitmap->h);
+        auto wrap = [](float v, float p) {
+            v = std::fmod(v, p);
+            return v < 0.f ? v + p : v;
+        };
+        const float x = wrap(c.x - offset, period);
+        for (float rep : {x, x - period}) {
+            if (rep + bw <= 0.f || rep >= wf) continue;
+            Color tint = fogged(Color{255, 255, 255}, theme.cloud_tint, theme.cloud_tint_amount * 0.5f, daylight_);
+            // fog toward air a little
+            tint = fogged(tint, fog_air_, theme.haze * 0.25f, 1.f);
+            push_quad(rep, horizon - c.altitude, bw, bh, 0.f, 0.f, 1.f, 1.f, tint, false);
+            flush_textured(tex);
+        }
+    }
 }
 
 void GlesRenderer::draw_segment(const Track& track, const Slice& s, const RoadTheme& theme) {
@@ -508,6 +580,35 @@ void GlesRenderer::draw_segment(const Track& track, const Slice& s, const RoadTh
     const Color rumble = fogc(theme.rumble[band]);
     push_trap(b.y, b.x - b.w - rb, b.x - b.w, a.y, a.x - a.w - ra, a.x - a.w, rumble);
     push_trap(b.y, b.x + b.w, b.x + b.w + rb, a.y, a.x + a.w, a.x + a.w + ra, rumble);
+
+    // Guard rails (simplified as two thin trapezoid bars).
+    auto rail = [&](int side) {
+        const Edge kind = side < 0 ? seg.left : seg.right;
+        if (kind != Edge::Rail) return;
+        const float off = rail_offset * static_cast<float>(side);
+        const float xa = a.x + off * a.w, xb = b.x + off * b.w;
+        const float ha = rail_height * a.scale * y_scale_, hb = rail_height * b.scale * y_scale_;
+        const float thick = std::max(1.5f, a.w * 0.02f);
+        const Color post = fogc(theme.rail[1]);
+        const Color bar = fogc(theme.rail[0]);
+        // upper bar
+        push_trap(b.y - hb * 0.9f, xb - thick, xb + thick, a.y - ha * 0.9f, xa - thick, xa + thick, bar);
+        push_trap(b.y - hb * 0.35f, xb - thick, xb + thick, a.y - ha * 0.35f, xa - thick, xa + thick, bar);
+        push_trap(b.y - hb, xb - thick * 0.7f, xb + thick * 0.7f, a.y - ha, xa - thick * 0.7f, xa + thick * 0.7f, post);
+    };
+    rail(-1);
+    rail(+1);
+
+    // Oil / water patches on the surface.
+    const float wa = track.patch_width_at(near), wb = track.patch_width_at(near + direction_);
+    if (seg.patch != Patch::None && (wa > 0.f || wb > 0.f)) {
+        const float ca = track.patch_center_at(near), cb = track.patch_center_at(near + direction_);
+        const float xa = a.x + ca * a.w, xb = b.x + cb * b.w;
+        Color c = seg.patch == Patch::Oil ? Color{0x18, 0x14, 0x20} : Color{0x40, 0x58, 0x70};
+        c = fogc(c);
+        push_trap(b.y, xb - wb * b.w, xb + wb * b.w, a.y, xa - wa * a.w, xa + wa * a.w, c);
+    }
+
     if (seg.checker) {
         for (int i = 0; i < 8; ++i) {
             const float f0 = static_cast<float>(i) / 8.f, f1 = static_cast<float>(i + 1) / 8.f;
