@@ -302,6 +302,7 @@ bool Game::init(bool fullscreen) {
     // Last run's choices first: fullscreen and HD affect the window and the
     // framebuffer size. A CLI --fullscreen still forces fullscreen on.
     store_ = Store(user_state_dir());
+    store_.diagnose();
     int last_track = 0; // the track driven last
     int saved_hd = 0;
     if (const std::optional<Choices> c = store_.load_choices()) {

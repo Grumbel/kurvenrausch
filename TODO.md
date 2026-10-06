@@ -2,6 +2,11 @@
 
 ## Current tip
 
+### Grok: state-dir diagnostics on startup
+- Store::diagnose() logs env, resolved path, mkdir, write/rename probe, and
+  whether choices exists. save_choices logs rename errors explicitly.
+
+
 ### Grok: GPU night again (R36S G-NIGHT was 30ms)
 - CPU ReadPixels + software lights was the cost. Night uses FBO lightmap +
   compose again. Lamp pools: one radial-falloff textured quad each (no rings).

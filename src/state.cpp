@@ -189,6 +189,82 @@ bool Store::make_dir() const {
     return true;
 }
 
+void Store::diagnose() const {
+    std::cerr << "Kurvenrausch: state diagnostics\n";
+    const char* forced = std::getenv("KURVENRAUSCH_STATE_DIR");
+    const char* xdg = std::getenv("XDG_STATE_HOME");
+    const char* home = std::getenv("HOME");
+    std::cerr << "  KURVENRAUSCH_STATE_DIR=" << (forced ? forced : "(unset)") << "\n";
+    std::cerr << "  XDG_STATE_HOME=" << (xdg ? xdg : "(unset)") << "\n";
+    std::cerr << "  HOME=" << (home ? home : "(unset)") << "\n";
+    std::cerr << "  resolved dir=" << (dir_.empty() ? "(empty — saves disabled)" : dir_) << "\n";
+    if (dir_.empty()) {
+        std::cerr << "  result: no state directory; choices will not be saved or loaded\n";
+        return;
+    }
+    std::error_code ec;
+    const fs::path dir(dir_);
+    const bool exists = fs::exists(dir, ec);
+    const bool is_dir = exists && fs::is_directory(dir, ec);
+    std::cerr << "  exists=" << (exists ? "yes" : "no")
+              << " is_directory=" << (is_dir ? "yes" : "no");
+    if (ec) std::cerr << " (" << ec.message() << ")";
+    std::cerr << "\n";
+    if (!is_dir) {
+        std::cerr << "  creating directory...\n";
+        if (!make_dir()) {
+            std::cerr << "  result: cannot create directory; saves disabled\n";
+            return;
+        }
+        std::cerr << "  created OK\n";
+    }
+    const fs::path probe = dir / "choices.write-probe";
+    const fs::path target = dir / "choices";
+    {
+        std::ofstream out(probe, std::ios::trunc);
+        out << "probe\n";
+        out.flush();
+        if (!out) {
+            std::cerr << "  write probe: FAILED to open/write " << probe << "\n";
+            std::cerr << "  result: directory not writable; saves will fail\n";
+            return;
+        }
+    }
+    std::cerr << "  write probe: wrote " << probe << "\n";
+    fs::remove(probe, ec);
+    if (ec) std::cerr << "  remove probe: " << ec.message() << "\n";
+    else std::cerr << "  remove probe: OK\n";
+    // Same sequence as save_choices: write temp, rename over choices if present.
+    const fs::path temp = dir / "choices.tmp";
+    {
+        std::ofstream out(temp, std::ios::trunc);
+        out << "probe-rename\n";
+        out.flush();
+        if (!out) {
+            std::cerr << "  rename probe: FAILED to write " << temp << "\n";
+            return;
+        }
+    }
+    fs::rename(temp, dir / "choices.rename-probe", ec);
+    if (ec) {
+        std::cerr << "  rename probe: FAILED " << temp << " -> choices.rename-probe: " << ec.message()
+                  << "\n";
+        fs::remove(temp, ec);
+    } else {
+        std::cerr << "  rename probe: OK\n";
+        fs::remove(dir / "choices.rename-probe", ec);
+    }
+    if (fs::exists(target, ec)) {
+        const auto sz = fs::file_size(target, ec);
+        std::cerr << "  existing choices: yes";
+        if (!ec) std::cerr << " size=" << sz << " bytes";
+        std::cerr << "\n";
+    } else {
+        std::cerr << "  existing choices: no\n";
+    }
+    std::cerr << "  result: state directory looks usable\n";
+}
+
 std::optional<Choices> Store::load_choices() const {
     if (dir_.empty()) return std::nullopt;
     std::ifstream in(fs::path(dir_) / "choices");
@@ -199,21 +275,32 @@ std::optional<Choices> Store::load_choices() const {
 }
 
 void Store::save_choices(const Choices& c) const {
-    if (dir_.empty() || !make_dir()) return;
+    if (dir_.empty()) {
+        std::cerr << "Kurvenrausch: save_choices skipped (empty state dir)
+";
+        return;
+    }
+    if (!make_dir()) return;
     const fs::path file = fs::path(dir_) / "choices", temp = fs::path(dir_) / "choices.tmp";
     {
         std::ofstream out(temp, std::ios::trunc);
         out << format_choices(c);
         out.flush();
         if (!out) {
-            fail("Cannot write the choices");
+            fail("Cannot write the choices temp file");
             return;
         }
     }
     std::error_code ec;
     fs::rename(temp, file, ec);
-    if (ec) fail("Cannot write the choices");
-    else persist();
+    if (ec) {
+        std::cerr << "Kurvenrausch: rename " << temp << " -> " << file << " failed: " << ec.message()
+                  << "
+";
+        fail("Cannot rename the choices file");
+    } else {
+        persist();
+    }
 }
 
 std::vector<LapRecord> Store::load_laps() const {

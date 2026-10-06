@@ -86,6 +86,8 @@ public:
     const std::string& dir() const { return dir_; }
     std::optional<Choices> load_choices() const;
     void save_choices(const Choices& c) const;
+    // Print path, env, and a write probe to stderr (startup diagnostics).
+    void diagnose() const;
     std::vector<LapRecord> load_laps() const;
     void add_lap(const LapRecord& lap) const;
 
