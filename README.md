@@ -4,11 +4,15 @@ Classic pseudo-3D bitmap racer in the spirit of *OutRun*, *Lotus Esprit Turbo
 Challenge* and *Pole Position*: a lap through Europe and the USA with weather,
 cliff roads, traffic, and a synthesised engine.
 
-Written in **C++17** with **SDL2**. Everything is drawn in software, scanline by
-scanline, into a 320x240 framebuffer that is scaled up with nearest-neighbour
-filtering for chunky pixels. All art is generated procedurally as pixel art at
-startup and all sound is synthesised on the fly: there are no asset files.
-Packaged with a **Nix flake**.
+Written in **C++17** with **SDL2**. The picture is a low-resolution
+framebuffer (320x240, or 640x480 in HD) scaled up with nearest-neighbour
+filtering for chunky pixels, drawn by either of two renderers that look the
+same: a classic software renderer, scanline by scanline, or an OpenGL ES 2
+renderer that draws the road, sprites, night lighting, HUD and mirror on the
+GPU (the default where GL is available; it keeps handhelds like the R36S at
+60 fps). All art is generated procedurally as pixel art at startup and all
+sound is synthesised on the fly: there are no asset files. Packaged with a
+**Nix flake**.
 
 ![Kurvenrausch on the Cote d'Azur corniche](docs/screenshot.png)
 
@@ -57,8 +61,9 @@ weather and road markings, fading smoothly into one another:
   the worst of it
 - **Day and night**: a day passes in eight minutes (a clock under the lap
   counter): sunrise and sunset redden the sky, at night the picture darkens
-  to blue with stars overhead while tail lights, indicators and headlights
-  keep shining; the headlights (L) light the road ahead
+  to blue with stars overhead while tail lights, indicators, headlights, lit
+  windows and neon keep shining (lights are marked as such where the pixel
+  art is painted); the headlights (L) light the road ahead
 - **Attract mode**: the game starts, as in an arcade, following the cars of
   the traffic around the world (a new one every 20 seconds), and goes back
   to it after two minutes without anybody at the controls; any key, button,
@@ -69,7 +74,13 @@ weather and road markings, fading smoothly into one another:
   hardly any grip at all
 - Roadside scenery as scaled, fogged pixel-art sprites; objects behind a crest
   peek over it
-- Present: SDL or OpenGL/GLES2 scale-and-blit of the software framebuffer (VIDEO → PRESENT)
+- **Two renderers**: software (the reference) or OpenGL ES 2 / desktop GL
+  (`--renderer auto|software|gles`, F8 switches while playing, the choice is
+  kept). The GPU path draws the same scene: road strips, a sprite atlas, the
+  night lightmap with the software light formulas evaluated per pixel, the
+  HUD, menus, particles and the rear-view mirror. VIDEO → RESOLUTION picks SD
+  (320x240) or HD (640x480); VIDEO → PRESENT how the picture reaches the
+  window (SDL or GL)
 - Parallax backdrop: copper-banded sky, sun and moon on a day-long arc, drifting clouds, mountains and hills
   scrolling at different rates through bends
 - Road markings per region: dashed white lines in Europe, double yellow centre
@@ -265,8 +276,9 @@ nix build .#kurvenrausch-r36s-portmaster       # or copy its contents to /roms/p
 A native aarch64 build for ArkOS (Ubuntu 19.10 underneath), made with
 nixpkgs' cross compiler against a sysroot of Ubuntu 19.10's own packages
 (`nix/r36s.nix`), so it runs on the device's glibc, libstdc++ and SDL2. The
-320x240 picture fills the 640x480 screen at exactly twice the size; the
-controls are in `mk/r36s/README.md`.
+controls are in `mk/r36s/README.md`. The GLES2 renderer runs the game at
+60 fps on the device, in SD (the 320x240 picture at exactly twice the size)
+or HD (640x480, the screen's own resolution).
 
 ### Web (WebAssembly)
 
@@ -321,6 +333,7 @@ backend. Use `nix run .#kurvenrausch-wasm` (or any static file server on
 | Tab              | Right stick, clicked     | Mini map: zoomed in around the car, or the whole lap |
 | M                |                          | Mute sound         |
 | F11 / Alt+Enter  |                          | Toggle fullscreen  |
+| F8               |                          | Switch renderer: GLES ↔ software |
 | Esc              |                          | Quit (in the pause menu: back to the race) |
 
 On a touch screen (phones, tablets, the web page on them) controls appear
@@ -394,11 +407,33 @@ pulls in at gas stations when low on fuel (or a held steering angle), renders on
 the sound of the run. `tools/make_screenshots.py` (needs Pillow) regenerates
 the README images.
 
+With `--renderer gles` the same frame is drawn by the GLES renderer in a
+hidden window (this needs a display, or `xvfb-run`), for comparing the two
+renderers pixel by pixel; it also prints the frame's statistics:
+
+```bash
+./build/kurvenrausch --screenshot sw.bmp --zone 14 --frames 400 --hour 23 --headlights
+./build/kurvenrausch --screenshot gl.bmp --zone 14 --frames 400 --hour 23 --headlights --renderer gles
+```
+
+### Profiling
+
+VIDEO → FPS shows the frame rate and, on the GLES path, the draw calls,
+vertices, and the time and fill (screens' worth of pixels drawn) of each
+phase of the frame: `g-sky`, `g-road`, `g-spr` (sprites, particles,
+cockpit), `g-light` (night lightmap), `g-comp` (night compose), `g-mirror`,
+`present`. About once a second the same goes to stdout, attract mode
+included. GPU drivers queue work, so CPU timers mostly show it landing in
+`present`; run with `KURVENRAUSCH_GPU_SYNC=1` and every phase waits for the
+GPU, so its time includes its own GPU work (the frame gets slower, the
+split gets honest).
+
 ## Architecture
 
 ```
 include/
-  types.hpp        Color (ARGB8888), blending, dithering, hash noise
+  types.hpp        Color (ARGB8888), blending, dithering, hash noise, the
+                   glowing() mark for lights
   ecs.hpp          minimal Entity-Component-System
   components.hpp   Transform, Velocity, Player, Traffic, Camera
   track.hpp        Track, Segment, Zone, RoadTheme (the blendable look),
@@ -410,9 +445,15 @@ include/
   sprites.hpp      procedural pixel-art sprite sheet
   bitmap.hpp       Bitmap and paint helpers for generating sprites
   font.hpp         5x7 bitmap font
-  hud.hpp          HUD drawing
+  hud.hpp          HUD and menu drawing
+  canvas.hpp       2D drawing for everything over the scene: into the
+                   framebuffer (software) or as a GPU draw list
   framebuffer.hpp  software framebuffer: clipping, trapezoids, scaled blits
-  display.hpp      SDL window presentation, BMP export
+  daylight.hpp     time of day, nightfall, street lamps and headlight pools
+  gles_render.hpp  the OpenGL ES 2 renderer: road, sprite atlas, night
+                   lightmap and compose, draw lists, the mirror's view
+  frame_stats.hpp  per-phase timings, draw counts and fill for the FPS overlay
+  display.hpp      SDL window presentation (SDL or GL), BMP export
   input.hpp        keyboard and gamepad input (analog), rumble
   drivetrain.hpp   gears and revs, shared by the HUD and the sound
   vehicles.hpp     the kinds of traffic: sizes, speeds, shares, the rival
@@ -450,6 +491,13 @@ LICENSES/          licence text (REUSE)
 7. **Looks**: every segment carries a precomputed blend of its zone's theme
    and its neighbours', so sky, fog, weather, markings and handling change
    smoothly along the track.
+8. **Night**: the picture is drawn at full daylight, then darkened, and lit
+   again by street lamps, the traffic's lights and the headlights from what
+   the ground showed by day. Lights are pixels marked in their alpha channel
+   where the art is painted, so they keep shining. The GLES renderer
+   evaluates the same formulas per pixel into a lightmap (per-row road depth
+   and centre come from a small texture; the depth buffer tells the ground
+   from what stands on it) and composes it with the daylight picture.
 
 ## License
 
