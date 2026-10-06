@@ -140,7 +140,6 @@ constexpr float train_margin = 0.4f;
 // this far out to the side (road half-widths), and are forgotten this far
 // behind.
 constexpr float animal_ahead = 140.f, animal_start = 1.5f, animal_behind = 20.f;
-constexpr float attract_idle_seconds = 120.f;  // without input, back to the attract mode
 constexpr float attract_follow_seconds = 20.f; // each car followed this long
 
 // The cars a lot sells.
@@ -340,6 +339,11 @@ bool Game::init(bool fullscreen) {
         debug_.headlights = c->dbg_headlights != 0;
         debug_.weather = c->dbg_weather != 0;
         debug_.fps = c->dbg_fps != 0;
+        map_zoomed_ = c->map_zoomed != 0;
+        rumble_ = c->rumble != 0;
+        demo_text_ = c->demo_text != 0;
+        demo_idle_ = std::clamp(c->demo_idle, 0, demo_idle_choices - 1);
+        bindings_ = c->bindings;
     }
 
     display_ = std::make_unique<Display>();
@@ -360,6 +364,7 @@ bool Game::init(bool fullscreen) {
     synth_.set_music(music_);
 
     input_.init(); // not fatal: the keyboard always works
+    apply_bindings();
     audio_.init(synth_); // nor is a missing audio device
 
     start_attract(); // until somebody presses something
@@ -510,11 +515,23 @@ bool Game::frame() {
         muted_ = !muted_;
         save_choices();
     }
-    if (input.toggle_map) map_zoomed_ = !map_zoomed_;
+    if (input.toggle_map && !paused_ && !attract_) {
+        map_zoomed_ = !map_zoomed_;
+        save_choices();
+    }
+    // The mouse pointer only where it is any use: in the menu.
+    if (display_ && cursor_shown_ != paused_) {
+        cursor_shown_ = paused_;
+        SDL_ShowCursor(paused_ ? SDL_ENABLE : SDL_DISABLE);
+    }
 
     // The attract mode until somebody presses something; and back to it
     // after a while without anybody at the controls.
     if (attract_) {
+        if (!attract_armed_) {
+            attract_armed_ = !input.any_held;
+            input.any_input = false;
+        }
         if (input.any_input) {
             leave_attract();
         } else {
@@ -540,7 +557,7 @@ bool Game::frame() {
         progress_saved_ = 0.f;
         save_choices();
     }
-    if (idle_ > attract_idle_seconds) {
+    if (demo_idle_seconds(demo_idle_) > 0.f && idle_ > demo_idle_seconds(demo_idle_)) {
         start_attract(true); // the race waits
         return true;
     }
@@ -559,7 +576,7 @@ bool Game::frame() {
         show_message(view_name(view_mode_), 1.f);
         save_choices();
     }
-    if (input.change_music != 0) {
+    if (input.change_music != 0 && !paused_) {
         music_ = input.change_music > 0 ? Music::next(music_) : Music::previous(music_);
         synth_.set_music(music_);
         show_message(Music::name(music_), 1.5f);
@@ -612,17 +629,8 @@ bool Game::frame() {
     render();
     {
         frame_stats::Scope hud(frame_stats::Phase::Hud);
-        Canvas& c = hud_canvas();
-        if (paused_ && options_open_)
-            draw_options_menu(c, options_menu_, options_, zone_label(options_menu_.zone),
-                              track_name(options_menu_.track));
-        else if (paused_ && video_open_)
-            draw_video_menu(c, video_menu_, wide_, pixel_scale_ >= 2, present_backend_, debug_);
-        else if (paused_ && audio_open_) draw_audio_menu(c, audio_menu_, muted_, engine_vol_, music_vol_, music_);
-        else if (paused_ && debug_open_)
-            draw_debug_menu(c, debug_menu_, debug_, hour_, car_model_, driver_, passenger_);
-        else if (paused_) draw_pause_menu(c, menu_, zone_label(zone_), track_name(track_index_));
-        if (debug_.fps) draw_fps(c, fps_, frame_stats::last());
+        if (paused_) draw_menu();
+        if (debug_.fps) draw_fps(hud_canvas(), fps_, frame_stats::last());
     }
     present();
     frame_stats::end_frame(static_cast<double>(dt) * 1000.0);
@@ -792,6 +800,8 @@ void Game::start_attract(bool keep_race) {
     }
     attract_ = true;
     paused_ = false;
+    end_capture();
+    menu_stack_.clear();
     played_view_ = view_mode_;
     attract_cars_ = 0;
     attract_car_ = INVALID_ENTITY;
@@ -898,7 +908,8 @@ void Game::pause() {
     if (paused_) return;
     touch_.release();
     paused_ = true;
-    menu_.open(!web);
+    for (MenuView& v : menu_views_) v.reset();
+    menu_stack_.assign(1, MenuPageId::Pause);
     SynthParams quiet = sound_;
     quiet.volume = 0.f;
     synth_.set_params(quiet);
@@ -912,148 +923,42 @@ bool Game::update_pause(const InputState& input) {
         if (input.pause || (input.escape && web)) pause();
         return true;
     }
-    if (options_open_ && !input.pause) {
-        const Options before = options_;
-        OptionsAction act = options_menu_.update(input.menu, options_);
-        for (const Finger& tap : touch_taps_) {
-            if (act != OptionsAction::None) break;
-            float x = 0.f, y = 0.f;
-            display_->screen_to_framebuffer(tap.x, tap.y, x, y);
-            const MenuTap where = options_tap(x, y, width_, fb_height(), OptionsMenu::items);
-            act = options_menu_.choose(where.item, where.side, options_);
-        }
-        apply_options(before);
-        if (options_.time != before.time || options_.fuel != before.fuel || options_.nitros != before.nitros ||
-            options_.police != before.police || options_.weather != before.weather ||
-            options_.traffic != before.traffic || act == OptionsAction::Back)
-            save_choices();
-        if (act == OptionsAction::Back) {
-            options_open_ = false;
-        } else if (act == OptionsAction::StartZone) {
-            options_open_ = false;
-            paused_ = false;
-            reset();
-            start_at(zone_start_position(options_menu_.zone));
-        } else if (act == OptionsAction::ChangeTrack) {
-            options_open_ = false;
-            paused_ = false;
-            if (options_menu_.track != track_index_) {
-                load_track(options_menu_.track);
-                save_choices();
-            } else {
-                reset();
-            }
-        }
+    if (capturing_) {
+        update_capture(input);
         return true;
     }
-    if (debug_open_ && !input.pause) {
-        const float hour_before = hour_;
-        const int car_before = car_model_;
-        bool close = debug_menu_.update(input.menu, debug_, hour_, car_model_, driver_, passenger_);
-        for (const Finger& tap : touch_taps_) {
-            float x = 0.f, y = 0.f;
-            display_->screen_to_framebuffer(tap.x, tap.y, x, y);
-            const MenuTap where = options_tap(x, y, width_, fb_height(), DebugMenu::items, 8, 28, 14);
-            close = debug_menu_.choose(where.item, where.side, debug_, hour_, car_model_, driver_, passenger_) ||
-                    close;
-        }
-        if (hour_ != hour_before) {
-            // Free the clock from a fixed Day/Dusk/Night setting so the scrub sticks.
-            options_.time = TimeSetting::Cycle;
-        }
-        if (car_model_ != car_before) apply_car();
-        save_choices(); // debug toggles + car/driver/passenger/hour
-        if (close) {
-            if (debug_menu_.selected == DebugMenu::Sprites)
-                run_sprite_viewer_session(*display_, input_, sprites_);
-            if (debug_menu_.selected == DebugMenu::Attract) {
-                debug_open_ = false;
-                paused_ = false;
-                start_attract(true);
-                return true;
-            }
-            debug_open_ = false;
-        }
+    if (input.pause) { // P or Start: straight back to the race
+        resume();
         return true;
     }
-    if (video_open_ && !input.pause) {
-        bool want_fs = false;
-        bool hd = pixel_scale_ >= 2;
-        PresentBackend present = present_backend_;
-        bool close = video_menu_.update(input.menu, wide_, hd, want_fs, present, debug_);
-        for (const Finger& tap : touch_taps_) {
-            float x = 0.f, y = 0.f;
-            display_->screen_to_framebuffer(tap.x, tap.y, x, y);
-            const MenuTap where = options_tap(x, y, width_, fb_height(), VideoMenu::items, 12, 36, 16);
-            close = video_menu_.choose(where.item, where.side, wide_, hd, want_fs, present, debug_) || close;
-        }
-        set_pixel_scale(hd ? 2 : 1);
-        if (want_fs) display_->toggle_fullscreen();
-        if (present != present_backend_) {
-            if (display_->set_present_backend(present)) {
-                present_backend_ = present;
-                gles_.invalidate();
-                apply_scene_backend();
-            } else present_backend_ = display_->present_backend() == PresentBackend::Gl ? PresentBackend::Gl
-                                   : PresentBackend::Sdl;
-        }
-        save_choices();
-        if (close) video_open_ = false;
-        return true;
+    const MenuPageId id = menu_stack_.empty() ? MenuPageId::Pause : menu_stack_.back();
+    const MenuPage page = menu_page(id);
+    MenuView& view = menu_views_[static_cast<size_t>(id)];
+    const MenuLayout layout = menu_layout(page, width_, fb_height());
+    const auto to_fb = [&](float wx, float wy, float& x, float& y) {
+        float sx = 0.f, sy = 0.f;
+        display_->touch_to_screen(wx, wy, sx, sy);
+        display_->screen_to_framebuffer(sx, sy, x, y);
+    };
+    if (input.pointer_moved) {
+        float x = 0.f, y = 0.f;
+        to_fb(input.pointer_x, input.pointer_y, x, y);
+        view.hover(page, layout, x, y);
     }
-    if (audio_open_ && !input.pause) {
-        const int music_before = music_;
-        const int eng_before = engine_vol_, mus_before = music_vol_;
-        const bool muted_before = muted_;
-        bool close = audio_menu_.update(input.menu, muted_, engine_vol_, music_vol_, music_);
-        for (const Finger& tap : touch_taps_) {
-            float x = 0.f, y = 0.f;
-            display_->screen_to_framebuffer(tap.x, tap.y, x, y);
-            const MenuTap where = options_tap(x, y, width_, fb_height(), AudioMenu::items);
-            close = audio_menu_.choose(where.item, where.side, muted_, engine_vol_, music_vol_, music_) || close;
-        }
-        if (music_ != music_before) synth_.set_music(music_);
-        if (music_ != music_before || eng_before != engine_vol_ || mus_before != music_vol_ || muted_ != muted_before)
-            save_choices();
-        if (close) audio_open_ = false;
-        return true;
-    }
-    options_open_ = false;
-    video_open_ = false;
-    audio_open_ = false;
-    debug_open_ = false;
-    MenuAction action = input.pause ? MenuAction::Resume : menu_.update(input.menu);
+    MenuEvent ev = view.update(page, input.menu, layout.rows);
     for (const Finger& tap : touch_taps_) {
-        if (action != MenuAction::None) break;
+        if (ev.type != MenuEvent::Type::None) break;
         float x = 0.f, y = 0.f;
         display_->screen_to_framebuffer(tap.x, tap.y, x, y);
-        const MenuTap where = menu_tap(menu_, x, y, width_, fb_height());
-        action = menu_.choose(where.item, where.side);
+        ev = view.click(page, layout, x, y);
     }
-    switch (action) {
-        case MenuAction::None: return true;
-        case MenuAction::Quit: return false;
-        case MenuAction::Restart: reset(); break;
-        case MenuAction::Options:
-            options_open_ = true;
-            options_menu_.open(zone_, static_cast<int>(track_.zones.size()), track_index_, track_count);
-            return true;
-        case MenuAction::Video:
-            video_open_ = true;
-            video_menu_.open();
-            return true;
-        case MenuAction::Audio:
-            audio_open_ = true;
-            audio_menu_.open();
-            return true;
-        case MenuAction::Debug:
-            debug_open_ = true;
-            debug_menu_.open();
-            return true;
-        case MenuAction::Resume: break;
+    for (const Finger& click : input.clicks) {
+        if (ev.type != MenuEvent::Type::None) break;
+        float x = 0.f, y = 0.f;
+        to_fb(click.x, click.y, x, y);
+        ev = view.click(page, layout, x, y);
     }
-    paused_ = false;
-    return true;
+    return menu_event(id, ev);
 }
 
 void Game::start_at(float position) {
@@ -1076,13 +981,6 @@ void Game::load_track(int index) {
     map_ = track_map(track_);
     record_lap_ = best_lap(store_.load_laps(), track_name(track_index_));
     reset();
-}
-
-std::string Game::zone_label(int index) const {
-    const Zone& zone = track_.zones.at(static_cast<size_t>(index));
-    const auto same = std::count_if(track_.zones.begin(), track_.zones.end(),
-                                    [&](const Zone& z) { return z.country == zone.country; });
-    return same > 1 && track_index_ != 0 ? zone.country + " " + zone.region : zone.country;
 }
 
 void Game::print_zones() const {
@@ -1180,8 +1078,16 @@ bool Game::screenshot(const ScreenshotOptions& opts) {
     draw_touch();
     overlay_.draw(hud_canvas());
     if (opts.pause) {
-        menu_.open();
-        draw_pause_menu(hud_canvas(), menu_, zone_label(zone_), track_name(track_index_));
+        menu_stack_.assign(1, MenuPageId::Pause);
+        const auto& names = menu_page_names();
+        const auto page = std::find(names.begin(), names.end(), opts.menu);
+        if (page != names.end() && page != names.begin()) {
+            const auto id = static_cast<MenuPageId>(page - names.begin());
+            if (id == MenuPageId::Race) pick_setup_track(track_index_);
+            if (id == MenuPageId::Records) load_records();
+            menu_stack_.push_back(id);
+        }
+        draw_menu();
     }
     if (use_gles_) {
         // Everything over the scene drawn into it, and the picture read back.
@@ -1501,6 +1407,11 @@ void Game::save_choices() const {
     c.dbg_headlights = debug_.headlights ? 1 : 0;
     c.dbg_weather = debug_.weather ? 1 : 0;
     c.dbg_fps = debug_.fps ? 1 : 0;
+    c.map_zoomed = map_zoomed_ ? 1 : 0;
+    c.rumble = rumble_ ? 1 : 0;
+    c.demo_text = demo_text_ ? 1 : 0;
+    c.demo_idle = demo_idle_;
+    c.bindings = bindings_;
     // Where the race is, to go on from there next time; following the
     // traffic in the attract mode, where it was.
     if (!attract_) {
@@ -3140,6 +3051,7 @@ void Game::render() {
         hud.chase_red = static_cast<int>(clock_ / 0.12f) % 2 == 0;
     }
     hud.attract = attract_;
+    hud.attract_text = demo_text_;
     hud.attract_prompt = std::fmod(clock_, 1.f) < 0.65f;
     if (banner_time_ > 0.f && zone_ >= 0 && !paused_) {
         hud.banner = track_.zones[static_cast<size_t>(zone_)].country;

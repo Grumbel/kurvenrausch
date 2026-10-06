@@ -3,6 +3,8 @@
 
 #include "state.hpp"
 
+#include <SDL2/SDL.h>
+
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
@@ -88,7 +90,17 @@ std::string format_choices(const Choices& c) {
         << "dbg_map " << c.dbg_map << "\n"
         << "dbg_headlights " << c.dbg_headlights << "\n"
         << "dbg_weather " << c.dbg_weather << "\n"
-        << "dbg_fps " << c.dbg_fps << "\n";
+        << "dbg_fps " << c.dbg_fps << "\n"
+        << "map_zoomed " << c.map_zoomed << "\n"
+        << "rumble " << c.rumble << "\n"
+        << "demo_text " << c.demo_text << "\n"
+        << "demo_idle " << c.demo_idle << "\n";
+    for (int a = 0; a < action_count; ++a) {
+        const auto& keys = c.bindings.keys[static_cast<size_t>(a)];
+        const auto& pad = c.bindings.pad[static_cast<size_t>(a)];
+        out << "key_" << action_id(static_cast<Action>(a)) << " " << keys[0] << " " << keys[1] << "\n"
+            << "pad_" << action_id(static_cast<Action>(a)) << " " << pad[0] << " " << pad[1] << "\n";
+    }
     return out.str();
 }
 
@@ -130,6 +142,24 @@ Choices parse_choices(std::string_view text) {
         else if (key == "dbg_headlights") c.dbg_headlights = value;
         else if (key == "dbg_weather") c.dbg_weather = value;
         else if (key == "dbg_fps") c.dbg_fps = value;
+        else if (key == "map_zoomed") c.map_zoomed = value;
+        else if (key == "rumble") c.rumble = value;
+        else if (key == "demo_text") c.demo_text = value;
+        else if (key == "demo_idle") c.demo_idle = std::clamp(value, 0, demo_idle_choices - 1);
+        else if (key.size() > 4 && (key.compare(0, 4, "key_") == 0 || key.compare(0, 4, "pad_") == 0)) {
+            int second = 0;
+            if (!(fields >> second)) second = 0;
+            const bool is_key = key[0] == 'k';
+            const auto valid = [&](int v) {
+                return is_key ? v >= 0 && v < SDL_NUM_SCANCODES : v == pad_none || pad_is_button(v) || pad_is_axis(v);
+            };
+            if (!valid(value) || !valid(second)) continue;
+            for (int a = 0; a < action_count; ++a) {
+                if (key.compare(4, std::string::npos, action_id(static_cast<Action>(a))) != 0) continue;
+                auto& slots = is_key ? c.bindings.keys[static_cast<size_t>(a)] : c.bindings.pad[static_cast<size_t>(a)];
+                slots = {value, second};
+            }
+        }
     }
     c.options = clamped(c.options);
     c.engine_vol = std::clamp(c.engine_vol, 0, max_volume);

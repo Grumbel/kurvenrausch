@@ -15,7 +15,7 @@ Netherlands, the Black Forest, the Alps, Tuscany, Egypt, Kenya, India, Korea,
 Japan and the Australian outback to Arizona, the California coast, San
 Francisco and the Amazon rainforest.
 A second, far longer track, the Grand Tour, stops in two or three cities of
-every country on the way; pick it on the pause menu's TRACK line.
+every country on the way; pick it in the pause menu's RACE SETUP.
 The road forks in places into two routes that join again; keep to the side of
 the road you want to take.
 On the way there is traffic to pass, fuel to buy at gas stations, other cars
@@ -152,6 +152,11 @@ or
 .B \-\-pause
 Show the pause menu in the screenshot.
 .TP
+.BI \-\-menu " PAGE"
+Show this page of the pause menu in the screenshot: pause, race, options,
+gameplay, video, audio, controls, keyboard, gamepad, extras, records or
+debug.
+.TP
 .BI \-\-signal " N"
 Switch the indicators on for the headless run: \-1 left, 1 right, 2 the
 hazard lights.
@@ -225,18 +230,29 @@ Keyboard	Gamepad	Action
 Ctrl	left shoulder	handbrake
 H	X	horn
 Space	Y, right shoulder	nitro
-P	Start	pause menu: resume, restart, start in a country, quit
+P	Start	pause menu
 R		restart
 C	Back	camera view: chase, far, bumper, cockpit
-N	right stick flicked up, down	radio: the next (or previous) track, or off
+N	right stick flicked up	radio: the next track, or off
+B	right stick flicked down	radio: the previous track
 L	D\-pad up	headlights on or off
 Q E	right stick flicked left, right	indicator left, right (again: off)
 Z	D\-pad down	hazard lights
 Tab	right stick click	mini map: around the car or the whole lap
 M		mute the sound
 F11, Alt+Enter		toggle fullscreen
-Esc		quit; in the pause menu, back to the race
+Esc		quit; in the pause menu, back a page
 .TE
+.PP
+All but Esc, F8, F11 and Start can be rebound in the pause menu's
+OPTIONS \(-> CONTROLS, two keys and two pad inputs per action.
+.PP
+The pause menu: RESUME, RESTART, RACE SETUP (track, start country, time of
+day, weather, traffic), OPTIONS (GAMEPLAY, VIDEO, AUDIO, CONTROLS, DEBUG),
+EXTRAS (the demo, lap records) and QUIT.
+Arrow keys or D\-pad move, Enter or A picks, left and right change a
+setting, Esc or B go back; the mouse works too.
+Everything set there is kept for the next run.
 .PP
 Any game controller SDL knows works and can be plugged in at any time.
 Sticks and triggers are analog; keyboard and gamepad can be used together.

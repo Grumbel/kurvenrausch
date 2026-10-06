@@ -5,6 +5,7 @@
 #include "sprite_viewer.hpp"
 
 #include <SDL2/SDL.h>
+#include <algorithm>
 #include <cstdlib>
 #include <iostream>
 #include <memory>
@@ -40,6 +41,8 @@ void usage(const char* argv0) {
               << "  --handbrake N       hold the handbrake from step N of the headless run\n"
               << "  --brake N           brake from step N to a stop, let go, then hold it: reverse\n"
               << "  --pause             show the pause menu in the screenshot\n"
+              << "  --menu PAGE         show this page of the pause menu in the screenshot (pause, race, options,\n"
+              << "                      gameplay, video, audio, controls, keyboard, gamepad, extras, records, debug)\n"
               << "  --view N            camera view (0 chase, 1 far, 2 bumper, 3 cockpit)\n"
               << "  --storm L           hold the weather at L (0 clear to 1 storm)\n"
               << "  --music N           play radio track N (0 to 2) in the --wav recording\n"
@@ -146,6 +149,14 @@ int main(int argc, char* argv[]) {
             shot.view = std::atoi(argv[++i]);
         } else if (arg == "--pause") {
             shot.pause = true;
+        } else if (arg == "--menu" && i + 1 < argc) {
+            shot.menu = argv[++i];
+            shot.pause = true;
+            const auto& pages = racer::Game::menu_page_names();
+            if (std::find(pages.begin(), pages.end(), shot.menu) == pages.end()) {
+                std::cerr << "Unknown --menu page: " << shot.menu << "\n";
+                return 1;
+            }
         } else if (arg == "--dealer") {
             shot.visit = static_cast<int>(racer::Lot::Dealer);
         } else if (arg == "--fuel" && i + 1 < argc) {

@@ -9,6 +9,8 @@
 #include "drivetrain.hpp"
 #include "driving.hpp"
 #include "input.hpp"
+#include "menu.hpp"
+#include "options.hpp"
 #include "animals.hpp"
 #include "state.hpp"
 #include "views.hpp"
@@ -68,21 +70,22 @@ void test_deadzone() {
 }
 
 void test_pad_mapping() {
-    using racer::InputState;
-    using racer::PadState;
+    using namespace racer;
+    const Bindings bind = default_bindings();
+    const auto button = [](PadState& p, int b) { p.buttons[static_cast<size_t>(b)] = true; };
 
     {   // Idle pad changes nothing.
         InputState in;
-        racer::merge_pad(in, PadState{});
+        merge_pad(in, PadState{}, bind);
         CHECK(in.throttle == 0.f && in.brake == 0.f && in.steer == 0.f);
     }
     {   // Analog stick and triggers.
         InputState in;
         PadState pad;
-        pad.left_x = -1.f;
-        pad.trigger_right = 1.f;
-        pad.trigger_left = 0.5f;
-        racer::merge_pad(in, pad);
+        pad.axes[SDL_CONTROLLER_AXIS_LEFTX] = -1.f;
+        pad.axes[SDL_CONTROLLER_AXIS_TRIGGERRIGHT] = 1.f;
+        pad.axes[SDL_CONTROLLER_AXIS_TRIGGERLEFT] = 0.5f;
+        merge_pad(in, pad, bind);
         CHECK_NEAR(in.steer, -1.f, 1e-6f);
         CHECK_NEAR(in.throttle, 1.f, 1e-6f);
         CHECK(in.brake > 0.4f && in.brake < 0.5f);
@@ -90,18 +93,18 @@ void test_pad_mapping() {
     {   // Stick drift inside the dead zone is ignored.
         InputState in;
         PadState pad;
-        pad.left_x = 0.1f;
-        pad.trigger_right = 0.03f;
-        racer::merge_pad(in, pad);
+        pad.axes[SDL_CONTROLLER_AXIS_LEFTX] = 0.1f;
+        pad.axes[SDL_CONTROLLER_AXIS_TRIGGERRIGHT] = 0.03f;
+        merge_pad(in, pad, bind);
         CHECK(in.steer == 0.f && in.throttle == 0.f);
     }
     {   // D-pad and face buttons are digital alternatives.
         InputState in;
         PadState pad;
-        pad.dpad_right = true;
-        pad.a = true;
-        pad.b = true;
-        racer::merge_pad(in, pad);
+        button(pad, SDL_CONTROLLER_BUTTON_DPAD_RIGHT);
+        button(pad, SDL_CONTROLLER_BUTTON_A);
+        button(pad, SDL_CONTROLLER_BUTTON_B);
+        merge_pad(in, pad, bind);
         CHECK_NEAR(in.steer, 1.f, 1e-6f);
         CHECK_NEAR(in.throttle, 1.f, 1e-6f);
         CHECK_NEAR(in.brake, 1.f, 1e-6f);
@@ -111,39 +114,201 @@ void test_pad_mapping() {
         in.steer = 1.f;
         in.throttle = 0.3f;
         PadState pad;
-        pad.dpad_right = true;
-        pad.trigger_right = 0.8f;
-        racer::merge_pad(in, pad);
+        button(pad, SDL_CONTROLLER_BUTTON_DPAD_RIGHT);
+        pad.axes[SDL_CONTROLLER_AXIS_TRIGGERRIGHT] = 0.8f;
+        merge_pad(in, pad, bind);
         CHECK_NEAR(in.steer, 1.f, 1e-6f);
         CHECK_NEAR(in.throttle, 0.8f, 0.05f);
         // Opposite inputs cancel.
         in.steer = 1.f;
         PadState left;
-        left.dpad_left = true;
-        racer::merge_pad(in, left);
+        button(left, SDL_CONTROLLER_BUTTON_DPAD_LEFT);
+        merge_pad(in, left, bind);
         CHECK_NEAR(in.steer, 0.f, 1e-6f);
     }
     {   // Horn on X, nitro on Y or the right shoulder, handbrake on the left shoulder.
         InputState in;
-        racer::merge_pad(in, PadState{});
+        merge_pad(in, PadState{}, bind);
         CHECK(!in.horn && !in.nitro && !in.handbrake);
         PadState pad;
-        pad.x = true;
-        pad.right_shoulder = true;
-        racer::merge_pad(in, pad);
+        button(pad, SDL_CONTROLLER_BUTTON_X);
+        button(pad, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER);
+        merge_pad(in, pad, bind);
         CHECK(in.horn && in.nitro && !in.handbrake);
         InputState in2;
         PadState pad2;
-        pad2.left_shoulder = true;
-        pad2.y = true;
-        racer::merge_pad(in2, pad2);
+        button(pad2, SDL_CONTROLLER_BUTTON_LEFTSHOULDER);
+        button(pad2, SDL_CONTROLLER_BUTTON_Y);
+        merge_pad(in2, pad2, bind);
         CHECK(!in2.horn && in2.nitro && in2.handbrake);
         // A key held on the keyboard is not released by an idle pad.
         InputState key;
         key.horn = true;
-        racer::merge_pad(key, PadState{});
+        merge_pad(key, PadState{}, bind);
         CHECK(key.horn);
     }
+    {   // Rebound: the throttle on the right shoulder, the triggers do nothing.
+        Bindings mine = bind;
+        bind_pad(mine, Action::Accelerate, 0, pad_button(SDL_CONTROLLER_BUTTON_RIGHTSHOULDER));
+        bind_pad(mine, Action::Accelerate, 1, pad_none);
+        CHECK(!mine.has_pad(Action::Nitro, pad_button(SDL_CONTROLLER_BUTTON_RIGHTSHOULDER))); // taken over
+        InputState in;
+        PadState pad;
+        pad.axes[SDL_CONTROLLER_AXIS_TRIGGERRIGHT] = 1.f;
+        button(pad, SDL_CONTROLLER_BUTTON_A);
+        merge_pad(in, pad, mine);
+        CHECK(in.throttle == 0.f);
+        button(pad, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER);
+        merge_pad(in, pad, mine);
+        CHECK(in.throttle == 1.f && !in.nitro);
+    }
+    // Axes pushed one way only.
+    PadState pad;
+    pad.axes[SDL_CONTROLLER_AXIS_RIGHTY] = -0.9f;
+    CHECK(pad_value(pad, pad_axis(SDL_CONTROLLER_AXIS_RIGHTY, false)) > 0.8f);
+    CHECK(pad_value(pad, pad_axis(SDL_CONTROLLER_AXIS_RIGHTY, true)) == 0.f);
+    CHECK(pad_value(pad, pad_none) == 0.f);
+}
+
+void test_bindings() {
+    using namespace racer;
+    const Bindings b = default_bindings();
+    // Every action has a key, and no key or pad input does two things.
+    std::set<int> keys, pads;
+    for (int a = 0; a < action_count; ++a) {
+        const auto act = static_cast<Action>(a);
+        CHECK(b.keys[static_cast<size_t>(a)][0] != 0);
+        CHECK(std::string(action_name(act)).size() > 0 && std::string(action_id(act)).find(' ') == std::string::npos);
+        for (int k : b.keys[static_cast<size_t>(a)])
+            if (k) CHECK(keys.insert(k).second);
+        for (int p : b.pad[static_cast<size_t>(a)])
+            if (p) CHECK(pads.insert(p).second);
+    }
+    CHECK(b.has_key(Action::Accelerate, SDL_SCANCODE_W) && b.has_key(Action::Pause, SDL_SCANCODE_P));
+    CHECK(!b.has_pad(Action::Pause, pad_button(SDL_CONTROLLER_BUTTON_START))); // Start is fixed
+    // Rebinding moves a key: the old owner loses it.
+    Bindings m = b;
+    bind_key(m, Action::Horn, 1, SDL_SCANCODE_W);
+    CHECK(m.has_key(Action::Horn, SDL_SCANCODE_W) && m.has_key(Action::Horn, SDL_SCANCODE_H));
+    CHECK(!m.has_key(Action::Accelerate, SDL_SCANCODE_W) && m.has_key(Action::Accelerate, SDL_SCANCODE_UP));
+    bind_key(m, Action::Horn, 0, 0); // cleared
+    CHECK(!m.has_key(Action::Horn, SDL_SCANCODE_H));
+    bind_key(m, Action::Horn, 5, SDL_SCANCODE_J); // no such slot
+    CHECK(!m.has_key(Action::Horn, SDL_SCANCODE_J));
+    // Names for the menu, in the font's upper case.
+    CHECK(key_label(SDL_SCANCODE_LCTRL) == "LEFT CTRL" && key_label(SDL_SCANCODE_KP_ENTER) == "KP ENTER");
+    CHECK(key_label(SDL_SCANCODE_RETURN) == "ENTER" && key_label(0) == "-");
+    CHECK(pad_label(pad_button(SDL_CONTROLLER_BUTTON_A)) == "A" && pad_label(pad_none) == "-");
+    CHECK(pad_label(pad_axis(SDL_CONTROLLER_AXIS_TRIGGERLEFT, true)) == "LT");
+    CHECK(pad_label(pad_axis(SDL_CONTROLLER_AXIS_RIGHTY, false)) == "R STICK UP");
+    // Kept in the choices, and read back; nonsense is ignored.
+    Choices c;
+    c.bindings = m;
+    const Choices back = parse_choices(format_choices(c));
+    CHECK(back.bindings.keys == m.keys && back.bindings.pad == m.pad);
+    const Choices old = parse_choices("car 1\n");
+    CHECK(old.bindings.keys == b.keys && old.bindings.pad == b.pad);
+    const Choices one = parse_choices("key_horn 11\npad_nitro 9999 3\nkey_bogus 4 5\n");
+    CHECK(one.bindings.keys[static_cast<size_t>(Action::Horn)][0] == 11);
+    CHECK(one.bindings.keys[static_cast<size_t>(Action::Horn)][1] == 0);
+    CHECK(one.bindings.pad == b.pad);
+}
+
+void test_menu() {
+    using namespace racer;
+    MenuPage page;
+    page.title = "TEST";
+    const auto item = [](int id, ItemKind kind, const char* label) {
+        MenuItem it;
+        it.id = id;
+        it.kind = kind;
+        it.label = label;
+        return it;
+    };
+    page.items = {item(-1, ItemKind::Heading, "HEAD"), item(1, ItemKind::Choice, "CHOICE"),
+                  item(2, ItemKind::Slider, "SLIDER"), item(-1, ItemKind::Info, "INFO"),
+                  item(3, ItemKind::Binding, "BIND"), item(4, ItemKind::Action, "BACK")};
+    page.items[2].levels = 10;
+    MenuView v;
+    MenuInput none, up, down, left, right, ok, back, clear;
+    up.up = down.down = left.left = right.right = ok.confirm = back.back = clear.clear = true;
+    // The first selectable item, skipping the heading.
+    CHECK(v.update(page, none, 10).type == MenuEvent::Type::None && v.selected == 1);
+    MenuEvent e = v.update(page, right, 10);
+    CHECK(e.type == MenuEvent::Type::Change && e.id == 1 && e.step == 1);
+    e = v.update(page, ok, 10);
+    CHECK(e.type == MenuEvent::Type::Change && e.step == 1);
+    CHECK(v.update(page, left, 10).step == -1);
+    // Up from the first wraps round to the last; the info line is skipped.
+    v.update(page, up, 10);
+    CHECK(v.selected == 5 && v.update(page, ok, 10).type == MenuEvent::Type::Activate);
+    v.update(page, up, 10);
+    CHECK(v.selected == 4);
+    // Bindings: left / right pick the slot, confirm rebinds it, clear clears.
+    v.update(page, right, 10);
+    e = v.update(page, ok, 10);
+    CHECK(e.type == MenuEvent::Type::Activate && e.id == 3 && e.slot == 1);
+    e = v.update(page, clear, 10);
+    CHECK(e.type == MenuEvent::Type::Clear && e.slot == 1);
+    v.update(page, up, 10);
+    CHECK(v.selected == 2 && v.slot == 0);
+    CHECK(v.update(page, ok, 10).type == MenuEvent::Type::None); // a slider has no confirm
+    CHECK(v.update(page, back, 10).type == MenuEvent::Type::Back);
+
+    // A long page scrolls, keeping a row of context round the selection.
+    MenuPage tall;
+    for (int i = 0; i < 40; ++i) tall.items.push_back(item(i, ItemKind::Action, "ITEM"));
+    const MenuLayout l = menu_layout(tall, 320, 240);
+    CHECK(l.rows > 5 && l.rows < 40);
+    CHECK(l.list_y + l.rows * l.row_h <= l.hint_y && l.hint_y + 7 <= l.panel_y + l.panel_h);
+    CHECK(l.panel_y >= 0 && l.panel_y + l.panel_h <= 240);
+    MenuView t;
+    for (int i = 0; i < l.rows; ++i) t.update(tall, down, l.rows);
+    CHECK(t.selected == l.rows && t.scroll == 2);
+    MenuInput pgdn;
+    pgdn.page_down = true;
+    t.update(tall, pgdn, l.rows);
+    CHECK(t.selected == 2 * l.rows - 1);
+    t.update(tall, up, l.rows);
+    t.update(tall, down, l.rows);
+    for (int i = 0; i < 3; ++i) t.update(tall, pgdn, l.rows);
+    CHECK(t.selected == 39 && t.scroll == 40 - l.rows); // no wrap on paging
+    t.update(tall, down, l.rows); // but up / down wrap
+    CHECK(t.selected == 0 && t.scroll == 0);
+    MenuInput wheel;
+    wheel.scroll = 3;
+    t.update(tall, wheel, l.rows);
+    CHECK(t.selected == 3);
+
+    // Short pages are centred and fit; HD doubles everything.
+    MenuPage small;
+    small.items = {item(1, ItemKind::Action, "A"), item(2, ItemKind::Action, "B")};
+    const MenuLayout sl = menu_layout(small, 320, 240), hd = menu_layout(small, 640, 480);
+    CHECK(sl.rows == 2 && sl.centred);
+    CHECK(std::abs((sl.panel_y + sl.panel_h / 2) - 120) <= 1 && std::abs((sl.panel_x + sl.panel_w / 2) - 160) <= 1);
+    CHECK(hd.scale == 2 && hd.row_h == 2 * sl.row_h && hd.panel_w == 2 * sl.panel_w);
+    CHECK(!menu_layout(page, 320, 240).centred);
+    // Wide screens: still centred.
+    const MenuLayout wide = menu_layout(small, 426, 240);
+    CHECK(std::abs((wide.panel_x + wide.panel_w / 2) - 213) <= 1);
+
+    // Taps and clicks: the line, and on a choice which half.
+    MenuView c;
+    c.settle(page, l.rows);
+    const MenuLayout pl = menu_layout(page, 320, 240);
+    const float row1 = static_cast<float>(pl.list_y + pl.row_h + pl.row_h / 2);
+    e = c.click(page, pl, static_cast<float>(pl.panel_x + 2), row1);
+    CHECK(e.type == MenuEvent::Type::Change && e.id == 1 && e.step == -1);
+    e = c.click(page, pl, static_cast<float>(pl.panel_x + pl.panel_w - 2), row1);
+    CHECK(e.step == 1);
+    CHECK(c.click(page, pl, 160.f, 2.f).type == MenuEvent::Type::None);
+    // The info line can't be picked; the binding's slot follows the pointer.
+    const float row3 = row1 + 2.f * static_cast<float>(pl.row_h), row4 = row3 + static_cast<float>(pl.row_h);
+    CHECK(c.click(page, pl, 160.f, row3).type == MenuEvent::Type::None && c.selected == 1);
+    c.hover(page, pl, static_cast<float>(pl.slot_x[1] + 1), row4);
+    CHECK(c.selected == 4 && c.slot == 1);
+    e = c.click(page, pl, static_cast<float>(pl.slot_x[0] + 1), row4);
+    CHECK(e.type == MenuEvent::Type::Activate && e.slot == 0);
 }
 
 // A flat 300 segment track with three zones starting at 0, 100 and 200.
@@ -799,9 +964,15 @@ void test_state() {
         full.muted = 1;
         full.options.fuel = false;
         full.engine_vol = 4;
+        full.rumble = 0;
+        full.demo_text = 0;
+        full.demo_idle = 3;
+        full.map_zoomed = 0;
         const Choices round = parse_choices(format_choices(full));
         CHECK(round.hd == 1 && round.fullscreen == 1 && round.muted == 1);
         CHECK(!round.options.fuel && round.engine_vol == 4);
+        CHECK(round.rumble == 0 && round.demo_text == 0 && round.demo_idle == 3 && round.map_zoomed == 0);
+        CHECK(parse_choices("demo_idle 17\n").demo_idle == demo_idle_choices - 1);
     }
     // Older files with a car_before_truck line still load.
     CHECK(parse_choices("car 3\ncar_before_truck 1\ndriver 4\n").driver == 4);
@@ -1054,19 +1225,6 @@ void test_touch() {
     CHECK(o.items().size() == shapes);
     CHECK(o.items()[0].image->w > 2 * static_cast<int>(gas.r));
 
-    // Taps on the pause menu choose the line tapped (no side actions on the root).
-    PauseMenu m;
-    m.open(false); // no Quit on the web
-    const float first = 240.f / 2.f - 50.f + 36.f + 3.f;
-    CHECK(menu_tap(m, 160.f, 20.f, 320, 240).item == -1);
-    const MenuTap restart = menu_tap(m, 160.f, first + 16.f, 320, 240);
-    CHECK(restart.item == PauseMenu::Restart && restart.side == 0);
-    CHECK(m.choose(restart.item, restart.side) == MenuAction::Restart);
-    CHECK(menu_tap(m, 160.f, first + 32.f, 320, 240).item == PauseMenu::Options);
-    CHECK(menu_tap(m, 160.f, first + 48.f, 320, 240).item == PauseMenu::Video);
-    CHECK(menu_tap(m, 160.f, first + 96.f, 320, 240).item == -1); // no Quit line
-    CHECK(m.choose(PauseMenu::Video) == MenuAction::Video);
-    CHECK(m.choose(PauseMenu::Audio) == MenuAction::Audio);
 }
 
 void test_oncoming_lanes() {
@@ -1106,34 +1264,13 @@ void test_animals() {
 
 void test_options() {
     using namespace racer;
-    Options o;
-    OptionsMenu m;
-    m.open(3, 16, 0, 2);
-    CHECK(m.zone == 3 && m.zones == 16 && m.track == 0 && m.tracks == 2);
-    // Right and confirm step a setting forward, left back, wrapping round.
-    MenuInput right; right.right = true;
-    MenuInput left; left.left = true;
-    MenuInput down; down.down = true;
-    MenuInput ok; ok.confirm = true;
-    CHECK(m.update(right, o) == OptionsAction::None && o.time == TimeSetting::Day);
-    CHECK(m.update(left, o) == OptionsAction::None && m.update(left, o) == OptionsAction::None &&
-          o.time == TimeSetting::Night);
-    m.update(down, o);
-    CHECK(m.update(ok, o) == OptionsAction::None && !o.fuel);
-    m.update(down, o);
-    for (int i = 0; i < max_nitros; ++i) m.update(right, o);
-    CHECK(o.nitros == 2); // 3 + 9, wrapped over 0 .. 9
-    // A tap's side picks the way; BACK (or the back button) closes the page.
-    CHECK(m.choose(OptionsMenu::Traffic, -1, o) == OptionsAction::None && o.traffic == 1);
-    CHECK(m.choose(OptionsMenu::Back, 1, o) == OptionsAction::Back);
-    MenuInput back; back.back = true;
-    CHECK(m.update(back, o) == OptionsAction::Back);
-    CHECK(OptionsMenu::line(OptionsMenu::Fuel, o, "X", "Y") == "FUEL: OFF");
-    // Start In and Track: sides change the pick, confirm acts.
-    CHECK(m.choose(OptionsMenu::StartZone, -1, o) == OptionsAction::None && m.zone == 2);
-    CHECK(m.choose(OptionsMenu::StartZone, 0, o) == OptionsAction::StartZone);
-    CHECK(m.choose(OptionsMenu::Track, 1, o) == OptionsAction::None && m.track == 1);
-    CHECK(m.choose(OptionsMenu::Track, 0, o) == OptionsAction::ChangeTrack);
+    // Stepping round the settings, both ways.
+    CHECK(step_setting(TimeSetting::Cycle, 1) == TimeSetting::Day);
+    CHECK(step_setting(TimeSetting::Cycle, -1) == TimeSetting::Night);
+    CHECK(step_setting(WeatherSetting::Foggy, 1) == WeatherSetting::Changing);
+    CHECK(std::string(time_name(TimeSetting::Dusk)) == "DUSK" && std::string(weather_name(WeatherSetting::Clear)) == "CLEAR");
+    CHECK(std::string(traffic_name(9)) == "HEAVY" && std::string(traffic_name(0)) == "NONE");
+    CHECK(demo_idle_seconds(0) == 0.f && demo_idle_seconds(2) == 120.f && demo_idle_seconds(99) == 300.f);
     // What the settings mean.
     CHECK(fixed_hour(TimeSetting::Cycle) < 0.f && fixed_hour(TimeSetting::Night) > 20.f);
     CHECK(weather_force(WeatherSetting::Changing) < 0.f && weather_force(WeatherSetting::Clear) == 0.f);
@@ -1167,11 +1304,6 @@ void test_options() {
     CHECK(n.canisters() == 5 && n.capacity() == 5);
     n.set_capacity(0);
     CHECK(n.canisters() == 0 && !n.fire());
-    // Taps on the page: the line, and its side (layout matches draw_options_menu).
-    const float first = 240.f / 2.f - 70.f + 28.f + 3.f;
-    CHECK(options_tap(20.f, first + 14.f, 320, 240).item == OptionsMenu::Fuel);
-    CHECK(options_tap(20.f, first + 14.f, 320, 240).side == -1 && options_tap(200.f, first, 320, 240).side == 0);
-    CHECK(options_tap(300.f, first, 320, 240).side == 1);
 }
 
 void test_daylight() {
@@ -1295,35 +1427,6 @@ void test_daylight() {
     beam.aim = 0.3f;
     headlight_beam(turned, day, midnight, depth, beam);
     CHECK(((turned.pixels()[23 * 40 + 26] >> 8) & 0xff) > ((road.pixels()[23 * 40 + 26] >> 8) & 0xff));
-}
-
-void test_pause_menu() {
-    using namespace racer;
-    PauseMenu m;
-    m.open();
-    CHECK(m.selected == PauseMenu::Resume);
-    CHECK(m.update(MenuInput{}) == MenuAction::None);
-    MenuInput up; up.up = true;
-    MenuInput down; down.down = true;
-    MenuInput ok; ok.confirm = true;
-    MenuInput back; back.back = true;
-    CHECK(m.update(ok) == MenuAction::Resume);
-    m.update(up); // wraps round to the last item
-    CHECK(m.selected == PauseMenu::Quit && m.update(ok) == MenuAction::Quit);
-    m.update(down);
-    m.update(down);
-    CHECK(m.selected == PauseMenu::Restart && m.update(ok) == MenuAction::Restart);
-    CHECK(m.update(back) == MenuAction::Resume);
-    // Without Quit (in a web page) the selection wraps round the others.
-    m.open(false);
-    CHECK(m.item_count() == PauseMenu::Quit); // Quit is the first omitted index
-    m.update(up);
-    CHECK(m.selected == PauseMenu::Debug && m.update(ok) == MenuAction::Debug);
-    m.update(down);
-    CHECK(m.selected == PauseMenu::Resume);
-    CHECK(m.choose(PauseMenu::Options) == MenuAction::Options);
-    CHECK(m.choose(PauseMenu::Video) == MenuAction::Video);
-    CHECK(m.choose(PauseMenu::Audio) == MenuAction::Audio);
 }
 
 void test_steer_rate() {
@@ -2627,7 +2730,8 @@ int main() {
     test_yield_lane();
     test_follow_speed();
     test_steer_rate();
-    test_pause_menu();
+    test_menu();
+    test_bindings();
     test_daylight();
     test_draw_list();
     test_touch();

@@ -67,6 +67,7 @@ add_library(kurvenrausch_core STATIC
     src/animals.cpp
     src/audio.cpp
     src/background.cpp
+    src/bindings.cpp
     src/bitmap.cpp
     src/canvas.cpp
     src/climate.cpp
@@ -78,6 +79,7 @@ add_library(kurvenrausch_core STATIC
     src/frame_stats.cpp
     src/framebuffer.cpp
     src/game.cpp
+    src/game_menu.cpp
     src/gles_render.cpp
     src/hud.cpp
     src/input.cpp

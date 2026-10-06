@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "bindings.hpp"
 #include "options.hpp"
 
 #include <optional>
@@ -53,9 +54,15 @@ struct Choices {
     int dbg_headlights = 1;
     int dbg_weather = 1; // weather overlay
     int dbg_fps = 0;
+    int map_zoomed = 1;  // the mini map shows the stretch around the car
+    int rumble = 1;      // pad vibration
+    int demo_text = 1;   // the attract mode shows the title and the prompt
+    int demo_idle = 2;   // see demo_idle_seconds()
+    // Keys and pad inputs, as "key_<action> a b" / "pad_<action> a b".
+    Bindings bindings = default_bindings();
 };
-// As "key value" lines; parsing skips unknown keys and malformed lines and
-// keeps the defaults for what is missing.
+// As "key value" lines (bindings: "key a b"); parsing skips unknown keys and
+// malformed lines and keeps the defaults for what is missing.
 std::string format_choices(const Choices& c);
 Choices parse_choices(std::string_view text);
 

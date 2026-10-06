@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "hud.hpp"
-#include "debug.hpp"
 
 #include "drivetrain.hpp"
 #include "driving.hpp"
@@ -232,6 +231,7 @@ void draw_hud(Canvas& fb, const HudState& hud) {
 
     // The attract mode: the country, the title, and how to play.
     if (hud.attract) {
+        if (!hud.attract_text) return;
         if (!hud.banner.empty()) {
             text_center(fb, 48, hud.banner, Value, 2);
             text_center(fb, 65, hud.banner_sub, Label);
@@ -327,81 +327,107 @@ void draw_hud(Canvas& fb, const HudState& hud) {
     }
 }
 
-void draw_pause_menu(Canvas& fb, const PauseMenu& menu, const std::string& /*place*/,
-                     const std::string& /*track*/) {
+void draw_menu(Canvas& fb, const MenuPage& page, const MenuView& view, bool capturing, bool blink) {
+    constexpr Color Dim{0xa0, 0xa8, 0xb8};
+    constexpr Color Off{0x5c, 0x60, 0x70};
+    constexpr Color Section{0x70, 0xb8, 0xf0};
+    constexpr Color Frame{0x50, 0x60, 0x90};
+    const MenuLayout l = menu_layout(page, fb.width(), fb.height());
+    const int s = l.scale;
+    const auto tw = [s](std::string_view t) { return font::text_width(t, s); };
+
     dim_menu_bg(fb);
-    const int top = fb.height() / 2 - 50;
-    text_center(fb, top, "PAUSED", Value, 3);
-    const std::string items[PauseMenu::items] = {"RESUME", "RESTART", "GAME OPTIONS", "VIDEO", "AUDIO", "DEBUG",
-                                                   "QUIT"};
-    for (int i = 0; i < menu.item_count(); ++i) {
-        const bool on = i == menu.selected;
-        const std::string line = on ? "> " + items[i] + " <" : items[i];
-        text_center(fb, top + 36 + 16 * i, line, on ? Label : Value);
+    fb.blend_rect(l.panel_x, l.panel_y, l.panel_w, l.panel_h, Color{0x06, 0x08, 0x18}, 0.7f);
+    fb.fill_rect(l.panel_x, l.panel_y, l.panel_w, s, Frame);
+    fb.fill_rect(l.panel_x, l.panel_y + l.panel_h - s, l.panel_w, s, Frame);
+    fb.fill_rect(l.panel_x, l.panel_y, s, l.panel_h, Frame);
+    fb.fill_rect(l.panel_x + l.panel_w - s, l.panel_y, s, l.panel_h, Frame);
+
+    const int title_w = font::text_width(page.title, l.title_scale);
+    text(fb, l.panel_x + (l.panel_w - title_w) / 2, l.title_y, page.title, Value, l.title_scale);
+
+    const int n = static_cast<int>(page.items.size());
+    const int text_dy = (l.row_h - font::glyph_h * s + 1) / 2;
+    for (int r = 0; r < l.rows; ++r) {
+        const int i = view.scroll + r;
+        if (i >= n) break;
+        const MenuItem& it = page.items[static_cast<size_t>(i)];
+        const int y = l.list_y + r * l.row_h, ty = y + text_dy;
+        const bool on = i == view.selected;
+        const Color c = !it.enabled ? Off : on ? Label : Value;
+        if (on) fb.blend_rect(l.panel_x + 2 * s, y, l.right - l.panel_x + 6 * s, l.row_h, Label, 0.16f);
+        switch (it.kind) {
+            case ItemKind::Heading: {
+                const int w = tw(it.label), cx = (l.left + l.right) / 2, ly = y + l.row_h / 2;
+                text(fb, cx - w / 2, ty, it.label, Section, s);
+                fb.fill_rect(l.left, ly, cx - w / 2 - 6 * s - l.left, s, Frame);
+                fb.fill_rect(cx + w / 2 + 6 * s, ly, l.right - (cx + w / 2 + 6 * s), s, Frame);
+                break;
+            }
+            case ItemKind::Info:
+                text(fb, l.left, ty, it.label, Dim, s);
+                text_right(fb, l.right, ty, it.value, Value, s);
+                break;
+            case ItemKind::Action:
+            case ItemKind::Submenu:
+                if (l.centred) {
+                    text(fb, (l.left + l.right - tw(it.label)) / 2, ty, it.label, c, s);
+                } else {
+                    text(fb, l.left, ty, it.label, c, s);
+                    if (it.kind == ItemKind::Submenu) text_right(fb, l.right, ty, ">", on ? Label : Dim, s);
+                }
+                break;
+            case ItemKind::Choice:
+                text(fb, l.left, ty, it.label, c, s);
+                if (on) {
+                    const int vw = tw(it.value), arrow = tw("< ");
+                    text_right(fb, l.right, ty, ">", Label, s);
+                    text_right(fb, l.right - arrow, ty, it.value, Value, s);
+                    text(fb, l.right - arrow - vw - arrow, ty, "<", Label, s);
+                } else {
+                    text_right(fb, l.right, ty, it.value, it.enabled ? Dim : Off, s);
+                }
+                break;
+            case ItemKind::Slider: {
+                text(fb, l.left, ty, it.label, c, s);
+                const int cell = 4 * s, bar_x = l.right - it.levels * cell + s;
+                for (int k = 0; k < it.levels; ++k) {
+                    const bool lit = k < it.level;
+                    fb.fill_rect(bar_x + k * cell + s, ty + s, cell - s, font::glyph_h * s, Shadow);
+                    fb.fill_rect(bar_x + k * cell, ty, cell - s, font::glyph_h * s,
+                                 lit ? (on ? Label : Value) : Color{0x30, 0x34, 0x48});
+                }
+                text_right(fb, bar_x - 4 * s, ty, std::to_string(it.level), on ? Label : Dim, s);
+                break;
+            }
+            case ItemKind::Binding:
+                text(fb, l.left, ty, it.label, c, s);
+                for (int k = 0; k < 2; ++k) {
+                    const bool picked = on && view.slot == k;
+                    std::string v = k == 0 ? it.value : it.value2;
+                    if (picked && capturing) v = blink ? "PRESS..." : "";
+                    if (picked)
+                        fb.blend_rect(l.slot_x[k] - 2 * s, y + s, l.slot_w + 4 * s, l.row_h - 2 * s, Label, 0.3f);
+                    const Color vc = picked ? Label : v == "-" ? Off : Dim;
+                    text(fb, l.slot_x[k] + (l.slot_w - tw(v)) / 2, ty, v, vc, s);
+                }
+                break;
+        }
     }
-}
 
-void draw_options_menu(Canvas& fb, const OptionsMenu& menu, const Options& options,
-                       const std::string& place, const std::string& track) {
-    dim_menu_bg(fb);
-    const int top = fb.height() / 2 - 70;
-    text_center(fb, top, "GAME OPTIONS", Value, 3);
-    for (int i = 0; i < OptionsMenu::items; ++i) {
-        const bool on = i == menu.selected;
-        std::string line = OptionsMenu::line(i, options, place, track);
-        const size_t colon = line.find(": ");
-        if (on) line = colon == std::string::npos ? "> " + line + " <"
-                                                  : line.substr(0, colon + 2) + "< " + line.substr(colon + 2) + " >";
-        text_center(fb, top + 28 + 14 * i, line, on ? Label : Value);
+    // The scroll bar, when there is more than fits.
+    if (n > l.rows) {
+        const int track_h = l.rows * l.row_h, x = l.right + 3 * s;
+        fb.fill_rect(x, l.list_y, 2 * s, track_h, Color{0x30, 0x34, 0x48});
+        const int thumb_h = std::max(4 * s, track_h * l.rows / n);
+        const int thumb_y = l.list_y + (track_h - thumb_h) * view.scroll / std::max(1, n - l.rows);
+        fb.fill_rect(x, thumb_y, 2 * s, thumb_h, Dim);
     }
-}
 
-
-void draw_debug_menu(Canvas& fb, const DebugMenu& menu, const DebugOptions& debug, float hour, int car,
-                     int driver, int passenger) {
-    dim_menu_bg(fb);
-    // Sit near the top so the longer list still fits on a 240-tall framebuffer.
-    const int top = 8;
-    text_center(fb, top, "DEBUG", Value, 3);
-    for (int i = 0; i < DebugMenu::items; ++i) {
-        const bool on = i == menu.selected;
-        std::string line = DebugMenu::line(i, debug, hour, car, driver, passenger);
-        const size_t colon = line.find(": ");
-        if (on) line = colon == std::string::npos ? "> " + line + " <"
-                                                  : line.substr(0, colon + 2) + "< " + line.substr(colon + 2) + " >";
-        text_center(fb, top + 28 + 14 * i, line, on ? Label : Value);
-    }
-}
-
-
-void draw_video_menu(Canvas& fb, const VideoMenu& menu, bool wide, bool hd, PresentBackend present,
-                     const DebugOptions& debug) {
-    dim_menu_bg(fb);
-    const int top = 12;
-    text_center(fb, top, "VIDEO", Value, 3);
-    for (int i = 0; i < VideoMenu::items; ++i) {
-        const bool on = i == menu.selected;
-        std::string line = VideoMenu::line(i, wide, hd, present, debug);
-        const size_t colon = line.find(": ");
-        if (on) line = colon == std::string::npos ? "> " + line + " <"
-                                                  : line.substr(0, colon + 2) + "< " + line.substr(colon + 2) + " >";
-        text_center(fb, top + 36 + 16 * i, line, on ? Label : Value);
-    }
-}
-
-void draw_audio_menu(Canvas& fb, const AudioMenu& menu, bool muted, int engine_vol, int music_vol,
-                     int music) {
-    dim_menu_bg(fb);
-    const int top = fb.height() / 2 - 50;
-    text_center(fb, top, "AUDIO", Value, 3);
-    for (int i = 0; i < AudioMenu::items; ++i) {
-        const bool on = i == menu.selected;
-        std::string line = AudioMenu::line(i, muted, engine_vol, music_vol, music);
-        const size_t colon = line.find(": ");
-        if (on) line = colon == std::string::npos ? "> " + line + " <"
-                                                  : line.substr(0, colon + 2) + "< " + line.substr(colon + 2) + " >";
-        text_center(fb, top + 36 + 16 * i, line, on ? Label : Value);
-    }
+    std::string_view hint = page.hint;
+    if (view.selected >= 0 && view.selected < n && !page.items[static_cast<size_t>(view.selected)].help.empty())
+        hint = page.items[static_cast<size_t>(view.selected)].help;
+    text(fb, l.panel_x + (l.panel_w - tw(hint)) / 2, l.hint_y, hint, Dim, s);
 }
 
 void draw_fps(Canvas& fb, float fps, const frame_stats::Snapshot& stats) {

@@ -3,14 +3,10 @@
 
 #pragma once
 
-#include "menu.hpp"
-
-#include <string>
-
 namespace racer {
 
-// Technical toggles for development: the pause menu's DEBUG page. Persisted
-// in choices (dbg_*). Weather FX and FPS also live on the VIDEO page.
+// What is drawn over the road (VIDEO in the pause menu) and the headlight
+// beam (DEBUG). Persisted in choices (dbg_*).
 struct DebugOptions {
     bool hud = true;        // lap times, speedo, bars
     bool mirror = true;     // rear-view mirror
@@ -20,36 +16,6 @@ struct DebugOptions {
     bool fps = false;       // frames-per-second counter (VIDEO menu)
 };
 
-// The DEBUG page: display toggles, time of day, car / driver / passenger,
-// sprite viewer, attract, BACK.
-struct DebugMenu {
-    enum Item {
-        Hud,
-        Mirror,
-        Map,
-        Headlights,
-        Hour,
-        Car,
-        Driver,
-        Passenger,
-        Sprites,
-        Attract,
-        Back,
-        items
-    };
-
-    int selected = Hud;
-
-    void open() { selected = Hud; }
-    // true when the page should close (BACK, Sprites, or Attract).
-    // `hour` is the current time of day (0 .. 24); left/right on Hour steps it.
-    // `car` / `driver` / `passenger` are model indices; left/right cycles them.
-    bool update(const MenuInput& in, DebugOptions& debug, float& hour, int& car, int& driver, int& passenger);
-    bool choose(int item, int side, DebugOptions& debug, float& hour, int& car, int& driver, int& passenger);
-    static std::string line(int item, const DebugOptions& debug, float hour, int car, int driver, int passenger);
-};
-
-void change_debug(DebugOptions& debug, int item, int step);
 // Step the clock by `step` hours (wrapped 0 .. 24).
 void step_hour(float& hour, int step);
 

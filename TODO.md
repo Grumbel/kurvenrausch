@@ -2,6 +2,49 @@
 
 ## Current tip
 
+### Claude: pause menu reorganised, rebindable controls
+- Generic menu engine in menu.hpp/.cpp: MenuPage (items: Action, Submenu,
+  Choice, Slider, Binding, Heading, Info), MenuView (selection, scroll with a
+  row of context, binding slot), menu_layout() (panel sized to its content,
+  centred, scales with the framebuffer height so HD menus are not tiny,
+  scrolls with a scroll bar when the page is longer than fits), click/hover
+  hit tests. draw_menu() in hud.cpp draws any page. PauseMenu, OptionsMenu,
+  VideoMenu, AudioMenu, DebugMenu and menu_tap/options_tap are gone.
+- The pages are built from game state in src/game_menu.cpp (the tree is in
+  its header comment); Game keeps a page stack and a MenuView per page.
+  Every change is saved at once (save_choices).
+- Moved: PRESENT to DEBUG; HUD / mirror / map to VIDEO (map is one choice:
+  zoomed / whole lap / off, map_zoomed now saved); camera view to GAMEPLAY;
+  track / start in / time / weather / traffic to RACE SETUP (START RACE
+  applies track and place). Fullscreen is an action (ENTER/LEAVE).
+- New: renderer choice in VIDEO, rumble on/off, EXTRAS (WATCH DEMO, DEMO
+  TEXT on/off, DEMO WHEN IDLE never/1/2/5 min, LAP RECORDS top ten per
+  track), KEYBOARD / GAMEPAD binding pages.
+- bindings.hpp: Action, Bindings (two key scancodes and two pad inputs per
+  action; a pad input is a button or an axis direction), defaults equal the
+  old hard-wired controls plus B = radio previous. Saved as `key_<id> a b`
+  / `pad_<id> a b` in choices. Fixed, not bindable: Esc, F8, F11,
+  Alt+Enter, pad Start; menu navigation (arrows, Enter/Space, Esc/Backspace,
+  Delete = clear, PgUp/PgDn, D-pad, A/B/X, shoulders, left stick) also
+  follows the bound driving keys on the keyboard.
+- Input: capture mode for rebinding (captured_key / captured_pad; Esc,
+  Start or a click cancel; 8 s timeout), mouse (hover selects, click acts,
+  wheel scrolls, right click backs; cursor only shown while paused), menu
+  auto-repeat for held pad directions, `any_held`.
+- Attract bug fixed: started from the menu, the attract mode only listens
+  for input once everything held has been released (attract_armed_); before,
+  a held A (= throttle) ended it at once.
+- `--menu PAGE` renders a page headless (implies --pause).
+- Font: , ; + = ( ) [ ] ? & _ % # * ` \ added.
+- Verified: warning-free, unit tests (all new ones pass), ASan+UBSan on
+  every page and a 9000-step lap, live run under Xvfb + xdotool (attract
+  with Enter held, rebinding saved, mouse hover/click/wheel/right click).
+- Pre-existing, not fixed: test_daylight fails on
+  `at_daytime(look, midnight).stars == 1.f && … sun_amount == 0.f` (fails
+  on 5488aab too).
+- Not tried on a real pad / R36S: the binding capture of triggers and
+  sticks, D-pad repeat speed (repeat_delay_ms / repeat_every_ms in input.cpp).
+
 ### Claude: lights are marked, not told by colour
 - A light pixel has alpha `glow_alpha` (0xfe, types.hpp `glowing()` /
   `is_glowing()`), set where the sprite is painted. The 28-colour emissive
@@ -1558,7 +1601,7 @@ display and keyboard.
   `Synth::render`; the tests pin the relations, not absolute levels), the
   radio's songs, thunder and siren included. Ideas: traffic whoosh / Doppler,
   tunnels with reverb, more songs.
-- Real gamepad test; rumble strength tuning; remappable buttons.
+- Real gamepad test; rumble strength tuning.
 - Night stage with headlights; tunnels.
 - Police: traffic pulling over for the siren; fines on the lap time instead
   of only the stop.

@@ -52,6 +52,7 @@ struct ScreenshotOptions {
     int handbrake_from = -1; // if >= 0, hold the handbrake from this step on
     int brake_from = -1;     // if >= 0, brake (throttle off) from this step on to a stop, let go, then hold it: reverse
     bool pause = false;      // show the pause menu in the screenshot
+    std::string menu;        // ... this page of it (see Game::menu_page_names), the top one if empty
     int view = 0;            // the camera view, a ViewMode
     float storm = -1.f;      // if >= 0, hold the weather front at this level (0 clear .. 1 storm)
     int music = -1;          // the radio's track in the --wav recording, -1 off
@@ -112,6 +113,9 @@ public:
     // writes it as a BMP. No window is opened.
     bool screenshot(const ScreenshotOptions& opts);
 
+    // The pause menu's pages by name, as --menu takes them.
+    static const std::vector<std::string>& menu_page_names();
+
     // Lists the zones of the track with their start positions on stdout.
     void print_zones() const;
 
@@ -129,6 +133,27 @@ private:
     void start_at(float position);
     // Opens and drives the pause menu; false when the player chose to quit.
     bool update_pause(const InputState& input);
+    // The pause menu (game_menu.cpp): a stack of pages, built from the
+    // game's state whenever needed.
+    enum class MenuPageId {
+        Pause, Race, Options, Gameplay, Video, Audio, Controls, Keyboard, Gamepad, Extras, Records, Debug, count
+    };
+    MenuPage menu_page(MenuPageId id) const;
+    // What the player did on a page; false when they chose to quit.
+    bool menu_event(MenuPageId id, const MenuEvent& ev);
+    void open_menu(MenuPageId id);
+    // Back a page; off the first, back to the race.
+    void close_menu();
+    void resume();
+    void draw_menu();
+    // Waiting for the key or button to bind (CONTROLS).
+    void start_capture(bool pad, Action action, int slot);
+    void update_capture(const InputState& input);
+    void end_capture();
+    void apply_bindings();
+    // RACE SETUP's track, and the START IN places on it.
+    void pick_setup_track(int index);
+    void load_records();
     void spawn_traffic();
     void update_traffic(float dt);
     void fixed_update(const InputState& driver_input, float dt);
@@ -168,9 +193,9 @@ private:
     void apply_options(const Options& before);
     // The clock: the day passing, or held at the chosen time.
     void advance_clock(float dt);
-    // Where START IN would start for zone `index`: the country, and the
-    // region or city where the country has several.
-    std::string zone_label(int index) const;
+    // Where START IN would start for zone `index` of track `track_index`:
+    // the country, and the region or city where the country has several.
+    static std::string zone_label(const Track& track, int track_index, int index);
     void change_car();
     // Remembers the car, driver and passenger for the next run.
     void save_choices() const;
@@ -259,17 +284,26 @@ private:
     int engine_vol_ = max_volume; // 0 .. max_volume, engine and world SFX
     int music_vol_ = max_volume;  // 0 .. max_volume, radio
     bool paused_ = false;
-    PauseMenu menu_;
     Options options_;
-    OptionsMenu options_menu_;
-    DebugMenu debug_menu_;
     DebugOptions debug_;
-    bool debug_open_ = false;
-    VideoMenu video_menu_;
-    AudioMenu audio_menu_;
-    bool video_open_ = false;
-    bool audio_open_ = false;
-    bool options_open_ = false; // GAME OPTIONS page
+    std::vector<MenuPageId> menu_stack_; // the pages open, the top one last
+    std::array<MenuView, static_cast<size_t>(MenuPageId::count)> menu_views_;
+    int setup_track_ = 0;                // RACE SETUP: the track picked,
+    int setup_zone_ = 0;                 // where on it to start,
+    std::vector<std::string> setup_zones_; // and the places to choose from
+    int records_track_ = 0;              // LAP RECORDS: the track shown
+    std::vector<LapRecord> records_;     // its fastest laps
+    Bindings bindings_ = default_bindings();
+    // Rebinding: the key (or pad input) for this action's slot comes next.
+    bool capturing_ = false;
+    bool capture_pad_ = false;
+    Action capture_action_ = Action::Accelerate;
+    int capture_slot_ = 0;
+    Uint32 capture_started_ = 0; // SDL ticks
+    bool rumble_ = true;
+    bool demo_text_ = true;      // the attract mode's title and prompt
+    int demo_idle_ = 2;          // see demo_idle_seconds()
+    bool cursor_shown_ = true;   // the mouse pointer, shown in the menu only
     float fps_ = 0.f; // smoothed frames per second (debug display)
     int stats_logged_ = 0; // frames since log_frame_stats() last printed
     int track_index_ = 0;       // the track driven, see track_name()
@@ -320,6 +354,9 @@ private:
     int attract_cars_ = 0;        // followed so far: the view alternates
     ViewMode played_view_ = ViewMode::Chase; // the player's view, back after the attract mode
     float idle_ = 0.f;            // seconds without any input
+    // Started from the menu, the attract mode ends on input only once all
+    // that was held (the button that chose it) has been let go.
+    bool attract_armed_ = true;
     std::vector<uint32_t> day_picture_; // the picture before nightfall, for the headlights' beam
     // The light switches.
     bool headlights_ = false;

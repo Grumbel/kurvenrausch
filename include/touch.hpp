@@ -3,8 +3,6 @@
 
 #pragma once
 
-#include "menu.hpp"
-#include "options.hpp"
 #include "overlay.hpp"
 
 #include <cstdint>
@@ -74,18 +72,5 @@ private:
     bool held_[buttons] = {};
     float steer_ = 0.f;
 };
-
-// Where a tap on the pause menu landed: the line (-1 for none) and, on the
-// country line, its outer thirds: -1 the previous country, +1 the next.
-struct MenuTap {
-    int item = -1;
-    int side = 0;
-};
-MenuTap menu_tap(const PauseMenu& menu, float x, float y, int fb_width, int fb_height);
-// The same on the OPTIONS page: every setting line has its sides.
-// `top` is the title row Y; lines sit at top + first_line + row * i (centre).
-// Defaults match draw_options_menu. Pass the same numbers the draw uses.
-MenuTap options_tap(float x, float y, int fb_width, int fb_height, int item_count = 0,
-                    int top = -1, int first_line = 28, int row = 14);
 
 } // namespace racer

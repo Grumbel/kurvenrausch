@@ -121,31 +121,4 @@ void TouchControls::draw(Overlay& overlay) const {
     }
 }
 
-MenuTap menu_tap(const PauseMenu& menu, float /*x*/, float y, int /*fb_width*/, int fb_height) {
-    const float first = static_cast<float>(fb_height / 2 - 50 + 36);
-    for (int i = 0; i < menu.item_count(); ++i) {
-        const float line = first + 16.f * static_cast<float>(i) + 3.f;
-        if (std::abs(y - line) > 8.f) continue;
-        return {i, 0};
-    }
-    return {};
-}
-
-MenuTap options_tap(float x, float y, int fb_width, int fb_height, int item_count, int top,
-                    int first_line, int row) {
-    const int n = item_count > 0 ? item_count : OptionsMenu::items;
-    // Default top matches draw_options_menu(); callers pass their draw numbers.
-    if (top < 0) top = fb_height / 2 - 70;
-    const float first = static_cast<float>(top + first_line);
-    const float row_f = static_cast<float>(row);
-    for (int i = 0; i < n; ++i) {
-        const float line = first + row_f * static_cast<float>(i) + 3.f;
-        if (std::abs(y - line) > static_cast<float>(row) * 0.5f) continue;
-        const float third = static_cast<float>(fb_width) / 3.f;
-        const int side = x < third ? -1 : x > 2.f * third ? 1 : 0;
-        return {i, side};
-    }
-    return {};
-}
-
 } // namespace racer

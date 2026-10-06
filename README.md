@@ -40,7 +40,7 @@ weather and road markings, fading smoothly into one another:
   fog), San Francisco (steep streets between Victorian row houses) and the
   Amazon rainforest in a downpour; a banner announces each country. Roads
   differ in width as well as in markings
-- **Two tracks**, picked on the pause menu's TRACK line: the Small World
+- **Two tracks**, picked in the pause menu's RACE SETUP: the Small World
   above, and the Grand Tour, more than twice as long, which stops in two or
   three cities of every country (Paris, London, Amsterdam, Muenchen, Roma,
   Cairo, Mumbai, Tokyo, Sydney, Las Vegas, Los Angeles, Rio de Janeiro,
@@ -68,7 +68,8 @@ weather and road markings, fading smoothly into one another:
   the traffic around the world (a new one every 20 seconds), and goes back
   to it after two minutes without anybody at the controls; any key, button,
   stick or tap starts a race, or, after the break, goes back to the race
-  where it was left
+  where it was left. EXTRAS → WATCH DEMO starts it from the menu; how long
+  it waits (or never) and whether it shows any text are set there too
 - **Wet spots**: puddles on the road in the rainy and snowy zones; hit one
   fast and the car aquaplanes, throwing up spray. Rarely, an **oil slick**:
   hardly any grip at all
@@ -78,9 +79,9 @@ weather and road markings, fading smoothly into one another:
   (`--renderer auto|software|gles`, F8 switches while playing, the choice is
   kept). The GPU path draws the same scene: road strips, a sprite atlas, the
   night lightmap with the software light formulas evaluated per pixel, the
-  HUD, menus, particles and the rear-view mirror. VIDEO → RESOLUTION picks SD
-  (320x240) or HD (640x480); VIDEO → PRESENT how the picture reaches the
-  window (SDL or GL)
+  HUD, menus, particles and the rear-view mirror. OPTIONS → VIDEO → RESOLUTION
+  picks SD (320x240) or HD (640x480), RENDERER the scene path; DEBUG →
+  PRESENT how the picture reaches the window (SDL or GL)
 - Parallax backdrop: copper-banded sky, sun and moon on a day-long arc, drifting clouds, mountains and hills
   scrolling at different rates through bends
 - Road markings per region: dashed white lines in Europe, double yellow centre
@@ -323,35 +324,57 @@ backend. Use `nix run .#kurvenrausch-wasm` (or any static file server on
 | Ctrl             | Left shoulder            | Handbrake          |
 | H                | X                        | Horn               |
 | Space            | Y, right shoulder        | Nitro              |
-| P                | Start                    | Pause menu: resume, restart, start in a chosen country, screen shape, options, quit |
+| P                | Start                    | Pause menu (see below) |
 | R                |                          | Restart            |
 | C                | Back                     | Camera view: chase, far, bumper, cockpit |
-| N                | Right stick, flicked up / down | Radio: next (or previous) track, or off |
+| N                | Right stick, flicked up  | Radio: next track, or off |
 | L                | D-pad up                 | Headlights         |
 | Q / E            | Right stick, flicked left / right | Indicator left / right (again: off; it also goes off after a lane change) |
 | Z                | D-pad down               | Hazard lights (police car: lightbar and siren) |
 | Tab              | Right stick, clicked     | Mini map: zoomed in around the car, or the whole lap |
+| B                | Right stick, flicked down | Radio: previous track |
 | M                |                          | Mute sound         |
 | F11 / Alt+Enter  |                          | Toggle fullscreen  |
 | F8               |                          | Switch renderer: GLES ↔ software |
-| Esc              |                          | Quit (in the pause menu: back to the race) |
+| Esc              |                          | Quit (in the pause menu: back a page) |
+
+All of these but Esc, F8, F11 and Start can be rebound in OPTIONS →
+CONTROLS, two keys and two pad inputs (buttons, triggers, stick directions)
+per action.
 
 On a touch screen (phones, tablets, the web page on them) controls appear
 once you touch it, at the screen's own resolution and across the whole
 screen: drag sideways on the left to steer, GAS and BRK (brake, and
 reverse) on the right with NOS, HB (handbrake) and H (horn), the pause
-button right of the mirror; in the pause menu tap a line, on the country
-line its left or right end to pick the country.
+button right of the mirror; in the pause menu tap a line, on a setting
+its left or right half to step it back or on.
 
-OPTIONS in the pause menu switches gameplay features, kept for the next
-run: the time of day (the day passing, or held at day, dusk or night),
-fuel, how many nitro canisters each lap brings (0 to 9), police chases,
-the weather (changing, always clear, always stormy, heavy fog) and how much traffic
-there is (none to heavy).
+### Pause menu
 
-The picture is 4:3 with black bars on wider screens; SCREEN in the pause
-menu switches it to WIDE, as wide as the screen (up to 2:1), showing more
-to the sides.
+Everything set here is kept for the next run. Arrow keys / D-pad move,
+Enter / A picks, left / right change a setting, Esc / B go back a page,
+Page Up / Down and the shoulder buttons page through long lists; the mouse
+works too (point, click, wheel, right click to go back).
+
+- **RESUME**, **RESTART**
+- **RACE SETUP**: the track, the country (or city) to start in, the time of
+  day (the day passing, or held at day, dusk or night), the weather
+  (changing, always clear, always stormy, heavy fog), the traffic (none to
+  heavy); START RACE drives off from there
+- **OPTIONS**
+  - GAMEPLAY: fuel, nitro canisters each lap (0 to 9), police chases, the
+    camera view
+  - VIDEO: fullscreen, screen shape (4:3 with black bars, or WIDE: as wide
+    as the screen up to 2:1, showing more to the sides), SD / HD, renderer;
+    HUD, mini map (zoomed, whole lap, off), mirror, rain and snow, FPS
+  - AUDIO: sound on or off, effects and music volume, the radio
+  - CONTROLS: KEYBOARD and GAMEPAD bindings (pick a slot, press the new key;
+    Del / X clears it), rumble
+  - DEBUG: car, driver and passenger, the hour; headlight beam, present
+    path, the sprite viewer
+- **EXTRAS**: watch the demo (the attract mode), its text, when it starts by
+  itself; LAP RECORDS, the ten fastest laps of each track
+- **QUIT** (not in a web page)
 
 Any controller SDL knows (Xbox, PlayStation, Switch Pro, most generic pads) works
 and can be plugged in at any time; analog sticks and triggers steer and
@@ -418,7 +441,7 @@ renderers pixel by pixel; it also prints the frame's statistics:
 
 ### Profiling
 
-VIDEO → FPS shows the frame rate and, on the GLES path, the draw calls,
+VIDEO → SHOW FPS shows the frame rate and, on the GLES path, the draw calls,
 vertices, and the time and fill (screens' worth of pixels drawn) of each
 phase of the frame: `g-sky`, `g-road`, `g-spr` (sprites, particles,
 cockpit), `g-light` (night lightmap), `g-comp` (night compose), `g-mirror`,
@@ -446,6 +469,9 @@ include/
   bitmap.hpp       Bitmap and paint helpers for generating sprites
   font.hpp         5x7 bitmap font
   hud.hpp          HUD and menu drawing
+  menu.hpp         menu pages, navigation, scrolling and layout (the
+                   pages themselves are built in game_menu.cpp)
+  bindings.hpp     rebindable keys and pad inputs
   canvas.hpp       2D drawing for everything over the scene: into the
                    framebuffer (software) or as a GPU draw list
   framebuffer.hpp  software framebuffer: clipping, trapezoids, scaled blits
@@ -454,7 +480,7 @@ include/
                    lightmap and compose, draw lists, the mirror's view
   frame_stats.hpp  per-phase timings, draw counts and fill for the FPS overlay
   display.hpp      SDL window presentation (SDL or GL), BMP export
-  input.hpp        keyboard and gamepad input (analog), rumble
+  input.hpp        keyboard, gamepad (analog), mouse and touch input, rumble
   drivetrain.hpp   gears and revs, shared by the HUD and the sound
   vehicles.hpp     the kinds of traffic: sizes, speeds, shares, the rival
   driving.hpp      nitro, fuel, overspeed, the pass boost, yielding to the
