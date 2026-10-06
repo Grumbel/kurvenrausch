@@ -709,6 +709,28 @@ void GlesRenderer::push_tint_quad(float x0, float y0, float x1, float y1, float 
     textured_.insert(textured_.end(), verts, verts + 6);
 }
 
+void GlesRenderer::push_tex_quad(float x0, float y0, float u0, float v0, float x1, float y1, float u1,
+                                    float v1, float x2, float y2, float u2, float v2, float x3, float y3, float u3,
+                                    float v3, Color c) {
+    if (draw_clip_) {
+        const float cy0 = static_cast<float>(draw_clip_y0_);
+        const float cy1 = static_cast<float>(draw_clip_y1_);
+        const float cx0 = static_cast<float>(draw_clip_x0_);
+        const float cx1 = static_cast<float>(draw_clip_x1_);
+        const float ymin = std::min(std::min(y0, y1), std::min(y2, y3));
+        const float ymax = std::max(std::max(y0, y1), std::max(y2, y3));
+        const float xmin = std::min(std::min(x0, x1), std::min(x2, x3));
+        const float xmax = std::max(std::max(x0, x1), std::max(x2, x3));
+        if (ymax <= cy0 || ymin >= cy1 || xmax <= cx0 || xmin >= cx1) return;
+    }
+    const float r = c.r / 255.f, gch = c.g / 255.f, b = c.b / 255.f, a = c.a / 255.f;
+    const Vertex verts[6] = {
+        {x0, y0, u0, v0, r, gch, b, a}, {x1, y1, u1, v1, r, gch, b, a}, {x2, y2, u2, v2, r, gch, b, a},
+        {x0, y0, u0, v0, r, gch, b, a}, {x2, y2, u2, v2, r, gch, b, a}, {x3, y3, u3, v3, r, gch, b, a},
+    };
+    textured_.insert(textured_.end(), verts, verts + 6);
+}
+
 void GlesRenderer::push_quad(float x, float y, float w, float h, float u0, float v0, float u1, float v1, Color c,
                              bool flip) {
     if (flip) std::swap(u0, u1);
@@ -1741,61 +1763,46 @@ void GlesRenderer::draw_lamp_pools(float ambient) {
     flush_solid();
     flush_textured();
     set_textured(falloff_tex_);
-    const float screen_c = 0.5f * static_cast<float>(width_);
-    const bool have_rc = row_center_x_.size() >= static_cast<size_t>(height_);
-    // HD: every 2nd row is enough — linear-filtered falloff stays smooth; cuts
-    // geometry ~2× (night was 20–30 fps on R36S with a strip per pixel row).
-    const int y_step = height_ >= 300 ? 2 : 1;
-
     for (const LampSpot& lamp : lamps_) {
         if (lamp.depth <= 1e-3f) continue;
-        const float tint_r = 1.f;
-        const float tint_g = lamp.glow == Glow::Street ? 0.85f : lamp.glow == Glow::Tail ? 0.35f : 1.f;
-        const float tint_b = lamp.glow == Glow::Street ? 0.55f : lamp.glow == Glow::Tail ? 0.2f : 0.95f;
-        const float strength = lamp.glow == Glow::Tail ? 0.85f : lamp.glow == Glow::Head ? 0.8f : 0.9f;
-
-        // One scan: y-range + road centre at lamp depth.
-        int y0 = height_, y1 = 0;
-        float road_c_lamp = screen_c;
+        // Screen position of the lamp pool centre (nearest row to lamp.depth).
+        int cy = -1;
         float best = 1.0e9f;
         for (int y = 0; y < height_; ++y) {
             const float d = row_depth_[static_cast<size_t>(y)];
             if (d <= 0.f) continue;
-            if (std::abs(d - lamp.depth) < lamp.reach) {
-                y0 = std::min(y0, y);
-                y1 = std::max(y1, y + 1);
-            }
             const float err = std::abs(d - lamp.depth);
             if (err < best) {
                 best = err;
-                if (have_rc) road_c_lamp = row_center_x_[static_cast<size_t>(y)];
+                cy = y;
             }
         }
-        if (y0 >= y1) continue;
-        const float px_lamp = camera_depth_ / lamp.depth * x_scale_;
-        const float world_off = (lamp.x - road_c_lamp) / px_lamp;
-
-        for (int y = y0; y < y1; y += y_step) {
-            const float depth = row_depth_[static_cast<size_t>(y)];
-            if (depth <= 0.f) continue;
-            const float dz = depth - lamp.depth;
-            if (std::abs(dz) >= lamp.reach) continue;
-            const float px_per_unit = camera_depth_ / depth * x_scale_;
-            const float half = std::sqrt(lamp.reach * lamp.reach - dz * dz) * px_per_unit;
-            if (half < 0.5f) continue;
-            const float road_c = have_rc ? row_center_x_[static_cast<size_t>(y)] : screen_c;
-            const float cx = road_c + world_off * px_per_unit;
-            const float nz = dz / lamp.reach;
-            const float centre = (1.f - nz * nz);
-            const float fall = centre * centre;
-            const float k = strength * dark * fall;
-            if (k < 0.008f) continue;
-            Color c{static_cast<uint8_t>(std::min(255.f, tint_r * k * 255.f + 0.5f)),
-                    static_cast<uint8_t>(std::min(255.f, tint_g * k * 255.f + 0.5f)),
-                    static_cast<uint8_t>(std::min(255.f, tint_b * k * 255.f + 0.5f)), 0};
-            const float h = static_cast<float>(std::min(y_step, y1 - y));
-            push_quad(cx - half, static_cast<float>(y), half * 2.f, h, 0.f, 0.5f, 1.f, 0.5f, c, false);
+        if (cy < 0) continue;
+        const float px = camera_depth_ / lamp.depth * x_scale_;
+        const float half = lamp.reach * px;
+        if (half < 1.f) continue;
+        // Vertical span from depth ± reach (cheap bounds for the one quad).
+        float y0 = static_cast<float>(cy), y1 = static_cast<float>(cy + 1);
+        for (int y = 0; y < height_; ++y) {
+            const float d = row_depth_[static_cast<size_t>(y)];
+            if (d <= 0.f) continue;
+            if (std::abs(d - lamp.depth) < lamp.reach) {
+                y0 = std::min(y0, static_cast<float>(y));
+                y1 = std::max(y1, static_cast<float>(y + 1));
+            }
         }
+        const float cx = lamp.x;
+        const float tint_r = 1.f;
+        const float tint_g = lamp.glow == Glow::Street ? 0.85f : lamp.glow == Glow::Tail ? 0.35f : 1.f;
+        const float tint_b = lamp.glow == Glow::Street ? 0.55f : lamp.glow == Glow::Tail ? 0.2f : 0.95f;
+        const float strength = lamp.glow == Glow::Tail ? 0.85f : lamp.glow == Glow::Head ? 0.8f : 0.9f;
+        const float k = strength * dark;
+        Color c{static_cast<uint8_t>(std::min(255.f, tint_r * k * 255.f + 0.5f)),
+                static_cast<uint8_t>(std::min(255.f, tint_g * k * 255.f + 0.5f)),
+                static_cast<uint8_t>(std::min(255.f, tint_b * k * 255.f + 0.5f)), 0};
+        // One radial-falloff sprite per lamp.
+        push_quad(cx - half, y0, half * 2.f, std::max(1.f, y1 - y0), 0.f, 0.f, 1.f, 1.f, c, false);
+        (void)world_off;
     }
     flush_textured();
     g.BlendFunc(GL_SRC_ALPHA_, GL_ONE_MINUS_SRC_ALPHA_);
@@ -2009,23 +2016,29 @@ void GlesRenderer::ensure_falloff_tex() {
 
 void GlesRenderer::ensure_beam_falloff_tex() {
     if (beam_falloff_tex_ || !g.GenTextures) return;
-    // 1×N strip: software lateral shape
-    //   edge = smoothstep(1, 0.55, across) * (0.75 + 0.25 * (1 - across^2))
-    // across = |x| from centre, 0 at mid, 1 at edge. Linear filtered → smooth.
-    constexpr int n = 256;
-    std::vector<uint8_t> rgba(static_cast<size_t>(n) * 4);
+    // 2D cone sprite: U = lateral (0..1), V = along beam near→far (0..1).
+    // Matches software headlight shape continuously under linear filtering.
+    constexpr int n = 128;
+    std::vector<uint8_t> rgba(static_cast<size_t>(n) * static_cast<size_t>(n) * 4);
     auto smoothstep = [](float a, float b, float x) {
         const float t = std::clamp((x - a) / (b - a), 0.f, 1.f);
         return t * t * (3.f - 2.f * t);
     };
-    for (int i = 0; i < n; ++i) {
-        const float across = std::abs((static_cast<float>(i) + 0.5f) / static_cast<float>(n) * 2.f - 1.f);
-        const float edge = smoothstep(1.f, 0.55f, across) * (0.75f + 0.25f * (1.f - across * across));
-        const uint8_t g8 = static_cast<uint8_t>(std::min(255.f, edge * 255.f + 0.5f));
-        rgba[static_cast<size_t>(i) * 4 + 0] = g8;
-        rgba[static_cast<size_t>(i) * 4 + 1] = g8;
-        rgba[static_cast<size_t>(i) * 4 + 2] = g8;
-        rgba[static_cast<size_t>(i) * 4 + 3] = 255;
+    for (int y = 0; y < n; ++y) {
+        const float along = (static_cast<float>(y) + 0.5f) / static_cast<float>(n); // 0 near, 1 far
+        // Distance: soft start then 1/(1+(along*k)^2)
+        const float dist = smoothstep(0.f, 0.12f, along) / (1.f + (along * 2.2f) * (along * 2.2f));
+        for (int x = 0; x < n; ++x) {
+            const float across = std::abs((static_cast<float>(x) + 0.5f) / static_cast<float>(n) * 2.f - 1.f);
+            const float edge = smoothstep(1.f, 0.55f, across) * (0.75f + 0.25f * (1.f - across * across));
+            const float a = dist * edge;
+            const uint8_t g8 = static_cast<uint8_t>(std::min(255.f, a * 255.f + 0.5f));
+            const size_t i = (static_cast<size_t>(y) * static_cast<size_t>(n) + static_cast<size_t>(x)) * 4;
+            rgba[i + 0] = g8;
+            rgba[i + 1] = g8;
+            rgba[i + 2] = g8;
+            rgba[i + 3] = 255;
+        }
     }
     g.GenTextures(1, &beam_falloff_tex_);
     g.BindTexture(GL_TEXTURE_2D_, beam_falloff_tex_);
@@ -2034,7 +2047,7 @@ void GlesRenderer::ensure_beam_falloff_tex() {
     g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_WRAP_S_, GL_CLAMP_TO_EDGE_);
     g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_WRAP_T_, GL_CLAMP_TO_EDGE_);
     g.PixelStorei(0x0CF5 /* GL_UNPACK_ALIGNMENT */, 1);
-    g.TexImage2D(GL_TEXTURE_2D_, 0, static_cast<int>(GL_RGBA_), n, 1, 0, GL_RGBA_, GL_UNSIGNED_BYTE_, rgba.data());
+    g.TexImage2D(GL_TEXTURE_2D_, 0, static_cast<int>(GL_RGBA_), n, n, 0, GL_RGBA_, GL_UNSIGNED_BYTE_, rgba.data());
 }
 
 void GlesRenderer::read_fbo_argb(std::vector<uint32_t>& out) {
@@ -2145,45 +2158,48 @@ void GlesRenderer::draw_headlight(const Beam& beam, float ambient) {
     flush_solid();
     flush_textured();
     set_textured(beam_falloff_tex_);
-    auto smoothstep = [](float a, float b, float x) {
-        const float t = std::clamp((x - a) / (b - a), 0.f, 1.f);
-        return t * t * (3.f - 2.f * t);
-    };
-    int horizon_y = -1;
-    float horizon_depth = 0.f;
-    for (int y = 0; y < height_; ++y) {
-        if (row_depth_[static_cast<size_t>(y)] > 0.f) {
-            horizon_y = y;
-            horizon_depth = row_depth_[static_cast<size_t>(y)];
-            break;
-        }
-    }
-    const int y_lim = std::min(beam.bottom, height_);
-    const int y_step = y_lim >= 300 ? 2 : 1;
-    for (int y = 0; y < y_lim; y += y_step) {
-        float depth = row_depth_[static_cast<size_t>(y)];
-        float air = 1.f;
-        if (depth <= 0.f) {
-            if (horizon_y < 0 || y >= horizon_y) continue;
-            const float t = static_cast<float>(horizon_y - y) / static_cast<float>(std::max(1, horizon_y));
-            depth = horizon_depth * (1.f + 1.8f * t);
-            air = 0.55f * (1.f - 0.65f * t);
-        }
-        const float ahead = depth - beam.start;
+
+    // Find near (just past lamps) and far (end of useful beam) ground rows.
+    int y_near = -1, y_far = -1;
+    float depth_near = 0.f, depth_far = 0.f;
+    for (int y = 0; y < std::min(beam.bottom, height_); ++y) {
+        const float d = row_depth_[static_cast<size_t>(y)];
+        if (d <= 0.f) continue;
+        const float ahead = d - beam.start;
         if (ahead <= 0.f || ahead > 4.f * beam_reach) continue;
-        const float reach = smoothstep(0.f, 200.f, ahead) / (1.f + (ahead / beam_reach) * (ahead / beam_reach));
-        const float px_per_unit = beam.camera_depth / depth * beam.x_scale;
-        const float half = (beam_half_width + beam_spread * ahead) * px_per_unit;
-        if (half < 0.5f) continue;
-        const float mid = beam.center + beam.aim * ahead * px_per_unit;
-        const float k = 0.9f * dark * reach * air;
-        if (k < 0.01f) continue;
-        Color c{static_cast<uint8_t>(std::min(255.f, k * 255.f + 0.5f)),
-                static_cast<uint8_t>(std::min(255.f, k * 245.f + 0.5f)),
-                static_cast<uint8_t>(std::min(255.f, k * 220.f + 0.5f)), 0};
-        const float h = static_cast<float>(std::min(y_step, y_lim - y));
-        push_quad(mid - half, static_cast<float>(y), half * 2.f, h, 0.f, 0.f, 1.f, 1.f, c, false);
+        if (y_near < 0) {
+            y_near = y;
+            depth_near = d;
+        }
+        y_far = y;
+        depth_far = d;
     }
+    if (y_near < 0 || y_far <= y_near) {
+        g.BlendFunc(GL_SRC_ALPHA_, GL_ONE_MINUS_SRC_ALPHA_);
+        return;
+    }
+
+    auto half_at = [&](float depth) {
+        const float ahead = depth - beam.start;
+        const float px = beam.camera_depth / depth * beam.x_scale;
+        return (beam_half_width + beam_spread * ahead) * px;
+    };
+    auto mid_at = [&](float depth) {
+        const float ahead = depth - beam.start;
+        const float px = beam.camera_depth / depth * beam.x_scale;
+        return beam.center + beam.aim * ahead * px;
+    };
+    const float hn = half_at(depth_near), hf = half_at(depth_far);
+    const float mn = mid_at(depth_near), mf = mid_at(depth_far);
+    const float yn = static_cast<float>(y_near), yf = static_cast<float>(y_far + 1);
+    const float k = 0.9f * dark;
+    Color c{static_cast<uint8_t>(std::min(255.f, k * 255.f + 0.5f)),
+            static_cast<uint8_t>(std::min(255.f, k * 245.f + 0.5f)),
+            static_cast<uint8_t>(std::min(255.f, k * 220.f + 0.5f)), 0};
+    // One textured trapezoid: near edge V=0, far edge V=1; U spans the beam width.
+    // verts: near-left, near-right, far-right, far-left
+    push_tex_quad(mn - hn, yn, 0.f, 0.f, mn + hn, yn, 1.f, 0.f, mf + hf, yf, 1.f, 1.f, mf - hf, yf, 0.f, 1.f, c);
+
     flush_textured();
     g.BlendFunc(GL_SRC_ALPHA_, GL_ONE_MINUS_SRC_ALPHA_);
 }

@@ -2,6 +2,11 @@
 
 ## Current tip
 
+### Grok: one textured quad per light source
+- Lamps: radial falloff sprite (one quad). Headlight: one cone trapezoid
+  with 2D lateral×distance falloff texture. No per-row strips.
+
+
 ### Grok: night light strips step 2 on HD
 - Per-pixel-row strips × every lamp was too much geometry on R36S night
   (20–30 fps). Step 2 when height≥300; still linear-filtered smooth.
