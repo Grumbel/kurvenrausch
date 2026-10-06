@@ -70,7 +70,14 @@ std::string format_choices(const Choices& c) {
         << "hd " << c.hd << "\n"
         << "fullscreen " << c.fullscreen << "\n"
         << "muted " << c.muted << "\n"
-        << "present " << c.present << "\n";
+        << "present " << c.present << "\n"
+        << "scene " << c.scene << "\n"
+        << "dbg_hud " << c.dbg_hud << "\n"
+        << "dbg_mirror " << c.dbg_mirror << "\n"
+        << "dbg_map " << c.dbg_map << "\n"
+        << "dbg_headlights " << c.dbg_headlights << "\n"
+        << "dbg_weather " << c.dbg_weather << "\n"
+        << "dbg_fps " << c.dbg_fps << "\n";
     return out.str();
 }
 

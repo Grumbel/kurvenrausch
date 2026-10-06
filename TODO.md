@@ -2,6 +2,11 @@
 
 ## Current tip
 
+### Grok: format_choices actually writes dbg_* / scene
+- save_choices set the fields but format_choices never emitted them, so the
+  file never stored HUD/FPS/etc. Fixed.
+
+
 ### Grok: F8 atlas rebuild + persist debug/scene settings
 - invalidate() left atlas_ready_ true with dead GL names → 160 draws after
   software↔GLES. Now clears atlas_pages_/atlas_ready_.
