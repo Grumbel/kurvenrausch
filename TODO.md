@@ -2,6 +2,11 @@
 
 ## Current tip
 
+### Grok: smooth GLES sky + snow caps only on peaks
+- Sky is one vertex-colour gradient (GPU smooth) instead of flat bands.
+- Mountain snow only above `snow_line` altitude, not the whole column.
+
+
 ### Grok: tunnel walls as continuous solid bands
 - GLES tunnel sides are segment-spanning quads (kerb/tile/upper), like rails,
   not single-depth billboard columns.

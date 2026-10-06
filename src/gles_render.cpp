@@ -400,6 +400,16 @@ void GlesRenderer::push_trap(float y0, float x0l, float x0r, float y1, float x1l
     solid_.insert(solid_.end(), verts, verts + 6);
 }
 
+void GlesRenderer::push_trap_vcol(float y0, float x0l, float x0r, float y1, float x1l, float x1r, Color c0, Color c1) {
+    const float r0 = c0.r / 255.f, g0 = c0.g / 255.f, b0 = c0.b / 255.f, a0 = c0.a / 255.f;
+    const float r1 = c1.r / 255.f, g1 = c1.g / 255.f, b1 = c1.b / 255.f, a1 = c1.a / 255.f;
+    const Vertex verts[6] = {
+        {x0l, y0, 0, 0, r0, g0, b0, a0}, {x0r, y0, 0, 0, r0, g0, b0, a0}, {x1l, y1, 0, 0, r1, g1, b1, a1},
+        {x0r, y0, 0, 0, r0, g0, b0, a0}, {x1r, y1, 0, 0, r1, g1, b1, a1}, {x1l, y1, 0, 0, r1, g1, b1, a1},
+    };
+    solid_.insert(solid_.end(), verts, verts + 6);
+}
+
 // General solid quad (two triangles). Vertices in order around the perimeter.
 void GlesRenderer::push_solid_quad(float x0, float y0, float x1, float y1, float x2, float y2, float x3, float y3,
                                    Color c) {
@@ -539,28 +549,23 @@ void GlesRenderer::draw_backdrop(const RoadTheme& theme, const Background* backd
     // Extreme fog: solid air only (already cleared).
     if (theme.haze >= 0.99f || theme.fog_density >= 80.f) return;
     const float wf = static_cast<float>(width_);
-    // Sky gradient: a few horizontal bands from top to horizon.
-    const Color top = fogged(theme.sky_top, fog_air_, theme.haze * 0.5f, daylight_);
-    const Color bot = fogged(theme.sky_horizon, fog_air_, theme.haze * 0.35f, daylight_);
-    constexpr int bands = 8;
-    for (int i = 0; i < bands; ++i) {
-        const float t0 = static_cast<float>(i) / bands;
-        const float t1 = static_cast<float>(i + 1) / bands;
-        const Color c = blend(top, bot, (t0 + t1) * 0.5f);
-        const float y0 = horizon * t0;
-        const float y1 = horizon * t1;
-        push_trap(y0, 0.f, wf, y1, 0.f, wf, c);
+    // Smooth sky gradient (software dithers 16 bands; GPU interpolates vertex colours).
+    {
+        const Color top = fogged(theme.sky_top, fog_air_, theme.haze * 0.5f, daylight_);
+        const Color bot = fogged(theme.sky_horizon, fog_air_, theme.haze * 0.35f, daylight_);
+        push_trap_vcol(0.f, 0.f, wf, horizon, 0.f, wf, top, bot);
     }
     if (!backdrop) {
         flush_solid();
         return;
     }
-    // Column strips from ridge top down to the horizon.
+    // Mountain / hill columns. Snow only on the upper altitude band (software:
+    // alt = horizon - y > snow_line), not the whole column.
     auto ridge2 = [&](const std::vector<float>& h, float offset, Color lit, Color shade, float scale_mul,
                       float snow_line) {
         if (h.empty()) return;
         const int period = static_cast<int>(h.size());
-        const int step = std::max(1, width_ / 160); // finer columns ≈ software per-pixel
+        const int step = std::max(1, width_ / 200);
         for (int x = 0; x < width_; x += step) {
             const int i = ((static_cast<int>(std::lround(offset)) + x) % period + period) % period;
             const float here = h[static_cast<size_t>(i)] * scale_mul;
@@ -568,17 +573,28 @@ void GlesRenderer::draw_backdrop(const RoadTheme& theme, const Background* backd
             if (top_y >= horizon - 0.5f) continue;
             const float slope = h[static_cast<size_t>((i + 6) % period)] - h[static_cast<size_t>((i + period - 6) % period)];
             const float light = std::clamp(0.5f - slope * 0.08f, 0.f, 1.f);
-            Color face = blend(shade, lit, light);
-            // Snow caps above snow_line (software Background::ridge).
-            if (here > snow_line) {
-                face = blend(theme.snow, blend(theme.snow, theme.mountain_shade, 0.5f), 1.f - light);
-                face = light > 0.45f ? theme.snow : blend(theme.snow, theme.mountain_shade, 0.5f);
-            }
-            const float haze = std::max(theme.haze, std::clamp(1.f - here / (14.f * scale_mul + 1.f), 0.f, 1.f) * 0.75f);
-            const Color c = fogged(face, fog_air_, haze, daylight_);
+            const Color rock = blend(shade, lit, light);
+            const Color snow = light > 0.45f ? theme.snow : blend(theme.snow, theme.mountain_shade, 0.5f);
             const float x0 = static_cast<float>(x);
             const float x1 = std::min(wf, static_cast<float>(x + step));
-            push_trap(top_y, x0, x1, horizon, x0, x1, c);
+            // Screen row where altitude == snow_line (snow above, rock below).
+            const float snow_y = horizon - snow_line;
+            auto haze_at = [&](float alt) {
+                return std::max(theme.haze, std::clamp(1.f - alt / (14.f * scale_mul + 1.f), 0.f, 1.f) * 0.75f);
+            };
+            if (top_y < snow_y && snow_line < 1.0e8f) {
+                // Cap: top → snow_y
+                const float mid_alt = (horizon - top_y + snow_line) * 0.5f;
+                const Color cs = fogged(snow, fog_air_, haze_at(mid_alt), daylight_);
+                push_trap(top_y, x0, x1, snow_y, x0, x1, cs);
+                // Rock: snow_y → horizon (smooth shade via vertical gradient optional)
+                const float rock_alt = snow_line * 0.5f;
+                const Color cr = fogged(rock, fog_air_, haze_at(rock_alt), daylight_);
+                push_trap(snow_y, x0, x1, horizon, x0, x1, cr);
+            } else {
+                const Color c = fogged(rock, fog_air_, haze_at(here * 0.5f), daylight_);
+                push_trap(top_y, x0, x1, horizon, x0, x1, c);
+            }
         }
     };
     ridge2(backdrop->mountains(), backdrop->mountain_offset(), theme.mountain_lit, theme.mountain_shade,
