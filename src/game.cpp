@@ -334,12 +334,10 @@ bool Game::init(bool fullscreen) {
     if (display_->is_gl() && display_->make_gl_current() && gles_.init()) {
         use_gles_ = true;
         gles_.set_size(width_, fb_height());
-        std::cout << "Kurvenrausch: GLES2 scene renderer
-";
+        std::cout << "Kurvenrausch: GLES2 scene renderer\n";
     } else {
         use_gles_ = false;
-        std::cout << "Kurvenrausch: software renderer (no GL scene)
-";
+        std::cout << "Kurvenrausch: software renderer (no GL scene)\n";
     }
 
     const Bitmap icon = make_app_icon();

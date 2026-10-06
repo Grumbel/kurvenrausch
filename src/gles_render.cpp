@@ -26,6 +26,7 @@ namespace {
 constexpr unsigned GL_COLOR_BUFFER_BIT_ = 0x00004000;
 constexpr unsigned GL_BLEND_ = 0x0BE2;
 constexpr unsigned GL_SRC_ALPHA_ = 0x0302;
+constexpr unsigned GL_ONE_ = 1;
 constexpr unsigned GL_ONE_MINUS_SRC_ALPHA_ = 0x0303;
 constexpr unsigned GL_TEXTURE_2D_ = 0x0DE1;
 constexpr unsigned GL_TEXTURE0_ = 0x84C0;
