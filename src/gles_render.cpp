@@ -420,6 +420,24 @@ void GlesRenderer::push_quad(float x, float y, float w, float h, float u0, float
     textured_.insert(textured_.end(), verts, verts + 6);
 }
 
+// Axis-aligned rect rotated about its centre (matches Framebuffer::blit_rotated).
+void GlesRenderer::push_quad_rotated(float cx, float cy, float w, float h, float angle, float u0, float v0, float u1,
+                                     float v1, Color c) {
+    const float r = c.r / 255.f, gch = c.g / 255.f, b = c.b / 255.f, a = c.a / 255.f;
+    const float cos_a = std::cos(angle), sin_a = std::sin(angle);
+    const float hw = w * 0.5f, hh = h * 0.5f;
+    auto corner = [&](float lx, float ly, float u, float v) -> Vertex {
+        return {cx + lx * cos_a - ly * sin_a, cy + lx * sin_a + ly * cos_a, u, v, r, gch, b, a};
+    };
+    // Local corners: TL TR BL BR (y down, same as screen).
+    const Vertex tl = corner(-hw, -hh, u0, v0);
+    const Vertex tr = corner(hw, -hh, u1, v0);
+    const Vertex bl = corner(-hw, hh, u0, v1);
+    const Vertex br = corner(hw, hh, u1, v1);
+    const Vertex verts[6] = {tl, tr, bl, tr, br, bl};
+    textured_.insert(textured_.end(), verts, verts + 6);
+}
+
 void GlesRenderer::flush_solid() {
     if (solid_.empty()) return;
     g.Uniform1i(u_use_tex_, 0);
@@ -985,14 +1003,18 @@ void GlesRenderer::draw_sprites(const Track& track, const SpriteSheet& sprites, 
         auto draw_object = [&](const RoadSprite& o) {
             const Bitmap& bmp = *o.bitmap;
             if (o.fixed) {
-                // Player composite is written into a reused buffer each frame.
-                // Fixed sprites (player car, etc.) sit on the near plane: fog amount 0.
+                // Player composite: reused buffer, near plane (no fog).
                 const uint8_t day = static_cast<uint8_t>(std::min(255.f, daylight_ * 255.f + 0.5f));
                 Color tint{day, day, day, 0};
                 const unsigned tex = texture_for(bmp, true);
                 if (!tex) return;
                 flush_solid();
-                push_quad(o.sx, o.sy, o.sw, o.sh, 0.f, 0.f, 1.f, 1.f, tint, false);
+                if (o.angle != 0.f) {
+                    push_quad_rotated(o.sx + o.sw * 0.5f, o.sy + o.sh * 0.5f, o.sw, o.sh, o.angle, 0.f, 0.f, 1.f,
+                                      1.f, tint);
+                } else {
+                    push_quad(o.sx, o.sy, o.sw, o.sh, 0.f, 0.f, 1.f, 1.f, tint, false);
+                }
                 flush_textured(tex);
                 return;
             }

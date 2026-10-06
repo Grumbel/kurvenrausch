@@ -2,6 +2,11 @@
 
 ## Current tip
 
+### Grok: GLES crash car rotation
+- Fixed sprites honour `RoadSprite::angle` via `push_quad_rotated` (matches
+  software `blit_rotated` during crash tumble).
+
+
 ### Grok: mirror night, F8 GLES↔software, vehicle lamp depth
 - Mirror glass runs apply_daylight + street_lights (GLES skips main-view night).
 - F8 toggles Software ↔ Gles only (not Auto).

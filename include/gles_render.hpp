@@ -73,6 +73,8 @@ private:
     void push_solid_quad(float x0, float y0, float x1, float y1, float x2, float y2, float x3, float y3,
                          Color c);
     void push_quad(float x, float y, float w, float h, float u0, float v0, float u1, float v1, Color c, bool flip);
+    void push_quad_rotated(float cx, float cy, float w, float h, float angle, float u0, float v0, float u1,
+                           float v1, Color c);
     void flush_solid();
     void flush_textured(unsigned tex);
     // Immutable scenery: cache by px.data(). dynamic=true re-uploads pixels
