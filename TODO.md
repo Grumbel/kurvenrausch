@@ -2,6 +2,12 @@
 
 ## Current tip
 
+### Grok: cut draw calls (rails in atlas batch) + HUD dirty upload
+- Rails/tunnel solids in the sprite pass use atlas white texel → one textured
+  batch with scenery (was flush-per-slice → ~90 draws).
+- Present: upload only non-zero alpha bbox; GPU-clear HUD tex via FBO.
+
+
 ### Grok: frame_stats profiler (FPS overlay)
 - VIDEO → FPS: shows frame ms, draws, solid/tex verts, slices/sprites/lamps,
   and top phase times (sim, g-sky, g-road, g-spr, g-night, hud, present).

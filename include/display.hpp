@@ -126,6 +126,7 @@ private:
     SDL_GLContext gl_ = nullptr;
     unsigned gl_program_ = 0;
     unsigned gl_fb_tex_ = 0;
+    unsigned gl_hud_fbo_ = 0; // clear HUD texture without a full CPU upload
     unsigned gl_vbo_ = 0;
     int gl_u_tex_ = -1;
     int gl_u_swizzle_ = -1; // 1: sample ARGB uploaded as RGBA (swap R/B)

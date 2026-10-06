@@ -171,6 +171,8 @@ private:
     unsigned atlas_tex_ = 0;
     int atlas_w_ = 0, atlas_h_ = 0;
     bool atlas_ready_ = false;
+    // 1×1 white texel in the atlas — solid-coloured quads share the sprite batch.
+    float white_u_ = 0.f, white_v_ = 0.f;
 };
 
 } // namespace racer

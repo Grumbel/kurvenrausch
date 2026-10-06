@@ -71,6 +71,8 @@ constexpr GLenum GL_BLEND_ = 0x0BE2;
 constexpr GLenum GL_SRC_ALPHA_ = 0x0302;
 constexpr GLenum GL_ONE_MINUS_SRC_ALPHA_ = 0x0303;
 constexpr GLenum GL_TEXTURE0_ = 0x84C0;
+constexpr GLenum GL_FRAMEBUFFER_ = 0x8D40;
+constexpr GLenum GL_COLOR_ATTACHMENT0_ = 0x8CE0;
 constexpr GLboolean GL_FALSE_ = 0;
 
 struct GlApi {
@@ -111,6 +113,10 @@ struct GlApi {
     void (*Enable)(GLenum) = nullptr;
     void (*Disable)(GLenum) = nullptr;
     void (*BlendFunc)(GLenum, GLenum) = nullptr;
+    void (*GenFramebuffers)(GLsizei, GLuint*) = nullptr;
+    void (*DeleteFramebuffers)(GLsizei, const GLuint*) = nullptr;
+    void (*BindFramebuffer)(GLenum, GLuint) = nullptr;
+    void (*FramebufferTexture2D)(GLenum, GLenum, GLenum, GLuint, GLint) = nullptr;
 
     bool load() {
         auto get = [](const char* name) { return SDL_GL_GetProcAddress(name); };
@@ -122,25 +128,35 @@ struct GlApi {
             }
             return true;
         };
-        return need(CreateShader, "glCreateShader") && need(ShaderSource, "glShaderSource") &&
-               need(CompileShader, "glCompileShader") && need(GetShaderiv, "glGetShaderiv") &&
-               need(GetShaderInfoLog, "glGetShaderInfoLog") && need(DeleteShader, "glDeleteShader") &&
-               need(CreateProgram, "glCreateProgram") && need(AttachShader, "glAttachShader") &&
-               need(BindAttribLocation, "glBindAttribLocation") && need(LinkProgram, "glLinkProgram") &&
-               need(GetProgramiv, "glGetProgramiv") && need(GetProgramInfoLog, "glGetProgramInfoLog") &&
-               need(DeleteProgram, "glDeleteProgram") && need(GetUniformLocation, "glGetUniformLocation") &&
-               need(UseProgram, "glUseProgram") && need(Uniform1i, "glUniform1i") &&
-               need(GenTextures, "glGenTextures") && need(DeleteTextures, "glDeleteTextures") &&
-               need(BindTexture, "glBindTexture") && need(TexParameteri, "glTexParameteri") &&
-               need(TexImage2D, "glTexImage2D") && need(TexSubImage2D, "glTexSubImage2D") &&
-               need(GenBuffers, "glGenBuffers") && need(DeleteBuffers, "glDeleteBuffers") &&
-               need(BindBuffer, "glBindBuffer") && need(BufferData, "glBufferData") &&
-               need(EnableVertexAttribArray, "glEnableVertexAttribArray") &&
-               need(DisableVertexAttribArray, "glDisableVertexAttribArray") &&
-               need(VertexAttribPointer, "glVertexAttribPointer") && need(DrawArrays, "glDrawArrays") &&
-               need(Viewport, "glViewport") && need(ClearColor, "glClearColor") && need(Clear, "glClear") &&
-               need(ActiveTexture, "glActiveTexture") && need(Enable, "glEnable") &&
-               need(Disable, "glDisable") && need(BlendFunc, "glBlendFunc");
+        if (!(need(CreateShader, "glCreateShader") && need(ShaderSource, "glShaderSource") &&
+              need(CompileShader, "glCompileShader") && need(GetShaderiv, "glGetShaderiv") &&
+              need(GetShaderInfoLog, "glGetShaderInfoLog") && need(DeleteShader, "glDeleteShader") &&
+              need(CreateProgram, "glCreateProgram") && need(AttachShader, "glAttachShader") &&
+              need(BindAttribLocation, "glBindAttribLocation") && need(LinkProgram, "glLinkProgram") &&
+              need(GetProgramiv, "glGetProgramiv") && need(GetProgramInfoLog, "glGetProgramInfoLog") &&
+              need(DeleteProgram, "glDeleteProgram") && need(GetUniformLocation, "glGetUniformLocation") &&
+              need(UseProgram, "glUseProgram") && need(Uniform1i, "glUniform1i") &&
+              need(GenTextures, "glGenTextures") && need(DeleteTextures, "glDeleteTextures") &&
+              need(BindTexture, "glBindTexture") && need(TexParameteri, "glTexParameteri") &&
+              need(TexImage2D, "glTexImage2D") && need(TexSubImage2D, "glTexSubImage2D") &&
+              need(GenBuffers, "glGenBuffers") && need(DeleteBuffers, "glDeleteBuffers") &&
+              need(BindBuffer, "glBindBuffer") && need(BufferData, "glBufferData") &&
+              need(EnableVertexAttribArray, "glEnableVertexAttribArray") &&
+              need(DisableVertexAttribArray, "glDisableVertexAttribArray") &&
+              need(VertexAttribPointer, "glVertexAttribPointer") && need(DrawArrays, "glDrawArrays") &&
+              need(Viewport, "glViewport") && need(ClearColor, "glClearColor") && need(Clear, "glClear") &&
+              need(ActiveTexture, "glActiveTexture") && need(Enable, "glEnable") &&
+              need(Disable, "glDisable") && need(BlendFunc, "glBlendFunc")))
+            return false;
+        auto soft = [&](auto& fn, const char* a, const char* b) {
+            fn = reinterpret_cast<std::decay_t<decltype(fn)>>(get(a));
+            if (!fn && b) fn = reinterpret_cast<std::decay_t<decltype(fn)>>(get(b));
+        };
+        soft(GenFramebuffers, "glGenFramebuffers", "glGenFramebuffersOES");
+        soft(DeleteFramebuffers, "glDeleteFramebuffers", "glDeleteFramebuffersOES");
+        soft(BindFramebuffer, "glBindFramebuffer", "glBindFramebufferOES");
+        soft(FramebufferTexture2D, "glFramebufferTexture2D", "glFramebufferTexture2DOES");
+        return true;
     }
 };
 
@@ -288,6 +304,10 @@ void Display::destroy_present() {
     // can raise BadWindow during later TranslateCoords from SDL teardown.
     if (gl_ && window_) {
         SDL_GL_MakeCurrent(window_, gl_);
+        if (gl_hud_fbo_ && g_gl.DeleteFramebuffers) {
+            g_gl.DeleteFramebuffers(1, &gl_hud_fbo_);
+            gl_hud_fbo_ = 0;
+        }
         if (gl_fb_tex_ && g_gl.DeleteTextures) {
             g_gl.DeleteTextures(1, &gl_fb_tex_);
             gl_fb_tex_ = 0;
@@ -729,24 +749,74 @@ void Display::present_gles_scene(unsigned scene_tex, int tex_w, int tex_h, const
     g_gl.VertexAttribPointer(1, 2, GL_FLOAT_, GL_FALSE_, 16, reinterpret_cast<void*>(8));
     g_gl.DrawArrays(GL_TRIANGLE_STRIP_, 0, 4);
 
-    // HUD: CPU ARGB (row 0 = top) uploaded as a texture needs the present_gl UV flip.
+    // HUD: upload only the non-transparent bbox (full-buffer TexSubImage was ~20ms on Mali HD).
     if (hud_argb && gl_fb_tex_ && tex_w == fb_w_ && tex_h == fb_h_) {
-        g_gl.Enable(GL_BLEND_);
-        g_gl.BlendFunc(GL_SRC_ALPHA_, GL_ONE_MINUS_SRC_ALPHA_);
-        g_gl.BindTexture(GL_TEXTURE_2D_, gl_fb_tex_);
+        int x0b = fb_w_, y0b = fb_h_, x1b = 0, y1b = 0;
+        for (int y = 0; y < fb_h_; ++y) {
+            const uint32_t* row = hud_argb + static_cast<size_t>(y) * static_cast<size_t>(fb_w_);
+            for (int x = 0; x < fb_w_; ++x) {
+                if ((row[x] >> 24) == 0) continue;
+                if (x < x0b) x0b = x;
+                if (x >= x1b) x1b = x + 1;
+                if (y < y0b) y0b = y;
+                if (y >= y1b) y1b = y + 1;
+            }
+        }
+        if (x1b > x0b && y1b > y0b) {
+            // Clear previous HUD so pixels outside the bbox do not ghost.
+            if (g_gl.GenFramebuffers && g_gl.BindFramebuffer && g_gl.FramebufferTexture2D) {
+                if (!gl_hud_fbo_) {
+                    g_gl.GenFramebuffers(1, &gl_hud_fbo_);
+                    g_gl.BindFramebuffer(GL_FRAMEBUFFER_, gl_hud_fbo_);
+                    g_gl.FramebufferTexture2D(GL_FRAMEBUFFER_, GL_COLOR_ATTACHMENT0_, GL_TEXTURE_2D_, gl_fb_tex_, 0);
+                } else {
+                    g_gl.BindFramebuffer(GL_FRAMEBUFFER_, gl_hud_fbo_);
+                }
+                g_gl.Viewport(0, 0, fb_w_, fb_h_);
+                g_gl.ClearColor(0.f, 0.f, 0.f, 0.f);
+                g_gl.Clear(GL_COLOR_BUFFER_BIT_);
+                g_gl.BindFramebuffer(GL_FRAMEBUFFER_, 0);
+                g_gl.Viewport(0, 0, s.w, s.h);
+            }
+            g_gl.BindTexture(GL_TEXTURE_2D_, gl_fb_tex_);
+            const int bw = x1b - x0b, bh = y1b - y0b;
 #if KURVEN_GLES
-        g_gl.TexSubImage2D(GL_TEXTURE_2D_, 0, 0, 0, fb_w_, fb_h_, GL_RGBA_, GL_UNSIGNED_BYTE_, hud_argb);
+            // GLES2 has no UNPACK_ROW_LENGTH — pack the bbox tightly.
+            static thread_local std::vector<uint32_t> pack;
+            pack.resize(static_cast<size_t>(bw * bh));
+            for (int y = 0; y < bh; ++y) {
+                const uint32_t* src = hud_argb + static_cast<size_t>(y0b + y) * static_cast<size_t>(fb_w_) +
+                                      static_cast<size_t>(x0b);
+                std::copy(src, src + bw, pack.begin() + static_cast<size_t>(y) * static_cast<size_t>(bw));
+            }
+            g_gl.TexSubImage2D(GL_TEXTURE_2D_, 0, x0b, y0b, bw, bh, GL_RGBA_, GL_UNSIGNED_BYTE_, pack.data());
 #else
-        g_gl.TexSubImage2D(GL_TEXTURE_2D_, 0, 0, 0, fb_w_, fb_h_, GL_BGRA_, GL_UNSIGNED_BYTE_, hud_argb);
+            for (int y = 0; y < bh; ++y) {
+                g_gl.TexSubImage2D(GL_TEXTURE_2D_, 0, x0b, y0b + y, bw, 1, GL_BGRA_, GL_UNSIGNED_BYTE_,
+                                   hud_argb + static_cast<size_t>(y0b + y) * static_cast<size_t>(fb_w_) +
+                                       static_cast<size_t>(x0b));
+            }
 #endif
-        if (gl_u_swizzle_ >= 0) g_gl.Uniform1i(gl_u_swizzle_, 1);
-        const float hud_verts[] = {
-            x0, y0, 0.f, 1.f, x1, y0, 1.f, 1.f, x0, y1, 0.f, 0.f, x1, y1, 1.f, 0.f,
-        };
-        g_gl.BufferData(GL_ARRAY_BUFFER_, sizeof hud_verts, hud_verts, GL_STREAM_DRAW_);
-        g_gl.BindTexture(GL_TEXTURE_2D_, gl_fb_tex_);
-        g_gl.DrawArrays(GL_TRIANGLE_STRIP_, 0, 4);
-        g_gl.Disable(GL_BLEND_);
+            g_gl.Enable(GL_BLEND_);
+            g_gl.BlendFunc(GL_SRC_ALPHA_, GL_ONE_MINUS_SRC_ALPHA_);
+            if (gl_u_swizzle_ >= 0) g_gl.Uniform1i(gl_u_swizzle_, 1);
+            // Buffer y=0 is the top of the picture. NDC y0=bottom, y1=top of the letterbox.
+            const float u0 = static_cast<float>(x0b) / static_cast<float>(fb_w_);
+            const float u1 = static_cast<float>(x1b) / static_cast<float>(fb_w_);
+            const float vt = static_cast<float>(y0b) / static_cast<float>(fb_h_); // top of bbox
+            const float vb = static_cast<float>(y1b) / static_cast<float>(fb_h_); // bottom of bbox
+            const float fx0 = x0 + (x1 - x0) * static_cast<float>(x0b) / static_cast<float>(fb_w_);
+            const float fx1 = x0 + (x1 - x0) * static_cast<float>(x1b) / static_cast<float>(fb_w_);
+            const float fyt = y1 + (y0 - y1) * vt; // top of bbox on screen
+            const float fyb = y1 + (y0 - y1) * vb; // bottom of bbox on screen
+            const float hud_verts[] = {
+                fx0, fyb, u0, vb, fx1, fyb, u1, vb, fx0, fyt, u0, vt, fx1, fyt, u1, vt,
+            };
+            g_gl.BufferData(GL_ARRAY_BUFFER_, sizeof hud_verts, hud_verts, GL_STREAM_DRAW_);
+            g_gl.BindTexture(GL_TEXTURE_2D_, gl_fb_tex_);
+            g_gl.DrawArrays(GL_TRIANGLE_STRIP_, 0, 4);
+            g_gl.Disable(GL_BLEND_);
+        }
     }
     g_gl.Enable(GL_BLEND_);
     g_gl.BlendFunc(GL_SRC_ALPHA_, GL_ONE_MINUS_SRC_ALPHA_);

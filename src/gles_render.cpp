@@ -674,6 +674,42 @@ void GlesRenderer::push_solid_quad(float x0, float y0, float x1, float y1, float
     solid_.insert(solid_.end(), verts, verts + 6);
 }
 
+
+void GlesRenderer::push_tint_quad(float x0, float y0, float x1, float y1, float x2, float y2, float x3, float y3,
+                                  Color c) {
+    if (!atlas_tex_) {
+        push_solid_quad(x0, y0, x1, y1, x2, y2, x3, y3, c);
+        return;
+    }
+    if (draw_clip_) {
+        const float cy0 = static_cast<float>(draw_clip_y0_);
+        const float cy1 = static_cast<float>(draw_clip_y1_);
+        const float cx0 = static_cast<float>(draw_clip_x0_);
+        const float cx1 = static_cast<float>(draw_clip_x1_);
+        const float ymin = std::min(std::min(y0, y1), std::min(y2, y3));
+        const float ymax = std::max(std::max(y0, y1), std::max(y2, y3));
+        const float xmin = std::min(std::min(x0, x1), std::min(x2, x3));
+        const float xmax = std::max(std::max(x0, x1), std::max(x2, x3));
+        if (ymax <= cy0 || ymin >= cy1 || xmax <= cx0 || xmin >= cx1) return;
+        auto cl = [&](float& x, float& y) {
+            x = std::clamp(x, cx0, cx1);
+            y = std::clamp(y, cy0, cy1);
+        };
+        cl(x0, y0);
+        cl(x1, y1);
+        cl(x2, y2);
+        cl(x3, y3);
+    }
+    set_textured(atlas_tex_);
+    const float r = c.r / 255.f, gch = c.g / 255.f, b = c.b / 255.f, a = c.a / 255.f;
+    const float u = white_u_, v = white_v_;
+    const Vertex verts[6] = {
+        {x0, y0, u, v, r, gch, b, a}, {x1, y1, u, v, r, gch, b, a}, {x2, y2, u, v, r, gch, b, a},
+        {x0, y0, u, v, r, gch, b, a}, {x2, y2, u, v, r, gch, b, a}, {x3, y3, u, v, r, gch, b, a},
+    };
+    textured_.insert(textured_.end(), verts, verts + 6);
+}
+
 void GlesRenderer::push_quad(float x, float y, float w, float h, float u0, float v0, float u1, float v1, Color c,
                              bool flip) {
     if (flip) std::swap(u0, u1);
@@ -917,6 +953,14 @@ void GlesRenderer::ensure_sprite_atlas(const SpriteSheet& sprites) {
     g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_WRAP_T_, GL_CLAMP_TO_EDGE_);
     g.TexImage2D(GL_TEXTURE_2D_, 0, static_cast<int>(GL_RGBA_), atlas_w_, atlas_h_, 0, GL_RGBA_, GL_UNSIGNED_BYTE_,
                  nullptr);
+    // Opaque white texel for tinted solid geometry in the same draw as sprites.
+    {
+        const uint8_t white[4] = {255, 255, 255, 255};
+        if (g.TexSubImage2D)
+            g.TexSubImage2D(GL_TEXTURE_2D_, 0, 0, 0, 1, 1, GL_RGBA_, GL_UNSIGNED_BYTE_, white);
+        white_u_ = 0.5f / static_cast<float>(atlas_w_);
+        white_v_ = 0.5f / static_cast<float>(atlas_h_);
+    }
     g.PixelStorei(0x0CF5 /* GL_UNPACK_ALIGNMENT */, 1);
 
     for (const Place& pl : places) {
@@ -1431,18 +1475,18 @@ void GlesRenderer::draw_sprites(const Track& track, const SpriteSheet& sprites, 
             {
                 const auto n0 = at(0.f, 0.42f), n1 = at(0.f, 0.20f);
                 const auto f0 = at(1.f, 0.42f), f1 = at(1.f, 0.20f);
-                push_solid_quad(n0.first, n0.second, f0.first, f0.second, f1.first, f1.second, n1.first, n1.second,
+                push_tint_quad(n0.first, n0.second, f0.first, f0.second, f1.first, f1.second, n1.first, n1.second,
                                 bar_c);
             }
             // Upper bar 0.60 .. 0.95 (bright lip on the top edge via top_c)
             {
                 const auto n0 = at(0.f, 0.95f), n1 = at(0.f, 0.60f);
                 const auto f0 = at(1.f, 0.95f), f1 = at(1.f, 0.60f);
-                push_solid_quad(n0.first, n0.second, f0.first, f0.second, f1.first, f1.second, n1.first, n1.second,
+                push_tint_quad(n0.first, n0.second, f0.first, f0.second, f1.first, f1.second, n1.first, n1.second,
                                 bar_c);
                 const auto lip_n0 = at(0.f, 0.95f), lip_n1 = at(0.f, 0.88f);
                 const auto lip_f0 = at(1.f, 0.95f), lip_f1 = at(1.f, 0.88f);
-                push_solid_quad(lip_n0.first, lip_n0.second, lip_f0.first, lip_f0.second, lip_f1.first, lip_f1.second,
+                push_tint_quad(lip_n0.first, lip_n0.second, lip_f0.first, lip_f0.second, lip_f1.first, lip_f1.second,
                                 lip_n1.first, lip_n1.second, top_c);
             }
             // Post at the near end of the segment (first ~10% of the run).
@@ -1453,7 +1497,7 @@ void GlesRenderer::draw_sprites(const Track& track, const SpriteSheet& sprites, 
                 const auto f0 = at(t1, 1.f), f1 = at(t1, 0.f);
                 const float pw = std::max(1.5f, std::min(std::abs(xb - xa) * 0.08f, 4.f));
                 const float sx = static_cast<float>(side);
-                push_solid_quad(n0.first - sx * pw * 0.5f, n0.second, f0.first - sx * pw * 0.5f, f0.second,
+                push_tint_quad(n0.first - sx * pw * 0.5f, n0.second, f0.first - sx * pw * 0.5f, f0.second,
                                 f1.first + sx * pw * 0.5f, f1.second, n1.first + sx * pw * 0.5f, n1.second, post_c);
             }
         };
@@ -1487,11 +1531,11 @@ void GlesRenderer::draw_sprites(const Track& track, const SpriteSheet& sprites, 
                 auto band = [&](float r0, float r1, Color c) {
                     const float ya0 = a.y - ha * r0, ya1 = a.y - ha * r1;
                     const float yb0 = b.y - hb * r0, yb1 = b.y - hb * r1;
-                    push_solid_quad(xa, ya1, xb, yb1, xb, yb0, xa, ya0, c);
+                    push_tint_quad(xa, ya1, xb, yb1, xb, yb0, xa, ya0, c);
                 };
                 // Opaque sides: full height bulk outside the tunnel wall face.
-                push_solid_quad(xa, a.y - ha, xb, b.y - hb, xb_out, b.y - hb, xa_out, a.y - ha, bulk);
-                push_solid_quad(xa, a.y - ha, xb, b.y - hb, xb_out, b.y, xa_out, a.y, bulk);
+                push_tint_quad(xa, a.y - ha, xb, b.y - hb, xb_out, b.y - hb, xa_out, a.y - ha, bulk);
+                push_tint_quad(xa, a.y - ha, xb, b.y - hb, xb_out, b.y, xa_out, a.y, bulk);
                 band(0.f, 0.14f, kerb);
                 band(0.14f, 0.55f, tile);
                 band(0.55f, 1.f, upper);
@@ -1528,7 +1572,6 @@ void GlesRenderer::draw_sprites(const Track& track, const SpriteSheet& sprites, 
             Color tint{day, day, day, fa};
             const TexRef tex = texture_for(cliff);
             if (!tex) return;
-            flush_solid();
             set_textured(tex.id);
             push_quad(left, p0.y - height, width, height, tex.u0, tex.v0, tex.u1, tex.v1, tint, side < 0);
         };
@@ -1559,7 +1602,6 @@ void GlesRenderer::draw_sprites(const Track& track, const SpriteSheet& sprites, 
             Color tint{day, day, day, fa};
             const TexRef tex = texture_for(bmp);
             if (!tex) return;
-            flush_solid();
             set_textured(tex.id);
             push_quad(left, p0.y - height, width, height, tex.u0, tex.v0, tex.u1, tex.v1, tint, flip);
             if (obj.kind == Scenery::StreetLamp) {
@@ -1589,7 +1631,6 @@ void GlesRenderer::draw_sprites(const Track& track, const SpriteSheet& sprites, 
                 Color tint{day, day, day, 0};
                 const TexRef tex = texture_for(bmp, true);
                 if (!tex) return;
-                flush_solid();
                 set_textured(tex.id);
                 if (o.angle != 0.f) {
                     push_quad_rotated(o.sx + o.sw * 0.5f, o.sy + o.sh * 0.5f, o.sw, o.sh, o.angle, tex.u0, tex.v0,
@@ -1614,7 +1655,6 @@ void GlesRenderer::draw_sprites(const Track& track, const SpriteSheet& sprites, 
             Color tint{day, day, day, fa};
             const TexRef tex = texture_for(bmp);
             if (!tex) return;
-            flush_solid();
             set_textured(tex.id);
             push_quad(cx - width / 2.f, y - height, width, height, tex.u0, tex.v0, tex.u1, tex.v1, tint, o.flip);
             if (o.lights != 0 && scale > 1e-4f) {
