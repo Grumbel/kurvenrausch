@@ -924,28 +924,28 @@ void GlesRenderer::draw_sprites(const Track& track, const SpriteSheet& sprites, 
             draw_rail(+1);
         }
 
-        // Tunnel side walls: solid columns (same placement as software's
-        // tunnel_wall blit), banded like make_tunnel_wall — kerb / tile / upper.
-        // Drawn far→near with rails so nearer segments cover farther ones.
+        // Tunnel side walls: continuous bands along the segment (same idea as
+        // guard rails), not billboard columns. Kerb / tile / upper match
+        // make_tunnel_wall(); tile course alternates by segment.
         if (projectable && seg.tunnel) {
-            const float px = p0.scale * x_scale_;
-            const float wh = tunnel_height * p0.scale * y_scale_;
-            const float ww = std::max(8.f, track.segment_length * px * 1.2f);
+            const ScreenPoint& a = s.p1;
+            const ScreenPoint& b = s.p2;
             const float fog_amount = 1.f - s.fog;
             auto fogc = [&](Color c) { return fogged(c, fog_air_, fog_amount, daylight_); };
-            // Colours from make_tunnel_wall(); alternate tile course by segment.
             const Color kerb = fogc(Color{0xe0, 0xdc, 0xd4});
-            const Color tile = fogc((s.index / 1) % 2 ? Color{0xc4, 0xbc, 0xb0} : Color{0xb8, 0xb0, 0xa4});
+            const Color tile = fogc((s.index % 2) ? Color{0xc4, 0xbc, 0xb0} : Color{0xb8, 0xb0, 0xa4});
             const Color upper = fogc(Color{0x7c, 0x78, 0x70});
+            const float ha = tunnel_height * a.scale * y_scale_;
+            const float hb = tunnel_height * b.scale * y_scale_;
             for (int side = -1; side <= 1; side += 2) {
-                const float edge = p0.x + static_cast<float>(side) * p0.w;
-                const float left = side < 0 ? edge - ww : edge;
-                const float right = left + ww;
-                // Height fractions from road (0) up to ceiling (1), matching the sprite.
+                const float sd = static_cast<float>(side);
+                // Vertical face at the road edge, near → far (like a rail bar).
+                const float xa = a.x + sd * a.w;
+                const float xb = b.x + sd * b.w;
                 auto band = [&](float r0, float r1, Color c) {
-                    const float y0 = p0.y - wh * r1; // higher on screen = larger r
-                    const float y1 = p0.y - wh * r0;
-                    push_solid_quad(left, y0, right, y0, right, y1, left, y1, c);
+                    const float ya0 = a.y - ha * r0, ya1 = a.y - ha * r1;
+                    const float yb0 = b.y - hb * r0, yb1 = b.y - hb * r1;
+                    push_solid_quad(xa, ya1, xb, yb1, xb, yb0, xa, ya0, c);
                 };
                 band(0.f, 0.14f, kerb);
                 band(0.14f, 0.55f, tile);

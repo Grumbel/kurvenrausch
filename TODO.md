@@ -2,6 +2,11 @@
 
 ## Current tip
 
+### Grok: tunnel walls as continuous solid bands
+- GLES tunnel sides are segment-spanning quads (kerb/tile/upper), like rails,
+  not single-depth billboard columns.
+
+
 ### Grok: GLES scenery parity (markings, sky, stars, patches, snow, windows)
 - Dashed lane width matches software (`road_w / max(32, 8*lanes)`).
 - Sky uses 16 bands; stars drawn as exact emissives (no fog).
