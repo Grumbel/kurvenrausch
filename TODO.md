@@ -2,6 +2,12 @@
 
 ## Current tip
 
+### Grok: sprite atlas never fully abandoned
+- Overflow used to skip the whole atlas → one GL texture/draw per sprite
+  (~150+ draws). Now pack what fits (scenery first); remainder stays solo.
+- Expect a console line only if some vehicle variants did not fit.
+
+
 ### Grok: stable player car layer order
 - Equal-z player layers were reordered by std::sort. Use stable_sort and
   micro z offsets (body → dirt → people → movie → lightbar).

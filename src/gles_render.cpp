@@ -857,12 +857,12 @@ GlesRenderer::TexRef GlesRenderer::texture_for(const Bitmap& bmp, bool dynamic) 
 void GlesRenderer::ensure_sprite_atlas(const SpriteSheet& sprites) {
     if (atlas_ready_ || !g.GenTextures) return;
 
-    // Scenery + all static traffic/animal/train sprites share one atlas so
-    // cars no longer force a texture bind (and draw) each.
+    // Pack as many static sprites as fit into one atlas. Never abandon the
+    // atlas on overflow — partial pack still collapses scenery + most cars
+    // into one textured batch (overflow used to mean one draw per sprite).
     std::vector<const Bitmap*> bitmaps;
     sprites.append_static_bitmaps(bitmaps);
 
-    // Deduplicate by px.data()
     std::vector<const Bitmap*> unique;
     unique.reserve(bitmaps.size());
     for (const Bitmap* b : bitmaps) {
@@ -875,22 +875,32 @@ void GlesRenderer::ensure_sprite_atlas(const SpriteSheet& sprites) {
         }
         if (!seen) unique.push_back(b);
     }
-
-    // Shelf pack into a power-of-two atlas (vehicles dominate the size).
-    const int pad = 1;
-    const int shelf_limit = 4096;
-    int shelf_x = pad, shelf_y = pad, shelf_h = 0, max_w = 64, max_h = 64;
+    // Keep append_static_bitmaps order: scenery first, then vehicles, so if the
+    // atlas fills, traffic variants are the ones left as solo textures.
+    constexpr int pad = 1;
+    constexpr int atlas_limit = 4096;
     struct Place {
         const Bitmap* b;
         int x, y;
     };
     std::vector<Place> places;
     places.reserve(unique.size());
-    for (const Bitmap* b : unique) {
-        if (shelf_x + b->w + pad > shelf_limit) {
+    int shelf_x = pad, shelf_y = pad, shelf_h = 0, max_w = 64, max_h = 64;
+    int skipped = 0;
+    for (size_t i = 0; i < unique.size(); ++i) {
+        const Bitmap* b = unique[i];
+        if (b->w + 2 * pad > atlas_limit || b->h + 2 * pad > atlas_limit) {
+            ++skipped;
+            continue;
+        }
+        if (shelf_x + b->w + pad > atlas_limit) {
             shelf_x = pad;
             shelf_y += shelf_h + pad;
             shelf_h = 0;
+        }
+        if (shelf_y + b->h + pad > atlas_limit) {
+            skipped += static_cast<int>(unique.size() - i);
+            break;
         }
         places.push_back({b, shelf_x, shelf_y});
         shelf_x += b->w + pad;
@@ -900,20 +910,20 @@ void GlesRenderer::ensure_sprite_atlas(const SpriteSheet& sprites) {
     }
     auto pot = [](int v) {
         int p = 64;
-        while (p < v && p < 4096) p *= 2;
-        return std::min(p, 4096);
+        while (p < v && p < atlas_limit) p *= 2;
+        return std::min(p, atlas_limit);
     };
-    atlas_w_ = pot(max_w);
-    atlas_h_ = pot(max_h);
-    // Refuse a pack that does not fit — fall back to per-texture (no atlas).
-    if (max_w > atlas_w_ || max_h > atlas_h_) {
-        std::cerr << "kurvenrausch: sprite atlas overflow (" << max_w << "x" << max_h << "), skipping\n";
-        atlas_ready_ = true; // do not retry every frame
-        return;
-    }
-    if (atlas_w_ * atlas_h_ <= 0) {
+    atlas_w_ = pot(std::max(max_w, 64));
+    atlas_h_ = pot(std::max(max_h, 64));
+    if (places.empty() || atlas_w_ * atlas_h_ <= 0) {
+        std::cerr << "kurvenrausch: sprite atlas empty, sprites use solo textures\n";
         atlas_ready_ = true;
         return;
+    }
+    if (skipped > 0) {
+        std::cerr << "kurvenrausch: sprite atlas packed " << places.size() << "/"
+                  << places.size() + skipped << " (" << atlas_w_ << "x" << atlas_h_ << "), "
+                  << skipped << " solo\n";
     }
 
     g.GenTextures(1, &atlas_tex_);
@@ -948,8 +958,6 @@ void GlesRenderer::ensure_sprite_atlas(const SpriteSheet& sprites) {
         if (g.TexSubImage2D) {
             g.TexSubImage2D(GL_TEXTURE_2D_, 0, pl.x, pl.y, bmp.w, bmp.h, GL_RGBA_, GL_UNSIGNED_BYTE_, rgba.data());
         }
-        // UVs must match TexSubImage(x, y): client row 0 is at texture y (v = y/H).
-        // Same convention as a solo texture (v0 = top of bitmap = first pixel row).
         const float u0 = static_cast<float>(pl.x) / static_cast<float>(atlas_w_);
         const float v0 = static_cast<float>(pl.y) / static_cast<float>(atlas_h_);
         const float u1 = static_cast<float>(pl.x + bmp.w) / static_cast<float>(atlas_w_);
