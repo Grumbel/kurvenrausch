@@ -230,6 +230,59 @@ Bitmap make_fuel_pump() {
 }
 
 // A tall sign on a pole: FUEL, a pump symbol and the price.
+// An advance sign for a lot: a blue panel on two posts, white bordered,
+// what is ahead over how far it is. The white is retroreflective: marked as
+// a light, so it reads at night too.
+constexpr int advance_sign_w = 144, advance_sign_h = 112, advance_panel_h = 62;
+
+Bitmap make_advance_sign(const char* what, const char* distance) {
+    Bitmap b(advance_sign_w, advance_sign_h);
+    const int w = advance_sign_w, ph = advance_panel_h;
+    const Color blue{0x1c, 0x48, 0xa8}, white = glowing(Color{0xe8, 0xec, 0xf0});
+    const Color post{0x9a, 0x9a, 0xa4}, post_dark{0x6c, 0x6c, 0x74};
+    for (int x : {22, w - 28}) {
+        paint::rect(b, x, ph - 2, 6, advance_sign_h - ph + 2, post);
+        paint::rect(b, x + 4, ph - 2, 2, advance_sign_h - ph + 2, post_dark);
+    }
+    paint::rect(b, 0, 0, w, ph, blue);
+    paint::rect(b, 3, 3, w - 6, 2, white);
+    paint::rect(b, 3, ph - 5, w - 6, 2, white);
+    paint::rect(b, 3, 3, 2, ph - 6, white);
+    paint::rect(b, w - 5, 3, 2, ph - 6, white);
+    paint::text(b, (w - font::text_width(what, 2)) / 2, 11, what, white, 2);
+    paint::rect(b, 14, 30, w - 28, 2, white);
+    paint::text(b, (w - font::text_width(distance, 2)) / 2, 38, distance, white, 2);
+    paint::outline(b, Outline);
+    return b;
+}
+
+// Its back, as seen in the mirror: the bare panel on its posts.
+Bitmap make_advance_sign_back() {
+    Bitmap b(advance_sign_w, advance_sign_h);
+    const int w = advance_sign_w, ph = advance_panel_h;
+    const Color back{0x8c, 0x90, 0x98}, post{0x9a, 0x9a, 0xa4};
+    for (int x : {22, w - 28}) paint::rect(b, x, ph - 2, 6, advance_sign_h - ph + 2, post);
+    paint::rect(b, 0, 0, w, ph, back);
+    paint::rect(b, 0, ph / 2 - 2, w, 4, Color{0x70, 0x74, 0x7c}); // the rail it is bolted to
+    paint::outline(b, Outline);
+    return b;
+}
+
+// What the advance signs call each lot: short, to be read at speed.
+const char* advance_sign_word(Lot kind) {
+    switch (kind) {
+        case Lot::Gas: return "FUEL";
+        case Lot::Dealer: return "CAR DEALER";
+        case Lot::Wash: return "CAR WASH";
+        case Lot::Motel: return "MOTEL";
+        case Lot::Hospital: return "HOSPITAL";
+        case Lot::Truckstop: return "TRUCK STOP";
+        case Lot::SportsDealer: return "SPORTS CARS";
+        case Lot::Chemical: return "NITRO";
+    }
+    return "";
+}
+
 Bitmap make_fuel_sign() {
     Bitmap b(44, 112);
     const Color red{0xc8, 0x20, 0x20}, white{0xf4, 0xf4, 0xf4}, ink{0x20, 0x20, 0x28};
@@ -3208,6 +3261,8 @@ void SpriteSheet::append_static_bitmaps(std::vector<const Bitmap*>& out) const {
         add(scenery_lit_[i]);
     }
     add(billboard_back_);
+    for (const Bitmap& b : advance_sign_) add(b);
+    add(advance_sign_back_);
     add(tunnel_wall_);
     for (const Bitmap& b : cliff_faces_) add(b);
     for (const Bitmap& b : cliff_faces_snow_) add(b);
@@ -3458,6 +3513,15 @@ SpriteSheet::SpriteSheet() {
         }
     }
     billboard_back_ = make_billboard_back();
+    for (int k = 0; k < lot_kinds; ++k) {
+        for (int d = 0; d < advance_sign_distances; ++d) {
+            advance_sign_[advance_sign_variant(static_cast<Lot>(k), d)] =
+                make_advance_sign(advance_sign_word(static_cast<Lot>(k)),
+                                  (std::to_string(advance_sign_metres[d]) + " M").c_str());
+        }
+    }
+    advance_sign_back_ = make_advance_sign_back();
+    scenery_[static_cast<size_t>(Scenery::AdvanceSign)] = advance_sign_[0];
     scenery_[static_cast<size_t>(Scenery::GasStation)] = make_gas_station();
     scenery_[static_cast<size_t>(Scenery::FuelPump)] = make_fuel_pump();
     scenery_[static_cast<size_t>(Scenery::FuelSign)] = make_fuel_sign();

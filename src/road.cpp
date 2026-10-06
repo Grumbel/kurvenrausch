@@ -480,8 +480,8 @@ void RoadRenderer::draw_sprites(Framebuffer& fb, const Track& track, const Sprit
             // Horn at night: light every window on nearby buildings.
             const bool wake = window_wake_ > 0.f && p0.cam_z < window_wake_ &&
                               SpriteSheet::scenery_has_windows(obj.kind);
-            const Bitmap& bmp = direction_ > 0 ? sprites.scenery(obj.kind, wake)
-                                              : sprites.scenery_back(obj.kind, wake);
+            const Bitmap& bmp = direction_ > 0 ? sprites.scenery(obj, wake)
+                                              : sprites.scenery_back(obj, wake);
             // TunnelPortal: size the sprite so the opening top (open_frac of the
             // bitmap from the base) lands on the tunnel ceiling. Plain aspect
             // scaling with x_scale made the doorway taller than the ceiling and

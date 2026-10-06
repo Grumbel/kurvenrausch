@@ -1918,7 +1918,7 @@ void GlesRenderer::draw_sprites(const Track& track, const SpriteSheet& sprites, 
             if (info.centered) left -= width / 2.f;
             else if (obj.offset < 0.f) left -= width;
             const bool wake = window_wake_ > 0.f && p0.cam_z < window_wake_ && SpriteSheet::scenery_has_windows(obj.kind);
-            const Bitmap& bmp = direction_ > 0 ? sprites.scenery(obj.kind, wake) : sprites.scenery_back(obj.kind, wake);
+            const Bitmap& bmp = direction_ > 0 ? sprites.scenery(obj, wake) : sprites.scenery_back(obj, wake);
             float height = width * static_cast<float>(bmp.h) / static_cast<float>(std::max(1, bmp.w));
             if (obj.kind == Scenery::TunnelPortal) {
                 // Opening 72×36 in 256×128; match hole to tunnel interior width/height.

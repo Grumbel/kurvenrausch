@@ -90,6 +90,7 @@ enum class Scenery : uint8_t {
     Tower,        // a glass office tower
     FlatHouse,    // a flat-roofed house of sandstone or plaster, warm climates
     GoldenGate,   // San Francisco: Art Deco tower portal you drive through (the road is the bridge)
+    AdvanceSign,  // a lot ahead, and how far: its variant is advance_sign_variant()
     Count
 };
 
@@ -148,7 +149,21 @@ struct RoadsideObject {
     // edges. Unless centred, the object's inner edge sits at this offset, so it
     // extends away from the road.
     float offset;
+    uint8_t variant = 0; // which one of a kind (AdvanceSign: see advance_sign_variant())
 };
+
+// The advance signs before each lot: a far one at 500 m (or, where there
+// is no room for it, 400 or 300 m) and a near one at 200 m (or 100 m). A
+// sign says how far it stands from the forecourt, at the speedometer's
+// scale (top speed, 293 km/h, is 60 segments a second: 1.36 m a segment).
+constexpr int advance_sign_distances = 5;
+constexpr int advance_sign_metres[advance_sign_distances] = {500, 400, 300, 200, 100};
+constexpr int advance_sign_segments(int distance) {
+    return (advance_sign_metres[distance] * 216 + 146) / 293;
+}
+constexpr uint8_t advance_sign_variant(Lot kind, int distance) {
+    return static_cast<uint8_t>(static_cast<int>(kind) * advance_sign_distances + distance);
+}
 
 struct Segment {
     float curve = 0.f;     // lateral bend per segment (positive bends right)

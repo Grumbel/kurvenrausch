@@ -1574,6 +1574,51 @@ void test_yield_lane() {
     CHECK(yield_lane(3, 0.f, 0.07f, 0.45f, free3) == 0);
 }
 
+void test_advance_signs() {
+    using namespace racer;
+    for (int t = 0; t < track_count; ++t) {
+        const Track tr = build_track(t);
+        const int n = static_cast<int>(tr.segments.size());
+        // Every sign tells the truth: the next forecourt of its kind starts
+        // as far ahead as it says (it may stand up to 20 segments farther back).
+        for (int i = 0; i < n; ++i) {
+            for (const RoadsideObject& o : tr.segments[static_cast<size_t>(i)].scenery) {
+                if (o.kind != Scenery::AdvanceSign) continue;
+                const auto kind = static_cast<Lot>(o.variant / advance_sign_distances);
+                const int want = advance_sign_segments(o.variant % advance_sign_distances);
+                int ahead = 1;
+                while (ahead < n) {
+                    const Segment& s = tr.segments[static_cast<size_t>((i + ahead) % n)];
+                    if (s.forecourt > 0.f && s.lot == kind) break;
+                    ++ahead;
+                }
+                CHECK(ahead >= want && ahead < want + 20);
+                CHECK(std::abs(o.offset) >= 1.1f);
+            }
+        }
+        // And nearly every lot has both, a far and a near one (not where
+        // another of its kind comes shortly before it), hardly any none
+        // (walled in by cliffs and rails all the way).
+        int lots = 0, both = 0, none = 0;
+        for (int k = 0; k < lot_kinds; ++k) {
+            for (int start : tr.lots(static_cast<Lot>(k))) {
+                ++lots;
+                bool far = false, near = false;
+                for (int back = 1; back < advance_sign_segments(0) + 40; ++back) {
+                    for (const RoadsideObject& o : tr.segments[static_cast<size_t>(((start - back) % n + n) % n)].scenery) {
+                        if (o.kind != Scenery::AdvanceSign || o.variant / advance_sign_distances != k) continue;
+                        (o.variant % advance_sign_distances < 3 ? far : near) = true;
+                    }
+                }
+                both += far && near;
+                none += !far && !near;
+            }
+        }
+        CHECK(lots > 0 && both * 100 >= lots * 85 && none * 100 <= lots * 5);
+    }
+    CHECK(advance_sign_segments(0) == 369 && advance_sign_segments(4) == 74);
+}
+
 void test_gas_stations() {
     using namespace racer;
     const Track t = build_demo_track();
@@ -2742,6 +2787,7 @@ int main() {
     test_car_models();
     test_track_map();
     test_gas_stations();
+    test_advance_signs();
     test_wet_spots();
     test_san_francisco();
     test_branches();

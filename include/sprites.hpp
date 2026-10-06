@@ -154,6 +154,16 @@ public:
     const Bitmap& scenery_back(Scenery kind, bool windows_lit = false) const {
         return is_billboard(kind) ? billboard_back_ : scenery(kind, windows_lit);
     }
+    // The same for a planted object, which may be one of several of its kind
+    // (the advance signs).
+    const Bitmap& scenery(const RoadsideObject& obj, bool windows_lit = false) const {
+        if (obj.kind == Scenery::AdvanceSign) return advance_sign_[obj.variant % advance_sign_.size()];
+        return scenery(obj.kind, windows_lit);
+    }
+    const Bitmap& scenery_back(const RoadsideObject& obj, bool windows_lit = false) const {
+        if (obj.kind == Scenery::AdvanceSign) return advance_sign_back_;
+        return scenery_back(obj.kind, windows_lit);
+    }
     // Rock faces for Edge::Cliff (not planted as scenery). Several slope
     // silhouettes; snowy set for alpine themes (grey rock + snow cap).
     static constexpr int cliff_faces = 5;
@@ -274,6 +284,8 @@ private:
     };
     std::array<std::vector<VehicleSprites>, static_cast<size_t>(Vehicle::Count)> vehicles_; // [kind][style]
     Bitmap billboard_back_;
+    std::array<Bitmap, lot_kinds * advance_sign_distances> advance_sign_; // by advance_sign_variant()
+    Bitmap advance_sign_back_;
     std::array<Bitmap, cliff_faces> cliff_faces_;
     std::array<Bitmap, cliff_faces> cliff_faces_snow_;
     Bitmap tunnel_wall_;

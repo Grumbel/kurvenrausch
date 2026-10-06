@@ -91,6 +91,7 @@ const SceneryInfo& scenery_info(Scenery kind) {
         /* Tower     */ {3200.f, true,  false, true},
         /* FlatHouse */ {2400.f, true,  false, true},
         /* GoldenGate*/ {7200.f, false, true,  false},
+        /* AdvanceSign*/{1700.f, true,  false, false},
     };
     static_assert(sizeof(infos) / sizeof(infos[0]) == static_cast<size_t>(Scenery::Count),
                   "scenery_info() needs an entry for every Scenery kind");
@@ -596,6 +597,29 @@ public:
         const auto scenery = [&](int index, Scenery what, float offset) {
             this->scenery(index, what, offset * static_cast<float>(side));
         };
+        // Signs well before it, so a driver at speed can still pull in.
+        // The far sign at the first distance with room, on its side of the
+        // road if possible, else on the other; then the near one.
+        const auto advance = [&](int first, int last) {
+            for (int d = first; d <= last; ++d) {
+                for (const int8_t on : {side, static_cast<int8_t>(-side)}) {
+                    const int at = free_for_sign(from + start - advance_sign_segments(d), on);
+                    if (at < 0) continue;
+                    // Not where another one of its kind comes first: that is the one it would mean.
+                    bool other = false;
+                    for (int i = at; i < from && !other; ++i) {
+                        const Segment& seg = t_.segments[static_cast<size_t>(i)];
+                        other = seg.forecourt > 0.f && seg.lot == kind;
+                    }
+                    if (other) break; // nor nearer on the other side
+                    t_.segments[static_cast<size_t>(at)].scenery.push_back(
+                        {Scenery::AdvanceSign, 1.25f * static_cast<float>(on), advance_sign_variant(kind, d)});
+                    return;
+                }
+            }
+        };
+        advance(0, 2);
+        advance(3, 4);
         // The sign ahead, the building beyond the forecourt.
         switch (kind) {
             case Lot::Gas:
@@ -664,6 +688,8 @@ public:
         std::vector<Segment> routes[2];
         int middle[2] = {0, 0};
         const std::function<void()>* builds[2] = {&left, &right};
+        const int outer_route = route_start_;
+        route_start_ = start; // signs for what is on one route stay on it
         for (int r = 0; r < 2; ++r) {
             t_.segments.resize(static_cast<size_t>(start));
             part(r == 0 ? -1.f : 1.f);
@@ -672,6 +698,7 @@ public:
             middle[r] = size() - before;
             routes[r].assign(t_.segments.begin() + start, t_.segments.end());
         }
+        route_start_ = outer_route;
         const int longest = std::max(middle[0], middle[1]) + 30;
         for (int r = 0; r < 2; ++r) {
             t_.segments.resize(static_cast<size_t>(start));
@@ -752,7 +779,35 @@ public:
         t_.segments[static_cast<size_t>(index)].scenery.push_back({kind, offset});
     }
 
+    // A segment at or a little (up to 20 segments, some 25 m) before `index` where a sign can stand on
+    // `side`: on plain road (no lot, tunnel, crossing or fork, and on the
+    // route being built), nothing else standing close by on that side;
+    // -1 for none.
+    int free_for_sign(int index, int side) const {
+        for (int i = index; i > index - 20; --i) {
+            if (i < route_start_ || i >= size()) continue;
+            const Segment& s = t_.segments[static_cast<size_t>(i)];
+            if (s.tunnel || s.rails || s.checker || (side < 0 ? s.left : s.right) != Edge::None) continue;
+            const bool in_fork = std::any_of(t_.branches.begin(), t_.branches.end(), [&](const Branch& b) {
+                return i >= b.fork && i < b.fork + b.length;
+            });
+            if (in_fork) continue;
+            bool crowded = false;
+            for (int j = std::max(0, i - 8); j <= std::min(size() - 1, i + 8) && !crowded; ++j) {
+                crowded = t_.segments[static_cast<size_t>(j)].forecourt > 0.f; // a lot and its tapers
+                // Its own footprint (offsets 1.25 .. 2.1) clear, a little either way.
+                if (std::abs(j - i) > 2) continue;
+                for (const RoadsideObject& o : t_.segments[static_cast<size_t>(j)].scenery) {
+                    if (o.offset * static_cast<float>(side) > 0.f && std::abs(o.offset) < 2.2f) crowded = true;
+                }
+            }
+            if (!crowded) return i;
+        }
+        return -1;
+    }
+
 private:
+    int route_start_ = 0; // building a fork's route: its first segment
     float last_y() const { return t_.segments.empty() ? 0.f : t_.segments.back().y2; }
 
     void add(float curve, float y) {
