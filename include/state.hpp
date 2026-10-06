@@ -42,6 +42,14 @@ struct Choices {
     int fullscreen = 0;  // 1: start in fullscreen
     int muted = 0;       // 1: sound off
     int present = 0;     // PresentBackend: 0 Auto, 1 SDL, 2 GL
+    int scene = 0;       // SceneBackend: 0 Auto, 1 Software, 2 Gles
+    // Debug / VIDEO toggles (were reset every run).
+    int dbg_hud = 1;
+    int dbg_mirror = 1;
+    int dbg_map = 1;
+    int dbg_headlights = 1;
+    int dbg_weather = 1; // weather overlay
+    int dbg_fps = 0;
 };
 // As "key value" lines; parsing skips unknown keys and malformed lines and
 // keeps the defaults for what is missing.

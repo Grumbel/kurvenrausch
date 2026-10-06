@@ -326,6 +326,13 @@ bool Game::init(bool fullscreen) {
         options_ = c->options;
         apply_options(before);
         apply_car();
+        scene_backend_ = static_cast<SceneBackend>(std::clamp(c->scene, 0, 2));
+        debug_.hud = c->dbg_hud != 0;
+        debug_.mirror = c->dbg_mirror != 0;
+        debug_.map = c->dbg_map != 0;
+        debug_.headlights = c->dbg_headlights != 0;
+        debug_.weather = c->dbg_weather != 0;
+        debug_.fps = c->dbg_fps != 0;
     }
 
     display_ = std::make_unique<Display>();
@@ -527,6 +534,7 @@ bool Game::frame() {
         // F8 flips the effective path only (GLES ↔ software), never Auto.
         scene_backend_ = use_gles_ ? SceneBackend::Software : SceneBackend::Gles;
         apply_scene_backend();
+        save_choices();
         std::cout << "Kurvenrausch: scene renderer " << scene_backend_name(scene_backend_)
                   << (use_gles_ ? " (GLES active)" : " (software active)") << "\n";
     }
@@ -936,6 +944,7 @@ bool Game::update_pause(const InputState& input) {
             options_.time = TimeSetting::Cycle;
         }
         if (car_model_ != car_before) apply_car();
+        save_choices(); // debug toggles + car/driver/passenger/hour
         if (close) {
             if (debug_menu_.selected == DebugMenu::Sprites)
                 run_sprite_viewer_session(*display_, input_, sprites_);
@@ -1423,9 +1432,28 @@ void Game::fixed_update(const InputState& driver_input, float dt) {
 // The player's car takes its model's top speed and acceleration (grip is
 // applied where the road's grip is).
 void Game::save_choices() const {
-    Choices c{car_model_, driver_, passenger_ >= motel_passengers ? nobody : passenger_, static_cast<int>(view_mode_), music_, wide_ ? 1 : 0, track_index_, options_,
-              -1, -1, -1, engine_vol_, music_vol_, pixel_scale_ >= 2 ? 1 : 0,
-              display_ && display_->is_fullscreen() ? 1 : 0, muted_ ? 1 : 0, static_cast<int>(present_backend_)};
+    Choices c{};
+    c.car = car_model_;
+    c.driver = driver_;
+    c.passenger = passenger_ >= motel_passengers ? nobody : passenger_;
+    c.view = static_cast<int>(view_mode_);
+    c.music = music_;
+    c.wide = wide_ ? 1 : 0;
+    c.track = track_index_;
+    c.options = options_;
+    c.engine_vol = engine_vol_;
+    c.music_vol = music_vol_;
+    c.hd = pixel_scale_ >= 2 ? 1 : 0;
+    c.fullscreen = display_ && display_->is_fullscreen() ? 1 : 0;
+    c.muted = muted_ ? 1 : 0;
+    c.present = static_cast<int>(present_backend_);
+    c.scene = static_cast<int>(scene_backend_);
+    c.dbg_hud = debug_.hud ? 1 : 0;
+    c.dbg_mirror = debug_.mirror ? 1 : 0;
+    c.dbg_map = debug_.map ? 1 : 0;
+    c.dbg_headlights = debug_.headlights ? 1 : 0;
+    c.dbg_weather = debug_.weather ? 1 : 0;
+    c.dbg_fps = debug_.fps ? 1 : 0;
     // Where the race is, to go on from there next time; following the
     // traffic in the attract mode, where it was.
     if (!attract_) {

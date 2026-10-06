@@ -9,9 +9,8 @@
 
 namespace racer {
 
-// Technical toggles for development: the pause menu's DEBUG page. Not saved
-// with the player's game options; they reset each run. Weather FX and FPS
-// live on the VIDEO page (still stored in DebugOptions).
+// Technical toggles for development: the pause menu's DEBUG page. Persisted
+// in choices (dbg_*). Weather FX and FPS also live on the VIDEO page.
 struct DebugOptions {
     bool hud = true;        // lap times, speedo, bars
     bool mirror = true;     // rear-view mirror

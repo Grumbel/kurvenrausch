@@ -399,8 +399,21 @@ void GlesRenderer::invalidate() {
     depth_rb_ = 0;
     light_fbo_ = 0;
     light_tex_ = 0;
+    night_fbo_ = 0;
+    night_tex_ = 0;
+    ground_fbo_ = 0;
+    ground_tex_ = 0;
+    emissive_tex_ = 0;
+    present_tex_ = 0;
     fbo_w_ = fbo_h_ = 0;
     textures_.clear();
+    // Must clear atlas state — otherwise atlas_ready_ stays true with dead GL
+    // names after F8/software switch and every sprite becomes a solo texture.
+    atlas_pages_.clear();
+    atlas_tex_ = 0;
+    atlas_w_ = atlas_h_ = 0;
+    atlas_ready_ = false;
+    white_u_ = white_v_ = 0.f;
     // Force load_gl to re-resolve entry points if needed.
     g = {};
 }

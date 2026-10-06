@@ -2,6 +2,13 @@
 
 ## Current tip
 
+### Grok: F8 atlas rebuild + persist debug/scene settings
+- invalidate() left atlas_ready_ true with dead GL names → 160 draws after
+  software↔GLES. Now clears atlas_pages_/atlas_ready_.
+- Choices saves scene backend + debug toggles (hud/mirror/map/headlights/
+  weather FX/fps); loaded on init; F8 and DEBUG menu write them.
+
+
 ### Grok: player headlight stays on beam.center
 - Following row_center_x put the cone beside the car. Player is screen-centred;
   headlight is camera-relative. row_center_x remains for traffic lamp pools only.

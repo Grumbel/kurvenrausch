@@ -105,6 +105,13 @@ Choices parse_choices(std::string_view text) {
         else if (key == "fullscreen") c.fullscreen = value;
         else if (key == "muted") c.muted = value;
         else if (key == "present") c.present = value;
+        else if (key == "scene") c.scene = value;
+        else if (key == "dbg_hud") c.dbg_hud = value;
+        else if (key == "dbg_mirror") c.dbg_mirror = value;
+        else if (key == "dbg_map") c.dbg_map = value;
+        else if (key == "dbg_headlights") c.dbg_headlights = value;
+        else if (key == "dbg_weather") c.dbg_weather = value;
+        else if (key == "dbg_fps") c.dbg_fps = value;
     }
     c.options = clamped(c.options);
     c.engine_vol = std::clamp(c.engine_vol, 0, max_volume);
