@@ -2,6 +2,12 @@
 
 ## Current tip
 
+### Grok: F8 one-shot + GLES sprite atmosphere fog
+- `Input::poll` never cleared `toggle_renderer`, so F8 stayed true and cycled every frame.
+- Textured GLES sprites used multiply-by-fogged-white (wrong); fragment shader now
+  `mix(tex * daylight, fog_air * daylight, fog_amount)` like software `blit_scaled`.
+
+
 ### Grok: --renderer actually applied in main
 -  was written but never used; call  before init.
 

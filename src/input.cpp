@@ -97,6 +97,7 @@ void Input::poll(InputState& state) {
     state.toggle_fullscreen = false;
     state.toggle_mute = false;
     state.change_view = false;
+    state.toggle_renderer = false;
     state.toggle_map = false;
     state.toggle_headlights = state.signal_left = state.signal_right = state.toggle_hazards = false;
     state.change_music = 0;

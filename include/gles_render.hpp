@@ -97,6 +97,7 @@ private:
     int u_screen_ = -1;
     int u_use_tex_ = -1;
     int u_tex_ = -1;
+    int u_fog_air_ = -1;
 
     unsigned fbo_ = 0;
     unsigned color_tex_ = 0;

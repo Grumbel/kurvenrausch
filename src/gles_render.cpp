@@ -82,6 +82,7 @@ struct GlApi {
     int (*GetUniformLocation)(unsigned, const char*) = nullptr;
     void (*Uniform1i)(int, int) = nullptr;
     void (*Uniform2f)(int, float, float) = nullptr;
+    void (*Uniform3f)(int, float, float, float) = nullptr;
     void (*GenBuffers)(int, unsigned*) = nullptr;
     void (*DeleteBuffers)(int, const unsigned*) = nullptr;
     void (*BindBuffer)(unsigned, unsigned) = nullptr;
@@ -141,6 +142,7 @@ bool load_gl() {
     g.GetUniformLocation = load<decltype(g.GetUniformLocation)>("glGetUniformLocation");
     g.Uniform1i = load<decltype(g.Uniform1i)>("glUniform1i");
     g.Uniform2f = load<decltype(g.Uniform2f)>("glUniform2f");
+    g.Uniform3f = load<decltype(g.Uniform3f)>("glUniform3f");
     g.GenBuffers = load<decltype(g.GenBuffers)>("glGenBuffers");
     g.DeleteBuffers = load<decltype(g.DeleteBuffers)>("glDeleteBuffers");
     g.BindBuffer = load<decltype(g.BindBuffer)>("glBindBuffer");
@@ -215,10 +217,18 @@ const char* k_frag =
     "varying vec4 v_col;\n"
     "uniform sampler2D u_tex;\n"
     "uniform int u_use_tex;\n"
+    "uniform vec3 u_fog_air;\n"
     "void main(){\n"
-    "  vec4 t = u_use_tex != 0 ? texture2D(u_tex, v_uv) : vec4(1.0);\n"
-    "  if (u_use_tex != 0 && t.a < 0.01) discard;\n"
-    "  gl_FragColor = t * v_col;\n"
+    "  if (u_use_tex != 0) {\n"
+    "    vec4 t = texture2D(u_tex, v_uv);\n"
+    "    if (t.a < 0.01) discard;\n"
+    "    // v_col.rgb = daylight scale, v_col.a = fog amount (software blit mix).\n"
+    "    vec3 lit = t.rgb * v_col.rgb;\n"
+    "    float fa = v_col.a;\n"
+    "    gl_FragColor = vec4(mix(lit, u_fog_air, fa), t.a);\n"
+    "  } else {\n"
+    "    gl_FragColor = v_col;\n"
+    "  }\n"
     "}\n";
 #else
     "#version 110\n"
@@ -226,10 +236,17 @@ const char* k_frag =
     "varying vec4 v_col;\n"
     "uniform sampler2D u_tex;\n"
     "uniform int u_use_tex;\n"
+    "uniform vec3 u_fog_air;\n"
     "void main(){\n"
-    "  vec4 t = u_use_tex != 0 ? texture2D(u_tex, v_uv) : vec4(1.0);\n"
-    "  if (u_use_tex != 0 && t.a < 0.01) discard;\n"
-    "  gl_FragColor = t * v_col;\n"
+    "  if (u_use_tex != 0) {\n"
+    "    vec4 t = texture2D(u_tex, v_uv);\n"
+    "    if (t.a < 0.01) discard;\n"
+    "    vec3 lit = t.rgb * v_col.rgb;\n"
+    "    float fa = v_col.a;\n"
+    "    gl_FragColor = vec4(mix(lit, u_fog_air, fa), t.a);\n"
+    "  } else {\n"
+    "    gl_FragColor = v_col;\n"
+    "  }\n"
     "}\n";
 #endif
 
@@ -347,6 +364,7 @@ bool GlesRenderer::init() {
     u_screen_ = g.GetUniformLocation(program_, "u_screen");
     u_use_tex_ = g.GetUniformLocation(program_, "u_use_tex");
     u_tex_ = g.GetUniformLocation(program_, "u_tex");
+    u_fog_air_ = g.GetUniformLocation(program_, "u_fog_air");
     g.GenBuffers(1, &vbo_);
     return true;
 }
@@ -568,9 +586,9 @@ void GlesRenderer::draw_backdrop(const RoadTheme& theme, const Background* backd
         const float x = wrap(c.x - offset, period);
         for (float rep : {x, x - period}) {
             if (rep + bw <= 0.f || rep >= wf) continue;
+            // Cloud tint in RGB (daylight already applied); haze as fog amount in A.
             Color tint = fogged(Color{255, 255, 255}, theme.cloud_tint, theme.cloud_tint_amount * 0.5f, daylight_);
-            // fog toward air a little
-            tint = fogged(tint, fog_air_, theme.haze * 0.25f, 1.f);
+            tint.a = static_cast<uint8_t>(std::min(255.f, theme.haze * 0.25f * 255.f + 0.5f));
             push_quad(rep, horizon - c.altitude, bw, bh, 0.f, 0.f, 1.f, 1.f, tint, false);
             flush_textured(tex);
         }
@@ -802,7 +820,9 @@ void GlesRenderer::draw_sprites(const Track& track, const SpriteSheet& sprites, 
             const float width = std::max(track.segment_length * ppu * segs, height * 1.05f);
             if (!(height > 2.f) || !(width > 2.f)) return;
             const float left = side < 0 ? xa - width : xa;
-            Color tint = fogged(Color{255, 255, 255}, fog_air_, fog_amount, daylight_);
+            const uint8_t day = static_cast<uint8_t>(std::min(255.f, daylight_ * 255.f + 0.5f));
+            const uint8_t fa = static_cast<uint8_t>(std::min(255.f, fog_amount * 255.f + 0.5f));
+            Color tint{day, day, day, fa};
             const unsigned tex = texture_for(cliff);
             if (!tex) return;
             flush_solid();
@@ -831,7 +851,9 @@ void GlesRenderer::draw_sprites(const Track& track, const SpriteSheet& sprites, 
                 height = (tunnel_height * p0.scale * y_scale_) / open_frac;
             }
             const bool flip = info.mirrorable && obj.offset < 0.f;
-            Color tint = fogged(Color{255, 255, 255}, fog_air_, fog_amount, daylight_);
+            const uint8_t day = static_cast<uint8_t>(std::min(255.f, daylight_ * 255.f + 0.5f));
+            const uint8_t fa = static_cast<uint8_t>(std::min(255.f, fog_amount * 255.f + 0.5f));
+            Color tint{day, day, day, fa};
             const unsigned tex = texture_for(bmp);
             if (!tex) return;
             flush_solid();
@@ -859,10 +881,9 @@ void GlesRenderer::draw_sprites(const Track& track, const SpriteSheet& sprites, 
         auto draw_object = [&](const RoadSprite& o) {
             const Bitmap& bmp = *o.bitmap;
             if (o.fixed) {
-                Color tint{255, 255, 255};
-                tint.r = static_cast<uint8_t>(std::min(255.f, tint.r * daylight_ + 0.5f));
-                tint.g = static_cast<uint8_t>(std::min(255.f, tint.g * daylight_ + 0.5f));
-                tint.b = static_cast<uint8_t>(std::min(255.f, tint.b * daylight_ + 0.5f));
+                // Fixed sprites (player car, etc.) sit on the near plane: fog amount 0.
+                const uint8_t day = static_cast<uint8_t>(std::min(255.f, daylight_ * 255.f + 0.5f));
+                Color tint{day, day, day, 0};
                 const unsigned tex = texture_for(bmp);
                 if (!tex) return;
                 flush_solid();
@@ -880,7 +901,9 @@ void GlesRenderer::draw_sprites(const Track& track, const SpriteSheet& sprites, 
             const float width = o.world_width * px;
             const float height = width * static_cast<float>(bmp.h) / static_cast<float>(std::max(1, bmp.w));
             const float cx = x + o.offset * track.half_width_at(o.z) * px;
-            Color tint = fogged(Color{255, 255, 255}, fog_air_, fog_amount, daylight_);
+            const uint8_t day = static_cast<uint8_t>(std::min(255.f, daylight_ * 255.f + 0.5f));
+            const uint8_t fa = static_cast<uint8_t>(std::min(255.f, fog_amount * 255.f + 0.5f));
+            Color tint{day, day, day, fa};
             const unsigned tex = texture_for(bmp);
             if (!tex) return;
             flush_solid();
@@ -1179,6 +1202,13 @@ void GlesRenderer::render(const Track& track, const RoadView& view, const Sprite
     g.BlendFunc(GL_SRC_ALPHA_, GL_ONE_MINUS_SRC_ALPHA_);
     g.UseProgram(program_);
     g.Uniform2f(u_screen_, static_cast<float>(width_), static_cast<float>(height_));
+    if (g.Uniform3f && u_fog_air_ >= 0) {
+        const float d = daylight_;
+        g.Uniform3f(u_fog_air_,
+                    fog_air_.r / 255.f * d,
+                    fog_air_.g / 255.f * d,
+                    fog_air_.b / 255.f * d);
+    }
 
     clear_batch();
     draw_backdrop(theme, backdrop, hour, horizon);
