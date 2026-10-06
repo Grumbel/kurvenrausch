@@ -166,6 +166,7 @@ private:
     unsigned active_tex_ = 0; // GL texture for the current textured_ batch
     std::vector<Slice> slices_;
     std::vector<float> row_depth_;
+    std::vector<float> row_center_x_;
     std::vector<LampSpot> lamps_;
     // CPU clip for solid/textured pushes (avoids GL scissor flushes per slice).
     int draw_clip_x0_ = 0, draw_clip_y0_ = 0, draw_clip_x1_ = 0, draw_clip_y1_ = 0;

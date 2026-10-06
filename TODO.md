@@ -2,6 +2,10 @@
 
 ## Current tip
 
+### Grok: declare row_center_x_ member
+- Accessor was added without the private vector — compile fix.
+
+
 ### Grok: multi-page sprite atlas
 - Overflow no longer uses solo textures per sprite. Extra 4096² atlas pages
   hold the rest so every static vehicle stays on an atlas texture.
