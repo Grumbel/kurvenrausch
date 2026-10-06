@@ -22,8 +22,10 @@ GAMEDIR="/$directory/ports/kurvenrausch"
 cd "$GAMEDIR" || exit 1
 > "$GAMEDIR/log.txt" && exec > >(tee "$GAMEDIR/log.txt") 2>&1
 
-# Lap times and choices stay with the port.
+# Lap times and choices stay with the port (not under ~/.local — SD card only).
+mkdir -p "$GAMEDIR/conf"
 export XDG_STATE_HOME="$GAMEDIR/conf"
+export KURVENRAUSCH_STATE_DIR="$GAMEDIR/conf"
 # The pad's layout from PortMaster, for SDL's game controller API.
 export SDL_GAMECONTROLLERCONFIG="$sdl_controllerconfig"
 

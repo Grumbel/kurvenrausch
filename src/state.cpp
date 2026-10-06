@@ -33,7 +33,16 @@ void persist() {
 } // namespace
 
 std::string state_dir(const char* xdg_state_home, const char* home) {
-    if (xdg_state_home && xdg_state_home[0] == '/') return (fs::path(xdg_state_home) / "kurvenrausch").string();
+    // PortMaster / handheld: explicit root (e.g. /roms/ports/kurvenrausch/conf).
+    if (const char* forced = std::getenv("KURVENRAUSCH_STATE_DIR"); forced && forced[0] == '/')
+        return forced;
+    if (xdg_state_home && xdg_state_home[0] == '/') {
+        const fs::path base(xdg_state_home);
+        // PortMaster sets XDG_STATE_HOME to the port's conf/ directory itself —
+        // do not nest another kurvenrausch/ under it.
+        if (base.filename() == "conf") return base.string();
+        return (base / "kurvenrausch").string();
+    }
     if (home && home[0] == '/') return (fs::path(home) / ".local" / "state" / "kurvenrausch").string();
     return {};
 }

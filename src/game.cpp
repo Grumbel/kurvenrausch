@@ -684,8 +684,7 @@ void Game::draw_touch() {
 
 void Game::present() {
     draw_touch();
-    if (use_gles_ && !paused_ && !options_open_ && !video_open_ && !audio_open_ && !debug_open_ &&
-        gles_.color_texture()) {
+    if (use_gles_ && gles_.color_texture()) {
         display_->present_gles_scene(gles_.color_texture(), gles_.texture_width(), gles_.texture_height(),
                                      fb_.pixels(), overlay_);
     } else {
@@ -2748,14 +2747,9 @@ void Game::render() {
             weather_ptr = &weather_;
         gles_.render(track_, view, sprites_, road_sprites_, look, scene_light, &background_, hour_, beam_ptr,
                      weather_ptr);
-        // Pause / options: full software frame underneath the menus.
-        if (paused_ || options_open_ || video_open_ || audio_open_ || debug_open_) {
-            background_.render(fb_, look, hour_);
-            road_.render(fb_, track_, view, sprites_, road_sprites_);
-        } else {
-            // Transparent buffer so only HUD / cockpit pixels composite over GLES.
-            std::fill(fb_.pixels_mut(), fb_.pixels_mut() + width_ * fb_height(), 0u);
-        }
+        // Transparent buffer so only HUD / menus / cockpit composite over the
+        // GLES scene (including pause and options — no software backdrop).
+        std::fill(fb_.pixels_mut(), fb_.pixels_mut() + width_ * fb_height(), 0u);
     } else {
         background_.render(fb_, look, hour_);
         road_.render(fb_, track_, view, sprites_, road_sprites_);
@@ -2815,8 +2809,8 @@ void Game::render() {
     // No rain or snow falls in a tunnel. On the GLES path the particles are
     // drawn into the scene FBO; only fall back to software when that path is
     // not active (pause menus, headless, no GL).
-    if (debug_.weather && !track_.segment_at(tr.z + cam.player_z()).tunnel &&
-        !(use_gles_ && !paused_ && !options_open_ && !video_open_ && !audio_open_ && !debug_open_))
+    // Weather is already in the GLES scene FBO when that path is active.
+    if (debug_.weather && !track_.segment_at(tr.z + cam.player_z()).tunnel && !use_gles_)
         weather_.render(fb_);
     if (setup.cockpit) {
         // The dashboard and the wheel, shaking with the car. On a wide
@@ -2849,7 +2843,8 @@ void Game::render() {
     const Daylight light = lit_by(daylight_at(hour_), look.night_glow);
     // (The picture before nightfall, for the light the headlights and the
     // street lamps bring back.)
-    if (!(use_gles_ && !paused_)) {
+    // GLES applies night in its own FBO (including under pause menus).
+    if (!use_gles_) {
     if (headlights_ || !road_.lamps().empty()) day_picture_.assign(fb_.pixels(), fb_.pixels() + width_ * fb_height());
     apply_daylight(fb_, light);
     street_lights(fb_, day_picture_, road_.ground(), light, road_.row_depth(), road_.lamps(), cam.depth, fb_x_unit());

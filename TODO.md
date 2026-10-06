@@ -2,6 +2,13 @@
 
 ## Current tip
 
+### Grok: GLES menus + R36S conf path
+- Pause/options keep the GLES scene under the UI (no software backdrop).
+- State dir: $KURVENRAUSCH_STATE_DIR, or XDG_STATE_HOME when it is already
+  …/conf (PortMaster), else $XDG_STATE_HOME/kurvenrausch. Launcher mkdir -p
+  conf and exports both vars → /roms/ports/kurvenrausch/conf.
+
+
 ### Grok: flush textured on scissor change
 - Sprite scissor coalescing called flush_solid() only; that no-ops when
   solid_ is empty, so textured quads kept batching across clip rects and

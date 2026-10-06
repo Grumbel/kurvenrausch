@@ -12,11 +12,11 @@
 
 namespace racer {
 
-// Where the game keeps what it remembers between runs, following the XDG Base
-// Directory spec: $XDG_STATE_HOME/kurvenrausch, or
-// $HOME/.local/state/kurvenrausch when XDG_STATE_HOME is unset, empty or
-// relative (the spec says to ignore relative paths). Empty when neither
-// gives an absolute path.
+// Where the game keeps what it remembers between runs.
+// Prefer $KURVENRAUSCH_STATE_DIR when set (PortMaster: …/ports/kurvenrausch/conf).
+// Else XDG: $XDG_STATE_HOME/kurvenrausch, except when XDG_STATE_HOME already ends
+// in conf/ (PortMaster sets that to the port conf directory). Else
+// $HOME/.local/state/kurvenrausch. Empty when no absolute path is available.
 std::string state_dir(const char* xdg_state_home, const char* home);
 
 // What the player chose last time: indices of car_model(), driver() and
