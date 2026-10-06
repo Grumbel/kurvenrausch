@@ -451,25 +451,11 @@ void GlesRenderer::flush_textured(unsigned tex) {
     textured_.clear();
 }
 
-// Cheap content id so mutable bitmaps (player_bitmap_ reused in place) re-upload
-// when their pixels change while keeping the same px.data() pointer.
-static uint32_t bitmap_fingerprint(const Bitmap& bmp) {
-    uint32_t h = static_cast<uint32_t>(bmp.w) * 73856093u ^ static_cast<uint32_t>(bmp.h) * 19349663u;
-    const size_t n = bmp.px.size();
-    if (n == 0) return h;
-    h ^= bmp.px.front() + 0x9e3779b9u;
-    h ^= bmp.px.back() * 0x85ebca6bu;
-    h ^= bmp.px[n / 2] * 0xc2b2ae35u;
-    const size_t step = std::max<size_t>(1, n / 16);
-    for (size_t i = 0; i < n; i += step) h = h * 16777619u ^ bmp.px[i];
-    return h;
-}
-
-unsigned GlesRenderer::texture_for(const Bitmap& bmp) {
+unsigned GlesRenderer::texture_for(const Bitmap& bmp, bool dynamic) {
     if (bmp.w <= 0 || bmp.h <= 0 || bmp.px.empty() || !g.GenTextures) return 0;
     const uint32_t* key = bmp.px.data();
-    const uint32_t fp = bitmap_fingerprint(bmp);
-    auto upload = [&](unsigned tex, bool allocate) {
+
+    auto upload_rgba = [&](unsigned tex, bool allocate) {
         g.BindTexture(GL_TEXTURE_2D_, tex);
         if (allocate) {
             g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_MIN_FILTER_, GL_NEAREST_);
@@ -496,20 +482,18 @@ unsigned GlesRenderer::texture_for(const Bitmap& bmp) {
 
     if (auto it = textures_.find(key); it != textures_.end()) {
         CachedTex& entry = it->second;
-        if (entry.id && entry.w == bmp.w && entry.h == bmp.h && entry.fingerprint == fp) return entry.id;
         if (entry.id && entry.w == bmp.w && entry.h == bmp.h) {
-            upload(entry.id, false);
-            entry.fingerprint = fp;
+            // Immutable: keep GPU copy. Dynamic (player composite): refresh pixels.
+            if (dynamic) upload_rgba(entry.id, false);
             return entry.id;
         }
-        // Size changed: replace the texture object.
         if (entry.id) g.DeleteTextures(1, &entry.id);
         entry = {};
     }
     unsigned tex = 0;
     g.GenTextures(1, &tex);
-    upload(tex, true);
-    textures_[key] = CachedTex{tex, bmp.w, bmp.h, fp};
+    upload_rgba(tex, true);
+    textures_[key] = CachedTex{tex, bmp.w, bmp.h};
     return tex;
 }
 
@@ -995,10 +979,11 @@ void GlesRenderer::draw_sprites(const Track& track, const SpriteSheet& sprites, 
         auto draw_object = [&](const RoadSprite& o) {
             const Bitmap& bmp = *o.bitmap;
             if (o.fixed) {
+                // Player composite is written into a reused buffer each frame.
                 // Fixed sprites (player car, etc.) sit on the near plane: fog amount 0.
                 const uint8_t day = static_cast<uint8_t>(std::min(255.f, daylight_ * 255.f + 0.5f));
                 Color tint{day, day, day, 0};
-                const unsigned tex = texture_for(bmp);
+                const unsigned tex = texture_for(bmp, true);
                 if (!tex) return;
                 flush_solid();
                 push_quad(o.sx, o.sy, o.sw, o.sh, 0.f, 0.f, 1.f, 1.f, tint, false);

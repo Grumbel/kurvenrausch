@@ -73,7 +73,9 @@ private:
     void push_quad(float x, float y, float w, float h, float u0, float v0, float u1, float v1, Color c, bool flip);
     void flush_solid();
     void flush_textured(unsigned tex);
-    unsigned texture_for(const Bitmap& bmp);
+    // Immutable scenery: cache by px.data(). dynamic=true re-uploads pixels
+    // each call (player_bitmap_ is composited into a reused buffer).
+    unsigned texture_for(const Bitmap& bmp, bool dynamic = false);
     void draw_backdrop(const RoadTheme& theme, const Background* backdrop, float hour, float horizon);
     void draw_headlight(const Beam& beam, float dark);
     void draw_lamp_pools(float dark);
@@ -115,7 +117,6 @@ private:
         unsigned id = 0;
         int w = 0;
         int h = 0;
-        uint32_t fingerprint = 0;
     };
     std::unordered_map<const uint32_t*, CachedTex> textures_;
 };

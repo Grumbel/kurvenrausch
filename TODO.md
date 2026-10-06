@@ -2,6 +2,12 @@
 
 ## Current tip
 
+### Grok: dynamic GLES upload for player composite (no pixel hash)
+- Scenery stays cached by `px.data()` (immutable).
+- Fixed sprites call `texture_for(bmp, true)` → TexSubImage2D each frame.
+- Sub-pixel road trapezoids force a midline row to avoid 1px seams.
+
+
 ### Grok: GLES tunnel side walls as solid bands
 - Software blits `tunnel_wall` columns at the road edge; GLES had none.
 - Same placement (far→near sprite pass), solid kerb/tile/upper bands matching

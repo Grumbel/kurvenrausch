@@ -147,9 +147,15 @@ void Framebuffer::line(int x0, int y0, int x1, int y1, Color c) {
 void Framebuffer::fill_trapezoid(float y_top, float xl_top, float xr_top,
                                  float y_bot, float xl_bot, float xr_bot, Color c) {
     if (!(y_bot > y_top)) return;
-    const int row0 = std::max(clip_y0_, pixel_edge(y_top));
-    const int row1 = std::min(clip_y1_, pixel_edge(y_bot));
-    if (row0 >= row1) return;
+    int row0 = std::max(clip_y0_, pixel_edge(y_top));
+    int row1 = std::min(clip_y1_, pixel_edge(y_bot));
+    // Sub-pixel spans can round to zero rows and leave a 1px gap between segments.
+    if (row0 >= row1) {
+        const int mid = pixel_edge(0.5f * (y_top + y_bot));
+        if (mid < clip_y0_ || mid >= clip_y1_) return;
+        row0 = mid;
+        row1 = mid + 1;
+    }
     const float inv_h = 1.f / (y_bot - y_top);
     const uint32_t argb = c.argb();
     const int clip_l = clip_x0_, clip_r = clip_x1_;
