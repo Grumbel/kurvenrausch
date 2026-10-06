@@ -2,6 +2,12 @@
 
 ## Current tip
 
+### Grok: pixel-perfect night via software light functions
+- GLES draws full-bright albedo (road → ground snapshot → sprites → weather).
+- `apply_daylight` / `street_lights` / `headlight_beam` run on a CPU copy of the
+  FBO (same code as software), then upload back. Ground mask matches software.
+
+
 ### Grok: night lights via albedo × lightmap
 - Scene draws at full day colours into the color FBO.
 - Lightmap FBO cleared to ambient, additive circular lamp/headlight headroom.

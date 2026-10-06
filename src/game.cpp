@@ -2730,7 +2730,7 @@ void Game::render() {
 
     if (use_gles_ && display_ && display_->make_gl_current()) {
         gles_.set_size(width_, fb_height());
-        const float day_level = lit_by(daylight_at(hour_), look.night_glow).level;
+        const Daylight scene_light = lit_by(daylight_at(hour_), look.night_glow);
         const Beam* beam_ptr = nullptr;
         Beam beam{};
         if (headlights_ && debug_.headlights) {
@@ -2745,7 +2745,7 @@ void Game::render() {
         const Weather* weather_ptr = nullptr;
         if (debug_.weather && !track_.segment_at(world_.get<Transform>(player_).z + cam.player_z()).tunnel)
             weather_ptr = &weather_;
-        gles_.render(track_, view, sprites_, road_sprites_, look, day_level, &background_, hour_, beam_ptr,
+        gles_.render(track_, view, sprites_, road_sprites_, look, scene_light, &background_, hour_, beam_ptr,
                      weather_ptr);
         // Pause / options: full software frame underneath the menus.
         if (paused_ || options_open_ || video_open_ || audio_open_ || debug_open_) {

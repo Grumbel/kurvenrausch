@@ -37,8 +37,10 @@ public:
     void set_size(int width, int height);
 
     // Draws the road scene into the internal FBO (not the window).
+    // `light` drives CPU night (apply_daylight / street_lights / headlight_beam)
+    // after the full-bright GPU albedo pass — same math as the software path.
     void render(const Track& track, const RoadView& view, const SpriteSheet& sprites,
-                std::vector<RoadSprite>& objects, const RoadTheme& theme, float daylight = 1.f,
+                std::vector<RoadSprite>& objects, const RoadTheme& theme, const Daylight& light,
                 const Background* backdrop = nullptr, float hour = 12.f,
                 const Beam* headlight = nullptr, const Weather* weather = nullptr);
 

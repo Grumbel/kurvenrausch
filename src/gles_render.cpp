@@ -112,6 +112,7 @@ struct GlApi {
     void (*FramebufferRenderbuffer)(unsigned, unsigned, unsigned, unsigned) = nullptr;
     unsigned (*CheckFramebufferStatus)(unsigned) = nullptr;
     void (*GetIntegerv)(unsigned, int*) = nullptr;
+    void (*ReadPixels)(int, int, int, int, unsigned, unsigned, void*) = nullptr;
 } g;
 
 template <typename T>
@@ -183,6 +184,7 @@ bool load_gl() {
     g.CheckFramebufferStatus = load<decltype(g.CheckFramebufferStatus)>("glCheckFramebufferStatus");
     if (!g.CheckFramebufferStatus) g.CheckFramebufferStatus = load<decltype(g.CheckFramebufferStatus)>("glCheckFramebufferStatusOES");
     g.GetIntegerv = load<decltype(g.GetIntegerv)>("glGetIntegerv");
+    g.ReadPixels = load<decltype(g.ReadPixels)>("glReadPixels");
     return g.Clear && g.CreateShader && g.DrawArrays && g.TexImage2D && g.GenFramebuffers && g.BindFramebuffer;
 }
 
@@ -1232,12 +1234,11 @@ void GlesRenderer::draw_headlight(const Beam& beam, float ambient) {
 
 
 void GlesRenderer::render(const Track& track, const RoadView& view, const SpriteSheet& sprites,
-                          std::vector<RoadSprite>& objects, const RoadTheme& theme, float daylight,
+                          std::vector<RoadSprite>& objects, const RoadTheme& theme, const Daylight& light,
                           const Background* backdrop, float hour, const Beam* headlight,
                           const Weather* weather) {
     if (!program_ || !ensure_fbo()) return;
-    const float ambient = std::clamp(daylight, 0.05f, 1.f);
-    // Albedo pass draws full day colours; night is applied via lightmap multiply.
+    // Albedo at full day colour; night uses the same CPU path as software.
     daylight_ = 1.f;
     fog_air_ = view.fog_air;
     window_wake_ = view.window_wake;
@@ -1364,39 +1365,70 @@ void GlesRenderer::render(const Track& track, const RoadView& view, const Sprite
         }
     }
     flush_solid();
+
+    // Ground snapshot (road/grass only) — software street_lights only relights
+    // pixels the sprites did not cover (day[i] == ground[i]).
+    std::vector<uint32_t> ground_argb;
+    auto read_fbo_argb = [&](std::vector<uint32_t>& out) {
+        out.resize(static_cast<size_t>(width_) * static_cast<size_t>(height_));
+        if (!g.ReadPixels) {
+            std::fill(out.begin(), out.end(), 0u);
+            return;
+        }
+        std::vector<uint8_t> rgba(static_cast<size_t>(width_) * static_cast<size_t>(height_) * 4);
+        g.ReadPixels(0, 0, width_, height_, GL_RGBA_, GL_UNSIGNED_BYTE_, rgba.data());
+        // FBO origin is bottom-left; our y=0 is top.
+        for (int y = 0; y < height_; ++y) {
+            const int src_y = height_ - 1 - y;
+            for (int x = 0; x < width_; ++x) {
+                const size_t si = (static_cast<size_t>(src_y) * static_cast<size_t>(width_) + static_cast<size_t>(x)) * 4;
+                const uint32_t r = rgba[si], gc = rgba[si + 1], b = rgba[si + 2], a = rgba[si + 3];
+                out[static_cast<size_t>(y) * static_cast<size_t>(width_) + static_cast<size_t>(x)] =
+                    (a << 24) | (r << 16) | (gc << 8) | b;
+            }
+        }
+    };
+    read_fbo_argb(ground_argb);
+
     draw_sprites(track, sprites, objects);
     flush_solid();
-
-    // --- Lightmap pass: ambient + additive lamps ---
-    if (ambient < 0.98f && light_fbo_ && light_tex_) {
-        g.BindFramebuffer(GL_FRAMEBUFFER_, light_fbo_);
-        g.Viewport(0, 0, width_, height_);
-        g.Disable(GL_SCISSOR_TEST_);
-        g.ClearColor(ambient, ambient, ambient, 1.f);
-        g.Clear(GL_COLOR_BUFFER_BIT_);
-        if (headlight) draw_headlight(*headlight, ambient);
-        draw_lamp_pools(ambient);
-
-        // albedo × lightmap → color FBO (DST_COLOR, ZERO: out = src * dst)
-        g.BindFramebuffer(GL_FRAMEBUFFER_, fbo_);
-        g.Viewport(0, 0, width_, height_);
-        g.Disable(GL_SCISSOR_TEST_);
-        g.BlendFunc(GL_DST_COLOR_, GL_ZERO_); // need GL_ZERO
-        // Fullscreen textured quad of the lightmap.
-        g.Uniform1i(u_use_tex_, 1);
-        if (g.ActiveTexture) g.ActiveTexture(GL_TEXTURE0_);
-        g.BindTexture(GL_TEXTURE_2D_, light_tex_);
-        g.Uniform1i(u_tex_, 0);
-        // Fog uniform unused for this blit; v_col white, fog amount 0.
-        const float wf = static_cast<float>(width_), hf = static_cast<float>(height_);
-        Color white{255, 255, 255, 0}; // a = fog amount 0 for textured path
-        // FBO texture: top of scene is high V (same as present_gles_scene).
-        push_quad(0.f, 0.f, wf, hf, 0.f, 1.f, 1.f, 0.f, white, false);
-        flush_textured(light_tex_);
-        g.BlendFunc(GL_SRC_ALPHA_, GL_ONE_MINUS_SRC_ALPHA_);
-    }
-
     if (weather) draw_weather(*weather);
+    flush_solid();
+
+    // Day picture (full-bright albedo + sprites + weather).
+    // Skip the CPU night stack in full daylight with no beam.
+    if (light.level < 0.999f || headlight || !lamps_.empty()) {
+    std::vector<uint32_t> day_argb;
+    read_fbo_argb(day_argb);
+
+    // Same night stack as Game::render for the software path.
+    Framebuffer night(width_, height_);
+    std::copy(day_argb.begin(), day_argb.end(), night.pixels_mut());
+    apply_daylight(night, light);
+    street_lights(night, day_argb, ground_argb, light, row_depth_, lamps_, camera_depth_, x_scale_);
+    if (headlight) headlight_beam(night, day_argb, light, row_depth_, *headlight);
+
+    // Upload ARGB result back into the scene colour attachment (flip to GL origin).
+    if (g.TexSubImage2D && color_tex_) {
+        std::vector<uint8_t> rgba(static_cast<size_t>(width_) * static_cast<size_t>(height_) * 4);
+        const uint32_t* src = night.pixels();
+        for (int y = 0; y < height_; ++y) {
+            const int dst_y = height_ - 1 - y;
+            for (int x = 0; x < width_; ++x) {
+                const uint32_t p = src[static_cast<size_t>(y) * static_cast<size_t>(width_) + static_cast<size_t>(x)];
+                const size_t di = (static_cast<size_t>(dst_y) * static_cast<size_t>(width_) + static_cast<size_t>(x)) * 4;
+                rgba[di + 0] = static_cast<uint8_t>((p >> 16) & 0xff);
+                rgba[di + 1] = static_cast<uint8_t>((p >> 8) & 0xff);
+                rgba[di + 2] = static_cast<uint8_t>(p & 0xff);
+                rgba[di + 3] = static_cast<uint8_t>((p >> 24) & 0xff);
+            }
+        }
+        g.BindTexture(GL_TEXTURE_2D_, color_tex_);
+        g.PixelStorei(0x0CF5 /* GL_UNPACK_ALIGNMENT */, 1);
+        g.TexSubImage2D(GL_TEXTURE_2D_, 0, 0, 0, width_, height_, GL_RGBA_, GL_UNSIGNED_BYTE_, rgba.data());
+    }
+    } // CPU night
+
     g.BindFramebuffer(GL_FRAMEBUFFER_, static_cast<unsigned>(prev_fbo));
 }
 
