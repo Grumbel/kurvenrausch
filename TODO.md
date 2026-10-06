@@ -2,6 +2,12 @@
 
 ## Current tip
 
+### Grok: fix sprite atlas UVs
+- Atlas UVs used a V flip that did not match TexSubImage(y), so samples
+  hit the wrong cells (wrong scenery everywhere). UVs are now x/W, y/H
+  matching the upload origin; overflow pack is skipped instead of clipping.
+
+
 ### Grok: GLES night is pure RTT (no ReadPixels)
 - Ground mask: fullscreen copy of color_tex_ → ground_tex_ after road.
 - Lightmap FBO: additive mix-to-day factors (lamps + headlight).

@@ -750,8 +750,9 @@ void GlesRenderer::ensure_sprite_atlas(const SpriteSheet& sprites) {
         if (!seen) unique.push_back(b);
     }
 
-    // Shelf pack into a power-of-two atlas.
+    // Shelf pack into a power-of-two atlas (width chosen after measuring).
     const int pad = 1;
+    const int shelf_limit = 2048;
     int shelf_x = pad, shelf_y = pad, shelf_h = 0, max_w = 64, max_h = 64;
     struct Place {
         const Bitmap* b;
@@ -760,7 +761,7 @@ void GlesRenderer::ensure_sprite_atlas(const SpriteSheet& sprites) {
     std::vector<Place> places;
     places.reserve(unique.size());
     for (const Bitmap* b : unique) {
-        if (shelf_x + b->w + pad > 2048) {
+        if (shelf_x + b->w + pad > shelf_limit) {
             shelf_x = pad;
             shelf_y += shelf_h + pad;
             shelf_h = 0;
@@ -774,10 +775,16 @@ void GlesRenderer::ensure_sprite_atlas(const SpriteSheet& sprites) {
     auto pot = [](int v) {
         int p = 64;
         while (p < v && p < 4096) p *= 2;
-        return p;
+        return std::min(p, 4096);
     };
     atlas_w_ = pot(max_w);
     atlas_h_ = pot(max_h);
+    // Refuse a pack that does not fit — fall back to per-texture (no atlas).
+    if (max_w > atlas_w_ || max_h > atlas_h_) {
+        std::cerr << "kurvenrausch: sprite atlas overflow (" << max_w << "x" << max_h << "), skipping\n";
+        atlas_ready_ = true; // do not retry every frame
+        return;
+    }
     if (atlas_w_ * atlas_h_ <= 0) {
         atlas_ready_ = true;
         return;
@@ -806,11 +813,12 @@ void GlesRenderer::ensure_sprite_atlas(const SpriteSheet& sprites) {
         if (g.TexSubImage2D) {
             g.TexSubImage2D(GL_TEXTURE_2D_, 0, pl.x, pl.y, bmp.w, bmp.h, GL_RGBA_, GL_UNSIGNED_BYTE_, rgba.data());
         }
-        // Shelf y grows downward; GL texture v=0 is the bottom row — flip V.
+        // UVs must match TexSubImage(x, y): client row 0 is at texture y (v = y/H).
+        // Same convention as a solo texture (v0 = top of bitmap = first pixel row).
         const float u0 = static_cast<float>(pl.x) / static_cast<float>(atlas_w_);
+        const float v0 = static_cast<float>(pl.y) / static_cast<float>(atlas_h_);
         const float u1 = static_cast<float>(pl.x + bmp.w) / static_cast<float>(atlas_w_);
-        const float v1 = 1.f - static_cast<float>(pl.y) / static_cast<float>(atlas_h_);
-        const float v0 = 1.f - static_cast<float>(pl.y + bmp.h) / static_cast<float>(atlas_h_);
+        const float v1 = static_cast<float>(pl.y + bmp.h) / static_cast<float>(atlas_h_);
         textures_[bmp.px.data()] = CachedTex{atlas_tex_, bmp.w, bmp.h, u0, v0, u1, v1, true};
     }
     atlas_ready_ = true;
