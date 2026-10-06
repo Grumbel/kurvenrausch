@@ -374,8 +374,11 @@ void RoadRenderer::draw_edge(Framebuffer& fb, const Track& track, const Slice& s
         if (cliff.w <= 0 || cliff.h <= 0) return;
         if (!(h1 > 50.f) && !(h2 > 50.f)) return;
         const float ppu = std::max(ppu_a, 1e-4f);
-        // Far / small on screen: coarser stride. Near: still skip half of them.
-        const int stride = ppu > 0.12f ? 2 : 3;
+        // Nested power-of-two strides: far=4, near=2. The near set is a
+        // strict superset of the far set, so a column that was drawn far
+        // away never vanishes a few segments ahead of the car (the old
+        // stride 3→2 switch dropped every index ≡ 3 mod 6).
+        const int stride = ppu > 0.12f ? 2 : 4;
         const Edge prev_e = side < 0 ? track.segment(s.index - direction_).left
                                      : track.segment(s.index - direction_).right;
         const Edge next_e = side < 0 ? track.segment(s.index + direction_).left
