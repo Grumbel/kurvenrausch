@@ -2,6 +2,11 @@
 
 ## Current tip
 
+### Grok: GLES forks, forecourts, headlight cone
+- Other-route road surface + rumble at forks; forecourt paving; other-route
+  scenery. Headlight cone drawn in the FBO from row_depth when lights on.
+
+
 ### Grok: GLES clouds, sun/moon, rails, patches
 - Stars, sun disc, moon disc, and cloud billboards in the GLES backdrop.
 - Simplified guard rails and oil/water patches on the GLES road.

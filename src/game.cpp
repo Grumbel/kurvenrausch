@@ -2697,7 +2697,18 @@ void Game::render() {
     if (use_gles_ && display_ && display_->make_gl_current()) {
         gles_.set_size(width_, fb_height());
         const float day_level = lit_by(daylight_at(hour_), look.night_glow).level;
-        gles_.render(track_, view, sprites_, road_sprites_, look, day_level, &background_, hour_);
+        const Beam* beam_ptr = nullptr;
+        Beam beam{};
+        if (headlights_ && debug_.headlights) {
+            beam.start = setup.distance + 450.f;
+            beam.center = static_cast<float>(width_) / 2.f;
+            beam.aim = 0.08f * static_cast<float>(shown_steer);
+            beam.camera_depth = cam.depth;
+            beam.x_scale = fb_x_unit();
+            beam.bottom = setup.cockpit ? fb_height() - dashboard_height * pixel_scale_ : fb_height();
+            beam_ptr = &beam;
+        }
+        gles_.render(track_, view, sprites_, road_sprites_, look, day_level, &background_, hour_, beam_ptr);
         // Pause / options: full software frame underneath the menus.
         if (paused_ || options_open_ || video_open_ || audio_open_ || debug_open_) {
             background_.render(fb_, look, hour_);

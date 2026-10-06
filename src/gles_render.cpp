@@ -567,7 +567,8 @@ void GlesRenderer::draw_segment(const Track& track, const Slice& s, const RoadTh
     const Segment& seg = track.segment(s.index);
     const float fog_amount = 1.f - s.fog;
     const int near = direction_ > 0 ? s.index : s.index + 1;
-    const int band = near % 2;
+    const int band = seg.alt ? 0 : 1;
+    const int lanes = std::max(1, theme.lanes);
     const float wf = static_cast<float>(width_);
     auto fogc = [&](Color c) { return fogged(c, fog_air_, fog_amount, daylight_); };
 
@@ -576,10 +577,33 @@ void GlesRenderer::draw_segment(const Track& track, const Slice& s, const RoadTh
         const float ca = a.y - a.scale * tunnel_height * y_scale_, cb = b.y - b.scale * tunnel_height * y_scale_;
         push_trap(ca, 0.f, wf, cb, 0.f, wf, fogc(Color{0x34, 0x32, 0x30}));
     }
-    const float ra = a.w / 6.f, rb = b.w / 6.f;
+
+    const float oa = track.branch_offset(near), ob = track.branch_offset(near + direction_);
+    const bool other_road = !std::isnan(oa) && !std::isnan(ob);
+    const float oca = other_road ? a.x + oa * a.w : 0.f, ocb = other_road ? b.x + ob * b.w : 0.f;
+
+    // Forecourt paving
+    const float court_a = track.forecourt_at(near), court_b = track.forecourt_at(near + direction_);
+    if (court_a > 1.f || court_b > 1.f) {
+        const float fa = std::max(court_a, 1.f), fb_ = std::max(court_b, 1.f);
+        const float side = static_cast<float>(seg.court_side);
+        const Color paving = fogc(blend(theme.road[band], Color{0xb4, 0xb0, 0xa8}, 0.3f));
+        const float a0 = a.x + side * 1.f * a.w, a1 = a.x + side * fa * a.w;
+        const float b0 = b.x + side * 1.f * b.w, b1 = b.x + side * fb_ * b.w;
+        push_trap(b.y, std::min(b0, b1), std::max(b0, b1), a.y, std::min(a0, a1), std::max(a0, a1), paving);
+    }
+
+    const float ra = a.w / static_cast<float>(std::max(6, 2 * lanes));
+    const float rb = b.w / static_cast<float>(std::max(6, 2 * lanes));
     const Color rumble = fogc(theme.rumble[band]);
+    if (other_road) {
+        push_trap(b.y, ocb - b.w - rb, ocb + b.w + rb, a.y, oca - a.w - ra, oca + a.w + ra, rumble);
+    }
     push_trap(b.y, b.x - b.w - rb, b.x - b.w, a.y, a.x - a.w - ra, a.x - a.w, rumble);
     push_trap(b.y, b.x + b.w, b.x + b.w + rb, a.y, a.x + a.w, a.x + a.w + ra, rumble);
+    if (other_road) {
+        push_trap(b.y, ocb - b.w, ocb + b.w, a.y, oca - a.w, oca + a.w, fogc(theme.road[band]));
+    }
 
     // Guard rails (simplified as two thin trapezoid bars).
     auto rail = [&](int side) {
@@ -618,7 +642,6 @@ void GlesRenderer::draw_segment(const Track& track, const Slice& s, const RoadTh
         }
     } else {
         push_trap(b.y, b.x - b.w, b.x + b.w, a.y, a.x - a.w, a.x + a.w, fogc(theme.road[band]));
-        const int lanes = std::max(1, theme.lanes);
         if (theme.us_markings) {
             const Color white = fogc(theme.lane);
             const float e = 0.93f, th = 1.f / 60.f;
@@ -636,13 +659,23 @@ void GlesRenderer::draw_segment(const Track& track, const Slice& s, const RoadTh
                               a.x + sd * gap * a.w - a.w * yt, a.x + sd * gap * a.w + a.w * yt, yellow);
                 }
             }
-        } else {
+        } else if (seg.alt && lanes > 1) {
             const Color lane = fogc(theme.lane);
             for (int i = 1; i < lanes; ++i) {
                 const float f = static_cast<float>(i) / static_cast<float>(lanes);
                 const float xa = a.x - a.w + 2.f * a.w * f, xb = b.x - b.w + 2.f * b.w * f;
                 const float la = a.w * 0.02f, lb = b.w * 0.02f;
                 push_trap(b.y, xb - lb, xb + lb, a.y, xa - la, xa + la, lane);
+            }
+        }
+        if (other_road && seg.alt) {
+            const float la = a.w / static_cast<float>(std::max(32, 8 * lanes));
+            const float lb = b.w / static_cast<float>(std::max(32, 8 * lanes));
+            for (int i = 1; i < lanes; ++i) {
+                const float f = static_cast<float>(i) / static_cast<float>(lanes);
+                const float xa = oca - a.w + 2.f * a.w * f, xb = ocb - b.w + 2.f * b.w * f;
+                push_trap(b.y, xb - lb, xb + lb, a.y, xa - la, xa + la,
+                          fogc(theme.us_markings ? theme.center_line : theme.lane));
             }
         }
     }
@@ -711,6 +744,10 @@ void GlesRenderer::draw_sprites(const Track& track, const SpriteSheet& sprites, 
             flush_textured(tex);
         };
         if (projectable) {
+            const float shift = track.branch_offset(s.index);
+            if (const Segment* other = track.other_route_segment(s.index); other && !std::isnan(shift)) {
+                for (const RoadsideObject& obj : other->scenery) plant(obj, shift);
+            }
             for (const RoadsideObject& obj : seg.scenery) plant(obj, 0.f);
         }
 
@@ -792,9 +829,54 @@ bool GlesRenderer::ensure_fbo() {
     return true;
 }
 
+void GlesRenderer::draw_headlight(const Beam& beam, float dark) {
+    if (dark <= 0.01f) return;
+    auto smoothstep = [](float a, float b, float x) {
+        const float t = std::clamp((x - a) / (b - a), 0.f, 1.f);
+        return t * t * (3.f - 2.f * t);
+    };
+    int horizon_y = -1;
+    float horizon_depth = 0.f;
+    for (int y = 0; y < height_; ++y) {
+        if (row_depth_[static_cast<size_t>(y)] > 0.f) {
+            horizon_y = y;
+            horizon_depth = row_depth_[static_cast<size_t>(y)];
+            break;
+        }
+    }
+    for (int y = 0; y < std::min(beam.bottom, height_); ++y) {
+        float depth = row_depth_[static_cast<size_t>(y)];
+        float air = 1.f;
+        if (depth <= 0.f) {
+            if (horizon_y < 0 || y >= horizon_y) continue;
+            const float t = static_cast<float>(horizon_y - y) / static_cast<float>(std::max(1, horizon_y));
+            depth = horizon_depth * (1.f + 1.8f * t);
+            air = 0.55f * (1.f - 0.65f * t);
+        }
+        const float ahead = depth - beam.start;
+        if (ahead <= 0.f || ahead > 4.f * beam_reach) continue;
+        const float reach = smoothstep(0.f, 200.f, ahead) / (1.f + (ahead / beam_reach) * (ahead / beam_reach));
+        const float px_per_unit = beam.camera_depth / depth * beam.x_scale;
+        const float half = (beam_half_width + beam_spread * ahead) * px_per_unit;
+        const float mid = beam.center + beam.aim * ahead * px_per_unit;
+        const float k = 0.55f * dark * reach * air;
+        if (k < 0.02f) continue;
+        // Soft cone strip: brighter centre via two overlapping traps
+        const float a = std::min(1.f, k);
+        Color c{static_cast<uint8_t>(0xe8 * a), static_cast<uint8_t>(0xe4 * a), static_cast<uint8_t>(0xd0 * a),
+                static_cast<uint8_t>(std::min(255.f, a * 180.f))};
+        push_trap(static_cast<float>(y), mid - half, mid + half, static_cast<float>(y + 1), mid - half, mid + half, c);
+        Color core{static_cast<uint8_t>(0xff * a), static_cast<uint8_t>(0xf8 * a), static_cast<uint8_t>(0xe8 * a),
+                   static_cast<uint8_t>(std::min(255.f, a * 120.f))};
+        push_trap(static_cast<float>(y), mid - half * 0.35f, mid + half * 0.35f, static_cast<float>(y + 1),
+                  mid - half * 0.35f, mid + half * 0.35f, core);
+    }
+    flush_solid();
+}
+
 void GlesRenderer::render(const Track& track, const RoadView& view, const SpriteSheet& sprites,
                           std::vector<RoadSprite>& objects, const RoadTheme& theme, float daylight,
-                          const Background* backdrop, float hour) {
+                          const Background* backdrop, float hour, const Beam* headlight) {
     if (!program_ || !ensure_fbo()) return;
     daylight_ = std::clamp(daylight, 0.05f, 1.f);
     fog_air_ = view.fog_air;
@@ -889,6 +971,7 @@ void GlesRenderer::render(const Track& track, const RoadView& view, const Sprite
     flush_solid();
     draw_sprites(track, sprites, objects);
     flush_solid();
+    if (headlight) draw_headlight(*headlight, 1.f - daylight_);
     g.BindFramebuffer(GL_FRAMEBUFFER_, static_cast<unsigned>(prev_fbo));
 }
 
