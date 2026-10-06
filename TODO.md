@@ -2,6 +2,12 @@
 
 ## Current tip
 
+### Grok: GLES guard rails match software bands
+- Removed thin segment-pass rail straps. Rails drawn far→near with sprites using
+  `edge_height`, filled lower (0.20–0.42) / upper (0.60–0.95) bars, top lip, and
+  near-end posts via `push_solid_quad` (same structure as `RoadRenderer::draw_edge`).
+
+
 ### Grok: F8 one-shot + GLES sprite atmosphere fog
 - `Input::poll` never cleared `toggle_renderer`, so F8 stayed true and cycled every frame.
 - Textured GLES sprites used multiply-by-fogged-white (wrong); fragment shader now

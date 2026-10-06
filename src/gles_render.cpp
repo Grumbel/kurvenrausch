@@ -389,6 +389,17 @@ void GlesRenderer::push_trap(float y0, float x0l, float x0r, float y1, float x1l
     solid_.insert(solid_.end(), verts, verts + 6);
 }
 
+// General solid quad (two triangles). Vertices in order around the perimeter.
+void GlesRenderer::push_solid_quad(float x0, float y0, float x1, float y1, float x2, float y2, float x3, float y3,
+                                   Color c) {
+    const float r = c.r / 255.f, gch = c.g / 255.f, b = c.b / 255.f, a = c.a / 255.f;
+    const Vertex verts[6] = {
+        {x0, y0, 0, 0, r, gch, b, a}, {x1, y1, 0, 0, r, gch, b, a}, {x2, y2, 0, 0, r, gch, b, a},
+        {x0, y0, 0, 0, r, gch, b, a}, {x2, y2, 0, 0, r, gch, b, a}, {x3, y3, 0, 0, r, gch, b, a},
+    };
+    solid_.insert(solid_.end(), verts, verts + 6);
+}
+
 void GlesRenderer::push_quad(float x, float y, float w, float h, float u0, float v0, float u1, float v1, Color c,
                              bool flip) {
     if (flip) std::swap(u0, u1);
@@ -673,40 +684,6 @@ void GlesRenderer::draw_segment(const Track& track, const Slice& s, const RoadTh
         push_trap(b.y, ocb - b.w, ocb + b.w, a.y, oca - a.w, oca + a.w, fogc(theme.road[band]));
     }
 
-    // Guard rails: posts + upper/lower bars (software draws the same bands
-    // with gaps so the ground shows through). A post sits at the near end of
-    // each segment run; bars are two horizontal straps at ~0.3 and ~0.75 height.
-    auto rail = [&](int side) {
-        const Edge kind = side < 0 ? seg.left : seg.right;
-        if (kind != Edge::Rail) return;
-        const float off = rail_offset * static_cast<float>(side);
-        const float xa = a.x + off * a.w, xb = b.x + off * b.w;
-        if (std::abs(xb - xa) < 0.01f) return; // edge-on
-        const float ha = rail_height * a.scale * y_scale_, hb = rail_height * b.scale * y_scale_;
-        const float thick = std::max(1.2f, std::min(a.w, b.w) * 0.018f);
-        const Color post_c = fogc(theme.rail[1]);
-        const Color bar_c = fogc(theme.rail[0]);
-        Color top_c = bar_c;
-        top_c.r = static_cast<uint8_t>(std::min(255, top_c.r + 40));
-        top_c.g = static_cast<uint8_t>(std::min(255, top_c.g + 40));
-        top_c.b = static_cast<uint8_t>(std::min(255, top_c.b + 40));
-        // Lower bar (~0.20 .. 0.42 of rail height from the road).
-        push_trap(b.y - hb * 0.42f, xb - thick, xb + thick, a.y - ha * 0.42f, xa - thick, xa + thick, bar_c);
-        push_trap(b.y - hb * 0.20f, xb - thick, xb + thick, a.y - ha * 0.20f, xa - thick, xa + thick, bar_c);
-        // Upper bar (~0.60 .. 0.95), bright lip on the top edge.
-        push_trap(b.y - hb * 0.95f, xb - thick, xb + thick, a.y - ha * 0.95f, xa - thick, xa + thick, top_c);
-        push_trap(b.y - hb * 0.60f, xb - thick, xb + thick, a.y - ha * 0.60f, xa - thick, xa + thick, bar_c);
-        // Post at the near end of the segment (covers ~10% of the run).
-        const float t_post = 0.12f;
-        const float xp = xa + (xb - xa) * (direction_ > 0 ? t_post : 1.f - t_post);
-        const float hp = ha + (hb - ha) * (direction_ > 0 ? t_post : 1.f - t_post);
-        const float yp = a.y + (b.y - a.y) * (direction_ > 0 ? t_post : 1.f - t_post);
-        const float pw = std::max(1.5f, thick * 1.4f);
-        push_trap(yp - hp, xp - pw, xp + pw, yp, xp - pw, xp + pw, post_c);
-    };
-    rail(-1);
-    rail(+1);
-
     // Oil / water patches on the surface.
     const float wa = track.patch_width_at(near), wb = track.patch_width_at(near + direction_);
     if (seg.patch != Patch::None && (wa > 0.f || wb > 0.f)) {
@@ -801,6 +778,76 @@ void GlesRenderer::draw_sprites(const Track& track, const SpriteSheet& sprites, 
             flush_solid();
             g.Enable(GL_SCISSOR_TEST_);
             g.Scissor(clip_x0, height_ - clip_y1, clip_x1 - clip_x0, clip_y1 - clip_y0);
+        }
+
+        // Guard rails: same bands as software RoadRenderer::draw_edge (posts +
+        // upper/lower bars with gaps). Drawn far→near so nearer rails win.
+        auto draw_rail = [&](int side) {
+            const Edge kind = side < 0 ? seg.left : seg.right;
+            if (kind != Edge::Rail) return;
+            // Match software: always p1 = near-side of slice walk, p2 = far.
+            const ScreenPoint& a = s.p1;
+            const ScreenPoint& b = s.p2;
+            const float off = rail_offset * static_cast<float>(side);
+            const float xa = a.x + off * a.w, xb = b.x + off * b.w;
+            if (std::abs(xb - xa) < 0.01f) return; // edge-on
+            const int near = direction_ > 0 ? s.index : s.index + 1;
+            const float h1 = track.edge_height(near, side);
+            const float h2 = track.edge_height(near + direction_, side);
+            if (!(h1 > 1.f) && !(h2 > 1.f)) return;
+            const float ppu_a = a.scale * x_scale_, ppu_b = b.scale * x_scale_;
+            // Screen height of the rail at each end (y decreases upward).
+            const float ha = h1 * ppu_a, hb = h2 * ppu_b;
+            const float fog_amount = 1.f - s.fog;
+            auto fogc = [&](Color c) { return fogged(c, fog_air_, fog_amount, daylight_); };
+            const RoadTheme& th = track.look(s.index);
+            const Color post_c = fogc(th.rail[1]);
+            const Color bar_c = fogc(th.rail[0]);
+            Color top_c = bar_c;
+            top_c.r = static_cast<uint8_t>(std::min(255, top_c.r + 40));
+            top_c.g = static_cast<uint8_t>(std::min(255, top_c.g + 40));
+            top_c.b = static_cast<uint8_t>(std::min(255, top_c.b + 40));
+            // Height fractions along the post (road = 0, top = 1), software bands.
+            auto at = [&](float t, float r) {
+                const float x = xa + (xb - xa) * t;
+                const float base = a.y + (b.y - a.y) * t;
+                const float h = ha + (hb - ha) * t;
+                return std::pair<float, float>{x, base - h * r};
+            };
+            // Lower bar 0.20 .. 0.42
+            {
+                const auto n0 = at(0.f, 0.42f), n1 = at(0.f, 0.20f);
+                const auto f0 = at(1.f, 0.42f), f1 = at(1.f, 0.20f);
+                push_solid_quad(n0.first, n0.second, f0.first, f0.second, f1.first, f1.second, n1.first, n1.second,
+                                bar_c);
+            }
+            // Upper bar 0.60 .. 0.95 (bright lip on the top edge via top_c on the upper half)
+            {
+                const auto n0 = at(0.f, 0.95f), n1 = at(0.f, 0.60f);
+                const auto f0 = at(1.f, 0.95f), f1 = at(1.f, 0.60f);
+                push_solid_quad(n0.first, n0.second, f0.first, f0.second, f1.first, f1.second, n1.first, n1.second,
+                                bar_c);
+                const auto lip_n0 = at(0.f, 0.95f), lip_n1 = at(0.f, 0.88f);
+                const auto lip_f0 = at(1.f, 0.95f), lip_f1 = at(1.f, 0.88f);
+                push_solid_quad(lip_n0.first, lip_n0.second, lip_f0.first, lip_f0.second, lip_f1.first, lip_f1.second,
+                                lip_n1.first, lip_n1.second, top_c);
+            }
+            // Post at the near end of the segment (first ~10% of the run).
+            {
+                const float t0 = direction_ > 0 ? 0.f : 0.9f;
+                const float t1 = direction_ > 0 ? 0.1f : 1.f;
+                const auto n0 = at(t0, 1.f), n1 = at(t0, 0.f);
+                const auto f0 = at(t1, 1.f), f1 = at(t1, 0.f);
+                // Widen slightly in x so the post reads as a column.
+                const float pw = std::max(1.5f, std::min(std::abs(xb - xa) * 0.08f, 4.f));
+                const float sx = static_cast<float>(side);
+                push_solid_quad(n0.first - sx * pw * 0.5f, n0.second, f0.first - sx * pw * 0.5f, f0.second,
+                                f1.first + sx * pw * 0.5f, f1.second, n1.first + sx * pw * 0.5f, n1.second, post_c);
+            }
+        };
+        if (s.p1.cam_z > camera_depth_) {
+            draw_rail(-1);
+            draw_rail(+1);
         }
 
         // Cliff billboards (subsampled like software).

@@ -68,6 +68,8 @@ private:
     bool ensure_fbo();
     void clear_batch();
     void push_trap(float y0, float x0l, float x0r, float y1, float x1l, float x1r, Color c);
+    void push_solid_quad(float x0, float y0, float x1, float y1, float x2, float y2, float x3, float y3,
+                         Color c);
     void push_quad(float x, float y, float w, float h, float u0, float v0, float u1, float v1, Color c, bool flip);
     void flush_solid();
     void flush_textured(unsigned tex);
