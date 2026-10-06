@@ -5,6 +5,7 @@
 
 #include <cstdint>
 #include <cstring>
+#include <string>
 
 namespace racer {
 namespace frame_stats {
@@ -49,6 +50,10 @@ struct Snapshot {
     int sprites = 0;
     int lamps = 0;
     bool gles = false;
+    // Pixels covered by the GLES draws of each phase (overdraw counts each
+    // time), and the scene's size: fill / screen_px = screens filled.
+    double fill[static_cast<int>(Phase::Count)]{};
+    int screen_px = 0;
 };
 
 // Called at the start of each game tick before work begins.
@@ -61,6 +66,8 @@ void begin(Phase p);
 void end(Phase p);
 
 void add_draw(int vertex_count, bool textured);
+// Pixels a draw covers, charged to the innermost open phase.
+void add_fill(double pixels);
 
 // GPU-sync profiling: when set, `finish` (glFinish) runs at the start and end
 // of every phase, so each phase's time includes the GPU work it queued
@@ -68,7 +75,11 @@ void add_draw(int vertex_count, bool textured);
 // Slows the frame down; turned on by KURVENRAUSCH_GPU_SYNC=1.
 void set_gpu_sync(void (*finish)());
 bool gpu_sync();
-void set_scene_counts(int slices, int sprites, int lamps, bool gles);
+void set_scene_counts(int slices, int sprites, int lamps, bool gles, int screen_px = 0);
+
+// One console line: draws, vertices, and per phase its time and the screens
+// it filled (e.g. "g-spr=1.2ms/3.4x").
+std::string format(const Snapshot& s);
 
 const Snapshot& current(); // in-progress (for mid-frame)
 const Snapshot& last();    // completed previous frame

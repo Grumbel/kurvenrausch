@@ -2,6 +2,20 @@
 
 ## Current tip
 
+### Claude: fill counter, stars behind ridges, white highlights
+- frame_stats counts pixels each GLES draw covers per phase; overlay and
+  console show it as screens filled ("g-spr 1.2ms 3.4x"). The console line
+  (FPS overlay on) now also prints in attract mode; GLES screenshots print it.
+- Night FPS drops at cliffs on R36S are not explained yet: locally the cliff
+  frames fill ≤ ~6 screens, but the US canyon/coast roads emit 3–4× the solid
+  vertices (18–23k) and ~10× the g-road CPU time of a plain road. Need the
+  R36S overlay with KURVENRAUSCH_GPU_SYNC=1 at a slow cliff spot to decide.
+- The headlight cone ends in a hard line at the crest in both renderers:
+  every pixel of a row is lit for the road depth of that row, so cliff faces
+  and scenery above the crest only get the faint "air" glow. Fixing it means
+  lighting sprites by their own depth (a design change for both paths).
+
+
 ### Claude: GLES night lighting = software formulas, cheaper compose
 - Light pass evaluates street_lights() / headlight_beam() per pixel
   (k_light_frag). Per-row data (ground depth, road centre, beam centre /

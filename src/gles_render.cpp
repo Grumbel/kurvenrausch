@@ -849,6 +849,16 @@ void GlesRenderer::push_quad_rotated(float cx, float cy, float w, float h, float
     textured_.insert(textured_.end(), verts, verts + 6);
 }
 
+// Screen area of a triangle list (pixels drawn, before depth test or discard).
+double GlesRenderer::covered(const std::vector<Vertex>& tris) {
+    double area = 0.0;
+    for (size_t i = 0; i + 2 < tris.size(); i += 3) {
+        const Vertex &a = tris[i], &b = tris[i + 1], &c = tris[i + 2];
+        area += std::abs(static_cast<double>((b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y)));
+    }
+    return 0.5 * area;
+}
+
 void GlesRenderer::flush_solid() {
     if (solid_.empty()) return;
     // Solids that must sit on top of earlier sprites need those drawn first
@@ -868,6 +878,7 @@ void GlesRenderer::flush_solid() {
     const int n = static_cast<int>(solid_.size());
     g.DrawArrays(GL_TRIANGLES_, 0, n);
     frame_stats::add_draw(n, false);
+    frame_stats::add_fill(covered(solid_));
     solid_.clear();
 }
 
@@ -893,6 +904,7 @@ void GlesRenderer::flush_textured() {
     const int n = static_cast<int>(textured_.size());
     g.DrawArrays(GL_TRIANGLES_, 0, n);
     frame_stats::add_draw(n, true);
+    frame_stats::add_fill(covered(textured_));
     textured_.clear();
 }
 
@@ -1948,6 +1960,7 @@ void GlesRenderer::draw_fullscreen_quad() {
     g.VertexAttribPointer(1, 2, GL_FLOAT_, GL_FALSE_, stride, reinterpret_cast<void*>(sizeof(float) * 2));
     g.DrawArrays(GL_TRIANGLES_, 0, 6);
     frame_stats::add_draw(6, true);
+    frame_stats::add_fill(static_cast<double>(width_) * static_cast<double>(height_));
 }
 
 void GlesRenderer::ensure_emissive_lut() {
@@ -2075,6 +2088,7 @@ void GlesRenderer::flush_light() {
     const int n = static_cast<int>(solid_.size());
     g.DrawArrays(GL_TRIANGLES_, 0, n);
     frame_stats::add_draw(n, false);
+    frame_stats::add_fill(covered(solid_));
     solid_.clear();
 }
 
@@ -2428,7 +2442,7 @@ void GlesRenderer::render(const Track& track, const RoadView& view, const Sprite
     // As apply_daylight(): nothing to do in plain daylight.
     if (light.level < 0.999f || light.glow > 0.001f) apply_night(light, headlight);
     frame_stats::set_scene_counts(static_cast<int>(slices_.size()), static_cast<int>(objects.size()),
-                                  static_cast<int>(lamps_.size()), true);
+                                  static_cast<int>(lamps_.size()), true, width_ * height_);
 
 
 

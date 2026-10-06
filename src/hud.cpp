@@ -414,19 +414,24 @@ void draw_fps(Framebuffer& fb, float fps, const frame_stats::Snapshot& stats) {
     struct Row {
         const char* name;
         double ms;
+        int phase;
     };
     Row rows[static_cast<int>(frame_stats::Phase::Count)];
     int n = 0;
     for (int i = 0; i < static_cast<int>(frame_stats::Phase::Count); ++i) {
         if (stats.ms[i] < 0.1) continue;
-        rows[n++] = {frame_stats::phase_name(static_cast<frame_stats::Phase>(i)), stats.ms[i]};
+        rows[n++] = {frame_stats::phase_name(static_cast<frame_stats::Phase>(i)), stats.ms[i], i};
     }
     for (int i = 0; i < n; ++i)
         for (int j = i + 1; j < n; ++j)
             if (rows[j].ms > rows[i].ms) std::swap(rows[i], rows[j]);
     int y = stats.gles ? 34 : 24;
     for (int i = 0; i < n && i < 6; ++i) {
-        std::snprintf(buf, sizeof buf, "%-7s %5.1fms", rows[i].name, rows[i].ms);
+        const double screens = stats.screen_px > 0 ? stats.fill[rows[i].phase] / stats.screen_px : 0.0;
+        if (screens >= 0.05)
+            std::snprintf(buf, sizeof buf, "%-7s %5.1fms %4.1fx", rows[i].name, rows[i].ms, screens);
+        else
+            std::snprintf(buf, sizeof buf, "%-7s %5.1fms", rows[i].name, rows[i].ms);
         fb.draw_text(4, y, buf, col);
         y += 10;
     }

@@ -523,6 +523,7 @@ bool Game::frame() {
         if (debug_.fps) draw_fps(fb_, fps_, frame_stats::last());
         present();
         frame_stats::end_frame(static_cast<double>(dt) * 1000.0);
+        log_frame_stats();
         return true;
     }
     idle_ = input.any_input ? 0.f : idle_ + dt;
@@ -618,21 +619,16 @@ bool Game::frame() {
     }
     present();
     frame_stats::end_frame(static_cast<double>(dt) * 1000.0);
-    if (debug_.fps) {
-        static int log_i = 0;
-        if (++log_i >= 60) {
-            log_i = 0;
-            const auto& s = frame_stats::last();
-            std::cout << "kurvenrausch fps=" << static_cast<int>(fps_ + 0.5f) << " frame=" << s.ms_frame
-                      << "ms draws=" << s.draw_calls << " solidV=" << s.solid_verts << " texV=" << s.tex_verts;
-            for (int i = 0; i < static_cast<int>(frame_stats::Phase::Count); ++i) {
-                if (s.ms[i] < 0.15) continue;
-                std::cout << ' ' << frame_stats::phase_name(static_cast<frame_stats::Phase>(i)) << '=' << s.ms[i];
-            }
-            std::cout << "\n";
-        }
-    }
+    log_frame_stats();
     return true;
+}
+
+void Game::log_frame_stats() {
+    // About once a second while the FPS overlay is on, for logs from devices.
+    if (!debug_.fps || ++stats_logged_ < 60) return;
+    stats_logged_ = 0;
+    std::cout << "kurvenrausch fps=" << static_cast<int>(fps_ + 0.5f) << ' ' << frame_stats::format(frame_stats::last())
+              << std::endl;
 }
 
 void Game::apply_options(const Options& before) {
@@ -1166,8 +1162,11 @@ bool Game::screenshot(const ScreenshotOptions& opts) {
     // The GLES scene is only drawn unpaused; the pause menu reuses it.
     if (use_gles_ && opts.pause) render();
     paused_ = opts.pause;
+    frame_stats::begin_frame();
     render();
     if (use_gles_) {
+        frame_stats::end_frame(0.0);
+        std::cout << "kurvenrausch gles " << frame_stats::format(frame_stats::last()) << "\n";
         // The HUD over the scene read back from the GPU, as present() does.
         std::vector<uint32_t> scene;
         gles_.read_scene_argb(scene);

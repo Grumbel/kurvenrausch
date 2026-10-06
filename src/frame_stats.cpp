@@ -6,6 +6,7 @@
 #include <SDL2/SDL.h>
 
 #include <cstring>
+#include <sstream>
 
 #include <algorithm>
 
@@ -74,7 +75,12 @@ void add_draw(int vertex_count, bool textured) {
     else cur.solid_verts += vertex_count;
 }
 
-void set_scene_counts(int slices, int sprites, int lamps, bool gles) {
+void add_fill(double pixels) {
+    if (open_n > 0) cur.fill[open_stack[open_n - 1]] += pixels;
+}
+
+void set_scene_counts(int slices, int sprites, int lamps, bool gles, int screen_px) {
+    cur.screen_px = screen_px;
     cur.slices = slices;
     cur.sprites = sprites;
     cur.lamps = lamps;
@@ -83,6 +89,20 @@ void set_scene_counts(int slices, int sprites, int lamps, bool gles) {
 
 void set_gpu_sync(void (*finish)()) { sync_finish = finish; }
 bool gpu_sync() { return sync_finish != nullptr; }
+
+std::string format(const Snapshot& s) {
+    std::ostringstream out;
+    out << "frame=" << s.ms_frame << "ms draws=" << s.draw_calls << " solidV=" << s.solid_verts
+        << " texV=" << s.tex_verts;
+    for (int i = 0; i < static_cast<int>(Phase::Count); ++i) {
+        const double screens = s.screen_px > 0 ? s.fill[i] / s.screen_px : 0.0;
+        if (s.ms[i] < 0.15 && screens < 0.05) continue;
+        out << ' ' << phase_name(static_cast<Phase>(i)) << '=' << s.ms[i] << "ms";
+        if (screens >= 0.05) out << '/' << static_cast<int>(screens * 10.0 + 0.5) / 10.0 << 'x';
+    }
+    if (gpu_sync()) out << " (gpu-sync)";
+    return out.str();
+}
 
 const Snapshot& current() { return cur; }
 const Snapshot& last() { return prev; }

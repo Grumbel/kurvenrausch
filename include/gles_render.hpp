@@ -87,6 +87,7 @@ private:
     void push_quad(float x, float y, float w, float h, float u0, float v0, float u1, float v1, Color c, bool flip);
     void push_quad_rotated(float cx, float cy, float w, float h, float angle, float u0, float v0, float u1,
                            float v1, Color c);
+    static double covered(const std::vector<Vertex>& tris);
     void flush_solid();
     // Draw pending textured_ with active_tex_, then clear the batch.
     void flush_textured();
