@@ -50,8 +50,9 @@ public:
     // Opens a window of the framebuffer's size times window_scale, or
     // covering the screen; the framebuffer is scaled to fit either way.
     // `preferred` selects the present path; Auto tries GL then falls back.
+    // `hidden` keeps the window unmapped (headless GLES screenshots).
     bool init(const char* title, const char* app_id, int fb_width, int fb_height, int window_scale,
-              bool fullscreen = false, PresentBackend preferred = PresentBackend::Auto);
+              bool fullscreen = false, PresentBackend preferred = PresentBackend::Auto, bool hidden = false);
     // The window's icon, an ARGB8888 image.
     void set_icon(const uint32_t* argb_pixels, int width, int height);
     void present(const uint32_t* argb_pixels, const Overlay& overlay);

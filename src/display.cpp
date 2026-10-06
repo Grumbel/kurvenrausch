@@ -341,7 +341,7 @@ void Display::destroy_present() {
 }
 
 bool Display::init(const char* title, const char* app_id, int fb_width, int fb_height, int window_scale,
-                   bool fullscreen, PresentBackend preferred) {
+                   bool fullscreen, PresentBackend preferred, bool hidden) {
     fb_w_ = fb_width;
     fb_h_ = fb_height;
     window_scale_ = window_scale;
@@ -378,7 +378,7 @@ bool Display::init(const char* title, const char* app_id, int fb_width, int fb_h
 #endif
 #endif
 
-    Uint32 flags = SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL;
+    Uint32 flags = (hidden ? SDL_WINDOW_HIDDEN : SDL_WINDOW_SHOWN) | SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL;
     if (fullscreen) flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
 
     window_ = SDL_CreateWindow(title_.c_str(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,

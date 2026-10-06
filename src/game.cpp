@@ -1087,8 +1087,22 @@ void Game::print_zones() const {
 }
 
 bool Game::screenshot(const ScreenshotOptions& opts) {
-    // Headless, the screen is the framebuffer.
+    // --renderer gles: a hidden GL window, so the GLES scene can be compared
+    // with the software one (needs a display, e.g. xvfb-run). Otherwise
+    // headless, the screen is the framebuffer.
+    if (scene_backend_ == SceneBackend::Gles) {
+        display_ = std::make_unique<Display>();
+        if (!display_->init("Kurvenrausch", app_id, opts.width, fb_height(), 1, false, PresentBackend::Gl, true)) {
+            std::cerr << "--renderer gles: no GL window for the screenshot\n";
+            return false;
+        }
+        width_ = 0; // set_width resizes the GL framebuffer and starts the GLES path
+    }
     set_width(opts.width);
+    if (scene_backend_ == SceneBackend::Gles && !use_gles_) {
+        std::cerr << "--renderer gles: GLES scene renderer unavailable\n";
+        return false;
+    }
     wide_ = width_ > fb_base_width();
     touch_.set_layout(TouchLayout{static_cast<float>(width_), static_cast<float>(fb_height()), 0.f, 0.f,
                                   static_cast<float>(width_), static_cast<float>(fb_height())});
@@ -1149,8 +1163,24 @@ bool Game::screenshot(const ScreenshotOptions& opts) {
         std::cerr << "Writing " << opts.wav_path << " failed\n";
         return false;
     }
+    // The GLES scene is only drawn unpaused; the pause menu reuses it.
+    if (use_gles_ && opts.pause) render();
     paused_ = opts.pause;
     render();
+    if (use_gles_) {
+        // The HUD over the scene read back from the GPU, as present() does.
+        std::vector<uint32_t> scene;
+        gles_.read_scene_argb(scene);
+        uint32_t* px = fb_.pixels_mut();
+        for (size_t i = 0; i < scene.size(); ++i) {
+            const uint32_t h = px[i], a = h >> 24;
+            if (a == 255) continue;
+            const uint32_t s = scene[i];
+            const auto mix = [a](uint32_t over, uint32_t under) { return (over * a + under * (255 - a)) / 255; };
+            px[i] = 0xff000000u | mix((h >> 16) & 0xff, (s >> 16) & 0xff) << 16 |
+                    mix((h >> 8) & 0xff, (s >> 8) & 0xff) << 8 | mix(h & 0xff, s & 0xff);
+        }
+    }
     draw_touch();
     overlay_.draw(fb_);
     if (opts.pause) {

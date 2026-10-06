@@ -47,6 +47,8 @@ public:
 
     // Presentable scene texture (albedo, or night composite when applied).
     unsigned color_texture() const { return present_tex_ ? present_tex_ : color_tex_; }
+    // The presentable scene as ARGB pixels, top row first (headless screenshots).
+    void read_scene_argb(std::vector<uint32_t>& out);
     int texture_width() const { return width_; }
     int texture_height() const { return height_; }
 

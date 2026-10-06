@@ -32,7 +32,9 @@ that is scaled up with nearest-neighbour filtering for chunky pixels.
   test checks it).
 - Headless check: `./build/kurvenrausch --screenshot out.bmp --frames 600`
   renders a frame without opening a window. Use this to verify rendering
-  changes in environments without a display.
+  changes in environments without a display. Add `--renderer gles` to render
+  the same frame through the GLES path (hidden GL window, needs a display or
+  `xvfb-run`) and compare it with the software one.
 
 ## Rules
 

@@ -2075,6 +2075,15 @@ void GlesRenderer::read_fbo_argb(std::vector<uint32_t>& out) {
     }
 }
 
+void GlesRenderer::read_scene_argb(std::vector<uint32_t>& out) {
+    int prev_fbo = 0;
+    if (g.GetIntegerv) g.GetIntegerv(GL_FRAMEBUFFER_BINDING_, &prev_fbo);
+    g.BindFramebuffer(GL_FRAMEBUFFER_, present_tex_ == night_tex_ && night_fbo_ ? night_fbo_ : fbo_);
+    read_fbo_argb(out);
+    for (uint32_t& p : out) p |= 0xff000000u;
+    g.BindFramebuffer(GL_FRAMEBUFFER_, static_cast<unsigned>(prev_fbo));
+}
+
 void GlesRenderer::apply_cpu_night(const Daylight& light, const Beam* headlight,
                                    const std::vector<uint32_t>& ground_argb,
                                    const std::vector<uint32_t>& day_argb) {
