@@ -2147,7 +2147,7 @@ void GlesRenderer::render(const Track& track, const RoadView& view, const Sprite
     }
 
     for (RoadSprite& o : objects) o.z = track.wrap(o.z);
-    std::sort(objects.begin(), objects.end(), [](const RoadSprite& a, const RoadSprite& b) { return a.z < b.z; });
+    std::stable_sort(objects.begin(), objects.end(), [](const RoadSprite& a, const RoadSprite& b) { return a.z < b.z; });
 
     // GL frame into the internal FBO
     Color air = fog_air_;

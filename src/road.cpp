@@ -154,8 +154,8 @@ void RoadRenderer::render(Framebuffer& fb, const Track& track, const RoadView& v
 
     ground_.assign(fb.pixels(), fb.pixels() + static_cast<size_t>(fb.width()) * static_cast<size_t>(fb.height()));
     for (RoadSprite& o : objects) o.z = track.wrap(o.z);
-    std::sort(objects.begin(), objects.end(),
-              [](const RoadSprite& a, const RoadSprite& b) { return a.z < b.z; });
+    std::stable_sort(objects.begin(), objects.end(),
+                     [](const RoadSprite& a, const RoadSprite& b) { return a.z < b.z; });
     draw_sprites(fb, track, sprites, objects);
 }
 

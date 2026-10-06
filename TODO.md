@@ -2,6 +2,11 @@
 
 ## Current tip
 
+### Grok: stable player car layer order
+- Equal-z player layers were reordered by std::sort. Use stable_sort and
+  micro z offsets (body → dirt → people → movie → lightbar).
+
+
 ### Grok: lock light pools to vehicles (perspective + road centre)
 - Pools used a fixed screen X from the car's depth, so on other rows they
   slid toward the vanishing point. Now each lamp stores a world lateral

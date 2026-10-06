@@ -2732,10 +2732,17 @@ void Game::render() {
         car_visible = pose.visible;
     }
     if (car_visible) {
-        auto push_layer = [&](const Bitmap& bmp) {
+        // Layers share the player z; micro-offsets keep body < dirt < people <
+        // overlays under sort (stable_sort alone is not enough if anything
+        // reorders equal keys).
+        int layer_i = 0;
+        auto push_layer = [&](const Bitmap& bmp, bool dynamic = false) {
             if (bmp.w <= 0 || bmp.h <= 0 || bmp.px.empty()) return;
             RoadSprite layer = me;
             layer.bitmap = &bmp;
+            layer.dynamic = dynamic;
+            layer.z = me.z + static_cast<float>(layer_i) * 1e-3f;
+            ++layer_i;
             road_sprites_.push_back(layer);
         };
         push_layer(body);
@@ -2755,10 +2762,7 @@ void Game::render() {
                 std::fill(movie_overlay_.px.begin(), movie_overlay_.px.end(), 0u);
             }
             movie_car_extras(movie_overlay_, shown_steer);
-            RoadSprite layer = me;
-            layer.bitmap = &movie_overlay_;
-            layer.dynamic = true;
-            road_sprites_.push_back(layer);
+            push_layer(movie_overlay_, true);
         }
         if (beacon_) {
             const int lit = static_cast<int>(clock_ / 0.12f) % 2 ? 1 : -1;
