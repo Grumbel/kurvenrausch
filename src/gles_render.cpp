@@ -267,6 +267,19 @@ Color fogged(Color c, Color air, float amount, float daylight) {
 
 GlesRenderer::~GlesRenderer() { shutdown(); }
 
+void GlesRenderer::invalidate() {
+    // Context is gone: do not call glDelete*. Zero handles so init() rebuilds.
+    program_ = 0;
+    vbo_ = 0;
+    fbo_ = 0;
+    color_tex_ = 0;
+    depth_rb_ = 0;
+    fbo_w_ = fbo_h_ = 0;
+    textures_.clear();
+    // Force load_gl to re-resolve entry points if needed.
+    g = {};
+}
+
 void GlesRenderer::shutdown() {
     if (!g.DeleteTextures) {
         program_ = 0;
@@ -475,7 +488,9 @@ void GlesRenderer::draw_backdrop(const RoadTheme& theme, const Background* backd
             const float top_y = horizon - here;
             if (top_y >= horizon - 0.5f) continue;
             const float slope = h[static_cast<size_t>((i + 6) % period)] - h[static_cast<size_t>((i + period - 6) % period)];
-            const Color face = slope < 0.f ? lit : shade;
+            // Same lighting model as Background::render: lit from the left by slope.
+            const float light = std::clamp(0.5f - slope * 0.08f, 0.f, 1.f);
+            const Color face = blend(shade, lit, light);
             const float haze = std::max(theme.haze, std::clamp(1.f - here / (14.f * scale_mul + 1.f), 0.f, 1.f) * 0.75f);
             const Color c = fogged(face, fog_air_, haze, daylight_);
             const float x0 = static_cast<float>(x);

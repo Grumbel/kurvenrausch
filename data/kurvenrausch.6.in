@@ -37,6 +37,10 @@ one frame is rendered and saved, and no window is opened.
 Start covering the whole screen instead of in a window (F11 or Alt+Enter
 switches between the two).
 .TP
+.BI \-\-renderer " MODE"
+Choose the road scene renderer: auto (GLES when available), software, or gles. F8 cycles in game.
+
+.TP
 .BI \-\-screenshot " FILE"
 Render headless and save the frame as a BMP image to
 .IR FILE ,

@@ -69,8 +69,25 @@ void Framebuffer::put_pixel(int x, int y, Color c) {
 void Framebuffer::blend_pixel(int x, int y, Color c, float alpha) {
     if (x < clip_x0_ || x >= clip_x1_ || y < clip_y0_ || y >= clip_y1_) return;
     uint32_t& dst = pixels_[static_cast<size_t>(y) * w_ + x];
-    const Color under(static_cast<uint8_t>(dst >> 16), static_cast<uint8_t>(dst >> 8), static_cast<uint8_t>(dst));
-    dst = blend(under, c, std::clamp(alpha, 0.f, 1.f)).argb();
+    const float src_a = std::clamp(alpha, 0.f, 1.f);
+    const float dst_a = static_cast<float>((dst >> 24) & 0xffu) / 255.f;
+    const float out_a = src_a + dst_a * (1.f - src_a);
+    if (out_a < 1e-4f) {
+        dst = 0;
+        return;
+    }
+    auto ch = [&](uint8_t s, uint8_t d) {
+        const float s_f = static_cast<float>(s);
+        const float d_f = static_cast<float>(d);
+        // src-over in straight alpha; matches the opaque case used on the software path.
+        return static_cast<uint8_t>((s_f * src_a + d_f * dst_a * (1.f - src_a)) / out_a + 0.5f);
+    };
+    const uint8_t dr = static_cast<uint8_t>((dst >> 16) & 0xffu);
+    const uint8_t dg = static_cast<uint8_t>((dst >> 8) & 0xffu);
+    const uint8_t db = static_cast<uint8_t>(dst & 0xffu);
+    dst = Color(ch(c.r, dr), ch(c.g, dg), ch(c.b, db),
+                static_cast<uint8_t>(out_a * 255.f + 0.5f))
+              .argb();
 }
 
 void Framebuffer::hline(int x0, int x1, int y, Color c) {

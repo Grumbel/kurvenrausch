@@ -331,14 +331,7 @@ bool Game::init(bool fullscreen) {
     if (present_backend_ == PresentBackend::Sdl) present_backend_ = PresentBackend::Auto;
     if (!display_->init("Kurvenrausch", app_id, base_width, height, window_scale, fullscreen, present_backend_))
         return false;
-    if (display_->is_gl() && display_->make_gl_current() && gles_.init()) {
-        use_gles_ = true;
-        gles_.set_size(width_, fb_height());
-        std::cout << "Kurvenrausch: GLES2 scene renderer\n";
-    } else {
-        use_gles_ = false;
-        std::cout << "Kurvenrausch: software renderer (no GL scene)\n";
-    }
+    apply_scene_backend();
 
     const Bitmap icon = make_app_icon();
     display_->set_icon(icon.px.data(), icon.w, icon.h);
@@ -358,7 +351,7 @@ bool Game::init(bool fullscreen) {
     std::cout << "Kurvenrausch: " << track_.segments.size() << " segments, "
               << track_.length() << " units.\n"
               << "Controls: Arrows / WASD or gamepad to drive, P / Start to pause,\n"
-              << "          R restart, M mute, F11 fullscreen, Esc to " << (web ? "pause" : "quit") << ".\n";
+              << "          R restart, M mute, F8 renderer, F11 fullscreen, Esc to " << (web ? "pause" : "quit") << ".\n";
     return true;
 }
 
@@ -525,6 +518,12 @@ bool Game::frame() {
     }
 
     if (!paused_) switch_lights(input); // paused, the D-pad moves the menu
+    if (input.toggle_renderer) {
+        scene_backend_ = next_scene_backend(scene_backend_);
+        apply_scene_backend();
+        std::cout << "Kurvenrausch: scene renderer " << scene_backend_name(scene_backend_)
+                  << (use_gles_ ? " (GLES active)" : " (software active)") << "\n";
+    }
     if (input.change_view && !paused_) {
         view_mode_ = static_cast<ViewMode>((static_cast<int>(view_mode_) + 1) % view_modes);
         show_message(view_name(view_mode_), 1.f);
@@ -615,6 +614,36 @@ void Game::advance_clock(float dt) {
     hour_ = fixed >= 0.f ? fixed : advance_hour(hour_, dt);
 }
 
+
+void Game::apply_scene_backend() {
+    const bool was = use_gles_;
+    use_gles_ = false;
+    if (scene_backend_ == SceneBackend::Software) {
+        if (was) std::cout << "Kurvenrausch: software scene renderer\n";
+        return;
+    }
+    if (!display_ || !display_->is_gl()) {
+        if (scene_backend_ == SceneBackend::Gles)
+            std::cout << "Kurvenrausch: GLES scene requested but no GL present path; software\n";
+        else if (!was)
+            std::cout << "Kurvenrausch: software scene renderer (no GL)\n";
+        return;
+    }
+    if (!display_->make_gl_current()) {
+        std::cout << "Kurvenrausch: software scene renderer (make_gl_current failed)\n";
+        return;
+    }
+    // Context may have been rebuilt; always drop names and recreate.
+    gles_.invalidate();
+    if (!gles_.init()) {
+        std::cout << "Kurvenrausch: software scene renderer (GLES init failed)\n";
+        return;
+    }
+    gles_.set_size(width_, fb_height());
+    use_gles_ = true;
+    if (!was) std::cout << "Kurvenrausch: GLES2 scene renderer\n";
+}
+
 void Game::set_width(int w) {
     w = std::clamp(w, fb_base_width(), fb_max_width());
     if (w == width_ && fb_.height() == fb_height()) return;
@@ -622,7 +651,11 @@ void Game::set_width(int w) {
     width_ = w;
     fb_ = Framebuffer(width_, fb_height());
     weather_.resize(width_, fb_height());
-    if (use_gles_) gles_.set_size(width_, fb_height());
+    // resize_framebuffer rebuilds the GL present context — scene GL objects are stale.
+    if (scene_backend_ != SceneBackend::Software) {
+        gles_.invalidate();
+        apply_scene_backend();
+    }
 }
 
 void Game::set_pixel_scale(int scale) {
@@ -905,8 +938,11 @@ bool Game::update_pause(const InputState& input) {
         set_pixel_scale(hd ? 2 : 1);
         if (want_fs) display_->toggle_fullscreen();
         if (present != present_backend_) {
-            if (display_->set_present_backend(present)) present_backend_ = present;
-            else present_backend_ = display_->present_backend() == PresentBackend::Gl ? PresentBackend::Gl
+            if (display_->set_present_backend(present)) {
+                present_backend_ = present;
+                gles_.invalidate();
+                apply_scene_backend();
+            } else present_backend_ = display_->present_backend() == PresentBackend::Gl ? PresentBackend::Gl
                                    : PresentBackend::Sdl;
         }
         save_choices();

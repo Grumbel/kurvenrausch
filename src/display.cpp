@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <cstring>
 #include <iostream>
+#include <string>
 #include <type_traits>
 #include <vector>
 
@@ -201,6 +202,34 @@ unsigned link_program(unsigned vs, unsigned fs) {
 }
 
 } // namespace
+
+const char* scene_backend_name(SceneBackend b) {
+    switch (b) {
+        case SceneBackend::Software: return "SOFTWARE";
+        case SceneBackend::Gles: return "GLES";
+        case SceneBackend::Auto:
+        default: return "AUTO";
+    }
+}
+
+SceneBackend next_scene_backend(SceneBackend b) {
+    switch (b) {
+        case SceneBackend::Auto: return SceneBackend::Software;
+        case SceneBackend::Software: return SceneBackend::Gles;
+        case SceneBackend::Gles:
+        default: return SceneBackend::Auto;
+    }
+}
+
+bool parse_scene_backend(const char* s, SceneBackend& out) {
+    if (!s) return false;
+    std::string v(s);
+    for (char& c : v) if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a');
+    if (v == "auto") { out = SceneBackend::Auto; return true; }
+    if (v == "software" || v == "sw" || v == "cpu") { out = SceneBackend::Software; return true; }
+    if (v == "gles" || v == "gl" || v == "gpu") { out = SceneBackend::Gles; return true; }
+    return false;
+}
 
 const char* present_backend_name(PresentBackend b) {
     switch (b) {
@@ -659,19 +688,20 @@ void Display::present_gles_scene(unsigned scene_tex, int tex_w, int tex_h, const
     const float x1 = 2.f * static_cast<float>(pic.x + pic.w) / static_cast<float>(s.w) - 1.f;
     const float y0 = 1.f - 2.f * static_cast<float>(pic.y + pic.h) / static_cast<float>(s.h);
     const float y1 = 1.f - 2.f * static_cast<float>(pic.y) / static_cast<float>(s.h);
-    // GLES FBO is upright; present_gl used to flip software FB — no flip here.
-    const float verts[] = {
-        x0, y0, 0.f, 1.f, x1, y0, 1.f, 1.f, x0, y1, 0.f, 0.f, x1, y1, 1.f, 0.f,
+    // Scene FBO: y=0 is NDC top, so the top of the scene sits at high V.
+    // Sample with V=1 at the top of the picture (opposite of CPU-upload textures).
+    const float scene_verts[] = {
+        x0, y0, 0.f, 0.f, x1, y0, 1.f, 0.f, x0, y1, 0.f, 1.f, x1, y1, 1.f, 1.f,
     };
     g_gl.BindBuffer(GL_ARRAY_BUFFER_, gl_vbo_);
-    g_gl.BufferData(GL_ARRAY_BUFFER_, sizeof verts, verts, GL_STREAM_DRAW_);
+    g_gl.BufferData(GL_ARRAY_BUFFER_, sizeof scene_verts, scene_verts, GL_STREAM_DRAW_);
     g_gl.EnableVertexAttribArray(0);
     g_gl.EnableVertexAttribArray(1);
     g_gl.VertexAttribPointer(0, 2, GL_FLOAT_, GL_FALSE_, 16, reinterpret_cast<void*>(0));
     g_gl.VertexAttribPointer(1, 2, GL_FLOAT_, GL_FALSE_, 16, reinterpret_cast<void*>(8));
     g_gl.DrawArrays(GL_TRIANGLE_STRIP_, 0, 4);
 
-    // HUD: upload software ARGB (transparent where empty) and blend on top.
+    // HUD: CPU ARGB (row 0 = top) uploaded as a texture needs the present_gl UV flip.
     if (hud_argb && gl_fb_tex_ && tex_w == fb_w_ && tex_h == fb_h_) {
         g_gl.Enable(GL_BLEND_);
         g_gl.BlendFunc(GL_SRC_ALPHA_, GL_ONE_MINUS_SRC_ALPHA_);
@@ -688,6 +718,10 @@ void Display::present_gles_scene(unsigned scene_tex, int tex_w, int tex_h, const
 #else
         g_gl.TexSubImage2D(GL_TEXTURE_2D_, 0, 0, 0, fb_w_, fb_h_, GL_BGRA_, GL_UNSIGNED_BYTE_, hud_argb);
 #endif
+        const float hud_verts[] = {
+            x0, y0, 0.f, 1.f, x1, y0, 1.f, 1.f, x0, y1, 0.f, 0.f, x1, y1, 1.f, 0.f,
+        };
+        g_gl.BufferData(GL_ARRAY_BUFFER_, sizeof hud_verts, hud_verts, GL_STREAM_DRAW_);
         g_gl.BindTexture(GL_TEXTURE_2D_, gl_fb_tex_);
         g_gl.DrawArrays(GL_TRIANGLE_STRIP_, 0, 4);
         g_gl.Disable(GL_BLEND_);

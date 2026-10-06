@@ -29,6 +29,8 @@ public:
     GlesRenderer& operator=(const GlesRenderer&) = delete;
 
     bool init();
+    // Drop GL object names without calling GL (context was destroyed).
+    void invalidate();
     void shutdown();
     bool ready() const { return program_ != 0; }
 

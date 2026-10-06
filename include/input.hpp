@@ -32,6 +32,7 @@ struct InputState {
     bool toggle_fullscreen = false;
     bool toggle_mute = false;
     bool change_view = false; // C or Back: the next camera view
+    bool toggle_renderer = false; // F8: cycle software / GLES scene renderer
     bool toggle_map = false;  // Tab or the right stick clicked: zoom the mini map in or out
     // The light switches: L or D-pad up the headlights, Q / E or the right
     // stick flicked left / right the indicators, Z or D-pad down the hazard

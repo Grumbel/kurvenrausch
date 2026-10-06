@@ -126,6 +126,7 @@ void Input::poll(InputState& state) {
                     case SDLK_RIGHT: case SDLK_d: state.menu.right = true; break;
                     case SDLK_SPACE: state.menu.confirm = true; break;
                     case SDLK_F11: state.toggle_fullscreen = true; break;
+                    case SDLK_F8: state.toggle_renderer = true; break;
                     case SDLK_m: state.toggle_mute = true; break;
                     case SDLK_c: state.change_view = true; break;
                     case SDLK_TAB: state.toggle_map = true; break;

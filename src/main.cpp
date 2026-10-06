@@ -22,6 +22,7 @@ racer::Game* web_game = nullptr; // for the web page's hooks
 void usage(const char* argv0) {
     std::cout << "Usage: " << argv0 << " [OPTIONS]\n"
               << "  --fullscreen        start covering the whole screen\n"
+              << "  --renderer MODE     road scene: auto, software, or gles (F8 cycles)\n"
               << "  --screenshot FILE   render headless and save a BMP, then exit\n"
               << "  --frames N          simulation steps (60/s) before the screenshot (default 0)\n"
               << "  --position Z        start distance along the track for the screenshot\n"
@@ -62,6 +63,8 @@ void usage(const char* argv0) {
 
 int main(int argc, char* argv[]) {
     racer::ScreenshotOptions shot;
+    racer::SceneBackend scene_backend = racer::SceneBackend::Auto;
+    bool scene_backend_set = false;
     bool print_zones = false;
     bool fullscreen = false;
 
@@ -81,6 +84,12 @@ int main(int argc, char* argv[]) {
             shot.track = std::atoi(argv[++i]);
         } else if (arg == "--print-zones") {
             print_zones = true;
+        } else if (arg == "--renderer" && i + 1 < argc) {
+            if (!racer::parse_scene_backend(argv[++i], scene_backend)) {
+                std::cerr << "unknown --renderer (use auto, software, or gles)\n";
+                return 1;
+            }
+            scene_backend_set = true;
         } else if (arg == "--fullscreen") {
             fullscreen = true;
         } else if (arg == "--steer" && i + 1 < argc) {

@@ -95,6 +95,9 @@ public:
 
     // Interactive mode: opens a window, or covers the screen.
     bool init(bool fullscreen = false);
+    // Preferred road scene path (AUTO / SOFTWARE / GLES). Applied in init and on F8.
+    void set_scene_backend(SceneBackend b) { scene_backend_ = b; }
+    SceneBackend scene_backend() const { return scene_backend_; }
     // Runs until the player quits; in a web page the browser drives the loop
     // and this returns at once (the Game must then outlive main(): allocate
     // it on the heap and let it be).
@@ -206,6 +209,7 @@ private:
     void render_mirror();
     // The framebuffer to the screen, the touch controls over it.
     void present();
+    void apply_scene_backend();
     // The framebuffer this wide (clamped to base_width .. max_width), and the
     // width the screen asks for: 4:3, or as wide as the screen when wide_.
     void set_width(int w);
@@ -431,6 +435,7 @@ private:
     bool wide_ = false;                // the player chose a picture as wide as the screen
     int pixel_scale_ = 1;              // 1 SD (320x240), 2 HD (640x480)
     PresentBackend present_backend_ = PresentBackend::Auto;
+    SceneBackend scene_backend_ = SceneBackend::Auto; // preference; use_gles_ is effective
     Uint64 prev_counter_ = 0;
     float accumulator_ = 0.f;
 };

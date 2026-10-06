@@ -2,6 +2,20 @@
 
 ## Current tip
 
+### Grok: GLES orientation, minimap alpha, scene backend
+- `present_gles_scene` samples the scene FBO with V=1 at the top (was using the
+  CPU-texture UV flip and drawing the world upside down). HUD still uses the
+  upload flip.
+- `Framebuffer::blend_pixel` composites destination alpha so the minimap's
+  translucent shadow works over a transparent HUD buffer on the GLES path.
+- `GlesRenderer::invalidate` + `Game::apply_scene_backend` rebuild scene GL
+  objects after present/context rebuild (resize, video PRESENT change) — fixes
+  broken world after pause-menu present switches and framebuffer resizes.
+- Mountain/hill ridges use the software slope lighting (`0.5 - slope*0.08`).
+- `--renderer auto|software|gles` and **F8** cycle the scene backend (independent
+  of present path). Pause menus still use full software road under the UI.
+
+
 ### Grok: GLES tunnel occlusion + edge/rail parity
 - Projection loop now updates tunnel `ceiling` / `mouth_left` / `mouth_right` like
   software `RoadRenderer`, so farther slices clip to the portal.
