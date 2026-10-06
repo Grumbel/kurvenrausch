@@ -16,9 +16,15 @@
 // GLES2 on the web, Android, and R36S/ArkOS (KURVEN_OPENGLES2); desktop GL 2.x
 // otherwise. Entry points are resolved with SDL_GL_GetProcAddress so we do not
 // depend on GLEW/glad or GL_GLEXT_PROTOTYPES (which many Linux toolchains leave
-// undeclared).
-#if defined(__EMSCRIPTEN__) || defined(__ANDROID__) || defined(KURVEN_OPENGLES2)
+// undeclared). Types and enumerants used by the present path are defined below;
+// the platform GL header is only needed where the toolchain ships one.
+#if defined(__EMSCRIPTEN__) || defined(__ANDROID__)
 #include <SDL2/SDL_opengles2.h>
+#define KURVEN_GLES 1
+#elif defined(KURVEN_OPENGLES2)
+// Cross sysroots (ArkOS eoan) often lack GLES2/gl2platform.h that
+// SDL_opengles2.h pulls in. KURVEN_GLES selects ES shaders + ES 2.0 context;
+// no system GLES headers required.
 #define KURVEN_GLES 1
 #else
 #include <SDL2/SDL_opengl.h>

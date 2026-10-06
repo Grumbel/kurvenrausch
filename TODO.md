@@ -2,6 +2,12 @@
 
 ## Current tip
 
+### Grok: R36S GLES without system GLES headers
+- `SDL_opengles2.h` includes `GLES2/gl2platform.h`, missing from the ArkOS
+  eoan sysroot. For `KURVEN_OPENGLES2` skip that include: entry points still
+  come from `SDL_GL_GetProcAddress`, shaders/context from `KURVEN_GLES`.
+
+
 ### Grok: drop unused tunnel xa_in/xb_in
 - GLES tunnel wall loop declared road-edge coords never used (outer bulk
   only). Removed to silence -Wunused-variable under -Wall.
