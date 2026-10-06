@@ -2,6 +2,12 @@
 
 ## Current tip
 
+### Grok: tunnel walls sealed + collision
+- Walls at `tunnel_half_width` with opaque bulk outside so nothing shows past.
+- Mouth draws side+header fill for way_in and way_out.
+- `barrier_limit` treats tunnel segments as solid walls.
+
+
 ### Grok: GLES sun/moon soft discs
 - Soft radial discs + glow/halo; placement matches Background::body_screen.
 - Moon left-shaded limb; visibility matches software (stars or low sun).

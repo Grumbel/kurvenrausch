@@ -353,6 +353,8 @@ bool crossed_line_forward(float prev_z, float z, float line_z, float length) {
 }
 
 float barrier_limit(const Segment& seg, int side, float car_half_width) {
+    // Tunnel walls sit at tunnel_half_width road half-widths from centre.
+    if (seg.tunnel) return tunnel_half_width - car_half_width;
     const Edge e = side < 0 ? seg.left : seg.right;
     if (e == Edge::Rail) return rail_offset - car_half_width;
     if (e == Edge::Cliff && seg.edge_fade > 0.35f) return cliff_offset - car_half_width;

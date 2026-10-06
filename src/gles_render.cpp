@@ -775,18 +775,22 @@ void GlesRenderer::draw_segment(const Track& track, const Slice& s, const RoadTh
         else push_trap(b.y, xb, wf, a.y, xa, wf, c);
     }
 
-    // Tunnel exit mouth: wall around the opening (way out, seen from inside).
+    // Tunnel mouth: solid wall around the opening so scenery cannot show past
+    // the aperture (way in from outside, way out from inside).
     {
         const int dir = direction_;
         const bool way_out = seg.tunnel && !track.segment(s.index + dir).tunnel;
-        if (way_out) {
-            const ScreenPoint& mouth = b; // far end of this segment
+        const bool way_in = seg.tunnel && !track.segment(s.index - dir).tunnel;
+        if (way_out || way_in) {
+            const ScreenPoint& mouth = way_out ? b : a;
             const float half = mouth.scale * tunnel_half_width * track.road_width * x_scale_;
             const float x0 = mouth.x - half, x1 = mouth.x + half;
-            const float far_ceiling = b.y - b.scale * tunnel_height * y_scale_;
+            const float ceil_y = mouth.y - mouth.scale * tunnel_height * y_scale_;
             const Color mouth_wall = fogc(Color{0x6c, 0x68, 0x62});
-            push_trap(far_ceiling, 0.f, x0, b.y, 0.f, x0, mouth_wall);
-            push_trap(far_ceiling, x1, wf, b.y, x1, wf, mouth_wall);
+            // Full-height sides and a header above the opening.
+            push_trap(ceil_y, 0.f, x0, mouth.y, 0.f, x0, mouth_wall);
+            push_trap(ceil_y, x1, wf, mouth.y, x1, wf, mouth_wall);
+            push_trap(0.f, 0.f, wf, ceil_y, 0.f, wf, mouth_wall);
         }
     }
 
@@ -1002,9 +1006,9 @@ void GlesRenderer::draw_sprites(const Track& track, const SpriteSheet& sprites, 
             draw_rail(+1);
         }
 
-        // Tunnel side walls: continuous bands along the segment (same idea as
-        // guard rails), not billboard columns. Kerb / tile / upper match
-        // make_tunnel_wall(); tile course alternates by segment.
+        // Tunnel side walls at tunnel_half_width (matches mouth clip + collision).
+        // Continuous bands near→far; opaque fill from road edge out so nothing
+        // shows through past the walls.
         if (projectable && seg.tunnel) {
             const ScreenPoint& a = s.p1;
             const ScreenPoint& b = s.p2;
@@ -1013,18 +1017,29 @@ void GlesRenderer::draw_sprites(const Track& track, const SpriteSheet& sprites, 
             const Color kerb = fogc(Color{0xe0, 0xdc, 0xd4});
             const Color tile = fogc((s.index % 2) ? Color{0xc4, 0xbc, 0xb0} : Color{0xb8, 0xb0, 0xa4});
             const Color upper = fogc(Color{0x7c, 0x78, 0x70});
+            const Color bulk = fogc(Color{0x6c, 0x68, 0x62}); // solid rock outside the face
             const float ha = tunnel_height * a.scale * y_scale_;
             const float hb = tunnel_height * b.scale * y_scale_;
             for (int side = -1; side <= 1; side += 2) {
                 const float sd = static_cast<float>(side);
-                // Vertical face at the road edge, near → far (like a rail bar).
-                const float xa = a.x + sd * a.w;
-                const float xb = b.x + sd * b.w;
+                // Wall face at tunnel_half_width road half-widths from centre.
+                const float xa = a.x + sd * tunnel_half_width * a.w;
+                const float xb = b.x + sd * tunnel_half_width * b.w;
+                // Road edge (inner) — fill bulk between edge and wall so the
+                // aperture cannot show scenery behind the tunnel.
+                const float xa_in = a.x + sd * a.w;
+                const float xb_in = b.x + sd * b.w;
+                // Outer bulk to screen edge (blocks see-through past the wall).
+                const float xa_out = sd < 0.f ? 0.f : static_cast<float>(width_);
+                const float xb_out = xa_out;
                 auto band = [&](float r0, float r1, Color c) {
                     const float ya0 = a.y - ha * r0, ya1 = a.y - ha * r1;
                     const float yb0 = b.y - hb * r0, yb1 = b.y - hb * r1;
                     push_solid_quad(xa, ya1, xb, yb1, xb, yb0, xa, ya0, c);
                 };
+                // Opaque sides: full height bulk outside the tunnel wall face.
+                push_solid_quad(xa, a.y - ha, xb, b.y - hb, xb_out, b.y - hb, xa_out, a.y - ha, bulk);
+                push_solid_quad(xa, a.y - ha, xb, b.y - hb, xb_out, b.y, xa_out, a.y, bulk);
                 band(0.f, 0.14f, kerb);
                 band(0.14f, 0.55f, tile);
                 band(0.55f, 1.f, upper);
