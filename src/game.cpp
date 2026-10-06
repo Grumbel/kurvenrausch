@@ -652,8 +652,10 @@ void Game::draw_touch() {
 
 void Game::present() {
     draw_touch();
-    if (use_gles_ && !paused_ && !options_open_ && !video_open_ && !audio_open_ && !debug_open_) {
-        display_->present_overlay(overlay_);
+    if (use_gles_ && !paused_ && !options_open_ && !video_open_ && !audio_open_ && !debug_open_ &&
+        gles_.color_texture()) {
+        display_->present_gles_scene(gles_.color_texture(), gles_.texture_width(), gles_.texture_height(),
+                                     fb_.pixels(), overlay_);
     } else {
         display_->present(fb_.pixels(), overlay_);
     }
@@ -2694,14 +2696,15 @@ void Game::render() {
 
     if (use_gles_ && display_ && display_->make_gl_current()) {
         gles_.set_size(width_, fb_height());
-        const int dw = display_->window_pixel_width();
-        const int dh = display_->window_pixel_height();
         const float day_level = lit_by(daylight_at(hour_), look.night_glow).level;
-        gles_.render(track_, view, sprites_, road_sprites_, look, day_level, dw, dh);
-        // HUD / menus still need a software buffer when paused; clear for debug.
+        gles_.render(track_, view, sprites_, road_sprites_, look, day_level);
+        // Pause / options: full software frame underneath the menus.
         if (paused_ || options_open_ || video_open_ || audio_open_ || debug_open_) {
             background_.render(fb_, look, hour_);
             road_.render(fb_, track_, view, sprites_, road_sprites_);
+        } else {
+            // Transparent buffer so only HUD / cockpit pixels composite over GLES.
+            std::fill(fb_.pixels_mut(), fb_.pixels_mut() + width_ * fb_height(), 0u);
         }
     } else {
         background_.render(fb_, look, hour_);

@@ -2,6 +2,13 @@
 
 ## Current tip
 
+### Grok: GLES FBO + HUD composite
+- GlesRenderer draws into an internal RGBA FBO at framebuffer resolution.
+- `Display::present_gles_scene` letterboxes that texture, then blends the
+  software buffer (HUD / cockpit / particles on a cleared transparent FB)
+  on top and swaps. Software RoadRenderer still for headless / menus / no GL.
+
+
 ### Grok: GLES2 scene renderer (primary window path)
 - `GlesRenderer` draws road trapezoids + textured sprites via GLES2/desktop GL.
 - Sprite **construction** stays CPU (`SpriteSheet`); bitmaps upload to textures.

@@ -44,6 +44,10 @@ public:
     // The window's icon, an ARGB8888 image.
     void set_icon(const uint32_t* argb_pixels, int width, int height);
     void present(const uint32_t* argb_pixels, const Overlay& overlay);
+    // Scene texture (RGBA, nearest) letterboxed, then optional HUD ARGB pixels
+    // (alpha blended) and overlay, then swap. Used by the GLES road path.
+    void present_gles_scene(unsigned scene_tex, int tex_w, int tex_h, const uint32_t* hud_argb,
+                            const Overlay& overlay);
     // Scene already drawn into the GL backbuffer; only overlay + swap.
     void present_overlay(const Overlay& overlay);
     // A framebuffer of another size from now on.

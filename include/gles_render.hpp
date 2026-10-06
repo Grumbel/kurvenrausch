@@ -14,11 +14,10 @@
 
 namespace racer {
 
-class Display;
-
 // GLES2 / desktop-GL scene renderer for the road view. Sprite bitmaps stay
 // CPU-authored; once uploaded they are drawn as textured quads. Road surfaces
-// are solid-colour trapezoids. Uses the GL context owned by Display.
+// are solid-colour trapezoids. Renders into an FBO at internal resolution;
+// the colour texture is presented letterboxed by Display.
 class GlesRenderer {
 public:
     GlesRenderer() = default;
@@ -26,21 +25,21 @@ public:
     GlesRenderer(const GlesRenderer&) = delete;
     GlesRenderer& operator=(const GlesRenderer&) = delete;
 
-    // Compiles shaders and creates the VBO. Display must have a current GL
-    // context (PresentBackend::Gl). Returns false on failure.
     bool init();
     void shutdown();
     bool ready() const { return program_ != 0; }
 
-    // Internal resolution (same as the former software framebuffer).
     void set_size(int width, int height);
 
-    // Clear, draw road + sprites. `daylight` multiplies RGB (1 = full day).
+    // Draws the road scene into the internal FBO (not the window).
     void render(const Track& track, const RoadView& view, const SpriteSheet& sprites,
-                std::vector<RoadSprite>& objects, const RoadTheme& theme, float daylight = 1.f,
-                int viewport_w = 0, int viewport_h = 0);
+                std::vector<RoadSprite>& objects, const RoadTheme& theme, float daylight = 1.f);
 
-    // After render: depth per row and lamp spots (for optional CPU effects).
+    // Colour attachment of the scene FBO (RGBA, size width_ × height_).
+    unsigned color_texture() const { return color_tex_; }
+    int texture_width() const { return width_; }
+    int texture_height() const { return height_; }
+
     const std::vector<float>& row_depth() const { return row_depth_; }
     const std::vector<LampSpot>& lamps() const { return lamps_; }
 
@@ -59,6 +58,7 @@ private:
         bool road_visible = false;
     };
 
+    bool ensure_fbo();
     void clear_batch();
     void push_trap(float y0, float x0l, float x0r, float y1, float x1l, float x1r, Color c);
     void push_quad(float x, float y, float w, float h, float u0, float v0, float u1, float v1, Color c, bool flip);
@@ -67,7 +67,6 @@ private:
     unsigned texture_for(const Bitmap& bmp);
     void draw_segment(const Track& track, const Slice& s, const RoadTheme& theme);
     void draw_sprites(const Track& track, const SpriteSheet& sprites, std::vector<RoadSprite>& objects);
-
     void project_point(ScreenPoint& p, float world_x, float world_y, float world_z, float cam_x, float cam_y,
                        float cam_z, float depth, int direction, int screen_w, float x_scale, float horizon,
                        float y_scale, float road_width) const;
@@ -87,6 +86,11 @@ private:
     int u_screen_ = -1;
     int u_use_tex_ = -1;
     int u_tex_ = -1;
+
+    unsigned fbo_ = 0;
+    unsigned color_tex_ = 0;
+    unsigned depth_rb_ = 0;
+    int fbo_w_ = 0, fbo_h_ = 0;
 
     std::vector<Vertex> solid_;
     std::vector<Vertex> textured_;

@@ -48,6 +48,13 @@ constexpr unsigned GL_TEXTURE_WRAP_S_ = 0x2802;
 constexpr unsigned GL_TEXTURE_WRAP_T_ = 0x2803;
 constexpr unsigned GL_CLAMP_TO_EDGE_ = 0x812F;
 constexpr unsigned GL_SCISSOR_TEST_ = 0x0C11;
+constexpr unsigned GL_FRAMEBUFFER_ = 0x8D40;
+constexpr unsigned GL_COLOR_ATTACHMENT0_ = 0x8CE0;
+constexpr unsigned GL_DEPTH_ATTACHMENT_ = 0x8D00;
+constexpr unsigned GL_RENDERBUFFER_ = 0x8D41;
+constexpr unsigned GL_DEPTH_COMPONENT16_ = 0x81A5;
+constexpr unsigned GL_FRAMEBUFFER_COMPLETE_ = 0x8CD5;
+constexpr unsigned GL_FRAMEBUFFER_BINDING_ = 0x8CA6;
 
 struct GlApi {
     void (*ClearColor)(float, float, float, float) = nullptr;
@@ -89,6 +96,17 @@ struct GlApi {
     void (*TexImage2D)(unsigned, int, int, int, int, int, unsigned, unsigned, const void*) = nullptr;
     void (*TexParameteri)(unsigned, unsigned, int) = nullptr;
     void (*PixelStorei)(unsigned, int) = nullptr;
+    void (*GenFramebuffers)(int, unsigned*) = nullptr;
+    void (*DeleteFramebuffers)(int, const unsigned*) = nullptr;
+    void (*BindFramebuffer)(unsigned, unsigned) = nullptr;
+    void (*FramebufferTexture2D)(unsigned, unsigned, unsigned, unsigned, int) = nullptr;
+    void (*GenRenderbuffers)(int, unsigned*) = nullptr;
+    void (*DeleteRenderbuffers)(int, const unsigned*) = nullptr;
+    void (*BindRenderbuffer)(unsigned, unsigned) = nullptr;
+    void (*RenderbufferStorage)(unsigned, unsigned, int, int) = nullptr;
+    void (*FramebufferRenderbuffer)(unsigned, unsigned, unsigned, unsigned) = nullptr;
+    unsigned (*CheckFramebufferStatus)(unsigned) = nullptr;
+    void (*GetIntegerv)(unsigned, int*) = nullptr;
 } g;
 
 template <typename T>
@@ -137,7 +155,28 @@ bool load_gl() {
     g.TexImage2D = load<decltype(g.TexImage2D)>("glTexImage2D");
     g.TexParameteri = load<decltype(g.TexParameteri)>("glTexParameteri");
     g.PixelStorei = load<decltype(g.PixelStorei)>("glPixelStorei");
-    return g.Clear && g.CreateShader && g.DrawArrays && g.TexImage2D;
+    g.GenFramebuffers = load<decltype(g.GenFramebuffers)>("glGenFramebuffers");
+    if (!g.GenFramebuffers) g.GenFramebuffers = load<decltype(g.GenFramebuffers)>("glGenFramebuffersOES");
+    g.DeleteFramebuffers = load<decltype(g.DeleteFramebuffers)>("glDeleteFramebuffers");
+    if (!g.DeleteFramebuffers) g.DeleteFramebuffers = load<decltype(g.DeleteFramebuffers)>("glDeleteFramebuffersOES");
+    g.BindFramebuffer = load<decltype(g.BindFramebuffer)>("glBindFramebuffer");
+    if (!g.BindFramebuffer) g.BindFramebuffer = load<decltype(g.BindFramebuffer)>("glBindFramebufferOES");
+    g.FramebufferTexture2D = load<decltype(g.FramebufferTexture2D)>("glFramebufferTexture2D");
+    if (!g.FramebufferTexture2D) g.FramebufferTexture2D = load<decltype(g.FramebufferTexture2D)>("glFramebufferTexture2DOES");
+    g.GenRenderbuffers = load<decltype(g.GenRenderbuffers)>("glGenRenderbuffers");
+    if (!g.GenRenderbuffers) g.GenRenderbuffers = load<decltype(g.GenRenderbuffers)>("glGenRenderbuffersOES");
+    g.DeleteRenderbuffers = load<decltype(g.DeleteRenderbuffers)>("glDeleteRenderbuffers");
+    if (!g.DeleteRenderbuffers) g.DeleteRenderbuffers = load<decltype(g.DeleteRenderbuffers)>("glDeleteRenderbuffersOES");
+    g.BindRenderbuffer = load<decltype(g.BindRenderbuffer)>("glBindRenderbuffer");
+    if (!g.BindRenderbuffer) g.BindRenderbuffer = load<decltype(g.BindRenderbuffer)>("glBindRenderbufferOES");
+    g.RenderbufferStorage = load<decltype(g.RenderbufferStorage)>("glRenderbufferStorage");
+    if (!g.RenderbufferStorage) g.RenderbufferStorage = load<decltype(g.RenderbufferStorage)>("glRenderbufferStorageOES");
+    g.FramebufferRenderbuffer = load<decltype(g.FramebufferRenderbuffer)>("glFramebufferRenderbuffer");
+    if (!g.FramebufferRenderbuffer) g.FramebufferRenderbuffer = load<decltype(g.FramebufferRenderbuffer)>("glFramebufferRenderbufferOES");
+    g.CheckFramebufferStatus = load<decltype(g.CheckFramebufferStatus)>("glCheckFramebufferStatus");
+    if (!g.CheckFramebufferStatus) g.CheckFramebufferStatus = load<decltype(g.CheckFramebufferStatus)>("glCheckFramebufferStatusOES");
+    g.GetIntegerv = load<decltype(g.GetIntegerv)>("glGetIntegerv");
+    return g.Clear && g.CreateShader && g.DrawArrays && g.TexImage2D && g.GenFramebuffers && g.BindFramebuffer;
 }
 
 const char* k_vert =
@@ -231,6 +270,7 @@ void GlesRenderer::shutdown() {
     if (!g.DeleteTextures) {
         program_ = 0;
         vbo_ = 0;
+        fbo_ = color_tex_ = depth_rb_ = 0;
         textures_.clear();
         return;
     }
@@ -239,6 +279,19 @@ void GlesRenderer::shutdown() {
         if (tex) g.DeleteTextures(1, &tex);
     }
     textures_.clear();
+    if (depth_rb_ && g.DeleteRenderbuffers) {
+        g.DeleteRenderbuffers(1, &depth_rb_);
+        depth_rb_ = 0;
+    }
+    if (color_tex_) {
+        g.DeleteTextures(1, &color_tex_);
+        color_tex_ = 0;
+    }
+    if (fbo_ && g.DeleteFramebuffers) {
+        g.DeleteFramebuffers(1, &fbo_);
+        fbo_ = 0;
+    }
+    fbo_w_ = fbo_h_ = 0;
     if (vbo_) {
         g.DeleteBuffers(1, &vbo_);
         vbo_ = 0;
@@ -538,10 +591,42 @@ void GlesRenderer::draw_sprites(const Track& track, const SpriteSheet& sprites, 
     }
 }
 
+
+bool GlesRenderer::ensure_fbo() {
+    if (fbo_ && fbo_w_ == width_ && fbo_h_ == height_) return true;
+    if (depth_rb_ && g.DeleteRenderbuffers) g.DeleteRenderbuffers(1, &depth_rb_);
+    if (color_tex_) g.DeleteTextures(1, &color_tex_);
+    if (fbo_ && g.DeleteFramebuffers) g.DeleteFramebuffers(1, &fbo_);
+    fbo_ = color_tex_ = depth_rb_ = 0;
+    g.GenFramebuffers(1, &fbo_);
+    g.GenTextures(1, &color_tex_);
+    g.BindTexture(GL_TEXTURE_2D_, color_tex_);
+    g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_MIN_FILTER_, GL_NEAREST_);
+    g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_MAG_FILTER_, GL_NEAREST_);
+    g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_WRAP_S_, GL_CLAMP_TO_EDGE_);
+    g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_WRAP_T_, GL_CLAMP_TO_EDGE_);
+    g.TexImage2D(GL_TEXTURE_2D_, 0, static_cast<int>(GL_RGBA_), width_, height_, 0, GL_RGBA_, GL_UNSIGNED_BYTE_,
+                 nullptr);
+    g.GenRenderbuffers(1, &depth_rb_);
+    g.BindRenderbuffer(GL_RENDERBUFFER_, depth_rb_);
+    g.RenderbufferStorage(GL_RENDERBUFFER_, GL_DEPTH_COMPONENT16_, width_, height_);
+    g.BindFramebuffer(GL_FRAMEBUFFER_, fbo_);
+    g.FramebufferTexture2D(GL_FRAMEBUFFER_, GL_COLOR_ATTACHMENT0_, GL_TEXTURE_2D_, color_tex_, 0);
+    g.FramebufferRenderbuffer(GL_FRAMEBUFFER_, GL_DEPTH_ATTACHMENT_, GL_RENDERBUFFER_, depth_rb_);
+    const unsigned status = g.CheckFramebufferStatus(GL_FRAMEBUFFER_);
+    g.BindFramebuffer(GL_FRAMEBUFFER_, 0);
+    if (status != GL_FRAMEBUFFER_COMPLETE_) {
+        std::cerr << "kurvenrausch: gles FBO incomplete (" << status << ")\n";
+        return false;
+    }
+    fbo_w_ = width_;
+    fbo_h_ = height_;
+    return true;
+}
+
 void GlesRenderer::render(const Track& track, const RoadView& view, const SpriteSheet& sprites,
-                          std::vector<RoadSprite>& objects, const RoadTheme& theme, float daylight,
-                          int viewport_w, int viewport_h) {
-    if (!program_) return;
+                          std::vector<RoadSprite>& objects, const RoadTheme& theme, float daylight) {
+    if (!program_ || !ensure_fbo()) return;
     daylight_ = std::clamp(daylight, 0.05f, 1.f);
     fog_air_ = view.fog_air;
     window_wake_ = view.window_wake;

@@ -635,6 +635,69 @@ void Display::present_gl(const uint32_t* argb_pixels, const Overlay& overlay) {
 
 
 
+
+void Display::present_gles_scene(unsigned scene_tex, int tex_w, int tex_h, const uint32_t* hud_argb,
+                                 const Overlay& overlay) {
+    if (!is_gl() || !window_ || !gl_program_ || !scene_tex) {
+        present_overlay(overlay);
+        return;
+    }
+    SDL_GL_MakeCurrent(window_, gl_);
+    const SDL_Rect s = screen();
+    const SDL_Rect pic = picture();
+    g_gl.Viewport(0, 0, s.w, s.h);
+    g_gl.ClearColor(0.f, 0.f, 0.f, 1.f);
+    g_gl.Clear(GL_COLOR_BUFFER_BIT_);
+    g_gl.Disable(GL_BLEND_);
+
+    g_gl.UseProgram(gl_program_);
+    g_gl.Uniform1i(gl_u_tex_, 0);
+    g_gl.ActiveTexture(GL_TEXTURE0_);
+    g_gl.BindTexture(GL_TEXTURE_2D_, scene_tex);
+
+    const float x0 = 2.f * static_cast<float>(pic.x) / static_cast<float>(s.w) - 1.f;
+    const float x1 = 2.f * static_cast<float>(pic.x + pic.w) / static_cast<float>(s.w) - 1.f;
+    const float y0 = 1.f - 2.f * static_cast<float>(pic.y + pic.h) / static_cast<float>(s.h);
+    const float y1 = 1.f - 2.f * static_cast<float>(pic.y) / static_cast<float>(s.h);
+    // GLES FBO is upright; present_gl used to flip software FB — no flip here.
+    const float verts[] = {
+        x0, y0, 0.f, 1.f, x1, y0, 1.f, 1.f, x0, y1, 0.f, 0.f, x1, y1, 1.f, 0.f,
+    };
+    g_gl.BindBuffer(GL_ARRAY_BUFFER_, gl_vbo_);
+    g_gl.BufferData(GL_ARRAY_BUFFER_, sizeof verts, verts, GL_STREAM_DRAW_);
+    g_gl.EnableVertexAttribArray(0);
+    g_gl.EnableVertexAttribArray(1);
+    g_gl.VertexAttribPointer(0, 2, GL_FLOAT_, GL_FALSE_, 16, reinterpret_cast<void*>(0));
+    g_gl.VertexAttribPointer(1, 2, GL_FLOAT_, GL_FALSE_, 16, reinterpret_cast<void*>(8));
+    g_gl.DrawArrays(GL_TRIANGLE_STRIP_, 0, 4);
+
+    // HUD: upload software ARGB (transparent where empty) and blend on top.
+    if (hud_argb && gl_fb_tex_ && tex_w == fb_w_ && tex_h == fb_h_) {
+        g_gl.Enable(GL_BLEND_);
+        g_gl.BlendFunc(GL_SRC_ALPHA_, GL_ONE_MINUS_SRC_ALPHA_);
+        g_gl.BindTexture(GL_TEXTURE_2D_, gl_fb_tex_);
+#if KURVEN_GLES
+        static thread_local std::vector<uint32_t> rgba;
+        rgba.resize(static_cast<size_t>(fb_w_ * fb_h_));
+        for (int i = 0; i < fb_w_ * fb_h_; ++i) {
+            const uint32_t p = hud_argb[i];
+            rgba[static_cast<size_t>(i)] =
+                ((p & 0x000000ffu) << 16) | (p & 0x0000ff00u) | ((p & 0x00ff0000u) >> 16) | (p & 0xff000000u);
+        }
+        g_gl.TexSubImage2D(GL_TEXTURE_2D_, 0, 0, 0, fb_w_, fb_h_, GL_RGBA_, GL_UNSIGNED_BYTE_, rgba.data());
+#else
+        g_gl.TexSubImage2D(GL_TEXTURE_2D_, 0, 0, 0, fb_w_, fb_h_, GL_BGRA_, GL_UNSIGNED_BYTE_, hud_argb);
+#endif
+        g_gl.BindTexture(GL_TEXTURE_2D_, gl_fb_tex_);
+        g_gl.DrawArrays(GL_TRIANGLE_STRIP_, 0, 4);
+        g_gl.Disable(GL_BLEND_);
+    }
+    (void)overlay;
+    (void)tex_w;
+    (void)tex_h;
+    SDL_GL_SwapWindow(window_);
+}
+
 void Display::present_overlay(const Overlay& overlay) {
     if (!is_gl() || !make_gl_current()) return;
     // Overlay items are screen-resolution bitmaps; for now skip if empty and swap.
