@@ -1904,6 +1904,7 @@ void GlesRenderer::ensure_emissive_lut() {
 }
 
 void GlesRenderer::apply_gpu_night(const Daylight& light, const Beam* headlight) {
+    clear_draw_clip(); // lamp traps must not inherit road/sprite scissor
     ensure_emissive_lut();
     // Daylight channel scales — same formulas as apply_daylight().
     const float night = (1.f - light.level) / (1.f - night_level);
