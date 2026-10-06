@@ -1612,10 +1612,10 @@ void GlesRenderer::draw_sprites(const Track& track, const SpriteSheet& sprites, 
         auto draw_object = [&](const RoadSprite& o) {
             const Bitmap& bmp = *o.bitmap;
             if (o.fixed) {
-                // Player composite: reused buffer, near plane (no fog).
+                // Fixed screen layers (player body/dirt/people/…): near plane, no fog.
                 const uint8_t day = static_cast<uint8_t>(std::min(255.f, daylight_ * 255.f + 0.5f));
                 Color tint{day, day, day, 0};
-                const TexRef tex = texture_for(bmp, true);
+                const TexRef tex = texture_for(bmp, o.dynamic);
                 if (!tex) return;
                 set_textured(tex.id);
                 if (o.angle != 0.f) {

@@ -2706,38 +2706,18 @@ void Game::render() {
     // the sprite's native size, so the pixel art is shown 1:1.
     // Twitching after an oil slick, the car flicks from one side to the other.
     const int shown_steer = spin_time_ > 0.f ? (static_cast<int>(clock_ * 16.f) % 2 ? 1 : -1) : steer_;
-    // The car with its people drawn over it.
+    // Player car as stacked layers (body → dirt → people → movie/lightbar),
+    // not a per-frame pixel composite. Each layer is a fixed RoadSprite with
+    // the same screen rect / crash pose so GLES can texture them separately
+    // (body from the atlas; dirt/people cached overlays).
     const Bitmap& body = sprites_.player(car_model_, shown_steer, braking_, SpriteSheet::tyre_frame(wheel_distance_),
                                          shown_signal());
-    const Bitmap& people = sprites_.occupants(driver_, passenger_, shown_steer, wave_time_ > 0.f ? wave_side_ : 0,
-                                              static_cast<int>(clock_ / 0.15f) & 1, car_model_, bandaged_);
-    player_bitmap_ = body;
-    apply_dirt(player_bitmap_, dirt_.mud(), dirt_.oil());
-    // Seen over the seats or through the rear window; vans, box trucks and
-    // the racer show nobody from behind.
-    if (body_shows_people(car_model(car_model_).body)) {
-        for (size_t i = 0; i < people.px.size() && i < player_bitmap_.px.size(); ++i) {
-            if (people.px[i] >> 24) player_bitmap_.px[i] = people.px[i];
-        }
-    }
-    movie_car_extras(player_bitmap_, shown_steer);
-    if (beacon_) {
-        // The lightbar flashing, red and blue in turn.
-        const int lit = static_cast<int>(clock_ / 0.12f) % 2 ? 1 : -1;
-        if (car_model(car_model_).body == Body::Ambulance) {
-            paint_lightbar(player_bitmap_, lit, ambulance_lightbar_x, ambulance_lightbar_y);
-        } else {
-            paint_lightbar(player_bitmap_, lit, 48 + 2 * shown_steer, SpriteSheet::player_headroom - 1);
-        }
-    }
-    const Bitmap& car = player_bitmap_;
     const float scale = setup.car ? cam.depth / setup.distance * fb_x_unit() : 1.f;
     RoadSprite me;
     me.z = tr.z + cam.player_z();
-    me.bitmap = &car;
     me.fixed = true;
     me.sw = player.car_width * scale;
-    me.sh = me.sw * static_cast<float>(car.h) / static_cast<float>(car.w);
+    me.sh = me.sw * static_cast<float>(body.h) / static_cast<float>(std::max(1, body.w));
     me.sx = (static_cast<float>(width_) - me.sw) / 2.f;
     me.sy = (setup.car ? std::min(contact_row(setup, cam.depth, fb_height()), static_cast<float>(fb_height())) : fb_height()) - me.sh -
             1.f + bounce_;
@@ -2751,7 +2731,45 @@ void Game::render() {
         me.sy -= pose.lift;
         car_visible = pose.visible;
     }
-    if (car_visible) road_sprites_.push_back(me);
+    if (car_visible) {
+        auto push_layer = [&](const Bitmap& bmp) {
+            if (bmp.w <= 0 || bmp.h <= 0 || bmp.px.empty()) return;
+            RoadSprite layer = me;
+            layer.bitmap = &bmp;
+            road_sprites_.push_back(layer);
+        };
+        push_layer(body);
+        push_layer(sprites_.dirt_layer(body, dirt_.mud(), dirt_.oil()));
+        // Seen over the seats or through the rear window; vans, box trucks and
+        // the racer show nobody from behind.
+        if (body_shows_people(car_model(car_model_).body)) {
+            push_layer(sprites_.occupants(driver_, passenger_, shown_steer, wave_time_ > 0.f ? wave_side_ : 0,
+                                          static_cast<int>(clock_ / 0.15f) & 1, car_model_, bandaged_));
+        }
+        // Movie-car animated bits (scanner bar, flux coils, blower) still need
+        // a few dynamic pixels; keep them on a small overlay layer only.
+        if (car_model_ == scanner_model || car_model_ == time_car_model || car_model_ == interceptor_model) {
+            if (movie_overlay_.w != body.w || movie_overlay_.h != body.h) {
+                movie_overlay_ = Bitmap(body.w, body.h);
+            } else {
+                std::fill(movie_overlay_.px.begin(), movie_overlay_.px.end(), 0u);
+            }
+            movie_car_extras(movie_overlay_, shown_steer);
+            RoadSprite layer = me;
+            layer.bitmap = &movie_overlay_;
+            layer.dynamic = true;
+            road_sprites_.push_back(layer);
+        }
+        if (beacon_) {
+            const int lit = static_cast<int>(clock_ / 0.12f) % 2 ? 1 : -1;
+            if (car_model(car_model_).body == Body::Ambulance) {
+                push_layer(sprites_.lightbar_layer(body.w, body.h, lit, ambulance_lightbar_x, ambulance_lightbar_y));
+            } else {
+                push_layer(sprites_.lightbar_layer(body.w, body.h, lit, 48 + 2 * shown_steer,
+                                                   SpriteSheet::player_headroom - 1));
+            }
+        }
+    }
 
     if (use_gles_ && display_ && display_->make_gl_current()) {
         gles_.set_size(width_, fb_height());

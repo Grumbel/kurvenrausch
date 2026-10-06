@@ -231,6 +231,13 @@ public:
     // included for optional packing; the live player car is still dynamic.
     void append_static_bitmaps(std::vector<const Bitmap*>& out) const;
 
+    // Transparent dirt overlay for a player body (same size). Mud/oil are
+    // quantised so the result is cached; only dirty pixels are opaque.
+    const Bitmap& dirt_layer(const Bitmap& body, float mud, float oil) const;
+
+    // Full-size transparent overlay with a lightbar at (cx, y), lit -1/0/+1.
+    const Bitmap& lightbar_layer(int w, int h, int lit, int cx, int y) const;
+
     // Empty rows above the player's car for a waving arm; the car itself is
     // the usual 96x44 below them.
     static constexpr int player_headroom = 12;
@@ -257,6 +264,10 @@ private:
     std::array<Bitmap, train_wagon_kinds + 1> train_cars_;
     std::array<Bitmap, drivers> wheels_;
     mutable std::map<uint32_t, Bitmap> occupants_;
+    // Dirt overlays: key = body px pointer identity + quantised mud/oil.
+    mutable std::map<uint64_t, Bitmap> dirt_layers_;
+    // Lightbar overlays: key = packed (w,h,lit,cx,y).
+    mutable std::map<uint64_t, Bitmap> lightbar_layers_;
     struct VehicleSprites {
         std::array<std::array<std::array<Bitmap, tyre_frames>, 2>, 3> rear; // [signal][brake][tread]
         std::array<std::array<Bitmap, tyre_frames>, 3> front;               // [signal][tread]

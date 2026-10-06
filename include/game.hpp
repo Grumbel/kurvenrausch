@@ -328,7 +328,7 @@ private:
     float wheel_angle_ = 0.f; // of the steering wheel in the cockpit, radians
     Store store_;         // what is kept between runs; nothing in headless runs
     float record_lap_ = 0.f; // the fastest lap ever, from the store // the driver after a crash, until a hospital patches them up
-    Bitmap player_bitmap_; // the car with its people, put together each frame
+    Bitmap movie_overlay_; // scanner/time-car/interceptor animated bits (layered)
     float base_max_speed_ = 0.f;
     std::array<std::vector<int>, lot_kinds> lots_; // first full-width forecourt segment of each lot, per kind
     std::optional<Lot> offer_;  // standing at a lot with a choice: it is on offer

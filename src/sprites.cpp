@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <string_view>
 #include <tuple>
 
@@ -3224,9 +3225,44 @@ void SpriteSheet::append_static_bitmaps(std::vector<const Bitmap*>& out) const {
         for (const Bitmap& b : frames) add(b);
     for (const auto& frames : pedestrians_)
         for (const Bitmap& b : frames) add(b);
-    // Player base sprites are large (steer × brake × signal × tread × model).
-    // Omit them from the atlas: the live player car is composited every frame
-    // into player_bitmap_ and uploaded as a dynamic texture.
+    // Player body bases stay out of the atlas pack here; they are still
+    // eligible via texture_for when first drawn. Live player is layered
+    // (body + dirt + people + lightbar), not a per-frame composite bitmap.
+}
+
+const Bitmap& SpriteSheet::dirt_layer(const Bitmap& body, float mud, float oil) const {
+    static const Bitmap empty;
+    if (body.w <= 0 || body.h <= 0 || body.px.empty()) return empty;
+    const int mq = std::clamp(static_cast<int>(std::lround(std::clamp(mud, 0.f, 1.f) * 4.f)), 0, 4);
+    const int oq = std::clamp(static_cast<int>(std::lround(std::clamp(oil, 0.f, 1.f) * 4.f)), 0, 4);
+    if (mq == 0 && oq == 0) return empty;
+    const uint64_t key = (reinterpret_cast<uintptr_t>(body.px.data()) << 8) |
+                         (static_cast<uint64_t>(mq) << 4) | static_cast<uint64_t>(oq);
+    if (auto it = dirt_layers_.find(key); it != dirt_layers_.end()) return it->second;
+
+    Bitmap dirty = body;
+    apply_dirt(dirty, static_cast<float>(mq) / 4.f, static_cast<float>(oq) / 4.f);
+    Bitmap layer(body.w, body.h);
+    for (size_t i = 0; i < body.px.size(); ++i) {
+        // Keep only pixels that dirt changed (overlay; body shows through).
+        if (dirty.px[i] != body.px[i]) layer.px[i] = dirty.px[i];
+    }
+    auto [it, _] = dirt_layers_.emplace(key, std::move(layer));
+    return it->second;
+}
+
+const Bitmap& SpriteSheet::lightbar_layer(int w, int h, int lit, int cx, int y) const {
+    static const Bitmap empty;
+    if (w <= 0 || h <= 0) return empty;
+    const int L = lit < 0 ? 0 : (lit > 0 ? 2 : 1);
+    const uint64_t key = (static_cast<uint64_t>(w) << 40) | (static_cast<uint64_t>(h) << 24) |
+                         (static_cast<uint64_t>(L) << 16) | (static_cast<uint64_t>(cx & 0xff) << 8) |
+                         static_cast<uint64_t>(y & 0xff);
+    if (auto it = lightbar_layers_.find(key); it != lightbar_layers_.end()) return it->second;
+    Bitmap layer(w, h);
+    paint_lightbar(layer, lit, cx, y);
+    auto [it, _] = lightbar_layers_.emplace(key, std::move(layer));
+    return it->second;
 }
 
 SpriteSheet::SpriteSheet() {

@@ -2,6 +2,16 @@
 
 ## Current tip
 
+### Grok: player car as layered sprites (no per-frame composite)
+- Body, dirt overlay, occupants, lightbar are separate fixed RoadSprites
+  sharing the same screen rect / crash pose.
+- Dirt: quantised mud/oil overlay cache (`SpriteSheet::dirt_layer`).
+- Lightbar: cached transparent overlay (`lightbar_layer`).
+- Movie-car animated bits still a small dynamic overlay (scanner/time/interceptor).
+- GLES uses `RoadSprite::dynamic` only for that movie overlay re-upload.
+- Removed `player_bitmap_` full composite.
+
+
 ### Grok: GLES atlas vehicles — one textured batch for cars
 - Sprite atlas now packs traffic vehicles (all kinds/styles/signal/brake/tread
   rear+front), animals, pedestrians, trains, ramp trucks, crossing signs

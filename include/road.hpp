@@ -71,6 +71,8 @@ struct RoadSprite {
     bool fixed = false;
     float sx = 0.f, sy = 0.f, sw = 0.f, sh = 0.f;
     float angle = 0.f; // fixed sprites only: rotation about the centre, clockwise
+    // GLES: re-upload this bitmap each frame (animated overlay whose pixels change).
+    bool dynamic = false;
 };
 
 // Classic segment based pseudo-3D road renderer.
