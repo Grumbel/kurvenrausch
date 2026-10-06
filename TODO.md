@@ -2,6 +2,14 @@
 
 ## Current tip
 
+### Grok: GLES scenery parity (markings, sky, stars, patches, snow, windows)
+- Dashed lane width matches software (`road_w / max(32, 8*lanes)`).
+- Sky uses 16 bands; stars drawn as exact emissives (no fog).
+- Oil/water patches use multi-band sheen/mirror like software.
+- Mountain ridges get snow above `theme.snow_line`.
+- Fragment shader skips fog on bright texels so building windows survive night.
+
+
 ### Grok: GLES crash car rotation
 - Fixed sprites honour `RoadSprite::angle` via `push_quad_rotated` (matches
   software `blit_rotated` during crash tumble).

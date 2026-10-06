@@ -228,9 +228,10 @@ const char* k_frag =
     "  if (u_use_tex != 0) {\n"
     "    vec4 t = texture2D(u_tex, v_uv);\n"
     "    if (t.a < 0.01) discard;\n"
-    "    // v_col.rgb = daylight scale, v_col.a = fog amount (software blit mix).\n"
     "    vec3 lit = t.rgb * v_col.rgb;\n"
     "    float fa = v_col.a;\n"
+    "    float lum = max(t.r, max(t.g, t.b));\n"
+    "    if (lum > 0.72 && t.a > 0.9) fa = 0.0;\n"
     "    gl_FragColor = vec4(mix(lit, u_fog_air, fa), t.a);\n"
     "  } else {\n"
     "    gl_FragColor = v_col;\n"
@@ -249,6 +250,8 @@ const char* k_frag =
     "    if (t.a < 0.01) discard;\n"
     "    vec3 lit = t.rgb * v_col.rgb;\n"
     "    float fa = v_col.a;\n"
+    "    float lum = max(t.r, max(t.g, t.b));\n"
+    "    if (lum > 0.72 && t.a > 0.9) fa = 0.0;\n"
     "    gl_FragColor = vec4(mix(lit, u_fog_air, fa), t.a);\n"
     "  } else {\n"
     "    gl_FragColor = v_col;\n"
@@ -553,19 +556,24 @@ void GlesRenderer::draw_backdrop(const RoadTheme& theme, const Background* backd
         return;
     }
     // Column strips from ridge top down to the horizon.
-    auto ridge2 = [&](const std::vector<float>& h, float offset, Color lit, Color shade, float scale_mul) {
+    auto ridge2 = [&](const std::vector<float>& h, float offset, Color lit, Color shade, float scale_mul,
+                      float snow_line) {
         if (h.empty()) return;
         const int period = static_cast<int>(h.size());
-        const int step = std::max(2, width_ / 128);
+        const int step = std::max(1, width_ / 160); // finer columns ≈ software per-pixel
         for (int x = 0; x < width_; x += step) {
             const int i = ((static_cast<int>(std::lround(offset)) + x) % period + period) % period;
             const float here = h[static_cast<size_t>(i)] * scale_mul;
             const float top_y = horizon - here;
             if (top_y >= horizon - 0.5f) continue;
             const float slope = h[static_cast<size_t>((i + 6) % period)] - h[static_cast<size_t>((i + period - 6) % period)];
-            // Same lighting model as Background::render: lit from the left by slope.
             const float light = std::clamp(0.5f - slope * 0.08f, 0.f, 1.f);
-            const Color face = blend(shade, lit, light);
+            Color face = blend(shade, lit, light);
+            // Snow caps above snow_line (software Background::ridge).
+            if (here > snow_line) {
+                face = blend(theme.snow, blend(theme.snow, theme.mountain_shade, 0.5f), 1.f - light);
+                face = light > 0.45f ? theme.snow : blend(theme.snow, theme.mountain_shade, 0.5f);
+            }
             const float haze = std::max(theme.haze, std::clamp(1.f - here / (14.f * scale_mul + 1.f), 0.f, 1.f) * 0.75f);
             const Color c = fogged(face, fog_air_, haze, daylight_);
             const float x0 = static_cast<float>(x);
@@ -574,12 +582,14 @@ void GlesRenderer::draw_backdrop(const RoadTheme& theme, const Background* backd
         }
     };
     ridge2(backdrop->mountains(), backdrop->mountain_offset(), theme.mountain_lit, theme.mountain_shade,
-           theme.mountain_scale);
-    ridge2(backdrop->hills(), backdrop->hill_offset(), theme.hill_lit, theme.hill_shade, theme.hill_scale);
+           theme.mountain_scale, theme.snow_line);
+    ridge2(backdrop->hills(), backdrop->hill_offset(), theme.hill_lit, theme.hill_shade, theme.hill_scale,
+           1.0e9f); // hills never snow
     flush_solid();
 
     // Stars as solid 2×2 traps.
     if (theme.stars > 0.02f) {
+        // Exact emissive colours (no fog) so apply_daylight keeps them lit.
         uint32_t seed = 0x51a7f00du;
         for (int i = 0; i < 90; ++i) {
             seed = seed * 1664525u + 1013904223u;
@@ -588,9 +598,8 @@ void GlesRenderer::draw_backdrop(const RoadTheme& theme, const Background* backd
             const float y = static_cast<float>((seed >> 8) % 1000u) / 1000.f * horizon * 0.9f;
             if (static_cast<float>((seed >> 4) & 0xff) / 255.f > theme.stars) continue;
             const bool bright = (seed >> 28) < 4;
-            Color c = bright ? Color{0xe8, 0xee, 0xff} : Color{0xb8, 0xc8, 0xff};
-            c = fogged(c, fog_air_, theme.haze * 0.2f, daylight_);
-            push_trap(y, x, x + 2.f, y + 2.f, x, x + 2.f, c);
+            const Color c = bright ? Color{0xe8, 0xee, 0xff} : Color{0xb8, 0xc8, 0xff};
+            push_trap(y, x, x + 1.f, y + 1.f, x, x + 1.f, c);
         }
         flush_solid();
     }
@@ -730,14 +739,31 @@ void GlesRenderer::draw_segment(const Track& track, const Slice& s, const RoadTh
         push_trap(b.y, ocb - b.w, ocb + b.w, a.y, oca - a.w, oca + a.w, fogc(theme.road[band]));
     }
 
-    // Oil / water patches on the surface.
+    // Oil / water patches — same bands as software RoadRenderer.
     const float wa = track.patch_width_at(near), wb = track.patch_width_at(near + direction_);
     if (seg.patch != Patch::None && (wa > 0.f || wb > 0.f)) {
         const float ca = track.patch_center_at(near), cb = track.patch_center_at(near + direction_);
         const float xa = a.x + ca * a.w, xb = b.x + cb * b.w;
-        Color c = seg.patch == Patch::Oil ? Color{0x18, 0x14, 0x20} : Color{0x40, 0x58, 0x70};
-        c = fogc(c);
-        push_trap(b.y, xb - wb * b.w, xb + wb * b.w, a.y, xa - wa * a.w, xa + wa * a.w, c);
+        auto band_of = [&](float from, float to, Color c) {
+            push_trap(b.y, xb + from * wb * b.w, xb + to * wb * b.w, a.y, xa + from * wa * a.w, xa + to * wa * a.w,
+                      fogc(c));
+        };
+        const int glint = s.index % 4;
+        if (seg.patch == Patch::Oil) {
+            const Color slick{0x16, 0x14, 0x1a};
+            const Color sheen[3] = {{0x6c, 0x3c, 0x7c}, {0x2c, 0x74, 0x7c}, {0x8c, 0x7c, 0x34}};
+            band_of(-1.f, 1.f, slick);
+            band_of(-0.55f, -0.35f, blend(slick, sheen[s.index % 3], 0.8f));
+            band_of(0.05f, 0.2f, blend(slick, sheen[(s.index + 1) % 3], 0.7f));
+            if (glint == 2) band_of(0.4f, 0.55f, blend(slick, sheen[(s.index + 2) % 3], 0.6f));
+        } else {
+            const Color edge = blend(theme.road[band], Color{0x10, 0x12, 0x18}, 0.4f);
+            const Color mirror = blend(edge, theme.sky_horizon, 0.35f);
+            band_of(-1.f, 1.f, edge);
+            band_of(-0.75f, 0.75f, mirror);
+            if (glint == 1) band_of(-0.45f, -0.3f, blend(mirror, Color{0xff, 0xff, 0xff}, 0.45f));
+            if (glint == 3) band_of(0.2f, 0.32f, blend(mirror, Color{0xff, 0xff, 0xff}, 0.35f));
+        }
     }
 
     if (seg.checker) {
@@ -767,11 +793,13 @@ void GlesRenderer::draw_segment(const Track& track, const Slice& s, const RoadTh
                 }
             }
         } else if (seg.alt && lanes > 1) {
+            // Same half-width as software: road_w / max(32, 8*lanes).
             const Color lane = fogc(theme.lane);
+            const float la = a.w / static_cast<float>(std::max(32, 8 * lanes));
+            const float lb = b.w / static_cast<float>(std::max(32, 8 * lanes));
             for (int i = 1; i < lanes; ++i) {
                 const float f = static_cast<float>(i) / static_cast<float>(lanes);
                 const float xa = a.x - a.w + 2.f * a.w * f, xb = b.x - b.w + 2.f * b.w * f;
-                const float la = a.w * 0.02f, lb = b.w * 0.02f;
                 push_trap(b.y, xb - lb, xb + lb, a.y, xa - la, xa + la, lane);
             }
         }
