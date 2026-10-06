@@ -645,7 +645,15 @@ void Display::present_gl(const uint32_t* argb_pixels, const Overlay& overlay) {
 
     g_gl.UseProgram(gl_program_);
     g_gl.Uniform1i(gl_u_tex_, 0);
-    if (gl_u_swizzle_ >= 0) g_gl.Uniform1i(gl_u_swizzle_, 1); // CPU ARGB as RGBA
+    // GLES: ARGB memory uploaded as RGBA needs R/B swap. Desktop: GL_BGRA is already correct.
+    if (gl_u_swizzle_ >= 0)
+        g_gl.Uniform1i(gl_u_swizzle_,
+#if KURVEN_GLES
+                       1
+#else
+                       0
+#endif
+        );
     g_gl.ActiveTexture(GL_TEXTURE0_);
     g_gl.BindTexture(GL_TEXTURE_2D_, gl_fb_tex_);
 
@@ -668,7 +676,14 @@ void Display::present_gl(const uint32_t* argb_pixels, const Overlay& overlay) {
 
     g_gl.Enable(GL_BLEND_);
     g_gl.BlendFunc(GL_SRC_ALPHA_, GL_ONE_MINUS_SRC_ALPHA_);
-    if (gl_u_swizzle_ >= 0) g_gl.Uniform1i(gl_u_swizzle_, 1); // overlay bitmaps are ARGB
+    if (gl_u_swizzle_ >= 0)
+        g_gl.Uniform1i(gl_u_swizzle_,
+#if KURVEN_GLES
+                       1
+#else
+                       0
+#endif
+        ); // GLES: ARGB as RGBA; desktop: BGRA upload
     for (const Overlay::Item& item : overlay.items()) {
         if (!item.image || item.image->w <= 0 || item.image->h <= 0 || item.image->px.empty()) continue;
         const void* key = item.image->px.data();
@@ -799,7 +814,14 @@ void Display::present_gles_scene(unsigned scene_tex, int tex_w, int tex_h, const
 #endif
             g_gl.Enable(GL_BLEND_);
             g_gl.BlendFunc(GL_SRC_ALPHA_, GL_ONE_MINUS_SRC_ALPHA_);
-            if (gl_u_swizzle_ >= 0) g_gl.Uniform1i(gl_u_swizzle_, 1);
+            if (gl_u_swizzle_ >= 0)
+                g_gl.Uniform1i(gl_u_swizzle_,
+#if KURVEN_GLES
+                               1
+#else
+                               0
+#endif
+                );
             // Buffer y=0 is the top of the picture. NDC y0=bottom, y1=top of the letterbox.
             const float u0 = static_cast<float>(x0b) / static_cast<float>(fb_w_);
             const float u1 = static_cast<float>(x1b) / static_cast<float>(fb_w_);
@@ -820,7 +842,14 @@ void Display::present_gles_scene(unsigned scene_tex, int tex_w, int tex_h, const
     }
     g_gl.Enable(GL_BLEND_);
     g_gl.BlendFunc(GL_SRC_ALPHA_, GL_ONE_MINUS_SRC_ALPHA_);
-    if (gl_u_swizzle_ >= 0) g_gl.Uniform1i(gl_u_swizzle_, 1); // overlay bitmaps are ARGB
+    if (gl_u_swizzle_ >= 0)
+        g_gl.Uniform1i(gl_u_swizzle_,
+#if KURVEN_GLES
+                       1
+#else
+                       0
+#endif
+        ); // GLES: ARGB as RGBA; desktop: BGRA upload
     for (const Overlay::Item& item : overlay.items()) {
         if (!item.image || item.image->w <= 0 || item.image->h <= 0 || item.image->px.empty()) continue;
         const void* key = item.image->px.data();
