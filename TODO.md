@@ -2,6 +2,13 @@
 
 ## Current tip
 
+### Grok: restore pixel-perfect GLES night (software light stack)
+- FBO ring lightmap produced harsh banded headlights/pools vs software.
+- Night again: ReadPixels ground + day albedo, then the same
+  apply_daylight / street_lights / headlight_beam as software, upload.
+- Matches the earlier working 91f4066 approach (GPU rings were the regression).
+
+
 ### Grok: fix headlight mask after player layering
 - Software headlight beam still masked the car silhouette with `car.w/h`
   after the composite was removed; use `body` instead.

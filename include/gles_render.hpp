@@ -37,8 +37,9 @@ public:
     void set_size(int width, int height);
 
     // Draws the road scene into the internal FBO (not the window).
-    // Full-bright albedo → (optional) ground snapshot FBO → sprites → lightmap
-    // FBO → compose FBO. No ReadPixels.
+    // Full-bright albedo → ground ReadPixels → sprites → CPU night
+    // (apply_daylight / street_lights / headlight_beam) → upload. Same math
+    // as the software path so pools and cones stay smooth.
     void render(const Track& track, const RoadView& view, const SpriteSheet& sprites,
                 std::vector<RoadSprite>& objects, const RoadTheme& theme, const Daylight& light,
                 const Background* backdrop = nullptr, float hour = 12.f,
@@ -102,8 +103,13 @@ private:
     void draw_headlight(const Beam& beam, float dark);
     void draw_lamp_pools(float dark);
     void draw_weather(const Weather& weather);
-    // Lightmap + compose into night_tex_ (ground_tex_ must already hold pre-sprite).
+    // GPU lightmap path kept for reference; night uses apply_cpu_night.
     void apply_gpu_night(const Daylight& light, const Beam* headlight);
+    // Pixel-perfect night: software light stack on ReadPixels albedo.
+    void apply_cpu_night(const Daylight& light, const Beam* headlight,
+                         const std::vector<uint32_t>& ground_argb,
+                         const std::vector<uint32_t>& day_argb);
+    void read_fbo_argb(std::vector<uint32_t>& out);
     void draw_fullscreen_quad();
     void copy_tex_to_fbo(unsigned src_tex, unsigned dst_fbo);
     void ensure_emissive_lut();

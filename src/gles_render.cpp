@@ -1899,6 +1899,56 @@ void GlesRenderer::ensure_emissive_lut() {
     g.TexImage2D(GL_TEXTURE_2D_, 0, static_cast<int>(GL_RGBA_), 32, 1, 0, GL_RGBA_, GL_UNSIGNED_BYTE_, rgba.data());
 }
 
+void GlesRenderer::read_fbo_argb(std::vector<uint32_t>& out) {
+    out.resize(static_cast<size_t>(width_) * static_cast<size_t>(height_));
+    if (!g.ReadPixels || width_ <= 0 || height_ <= 0) {
+        std::fill(out.begin(), out.end(), 0u);
+        return;
+    }
+    std::vector<uint8_t> rgba(static_cast<size_t>(width_) * static_cast<size_t>(height_) * 4);
+    g.ReadPixels(0, 0, width_, height_, GL_RGBA_, GL_UNSIGNED_BYTE_, rgba.data());
+    // FBO origin is bottom-left; our y=0 is top.
+    for (int y = 0; y < height_; ++y) {
+        const int src_y = height_ - 1 - y;
+        for (int x = 0; x < width_; ++x) {
+            const size_t si = (static_cast<size_t>(src_y) * static_cast<size_t>(width_) + static_cast<size_t>(x)) * 4;
+            const uint32_t r = rgba[si], gc = rgba[si + 1], b = rgba[si + 2], a = rgba[si + 3];
+            out[static_cast<size_t>(y) * static_cast<size_t>(width_) + static_cast<size_t>(x)] =
+                (a << 24) | (r << 16) | (gc << 8) | b;
+        }
+    }
+}
+
+void GlesRenderer::apply_cpu_night(const Daylight& light, const Beam* headlight,
+                                   const std::vector<uint32_t>& ground_argb,
+                                   const std::vector<uint32_t>& day_argb) {
+    // Identical stack to the software renderer — continuous pools, no ring bands.
+    Framebuffer night(width_, height_);
+    std::copy(day_argb.begin(), day_argb.end(), night.pixels_mut());
+    apply_daylight(night, light);
+    street_lights(night, day_argb, ground_argb, light, row_depth_, lamps_, camera_depth_, x_scale_);
+    if (headlight) headlight_beam(night, day_argb, light, row_depth_, *headlight);
+
+    if (!g.TexSubImage2D || !color_tex_) return;
+    std::vector<uint8_t> rgba(static_cast<size_t>(width_) * static_cast<size_t>(height_) * 4);
+    const uint32_t* src = night.pixels();
+    for (int y = 0; y < height_; ++y) {
+        const int dst_y = height_ - 1 - y;
+        for (int x = 0; x < width_; ++x) {
+            const uint32_t p = src[static_cast<size_t>(y) * static_cast<size_t>(width_) + static_cast<size_t>(x)];
+            const size_t di = (static_cast<size_t>(dst_y) * static_cast<size_t>(width_) + static_cast<size_t>(x)) * 4;
+            rgba[di + 0] = static_cast<uint8_t>((p >> 16) & 0xff);
+            rgba[di + 1] = static_cast<uint8_t>((p >> 8) & 0xff);
+            rgba[di + 2] = static_cast<uint8_t>(p & 0xff);
+            rgba[di + 3] = static_cast<uint8_t>((p >> 24) & 0xff);
+        }
+    }
+    g.BindTexture(GL_TEXTURE_2D_, color_tex_);
+    g.PixelStorei(0x0CF5 /* GL_UNPACK_ALIGNMENT */, 1);
+    g.TexSubImage2D(GL_TEXTURE_2D_, 0, 0, 0, width_, height_, GL_RGBA_, GL_UNSIGNED_BYTE_, rgba.data());
+    present_tex_ = color_tex_;
+}
+
 void GlesRenderer::apply_gpu_night(const Daylight& light, const Beam* headlight) {
     clear_draw_clip(); // lamp traps must not inherit road/sprite scissor
     ensure_emissive_lut();
@@ -2141,19 +2191,16 @@ void GlesRenderer::render(const Track& track, const RoadView& view, const Sprite
         flush_solid();
     }
 
-    // Pre-sprite ground into its own FBO (software street_lights ground mask).
+    // Pre-sprite ground for street_lights mask (same rule as software: only
+    // relight pixels sprites did not cover).
     const bool need_night = light.level < 0.999f || headlight != nullptr;
-    if (need_night && copy_program_ && ground_fbo_) {
+    std::vector<uint32_t> ground_argb;
+    if (need_night) {
         frame_stats::Scope night(frame_stats::Phase::GlesNight);
         flush_solid();
         flush_textured();
-        copy_tex_to_fbo(color_tex_, ground_fbo_);
         g.BindFramebuffer(GL_FRAMEBUFFER_, fbo_);
-        g.Viewport(0, 0, width_, height_);
-        g.UseProgram(program_);
-        g.Uniform2f(u_screen_, static_cast<float>(width_), static_cast<float>(height_));
-        g.Enable(GL_BLEND_);
-        g.BlendFunc(GL_SRC_ALPHA_, GL_ONE_MINUS_SRC_ALPHA_);
+        read_fbo_argb(ground_argb);
     }
 
     {
@@ -2166,9 +2213,13 @@ void GlesRenderer::render(const Track& track, const RoadView& view, const Sprite
     }
 
     present_tex_ = color_tex_;
-    if (need_night && compose_program_ && light_fbo_ && night_fbo_ && ground_tex_) {
+    if (need_night || !lamps_.empty()) {
         frame_stats::Scope night(frame_stats::Phase::GlesNight);
-        apply_gpu_night(light, headlight);
+        std::vector<uint32_t> day_argb;
+        g.BindFramebuffer(GL_FRAMEBUFFER_, fbo_);
+        read_fbo_argb(day_argb);
+        if (ground_argb.empty()) ground_argb = day_argb;
+        apply_cpu_night(light, headlight, ground_argb, day_argb);
     }
     frame_stats::set_scene_counts(static_cast<int>(slices_.size()), static_cast<int>(objects.size()),
                                   static_cast<int>(lamps_.size()), true);
