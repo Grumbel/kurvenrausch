@@ -2,6 +2,33 @@
 
 ## Current tip
 
+### Claude: (almost) everything over the scene on the GPU
+- `Canvas` (include/canvas.hpp): HUD, menus, FPS overlay, particles, nitro
+  flame, cockpit, mirror housing/sheen, touch overlay (headless) draw through
+  it. `FbCanvas` → Framebuffer (software path, output unchanged except the
+  zoomed mini map ±1px and the menu dim ±1); `DrawList` → GPU quads (CPU
+  clip, same-colour span merging, glyph atlas `font_atlas::make()` whose
+  white cell serves solid fills, dither discs done per pixel in k_ui_frag).
+- GLES: `scene_list_` drawn in the sprite pass (layer 0 under the weather at
+  sprite_z, layer 1 cockpit + mirror housing at player_z), `hud_list_` drawn
+  straight onto the picture in Display::present_gles_scene (draw_over hook).
+  The per-frame CPU HUD buffer, its bbox scan and texture upload are gone.
+  Lightning flash now also shows on GLES.
+- Mirror: `mirror_gles_` (second GlesRenderer, own small FBOs, shares the
+  texture cache/atlas via `share_textures`) renders the view behind;
+  `set_backdrop_view(zoom, mirror)` gives the backdrop the mirror view.
+  frame_stats phase `g-mirror` absorbs the mirror's inner phases.
+- Mini map track is a cached bitmap (hud.cpp `minimap_layer`) for both paths.
+- Rain/snow streaks: one quad each with an alpha gradient.
+- Still CPU on the GLES path: sprite construction only (dirt/lightbar
+  layers, movie-car overlay re-upload). The software Framebuffer stays for
+  the software renderer and headless screenshots.
+- Not measured on the R36S yet: puddle FPS drop (spray/dust went through the
+  CPU HUD buffer; now GPU) — check with the FPS overlay.
+- Known software-side oddity left alone: the software mirror is darkened
+  twice at night (render_mirror applies night, then the whole picture does).
+
+
 ### Claude: fill counter, stars behind ridges, white highlights
 - frame_stats counts pixels each GLES draw covers per phase; overlay and
   console show it as screens filled ("g-spr 1.2ms 3.4x"). The console line
