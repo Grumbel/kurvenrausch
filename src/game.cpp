@@ -2781,14 +2781,15 @@ void Game::render() {
     if (car_visible) {
         // Layers share the player z; micro-offsets keep body < dirt < people <
         // overlays under sort (stable_sort alone is not enough if anything
-        // reorders equal keys).
+        // reorders equal keys). Sprites are drawn far to near, so each layer
+        // comes a little nearer than the one under it.
         int layer_i = 0;
         auto push_layer = [&](const Bitmap& bmp, bool dynamic = false) {
             if (bmp.w <= 0 || bmp.h <= 0 || bmp.px.empty()) return;
             RoadSprite layer = me;
             layer.bitmap = &bmp;
             layer.dynamic = dynamic;
-            layer.z = me.z + static_cast<float>(layer_i) * 1e-3f;
+            layer.z = me.z - static_cast<float>(layer_i) * 1e-3f;
             ++layer_i;
             road_sprites_.push_back(layer);
         };
