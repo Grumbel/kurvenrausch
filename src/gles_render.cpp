@@ -48,6 +48,7 @@ constexpr unsigned GL_RGBA_ = 0x1908;
 constexpr unsigned GL_UNSIGNED_BYTE_ = 0x1401;
 constexpr unsigned GL_TEXTURE_MIN_FILTER_ = 0x2801;
 constexpr unsigned GL_TEXTURE_MAG_FILTER_ = 0x2800;
+constexpr unsigned GL_LINEAR_ = 0x2601;
 constexpr unsigned GL_NEAREST_ = 0x2600;
 constexpr unsigned GL_TEXTURE_WRAP_S_ = 0x2802;
 constexpr unsigned GL_TEXTURE_WRAP_T_ = 0x2803;
@@ -404,6 +405,7 @@ void GlesRenderer::invalidate() {
     ground_fbo_ = 0;
     ground_tex_ = 0;
     emissive_tex_ = 0;
+    falloff_tex_ = 0;
     present_tex_ = 0;
     fbo_w_ = fbo_h_ = 0;
     textures_.clear();
@@ -449,6 +451,7 @@ void GlesRenderer::shutdown() {
     del_tex(light_tex_);
     del_tex(ground_tex_);
     del_tex(emissive_tex_);
+    del_tex(falloff_tex_);
     present_tex_ = 0;
     auto del_fbo = [&](unsigned& f) {
         if (f && g.DeleteFramebuffers) { g.DeleteFramebuffers(1, &f); f = 0; }
@@ -1730,50 +1733,62 @@ void GlesRenderer::draw_lamp_pools(float ambient) {
     if (lamps_.empty()) return;
     const float dark = 1.f - ambient;
     if (dark <= 0.02f) return;
-    // Lightmap is cleared to ambient; add the remaining headroom toward the tint
-    // so albedo × lightmap restores day colour under the lamp (software mix).
+    ensure_falloff_tex();
+    if (!falloff_tex_) return;
+    // One additive textured quad per lamp — continuous (1-r^2)^2 falloff, no rings.
     g.BlendFunc(GL_ONE_, GL_ONE_);
+    flush_solid();
+    flush_textured();
+    set_textured(falloff_tex_);
     for (const LampSpot& lamp : lamps_) {
+        if (lamp.depth <= 1e-3f) continue;
         const float tint_r = 1.f;
         const float tint_g = lamp.glow == Glow::Street ? 0.85f : lamp.glow == Glow::Tail ? 0.35f : 1.f;
         const float tint_b = lamp.glow == Glow::Street ? 0.55f : lamp.glow == Glow::Tail ? 0.2f : 0.95f;
         const float strength = lamp.glow == Glow::Tail ? 0.85f : lamp.glow == Glow::Head ? 0.8f : 0.9f;
-        // Soft radial falloff: many thin additive rings so the pool is continuous
-        // (software is per-pixel; 4 coarse rings banded badly in the lightmap).
+        // Screen Y of the lamp's depth (nearest row).
+        int cy = -1;
+        float best = 1.0e9f;
         for (int y = 0; y < height_; ++y) {
-            const float depth = row_depth_[static_cast<size_t>(y)];
-            if (depth <= 0.f) continue;
-            const float dz = depth - lamp.depth;
-            if (std::abs(dz) >= lamp.reach) continue;
-            const float px_per_unit = camera_depth_ / depth * x_scale_;
-            const float half = std::sqrt(lamp.reach * lamp.reach - dz * dz) * px_per_unit;
-            if (half < 0.5f) continue;
-            constexpr int rings = 12;
-            for (int ring = 0; ring < rings; ++ring) {
-                // Outer → inner: edge from 1 down to ~1/rings
-                const float edge0 = 1.f - static_cast<float>(ring) / static_cast<float>(rings);
-                const float edge1 = 1.f - static_cast<float>(ring + 1) / static_cast<float>(rings);
-                const float edge = 0.5f * (edge0 + edge1);
-                const float r_lat = 1.f - edge;
-                const float r2 = (dz * dz) / (lamp.reach * lamp.reach) + r_lat * r_lat * 0.5f;
-                if (r2 >= 1.f) continue;
-                // Same (1-r2)^2 shape as software street_lights centre falloff.
-                const float fall = (1.f - r2) * (1.f - r2);
-                const float k = strength * dark * fall * (edge0 - edge1) * static_cast<float>(rings) * 0.55f;
-                if (k < 0.008f) continue;
-                Color c{static_cast<uint8_t>(std::min(255.f, tint_r * k * 255.f + 0.5f)),
-                        static_cast<uint8_t>(std::min(255.f, tint_g * k * 255.f + 0.5f)),
-                        static_cast<uint8_t>(std::min(255.f, tint_b * k * 255.f + 0.5f)), 255};
-                const float h = half * edge0;
-                push_trap(static_cast<float>(y), lamp.x - h, lamp.x + h, static_cast<float>(y + 1), lamp.x - h,
-                          lamp.x + h, c);
+            const float d = row_depth_[static_cast<size_t>(y)];
+            if (d <= 0.f) continue;
+            const float err = std::abs(d - lamp.depth);
+            if (err < best) {
+                best = err;
+                cy = y;
             }
         }
+        if (cy < 0) continue;
+        const float px = camera_depth_ / lamp.depth * x_scale_;
+        const float half = lamp.reach * px;
+        if (half < 1.f) continue;
+        // Perspective: nearer rows stretch the pool; approximate vertical radius
+        // from the depth span of the sphere section.
+        float y0 = static_cast<float>(cy), y1 = static_cast<float>(cy);
+        for (int y = 0; y < height_; ++y) {
+            const float d = row_depth_[static_cast<size_t>(y)];
+            if (d <= 0.f) continue;
+            if (std::abs(d - lamp.depth) < lamp.reach) {
+                y0 = std::min(y0, static_cast<float>(y));
+                y1 = std::max(y1, static_cast<float>(y + 1));
+            }
+        }
+        const float cx = lamp.depth > 1e-3f && !row_center_x_.empty()
+                             ? (row_center_x_[static_cast<size_t>(cy)] +
+                                (lamp.x - (row_center_x_[static_cast<size_t>(cy)])) *
+                                    1.f) // already at lamp depth screen x
+                             : lamp.x;
+        const float k = strength * dark;
+        // a=0 → shader fog amount 0 (lightmap is unfogged additive lift).
+        Color c{static_cast<uint8_t>(std::min(255.f, tint_r * k * 255.f + 0.5f)),
+                static_cast<uint8_t>(std::min(255.f, tint_g * k * 255.f + 0.5f)),
+                static_cast<uint8_t>(std::min(255.f, tint_b * k * 255.f + 0.5f)), 0};
+        // Axis-aligned quad covering the pool; radial texture supplies falloff.
+        push_quad(cx - half, y0, half * 2.f, std::max(1.f, y1 - y0), 0.f, 0.f, 1.f, 1.f, c, false);
     }
-    flush_solid();
+    flush_textured();
     g.BlendFunc(GL_SRC_ALPHA_, GL_ONE_MINUS_SRC_ALPHA_);
 }
-
 
 void GlesRenderer::draw_weather(const Weather& weather) {
     const int nr = weather.rain_count();
@@ -1950,7 +1965,39 @@ void GlesRenderer::ensure_emissive_lut() {
     g.TexImage2D(GL_TEXTURE_2D_, 0, static_cast<int>(GL_RGBA_), 32, 1, 0, GL_RGBA_, GL_UNSIGNED_BYTE_, rgba.data());
 }
 
+void GlesRenderer::ensure_falloff_tex() {
+    if (falloff_tex_ || !g.GenTextures) return;
+    constexpr int n = 64;
+    std::vector<uint8_t> rgba(static_cast<size_t>(n) * static_cast<size_t>(n) * 4);
+    const float mid = 0.5f * static_cast<float>(n - 1);
+    for (int y = 0; y < n; ++y) {
+        for (int x = 0; x < n; ++x) {
+            const float dx = (static_cast<float>(x) - mid) / mid;
+            const float dy = (static_cast<float>(y) - mid) / mid;
+            const float r2 = dx * dx + dy * dy;
+            // Falloff in RGB (shader multiplies tex.rgb * v_col.rgb); alpha opaque
+            // so the emissive/fog branch does not discard soft edges.
+            const float a = r2 >= 1.f ? 0.f : (1.f - r2) * (1.f - r2); // software (1-r2)^2
+            const size_t i = (static_cast<size_t>(y) * static_cast<size_t>(n) + static_cast<size_t>(x)) * 4;
+            const uint8_t g8 = static_cast<uint8_t>(std::min(255.f, a * 255.f + 0.5f));
+            rgba[i + 0] = g8;
+            rgba[i + 1] = g8;
+            rgba[i + 2] = g8;
+            rgba[i + 3] = 255;
+        }
+    }
+    g.GenTextures(1, &falloff_tex_);
+    g.BindTexture(GL_TEXTURE_2D_, falloff_tex_);
+    g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_MIN_FILTER_, GL_LINEAR_);
+    g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_MAG_FILTER_, GL_LINEAR_);
+    g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_WRAP_S_, GL_CLAMP_TO_EDGE_);
+    g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_WRAP_T_, GL_CLAMP_TO_EDGE_);
+    g.PixelStorei(0x0CF5 /* GL_UNPACK_ALIGNMENT */, 1);
+    g.TexImage2D(GL_TEXTURE_2D_, 0, static_cast<int>(GL_RGBA_), n, n, 0, GL_RGBA_, GL_UNSIGNED_BYTE_, rgba.data());
+}
+
 void GlesRenderer::read_fbo_argb(std::vector<uint32_t>& out) {
+
     out.resize(static_cast<size_t>(width_) * static_cast<size_t>(height_));
     if (!g.ReadPixels || width_ <= 0 || height_ <= 0) {
         std::fill(out.begin(), out.end(), 0u);
@@ -2246,16 +2293,20 @@ void GlesRenderer::render(const Track& track, const RoadView& view, const Sprite
         flush_solid();
     }
 
-    // Pre-sprite ground for street_lights mask (same rule as software: only
-    // relight pixels sprites did not cover).
+    // Pre-sprite ground into its own FBO (compose uses it as the ground mask).
+    // GPU lightmap path — no ReadPixels (was ~30ms G-NIGHT on R36S).
     const bool need_night = light.level < 0.999f || headlight != nullptr;
-    std::vector<uint32_t> ground_argb;
-    if (need_night) {
+    if (need_night && copy_program_ && ground_fbo_) {
         frame_stats::Scope night(frame_stats::Phase::GlesNight);
         flush_solid();
         flush_textured();
+        copy_tex_to_fbo(color_tex_, ground_fbo_);
         g.BindFramebuffer(GL_FRAMEBUFFER_, fbo_);
-        read_fbo_argb(ground_argb);
+        g.Viewport(0, 0, width_, height_);
+        g.UseProgram(program_);
+        g.Uniform2f(u_screen_, static_cast<float>(width_), static_cast<float>(height_));
+        g.Enable(GL_BLEND_);
+        g.BlendFunc(GL_SRC_ALPHA_, GL_ONE_MINUS_SRC_ALPHA_);
     }
 
     {
@@ -2268,13 +2319,9 @@ void GlesRenderer::render(const Track& track, const RoadView& view, const Sprite
     }
 
     present_tex_ = color_tex_;
-    if (need_night || !lamps_.empty()) {
+    if (need_night && compose_program_ && light_fbo_ && night_fbo_ && ground_tex_) {
         frame_stats::Scope night(frame_stats::Phase::GlesNight);
-        std::vector<uint32_t> day_argb;
-        g.BindFramebuffer(GL_FRAMEBUFFER_, fbo_);
-        read_fbo_argb(day_argb);
-        if (ground_argb.empty()) ground_argb = day_argb;
-        apply_cpu_night(light, headlight, ground_argb, day_argb);
+        apply_gpu_night(light, headlight);
     }
     frame_stats::set_scene_counts(static_cast<int>(slices_.size()), static_cast<int>(objects.size()),
                                   static_cast<int>(lamps_.size()), true);

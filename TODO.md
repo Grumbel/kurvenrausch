@@ -2,6 +2,11 @@
 
 ## Current tip
 
+### Grok: GPU night again (R36S G-NIGHT was 30ms)
+- CPU ReadPixels + software lights was the cost. Night uses FBO lightmap +
+  compose again. Lamp pools: one radial-falloff textured quad each (no rings).
+
+
 ### Grok: format_choices actually writes dbg_* / scene
 - save_choices set the fields but format_choices never emitted them, so the
   file never stored HUD/FPS/etc. Fixed.
