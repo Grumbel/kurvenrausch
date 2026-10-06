@@ -2,6 +2,10 @@
 
 ## Current tip
 
+### Grok: SceneBackend enum in display.hpp (build fix)
+- `enum class SceneBackend` and helpers were only in `display.cpp`; declare
+  them in `display.hpp` so `game.hpp` / `main.cpp` compile.
+
 ### Grok: GLES orientation, minimap alpha, scene backend
 - `present_gles_scene` samples the scene FBO with V=1 at the top (was using the
   CPU-texture UV flip and drawing the world upside down). HUD still uses the

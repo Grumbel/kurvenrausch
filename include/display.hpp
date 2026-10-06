@@ -23,6 +23,17 @@ const char* present_backend_name(PresentBackend b);
 // Cycle AUTO → SDL → GL → AUTO.
 PresentBackend next_present_backend(PresentBackend b);
 
+// Who draws the road world (independent of how the framebuffer is presented).
+enum class SceneBackend {
+    Auto = 0,      // GLES when a GL present path is available, else software
+    Software = 1,
+    Gles = 2,
+};
+
+const char* scene_backend_name(SceneBackend b);
+SceneBackend next_scene_backend(SceneBackend b);
+bool parse_scene_backend(const char* s, SceneBackend& out);
+
 // Presents a software ARGB8888 framebuffer in an SDL window. The framebuffer
 // is scaled to the window with nearest-neighbour filtering and letterboxed to
 // keep its aspect ratio; an overlay goes on top at the screen's own
