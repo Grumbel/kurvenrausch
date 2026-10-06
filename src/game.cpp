@@ -2708,7 +2708,11 @@ void Game::render() {
             beam.bottom = setup.cockpit ? fb_height() - dashboard_height * pixel_scale_ : fb_height();
             beam_ptr = &beam;
         }
-        gles_.render(track_, view, sprites_, road_sprites_, look, day_level, &background_, hour_, beam_ptr);
+        const Weather* weather_ptr = nullptr;
+        if (debug_.weather && !track_.segment_at(world_.get<Transform>(player_).z + cam.player_z()).tunnel)
+            weather_ptr = &weather_;
+        gles_.render(track_, view, sprites_, road_sprites_, look, day_level, &background_, hour_, beam_ptr,
+                     weather_ptr);
         // Pause / options: full software frame underneath the menus.
         if (paused_ || options_open_ || video_open_ || audio_open_ || debug_open_) {
             background_.render(fb_, look, hour_);
@@ -2773,8 +2777,12 @@ void Game::render() {
                        side, nitro_.intensity(), rng_);
         }
     }
-    // No rain or snow falls in a tunnel.
-    if (debug_.weather && !track_.segment_at(tr.z + cam.player_z()).tunnel) weather_.render(fb_);
+    // No rain or snow falls in a tunnel. On the GLES path the particles are
+    // drawn into the scene FBO; only fall back to software when that path is
+    // not active (pause menus, headless, no GL).
+    if (debug_.weather && !track_.segment_at(tr.z + cam.player_z()).tunnel &&
+        !(use_gles_ && !paused_ && !options_open_ && !video_open_ && !audio_open_ && !debug_open_))
+        weather_.render(fb_);
     if (setup.cockpit) {
         // The dashboard and the wheel, shaking with the car. On a wide
         // screen the dashboard is centred and its outer edges carry on to

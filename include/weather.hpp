@@ -40,7 +40,8 @@ public:
     int rain_count() const { return static_cast<int>(rain_level_ * static_cast<float>(max_rain) + 0.5f); }
     int snow_count() const { return static_cast<int>(snow_level_ * static_cast<float>(max_snow) + 0.5f); }
 
-private:
+    // Screen-space particle for the GLES path (same layout as the internal
+    // drops and flakes).
     struct Particle {
         float x, y;
         float depth;  // 0 far .. 1 near
@@ -48,6 +49,10 @@ private:
         float vx = 0.f, vy = 0.f; // velocity at the last update, for the streaks
         float outflow = 0.f;      // the part of it streaming out of the distance, pixels per second
     };
+    const Particle* rain_data() const { return rain_.data(); }
+    const Particle* snow_data() const { return snow_.data(); }
+
+private:
 
     float next_random();
     // Moves a particle by its fall `fall` (pixels per second) plus the outflow,

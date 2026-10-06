@@ -605,20 +605,36 @@ void GlesRenderer::draw_segment(const Track& track, const Slice& s, const RoadTh
         push_trap(b.y, ocb - b.w, ocb + b.w, a.y, oca - a.w, oca + a.w, fogc(theme.road[band]));
     }
 
-    // Guard rails (simplified as two thin trapezoid bars).
+    // Guard rails: posts + upper/lower bars (software draws the same bands
+    // with gaps so the ground shows through). A post sits at the near end of
+    // each segment run; bars are two horizontal straps at ~0.3 and ~0.75 height.
     auto rail = [&](int side) {
         const Edge kind = side < 0 ? seg.left : seg.right;
         if (kind != Edge::Rail) return;
         const float off = rail_offset * static_cast<float>(side);
         const float xa = a.x + off * a.w, xb = b.x + off * b.w;
+        if (std::abs(xb - xa) < 0.01f) return; // edge-on
         const float ha = rail_height * a.scale * y_scale_, hb = rail_height * b.scale * y_scale_;
-        const float thick = std::max(1.5f, a.w * 0.02f);
-        const Color post = fogc(theme.rail[1]);
-        const Color bar = fogc(theme.rail[0]);
-        // upper bar
-        push_trap(b.y - hb * 0.9f, xb - thick, xb + thick, a.y - ha * 0.9f, xa - thick, xa + thick, bar);
-        push_trap(b.y - hb * 0.35f, xb - thick, xb + thick, a.y - ha * 0.35f, xa - thick, xa + thick, bar);
-        push_trap(b.y - hb, xb - thick * 0.7f, xb + thick * 0.7f, a.y - ha, xa - thick * 0.7f, xa + thick * 0.7f, post);
+        const float thick = std::max(1.2f, std::min(a.w, b.w) * 0.018f);
+        const Color post_c = fogc(theme.rail[1]);
+        const Color bar_c = fogc(theme.rail[0]);
+        Color top_c = bar_c;
+        top_c.r = static_cast<uint8_t>(std::min(255, top_c.r + 40));
+        top_c.g = static_cast<uint8_t>(std::min(255, top_c.g + 40));
+        top_c.b = static_cast<uint8_t>(std::min(255, top_c.b + 40));
+        // Lower bar (~0.20 .. 0.42 of rail height from the road).
+        push_trap(b.y - hb * 0.42f, xb - thick, xb + thick, a.y - ha * 0.42f, xa - thick, xa + thick, bar_c);
+        push_trap(b.y - hb * 0.20f, xb - thick, xb + thick, a.y - ha * 0.20f, xa - thick, xa + thick, bar_c);
+        // Upper bar (~0.60 .. 0.95), bright lip on the top edge.
+        push_trap(b.y - hb * 0.95f, xb - thick, xb + thick, a.y - ha * 0.95f, xa - thick, xa + thick, top_c);
+        push_trap(b.y - hb * 0.60f, xb - thick, xb + thick, a.y - ha * 0.60f, xa - thick, xa + thick, bar_c);
+        // Post at the near end of the segment (covers ~10% of the run).
+        const float t_post = 0.12f;
+        const float xp = xa + (xb - xa) * (direction_ > 0 ? t_post : 1.f - t_post);
+        const float hp = ha + (hb - ha) * (direction_ > 0 ? t_post : 1.f - t_post);
+        const float yp = a.y + (b.y - a.y) * (direction_ > 0 ? t_post : 1.f - t_post);
+        const float pw = std::max(1.5f, thick * 1.4f);
+        push_trap(yp - hp, xp - pw, xp + pw, yp, xp - pw, xp + pw, post_c);
     };
     rail(-1);
     rail(+1);
@@ -742,6 +758,11 @@ void GlesRenderer::draw_sprites(const Track& track, const SpriteSheet& sprites, 
             flush_solid();
             push_quad(left, p0.y - height, width, height, 0.f, 0.f, 1.f, 1.f, tint, flip);
             flush_textured(tex);
+            if (obj.kind == Scenery::StreetLamp) {
+                // Pool centre sits a little toward the road from the pole base.
+                const float toward_road = (obj.offset < 0.f ? 1.f : -1.f) * width * 0.15f;
+                lamps_.push_back({left + width / 2.f + toward_road, p0.cam_z, 1100.f, Glow::Street});
+            }
         };
         if (projectable) {
             const float shift = track.branch_offset(s.index);
@@ -786,6 +807,12 @@ void GlesRenderer::draw_sprites(const Track& track, const SpriteSheet& sprites, 
             flush_solid();
             push_quad(cx - width / 2.f, y - height, width, height, 0.f, 0.f, 1.f, 1.f, tint, o.flip);
             flush_textured(tex);
+            if (o.lights != 0) {
+                const float depth = camera_depth_ / std::max(1e-4f, scale);
+                const float ahead = static_cast<float>(o.lights);
+                lamps_.push_back({cx, depth + ahead * 1100.f, 1000.f, Glow::Head});
+                lamps_.push_back({cx, depth - ahead * 350.f, 560.f, Glow::Tail});
+            }
         };
         if (direction_ > 0) {
             for (auto o = std::make_reverse_iterator(last); o != std::make_reverse_iterator(first); ++o)
@@ -796,6 +823,98 @@ void GlesRenderer::draw_sprites(const Track& track, const SpriteSheet& sprites, 
     }
 }
 
+
+
+void GlesRenderer::draw_lamp_pools(float dark) {
+    if (dark <= 0.02f || lamps_.empty()) return;
+    // Approximate the software street_lights() pools: soft ground discs whose
+    // screen size follows row_depth. Only rows that already show ground/road
+    // (row_depth > 0) are lit so sky and walls stay dark.
+    g.BlendFunc(GL_SRC_ALPHA_, GL_ONE_); // additive over the night-darkened scene
+    for (const LampSpot& lamp : lamps_) {
+        const float tint_g = lamp.glow == Glow::Street ? 0.85f : lamp.glow == Glow::Tail ? 0.35f : 1.f;
+        const float tint_b = lamp.glow == Glow::Street ? 0.55f : lamp.glow == Glow::Tail ? 0.2f : 0.95f;
+        const float strength = lamp.glow == Glow::Tail ? 0.85f : lamp.glow == Glow::Head ? 0.8f : 0.9f;
+        const float base_r = lamp.glow == Glow::Tail ? 1.f : 1.f;
+        const float base_g = lamp.glow == Glow::Tail ? 0.25f : lamp.glow == Glow::Street ? 0.75f : 0.95f;
+        const float base_b = lamp.glow == Glow::Tail ? 0.12f : lamp.glow == Glow::Street ? 0.4f : 0.85f;
+        for (int y = 0; y < height_; ++y) {
+            const float depth = row_depth_[static_cast<size_t>(y)];
+            if (depth <= 0.f) continue;
+            const float dz = depth - lamp.depth;
+            if (dz * dz > lamp.reach * lamp.reach) continue;
+            const float px_per_unit = camera_depth_ / depth * x_scale_;
+            const float half = lamp.reach * px_per_unit;
+            if (half < 0.5f) continue;
+            const float r2_z = (dz * dz) / (lamp.reach * lamp.reach);
+            const float k = strength * dark * (1.f - r2_z) * (1.f - r2_z);
+            if (k < 0.03f) continue;
+            const float a = std::min(0.55f, k * 0.45f);
+            Color c{static_cast<uint8_t>(std::min(255.f, base_r * 255.f * a)),
+                    static_cast<uint8_t>(std::min(255.f, base_g * tint_g * 255.f * a)),
+                    static_cast<uint8_t>(std::min(255.f, base_b * tint_b * 255.f * a)),
+                    static_cast<uint8_t>(std::min(255.f, a * 200.f))};
+            // Soft falloff: outer strip + brighter core
+            push_trap(static_cast<float>(y), lamp.x - half, lamp.x + half, static_cast<float>(y + 1),
+                      lamp.x - half, lamp.x + half, c);
+            Color core = c;
+            core.a = static_cast<uint8_t>(std::min(255, core.a + 40));
+            push_trap(static_cast<float>(y), lamp.x - half * 0.35f, lamp.x + half * 0.35f,
+                      static_cast<float>(y + 1), lamp.x - half * 0.35f, lamp.x + half * 0.35f, core);
+        }
+    }
+    flush_solid();
+    g.BlendFunc(GL_SRC_ALPHA_, GL_ONE_MINUS_SRC_ALPHA_);
+}
+
+void GlesRenderer::draw_weather(const Weather& weather) {
+    const int nr = weather.rain_count();
+    const int ns = weather.snow_count();
+    if (nr <= 0 && ns <= 0) return;
+    constexpr float streak_seconds = 0.035f;
+    // Rain streaks
+    for (int i = 0; i < nr; ++i) {
+        const Weather::Particle& p = weather.rain_data()[i];
+        const float v = std::hypot(p.vx, p.vy);
+        const float len = std::min(3.f + p.depth * 6.f + p.outflow * streak_seconds, 12.f + p.depth * 32.f);
+        const float alpha = 0.3f + 0.4f * p.depth;
+        const float ux = v > 1e-3f ? p.vx / v : 0.f, uy = v > 1e-3f ? p.vy / v : 1.f;
+        const int steps = std::max(1, static_cast<int>(len));
+        for (int k = 0; k < steps; ++k) {
+            const float t = static_cast<float>(k);
+            const float a = alpha * (1.f - 0.6f * t / len);
+            Color c{0xc4, 0xd2, 0xe8, static_cast<uint8_t>(std::min(255.f, a * 255.f))};
+            const float x = p.x - ux * t;
+            const float y = p.y - uy * t;
+            push_trap(y, x, x + 1.f, y + 1.f, x, x + 1.f, c);
+        }
+    }
+    // Snow flakes / short streaks
+    for (int i = 0; i < ns; ++i) {
+        const Weather::Particle& p = weather.snow_data()[i];
+        const float v = std::hypot(p.vx, p.vy);
+        const float len = std::min(p.outflow * streak_seconds * 0.6f, 4.f + 10.f * p.depth);
+        if (len > 1.5f && v > 1e-3f) {
+            const float ux = p.vx / v, uy = p.vy / v;
+            const float alpha = 0.55f + 0.45f * p.depth;
+            for (int k = 0; k < static_cast<int>(len); ++k) {
+                const float t = static_cast<float>(k);
+                const float a = alpha * (1.f - 0.7f * t / len);
+                Color c{255, 255, 255, static_cast<uint8_t>(std::min(255.f, a * 255.f))};
+                const float x = p.x - ux * t;
+                const float y = p.y - uy * t;
+                push_trap(y, x, x + 1.f, y + 1.f, x, x + 1.f, c);
+            }
+        } else if (p.depth > 0.72f) {
+            Color c{255, 255, 255, 242};
+            push_trap(p.y, p.x, p.x + 2.f, p.y + 2.f, p.x, p.x + 2.f, c);
+        } else {
+            Color c{255, 255, 255, static_cast<uint8_t>((0.55f + 0.45f * p.depth) * 255.f)};
+            push_trap(p.y, p.x, p.x + 1.f, p.y + 1.f, p.x, p.x + 1.f, c);
+        }
+    }
+    flush_solid();
+}
 
 bool GlesRenderer::ensure_fbo() {
     if (fbo_ && fbo_w_ == width_ && fbo_h_ == height_) return true;
@@ -876,7 +995,8 @@ void GlesRenderer::draw_headlight(const Beam& beam, float dark) {
 
 void GlesRenderer::render(const Track& track, const RoadView& view, const SpriteSheet& sprites,
                           std::vector<RoadSprite>& objects, const RoadTheme& theme, float daylight,
-                          const Background* backdrop, float hour, const Beam* headlight) {
+                          const Background* backdrop, float hour, const Beam* headlight,
+                          const Weather* weather) {
     if (!program_ || !ensure_fbo()) return;
     daylight_ = std::clamp(daylight, 0.05f, 1.f);
     fog_air_ = view.fog_air;
@@ -972,6 +1092,9 @@ void GlesRenderer::render(const Track& track, const RoadView& view, const Sprite
     draw_sprites(track, sprites, objects);
     flush_solid();
     if (headlight) draw_headlight(*headlight, 1.f - daylight_);
+    // Night lamp pools on the ground (software street_lights equivalent).
+    draw_lamp_pools(1.f - daylight_);
+    if (weather) draw_weather(*weather);
     g.BindFramebuffer(GL_FRAMEBUFFER_, static_cast<unsigned>(prev_fbo));
 }
 

@@ -2,6 +2,18 @@
 
 ## Current tip
 
+### Grok: GLES lamp pools, finer rails, GPU weather
+- Street-lamp / head / tail pools on GLES via `draw_lamp_pools` (row_depth
+  discs, additive blend); lamps collected while planting StreetLamp scenery
+  and lit vehicles, matching software `street_lights`.
+- Guard rails redrawn as posts + upper/lower bars with top highlight (no
+  longer two solid straps).
+- Weather rain/snow drawn into the scene FBO (`draw_weather`); software
+  `Weather::render` skipped when the GLES path owns the frame. Particle
+  data exposed read-only from `Weather` for the GPU path.
+
+
+
 ### Grok: GLES forks, forecourts, headlight cone
 - Other-route road surface + rumble at forks; forecourt paving; other-route
   scenery. Headlight cone drawn in the FBO from row_depth when lights on.
