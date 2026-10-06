@@ -61,6 +61,12 @@ constexpr float overtake_top = 0.75f;
 constexpr float overtake_oncoming = 0.6f;
 constexpr float overtake_min_gain = 0.05f;
 constexpr float overtake_abort = 80.f;
+// Oncoming traffic overtakes the same way, in the nearest lane going the
+// player's way; what comes towards it there may be the player, flat out with
+// nitro (overtake_head_on of top speed). It heads back in while it has
+// overtake_return_margin seconds to spare over the lane change.
+constexpr float overtake_head_on = 1.3f;
+constexpr float overtake_return_margin = 0.6f;
 
 // Above the top speed (after nitro or a pass boost) the car loses this much
 // of the top speed per second until it is back down.
@@ -2384,12 +2390,12 @@ void Game::update_traffic(float dt) {
     auto distance_ahead = [&](float from, float to, int dir = 1) {
         return track_.wrap((to - from) * static_cast<float>(dir));
     };
-    // Is anyone going the player's way within `range` ahead or half of it
-    // behind near lateral position x?
+    // Is anyone within `range` ahead or half of it behind near lateral
+    // position x? (Coming the other way too: an oncoming car out overtaking.)
     auto lane_busy = [&](Entity self, float z, float x, float range) {
         bool busy = false;
         nearby(z, range * 0.5f, range, [&](const Mover& m) {
-            busy = m.e != self && m.dir >= 0 && std::abs(m.x - x) <= 0.4f;
+            busy = m.e != self && std::abs(m.x - x) <= 0.4f;
             return !busy;
         });
         return busy;
@@ -2407,9 +2413,66 @@ void Game::update_traffic(float dt) {
         const float spacing = 2.f / static_cast<float>(lanes);
         const int dir = traffic.dir;
         if (dir < 0) {
-            // Coming the other way. Meeting the player in its lane, it
-            // swerves out and slows down.
-            traffic.target_x = lane_center(lanes, against);
+            // Coming the other way. Stuck behind something slower, it
+            // overtakes in the lane next to its own going the player's way,
+            // as the player's side does in the oncoming lane.
+            const int pass_lane = look.left_hand ? against - 1 : against + 1;
+            const bool can_pass = pass_lane >= 0 && pass_lane < lanes;
+            // Is nothing coming towards it near lateral position x for
+            // `range` ahead (the player included)?
+            auto head_on_clear = [&](float x, float range) {
+                bool clear = true;
+                nearby(t.z, range, 0.f, [&](const Mover& m) {
+                    clear = !(m.dir > 0 && std::abs(m.x - x) < 0.6f * spacing);
+                    return clear;
+                });
+                return clear;
+            };
+            // Is another oncoming vehicle near lateral position x, `range`
+            // ahead of it or half of that behind?
+            auto lane_taken = [&](float x, float range) {
+                bool taken = false;
+                nearby(t.z, range, 0.5f * range, [&](const Mover& m) {
+                    taken = m.e != e && m.dir < 0 && std::abs(m.x - x) <= 0.4f;
+                    return !taken;
+                });
+                return taken;
+            };
+            // How far off something coming at it has to be for it to get
+            // back into its lane in time.
+            const float lateral = 0.8f; // road half-widths per second (see the step below)
+            const float back_in = (v.speed + overtake_head_on * max_speed) * (spacing / lateral + overtake_return_margin);
+            if (traffic.passing && (!can_pass || traffic.pass_lane != pass_lane)) traffic.passing = false;
+            if (traffic.passing) {
+                // Back in once well past whatever it overtook, or early with
+                // something coming.
+                const bool past = !lane_taken(lane_center(lanes, against), 2.f * follow_gap * track_.segment_length);
+                if (past || !head_on_clear(lane_center(lanes, pass_lane), back_in)) traffic.passing = false;
+            }
+            if (!traffic.passing && can_pass && std::abs(t.x - lane_center(lanes, against)) < 0.05f) {
+                bool blocked = false;
+                float lead_speed = 0.f;
+                nearby(t.z, follow_ahead, 0.f, [&](const Mover& m) {
+                    blocked = m.e != e && m.dir < 0 && std::abs(m.x - t.x) <= 0.5f &&
+                              m.speed < traffic.cruise - overtake_min_gain * max_speed;
+                    lead_speed = m.speed;
+                    return !blocked;
+                });
+                const float pass = std::min(overtake_top * max_speed, lead_speed + overtake_boost * max_speed);
+                const float gain = pass - lead_speed;
+                const float lane = lane_center(lanes, pass_lane);
+                if (blocked && gain > overtake_min_gain * max_speed) {
+                    const float clear = overtake_length * track_.segment_length / gain *
+                                            (pass + overtake_head_on * max_speed) + back_in;
+                    if (!lane_taken(lane, look_ahead) && head_on_clear(lane, clear)) {
+                        traffic.passing = true;
+                        traffic.pass_lane = pass_lane;
+                        traffic.pass_speed = std::max(traffic.cruise, pass);
+                    }
+                }
+            }
+            // Meeting the player in its lane, it swerves out and slows down.
+            traffic.target_x = lane_center(lanes, traffic.passing ? pass_lane : against);
             const float towards = distance_ahead(t.z, player_world_z, -1);
             bool alarm = !attract_ && towards < oncoming_alarm * track_.segment_length &&
                          std::abs(ptr.x - t.x) < 0.6f;
@@ -2419,7 +2482,7 @@ void Game::update_traffic(float dt) {
                 return !alarm;
             });
             if (alarm) traffic.target_x += (look.left_hand ? 1.f : -1.f) * oncoming_dodge;
-            float wanted = alarm ? 0.6f * traffic.cruise : traffic.cruise;
+            float wanted = traffic.passing ? traffic.pass_speed : alarm ? 0.6f * traffic.cruise : traffic.cruise;
             nearby(t.z, follow_ahead, 0.f, [&](const Mover& m) {
                 if (m.e == e || m.dir > 0 || std::abs(m.x - t.x) > follow_width) return true;
                 const float d = distance_ahead(t.z, m.z, -1);
