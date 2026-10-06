@@ -12,6 +12,7 @@
 #include "driving.hpp"
 #include "ecs.hpp"
 #include "framebuffer.hpp"
+#include "gles_render.hpp"
 #include "hud.hpp"
 #include "input.hpp"
 #include "menu.hpp"
@@ -227,6 +228,8 @@ private:
     World world_;
     Track track_;
     RoadRenderer road_;
+    GlesRenderer gles_;
+    bool use_gles_ = false;
     std::vector<RoadSprite> road_sprites_;
     Framebuffer mirror_fb_;
     RoadRenderer mirror_road_;

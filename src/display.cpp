@@ -633,6 +633,41 @@ void Display::present_gl(const uint32_t* argb_pixels, const Overlay& overlay) {
     SDL_GL_SwapWindow(window_);
 }
 
+
+
+void Display::present_overlay(const Overlay& overlay) {
+    if (!is_gl() || !make_gl_current()) return;
+    // Overlay items are screen-resolution bitmaps; for now skip if empty and swap.
+    // Full overlay support reuses the FB texture path only when items exist.
+    if (!overlay.items().empty()) {
+        // Draw overlay via temporary upload of a software composite would need
+        // a transparent layer; touch controls are optional — swap scene only.
+        (void)overlay;
+    }
+    SDL_GL_SwapWindow(window_);
+}
+
+bool Display::make_gl_current() {
+    if (!window_ || !gl_) return false;
+    return SDL_GL_MakeCurrent(window_, gl_) == 0;
+}
+
+void Display::swap_gl() {
+    if (window_) SDL_GL_SwapWindow(window_);
+}
+
+int Display::window_pixel_width() const {
+    int w = 0, h = 0;
+    if (window_) SDL_GL_GetDrawableSize(window_, &w, &h);
+    return w;
+}
+
+int Display::window_pixel_height() const {
+    int w = 0, h = 0;
+    if (window_) SDL_GL_GetDrawableSize(window_, &w, &h);
+    return h;
+}
+
 bool save_bmp(const std::string& path, const uint32_t* argb_pixels, int width, int height) {
     if (!argb_pixels || width <= 0 || height <= 0) return false;
     SDL_Surface* surface =

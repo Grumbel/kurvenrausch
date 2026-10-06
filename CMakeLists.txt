@@ -62,6 +62,7 @@ add_library(kurvenrausch_core STATIC
     src/font.cpp
     src/framebuffer.cpp
     src/game.cpp
+    src/gles_render.cpp
     src/hud.cpp
     src/input.cpp
     src/menu.cpp

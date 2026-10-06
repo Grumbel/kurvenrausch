@@ -327,8 +327,20 @@ bool Game::init(bool fullscreen) {
     }
 
     display_ = std::make_unique<Display>();
+    // GLES scene path needs a GL context; prefer GL present (falls back to SDL).
+    if (present_backend_ == PresentBackend::Sdl) present_backend_ = PresentBackend::Auto;
     if (!display_->init("Kurvenrausch", app_id, base_width, height, window_scale, fullscreen, present_backend_))
         return false;
+    if (display_->is_gl() && display_->make_gl_current() && gles_.init()) {
+        use_gles_ = true;
+        gles_.set_size(width_, fb_height());
+        std::cout << "Kurvenrausch: GLES2 scene renderer
+";
+    } else {
+        use_gles_ = false;
+        std::cout << "Kurvenrausch: software renderer (no GL scene)
+";
+    }
 
     const Bitmap icon = make_app_icon();
     display_->set_icon(icon.px.data(), icon.w, icon.h);
@@ -612,6 +624,7 @@ void Game::set_width(int w) {
     width_ = w;
     fb_ = Framebuffer(width_, fb_height());
     weather_.resize(width_, fb_height());
+    if (use_gles_) gles_.set_size(width_, fb_height());
 }
 
 void Game::set_pixel_scale(int scale) {
@@ -639,7 +652,11 @@ void Game::draw_touch() {
 
 void Game::present() {
     draw_touch();
-    display_->present(fb_.pixels(), overlay_);
+    if (use_gles_ && !paused_ && !options_open_ && !video_open_ && !audio_open_ && !debug_open_) {
+        display_->present_overlay(overlay_);
+    } else {
+        display_->present(fb_.pixels(), overlay_);
+    }
 }
 
 void Game::switch_lights(const InputState& input) {
@@ -2524,7 +2541,6 @@ void Game::render() {
     const auto& cam = world_.get<Camera>(camera_);
 
     const RoadTheme look = look_at(tr.z + cam.player_z());
-    background_.render(fb_, look, hour_);
 
     // The camera of the chosen view, placed relative to the car; the car's
     // own reference (the chase camera, see Camera) stays where it is.
@@ -2676,7 +2692,21 @@ void Game::render() {
     }
     if (car_visible) road_sprites_.push_back(me);
 
-    road_.render(fb_, track_, view, sprites_, road_sprites_);
+    if (use_gles_ && display_ && display_->make_gl_current()) {
+        gles_.set_size(width_, fb_height());
+        const int dw = display_->window_pixel_width();
+        const int dh = display_->window_pixel_height();
+        const float day_level = lit_by(daylight_at(hour_), look.night_glow).level;
+        gles_.render(track_, view, sprites_, road_sprites_, look, day_level, dw, dh);
+        // HUD / menus still need a software buffer when paused; clear for debug.
+        if (paused_ || options_open_ || video_open_ || audio_open_ || debug_open_) {
+            background_.render(fb_, look, hour_);
+            road_.render(fb_, track_, view, sprites_, road_sprites_);
+        }
+    } else {
+        background_.render(fb_, look, hour_);
+        road_.render(fb_, track_, view, sprites_, road_sprites_);
+    }
 
     if (scraping_ && vel.speed > 0.f && setup.car) {
         // Sparks flying off the side of the car that scrapes the barrier.
@@ -2762,6 +2792,7 @@ void Game::render() {
     const Daylight light = lit_by(daylight_at(hour_), look.night_glow);
     // (The picture before nightfall, for the light the headlights and the
     // street lamps bring back.)
+    if (!(use_gles_ && !paused_)) {
     if (headlights_ || !road_.lamps().empty()) day_picture_.assign(fb_.pixels(), fb_.pixels() + width_ * fb_height());
     apply_daylight(fb_, light);
     street_lights(fb_, day_picture_, road_.ground(), light, road_.row_depth(), road_.lamps(), cam.depth, fb_x_unit());
@@ -2802,6 +2833,7 @@ void Game::render() {
             for (int x = 0; x < width_; ++x) fb_.blend_pixel(x, y, Color{0xf0, 0xf4, 0xff}, a);
         }
     }
+    } // !use_gles_ night post
 
     HudState hud;
     hud.speed_fraction = std::abs(vel.speed) / player.max_speed;

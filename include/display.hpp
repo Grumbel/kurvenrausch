@@ -44,6 +44,8 @@ public:
     // The window's icon, an ARGB8888 image.
     void set_icon(const uint32_t* argb_pixels, int width, int height);
     void present(const uint32_t* argb_pixels, const Overlay& overlay);
+    // Scene already drawn into the GL backbuffer; only overlay + swap.
+    void present_overlay(const Overlay& overlay);
     // A framebuffer of another size from now on.
     bool resize_framebuffer(int fb_width, int fb_height);
     void toggle_fullscreen();
@@ -53,6 +55,16 @@ public:
     // Returns false and keeps the previous path when the request fails.
     bool set_present_backend(PresentBackend preferred);
     PresentBackend present_backend() const { return backend_; }
+    bool is_gl() const { return backend_ == PresentBackend::Gl && gl_ != nullptr; }
+    // Make the GL context current for scene rendering (GLES road path).
+    bool make_gl_current();
+    void swap_gl();
+    // Draw a letterboxed scene already in the default framebuffer at fb size
+    // by treating the backbuffer as the scene (scene rendered at window size).
+    // Prefer: render scene into gl_fb_tex via FBO later; for now swap after
+    // rendering at window resolution.
+    int window_pixel_width() const;
+    int window_pixel_height() const;
 
     // The screen's size in pixels (the window's, in pixels rather than
     // points on high-DPI screens).

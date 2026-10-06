@@ -2,6 +2,15 @@
 
 ## Current tip
 
+### Grok: GLES2 scene renderer (primary window path)
+- `GlesRenderer` draws road trapezoids + textured sprites via GLES2/desktop GL.
+- Sprite **construction** stays CPU (`SpriteSheet`); bitmaps upload to textures.
+- Window path prefers GL present + GLES scene; software `RoadRenderer` remains
+  for headless screenshots and when GL init fails / pause menus.
+- Still incomplete vs software: full marking detail, rails, weather particles,
+  night beams, backdrop hills/clouds, HUD on the GL path.
+
+
 ### Grok: fog on all non-lamp sprite pixels
 - blit_scaled used a red-channel heuristic that treated red car bodies as
   lamps and skipped fog. Now only exact emissive ARGB colours (shared
