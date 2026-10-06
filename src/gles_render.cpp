@@ -620,35 +620,97 @@ void GlesRenderer::draw_backdrop(const RoadTheme& theme, const Background* backd
         flush_solid();
     }
 
-    auto disc = [&](float cx, float cy, float radius, Color fill) {
-        const int y0 = std::max(0, static_cast<int>(cy - radius));
-        const int y1 = std::min(static_cast<int>(horizon), static_cast<int>(cy + radius) + 1);
-        for (int y = y0; y < y1; ++y) {
-            const float dy = (static_cast<float>(y) + 0.5f - cy) / radius;
-            if (dy * dy >= 1.f) continue;
-            const float half = radius * std::sqrt(1.f - dy * dy);
-            const float x0 = cx - half, x1 = cx + half;
-            push_trap(static_cast<float>(y), x0, x1, static_cast<float>(y + 1), x0, x1, fill);
+    // Soft filled disc as concentric rings (smooth radial gradient).
+    auto disc_soft = [&](float cx, float cy, float radius, Color core, Color edge, int rings) {
+        for (int i = rings - 1; i >= 0; --i) {
+            const float t0 = static_cast<float>(i) / static_cast<float>(rings);
+            const float t1 = static_cast<float>(i + 1) / static_cast<float>(rings);
+            const float r_out = radius * t1;
+            const Color c = blend(core, edge, (t0 + t1) * 0.5f);
+            const int y0 = std::max(0, static_cast<int>(cy - r_out));
+            const int y1 = std::min(static_cast<int>(horizon), static_cast<int>(cy + r_out) + 1);
+            for (int y = y0; y < y1; ++y) {
+                const float dy = (static_cast<float>(y) + 0.5f - cy) / r_out;
+                if (dy * dy >= 1.f) continue;
+                const float half = r_out * std::sqrt(1.f - dy * dy);
+                push_trap(static_cast<float>(y), cx - half, cx + half, static_cast<float>(y + 1), cx - half, cx + half, c);
+            }
         }
     };
 
     const SkyBody sun = sun_position(hour);
     const SkyBody moon = moon_position(hour);
     const float half_w = wf * 0.5f;
-    if (theme.sun_amount > 0.02f && sun.elevation > -0.02f) {
+    // Match Background::body_screen placement (0.88 band).
+    auto body_xy = [&](const SkyBody& body, float& sx, float& sy) -> bool {
+        if (body.elevation < -0.08f) return false;
+        const float elev = std::clamp(body.elevation, 0.f, 1.f);
+        const float band = horizon * 0.88f;
+        sx = half_w + body.azimuth * half_w * 0.88f;
+        sy = horizon - elev * band;
+        return true;
+    };
+
+    float sun_sx = 0.f, sun_sy = 0.f;
+    if (theme.sun_amount > 0.02f && body_xy(sun, sun_sx, sun_sy) && sun.elevation > -0.02f) {
         const float low = std::clamp(1.f - sun.elevation, 0.f, 1.f);
         const float radius = 5.f + 4.f * theme.sun_amount + 6.f * low;
-        const float sx = half_w + sun.azimuth * half_w * 0.85f;
-        const float sy = horizon - sun.elevation * horizon * 0.85f;
-        Color c = fogged(theme.sun, fog_air_, theme.haze * 0.15f, daylight_);
-        disc(sx, sy, radius, c);
+        // Core brighter; edge theme.sun — software blends toward white at centre.
+        const Color core = blend(theme.sun, Color{255, 255, 255}, 0.35f);
+        const Color edge = fogged(theme.sun, fog_air_, theme.haze * 0.1f, daylight_);
+        disc_soft(sun_sx, sun_sy, radius, core, edge, 6);
+        // Soft glow halo (software dithers; we use low-alpha concentric rings).
+        const float glow_r = radius * (1.8f + 0.6f * low);
+        const Color glow = blend(theme.sky_horizon, theme.sun, 0.55f);
+        Color g = glow;
+        g.a = static_cast<uint8_t>(std::min(255.f, (0.25f + 0.2f * low) * theme.sun_amount * 180.f));
+        const int y0 = std::max(0, static_cast<int>(sun_sy - glow_r));
+        const int y1 = std::min(static_cast<int>(horizon), static_cast<int>(sun_sy + glow_r) + 1);
+        for (int y = y0; y < y1; ++y) {
+            const float dy = (static_cast<float>(y) + 0.5f - sun_sy) / glow_r;
+            if (dy * dy >= 1.f) continue;
+            const float half = glow_r * std::sqrt(1.f - dy * dy);
+            // Only the ring outside the solid disc.
+            const float dy2 = (static_cast<float>(y) + 0.5f - sun_sy) / radius;
+            float inner = 0.f;
+            if (dy2 * dy2 < 1.f) inner = radius * std::sqrt(1.f - dy2 * dy2);
+            if (half <= inner + 0.5f) continue;
+            push_trap(static_cast<float>(y), sun_sx - half, sun_sx - inner, static_cast<float>(y + 1), sun_sx - half,
+                      sun_sx - inner, g);
+            push_trap(static_cast<float>(y), sun_sx + inner, sun_sx + half, static_cast<float>(y + 1), sun_sx + inner,
+                      sun_sx + half, g);
+        }
         flush_solid();
     }
-    if (theme.stars > 0.05f && moon.elevation > 0.f) {
+
+    float moon_sx = 0.f, moon_sy = 0.f;
+    const bool moon_show = body_xy(moon, moon_sx, moon_sy) && moon.elevation > 0.02f &&
+                           (theme.stars > 0.05f || sun.elevation < 0.25f);
+    if (moon_show) {
         const float radius = 5.5f;
-        const float sx = half_w + moon.azimuth * half_w * 0.85f;
-        const float sy = horizon - moon.elevation * horizon * 0.85f;
-        disc(sx, sy, radius, fogged(Color{0xe0, 0xe4, 0xec}, fog_air_, theme.haze * 0.1f, daylight_));
+        const Color disc_c{0xe0, 0xe4, 0xec}, limb{0xb0, 0xb8, 0xc8};
+        // Left-shaded disc: two half soft discs (limb on the left, bright on the right).
+        disc_soft(moon_sx - radius * 0.15f, moon_sy, radius * 0.95f, limb, limb, 3);
+        disc_soft(moon_sx + radius * 0.1f, moon_sy, radius, disc_c, blend(limb, disc_c, 0.5f), 5);
+        if (theme.stars > 0.2f) {
+            Color halo{0xc8, 0xd0, 0xe0, 40};
+            const float hr = radius * 1.35f;
+            const int y0 = std::max(0, static_cast<int>(moon_sy - hr));
+            const int y1 = std::min(static_cast<int>(horizon), static_cast<int>(moon_sy + hr) + 1);
+            for (int y = y0; y < y1; ++y) {
+                const float dy = (static_cast<float>(y) + 0.5f - moon_sy) / hr;
+                if (dy * dy >= 1.f) continue;
+                const float half = hr * std::sqrt(1.f - dy * dy);
+                const float dy2 = (static_cast<float>(y) + 0.5f - moon_sy) / radius;
+                float inner = 0.f;
+                if (dy2 * dy2 < 1.f) inner = radius * std::sqrt(1.f - dy2 * dy2);
+                if (half <= inner + 0.5f) continue;
+                push_trap(static_cast<float>(y), moon_sx - half, moon_sx - inner, static_cast<float>(y + 1),
+                          moon_sx - half, moon_sx - inner, halo);
+                push_trap(static_cast<float>(y), moon_sx + inner, moon_sx + half, static_cast<float>(y + 1),
+                          moon_sx + inner, moon_sx + half, halo);
+            }
+        }
         flush_solid();
     }
 

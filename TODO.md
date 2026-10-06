@@ -2,6 +2,11 @@
 
 ## Current tip
 
+### Grok: GLES sun/moon soft discs
+- Soft radial discs + glow/halo; placement matches Background::body_screen.
+- Moon left-shaded limb; visibility matches software (stars or low sun).
+
+
 ### Grok: smooth GLES sky + snow caps only on peaks
 - Sky is one vertex-colour gradient (GPU smooth) instead of flat bands.
 - Mountain snow only above `snow_line` altitude, not the whole column.
