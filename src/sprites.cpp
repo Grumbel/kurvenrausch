@@ -3164,7 +3164,7 @@ bool is_dark_window_glass(uint32_t p) {
 }
 
 Bitmap light_scenery_windows(Bitmap b) {
-    constexpr uint32_t lit = 0xffffd888u; // WindowLit, opaque
+    constexpr uint32_t lit = WindowLit.argb(); // marked as a light, as the windows lit anyway
     for (uint32_t& p : b.px) {
         if ((p >> 24) == 0) continue;
         if (is_dark_window_glass(p)) p = lit;
