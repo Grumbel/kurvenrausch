@@ -27,6 +27,9 @@ struct SynthParams {
     float pump = 0.f;      // a fuel pump running beside the car
     float splash = 0.f;    // tyres ploughing through water
     float siren = 0.f;     // a police siren, louder the nearer
+    float train = 0.f;     // a train at a level crossing: its diesel and wheels, louder the nearer
+    float train_horn = 0.f; // ... and its horn
+    float train_clack = 0.f; // rail joints its wheels pass a second (not 0 .. 1: 0 .. 20)
     float volume = 1.f;       // master volume, 0 mutes (the mute switch)
     float engine_volume = 1.f; // engine and world SFX, 0 .. 1
     float music_volume = 1.f;  // radio level, 0 .. 1
@@ -74,6 +77,7 @@ private:
     std::atomic<float> gravel_{0.f}, scrape_{0.f}, rain_{0.f}, volume_{1.f};
     std::atomic<float> engine_volume_{1.f}, music_volume_{1.f};
     std::atomic<float> horn_{0.f}, nitro_{0.f}, engine_{1.f}, pump_{0.f}, splash_{0.f}, siren_{0.f};
+    std::atomic<float> train_{0.f}, train_horn_{0.f}, train_clack_{0.f};
     std::atomic<float> crash_intensity_{0.f}, whoosh_intensity_{0.f}, thunder_intensity_{0.f};
     std::atomic<int> crash_events_{0}, whoosh_events_{0}, ding_events_{0}, thunder_events_{0};
     std::atomic<int> music_track_{-1};
@@ -92,6 +96,13 @@ private:
     float engine_low_ = 0.f;
     double siren_phase_ = 0.0, siren_sweep_ = 0.0;
     float siren_lp_ = 0.f;
+    float s_train_ = 0.f, s_train_horn_ = 0.f;
+    double train_phase_ = 0.0;    // the diesel's firing
+    double train_clack_phase_ = 0.0; // one turn per rail joint
+    float train_clack_age_ = 1.f;
+    float train_roar_[2] = {0.f, 0.f}, train_clack_lp_ = 0.f;
+    double train_horn_phase_[3] = {0.0, 0.0, 0.0};
+    float train_horn_lp_ = 0.f;
     uint32_t rng_ = 0x2545f491u;
     double crank_ = 0.0;          // crank phase, 0 .. 1 per revolution
     float jitter_ = 0.f;

@@ -207,4 +207,9 @@ int yield_lane(int lanes, float car_x, float player_x, float clearance, const st
     return best;
 }
 
+bool train_horn_on(float to_road) {
+    return (to_road > 1.6f && to_road < 2.4f) || (to_road > 0.8f && to_road < 1.4f) ||
+           (to_road > 0.4f && to_road < 0.6f) || (to_road > -1.2f && to_road < 0.2f);
+}
+
 } // namespace racer

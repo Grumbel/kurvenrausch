@@ -2217,6 +2217,21 @@ void Game::update_audio(const InputState& input, float dt) {
     p.pump = refuelling_ ? 1.f : 0.f;
     p.siren = std::max(siren_, beacon_ ? 0.7f : 0.f);
     p.splash = washing_ ? 0.8f : wet_ ? std::clamp(speed_pct * 1.3f, 0.f, 1.f) : 0.f;
+    if (train_.active) {
+        // The train: as loud as its nearest part is near. Across the road
+        // it runs from -1 to +1 (road half widths); the car is at tr.x.
+        const float seg_len = track_.segment_length;
+        const float hw = track_.half_width(train_.segment);
+        const float along = signed_gap(tr.z + player_z, (static_cast<float>(train_.segment) + 0.5f) * seg_len,
+                                       track_.length());
+        const float at = static_cast<float>(train_.dir) * tr.x;
+        const float across = at > train_.front ? at - train_.front : at < train_tail() ? train_tail() - at : 0.f;
+        const float d = std::hypot(along, across * hw) / seg_len; // segments
+        p.train = 1.f / (1.f + d / 12.f);
+        p.train_clack = train_speed / train_.car;
+        // Its horn as it comes to the road, heard from farther away.
+        p.train_horn = train_horn_on((-1.f - train_.front) / train_speed) ? 1.f / (1.f + d / 30.f) : 0.f;
+    }
     if (vertical_.airborne) p.rpm = std::min(1.f, p.rpm + 0.25f * input.throttle); // wheels spinning free
     p.speed = speed_pct;
 

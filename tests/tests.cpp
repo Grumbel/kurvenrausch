@@ -2516,6 +2516,26 @@ void test_synth_effects() {
         CHECK(band_power(scrape, 500, 3000) > 2.0 * band_power(base, 500, 3000));
         CHECK(band_power(scrape, 3000, 10000) > 5.0 * band_power(base, 3000, 10000));
     }
+    {   // A train rumbles low; its wheels clack over the joints; its horn is a chord.
+        SynthParams p = driving();
+        p.train = 1.f;
+        const Samples rumble = render_sound(p, 1.5);
+        CHECK(band_power(rumble, 30, 250) > 2.0 * band_power(base, 30, 250));
+        p.train_clack = 4.f;
+        const Samples clacks = render_sound(p, 1.5);
+        CHECK(band_power(clacks, 800, 3000) > 1.5 * band_power(rumble, 800, 3000));
+        p.train_horn = 1.f;
+        const Samples horn = render_sound(p, 1.5);
+        CHECK(power_at(horn, 22050, 32768, 370.0) > 20.0 * power_at(clacks, 22050, 32768, 370.0));
+        CHECK(rms(horn, 22050, 66150) > 1.15 * rms(clacks, 22050, 66150));
+        // Long, long, short, and long again while the locomotive crosses.
+        CHECK(train_horn_on(2.f) && !train_horn_on(1.5f) && train_horn_on(1.f) && !train_horn_on(0.7f));
+        CHECK(train_horn_on(0.5f) && train_horn_on(0.f) && train_horn_on(-1.f) && !train_horn_on(-2.f));
+        CHECK(!train_horn_on(3.f));
+        SynthParams far = driving();
+        far.train = 0.1f;
+        CHECK(band_power(render_sound(far, 1.5), 30, 250) < band_power(rumble, 30, 250));
+    }
     {   // Rain hisses in the top end.
         SynthParams p = driving();
         p.rain = 1.f;

@@ -45,6 +45,9 @@ void Synth::set_params(const SynthParams& p) {
     pump_.store(p.pump, std::memory_order_relaxed);
     splash_.store(p.splash, std::memory_order_relaxed);
     siren_.store(p.siren, std::memory_order_relaxed);
+    train_.store(p.train, std::memory_order_relaxed);
+    train_horn_.store(p.train_horn, std::memory_order_relaxed);
+    train_clack_.store(p.train_clack, std::memory_order_relaxed);
 }
 
 void Synth::trigger_tick(bool on) {
@@ -87,6 +90,8 @@ void Synth::render(int16_t* out, int frames) {
     const float t_engine_volume = load(engine_volume_), t_music_volume = load(music_volume_);
     const float t_horn = load(horn_), t_nitro = load(nitro_), t_engine = load(engine_), t_pump = load(pump_);
     const float t_splash = load(splash_), t_siren = load(siren_);
+    const float t_train = load(train_), t_train_horn = load(train_horn_);
+    const float clack_hz = std::clamp(train_clack_.load(std::memory_order_relaxed), 0.f, 20.f);
 
     if (!primed_) { // start from the current state instead of fading in from silence
         s_rpm_ = t_rpm; s_throttle_ = t_throttle; s_speed_ = t_speed; s_skid_ = t_skid;
@@ -94,6 +99,8 @@ void Synth::render(int16_t* out, int frames) {
         s_engine_volume_ = t_engine_volume; s_music_volume_ = t_music_volume;
         s_horn_ = t_horn; s_nitro_ = t_nitro; s_engine_ = t_engine; s_pump_ = t_pump; s_splash_ = t_splash;
         s_siren_ = t_siren;
+        s_train_ = t_train;
+        s_train_horn_ = t_train_horn;
         slow_throttle_ = t_throttle;
         primed_ = true;
     }
@@ -322,6 +329,48 @@ void Synth::render(int16_t* out, int frames) {
             siren = siren_lp_ * s_siren_ * 0.3f;
         }
 
+        // ---- Train: a diesel throbbing low, the roar of steel on steel, and
+        // the wheels' clack-clack over each rail joint ------------------------
+        s_train_ += (t_train - s_train_) * a_load;
+        s_train_horn_ += (t_train_horn - s_train_horn_) * a_horn;
+        float train = 0.f;
+        if (s_train_ > 1e-4f) {
+            train_phase_ += 36.0 / sample_rate;
+            train_phase_ -= std::floor(train_phase_);
+            const double ph = two_pi * train_phase_;
+            const float diesel = std::tanh(1.8f * static_cast<float>(std::sin(ph) + 0.6 * std::sin(2.0 * ph) +
+                                                                      0.35 * std::sin(3.0 * ph + 0.5)));
+            train_roar_[0] += (n - train_roar_[0]) * lowpass_coeff(500.f);
+            train_roar_[1] += (train_roar_[0] - train_roar_[1]) * lowpass_coeff(160.f);
+            // Two bogies over the joint, a beat apart: ta-dum ... ta-dum.
+            const double before = train_clack_phase_;
+            train_clack_phase_ += clack_hz / sample_rate;
+            const bool first = train_clack_phase_ >= 1.0, second = before < 0.2 && train_clack_phase_ >= 0.2;
+            train_clack_phase_ -= std::floor(train_clack_phase_);
+            if (clack_hz > 0.f && (first || second)) train_clack_age_ = 0.f;
+            float clack = 0.f;
+            if (train_clack_age_ < 0.05f) {
+                train_clack_lp_ += (n - train_clack_lp_) * lowpass_coeff(3000.f);
+                clack = (train_clack_lp_ * 2.5f + static_cast<float>(std::sin(two_pi * 140.0 * train_clack_age_))) *
+                        std::exp(-train_clack_age_ / 0.012f);
+                train_clack_age_ += 1.f / sr;
+            }
+            train = (diesel * 0.12f + train_roar_[1] * 3.5f + clack * 1.2f) * s_train_;
+        }
+        // Its horn: a chord of three, coarse and a little out of tune.
+        if (s_train_horn_ > 1e-4f) {
+            const double tones[3] = {311.1, 370.0, 466.2};
+            float h = 0.f;
+            for (int k = 0; k < 3; ++k) {
+                train_horn_phase_[k] += tones[k] * (1.0 + 0.002 * k) / sample_rate;
+                train_horn_phase_[k] -= std::floor(train_horn_phase_[k]);
+                const float saw = static_cast<float>(2.0 * train_horn_phase_[k] - 1.0);
+                h += std::tanh(2.f * saw);
+            }
+            train_horn_lp_ += (h - train_horn_lp_) * lowpass_coeff(1500.f);
+            train += train_horn_lp_ * 0.3f * s_train_horn_;
+        }
+
         // ---- Thunder: a crack, then a low rumble rolling on for seconds -----
         float thunder = 0.f;
         if (thunder_age_ < 6.f) {
@@ -409,7 +458,7 @@ void Synth::render(int16_t* out, int frames) {
         }
 
         const float sfx = engine + roar + wind + gravel + rain + skid + scrape + crash + horn + nitro + whoosh + pump +
-                          ding + splash + thunder + siren + tick;
+                          ding + splash + thunder + siren + tick + train;
         const float mix = sfx * s_engine_volume_ + 0.55f * music_.sample() * s_music_volume_;
         const float x = std::tanh(mix * s_volume_ * 1.1f);
         out[i] = static_cast<int16_t>(std::lround(x * 30000.f));

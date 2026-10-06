@@ -201,4 +201,9 @@ CrashPose crash_pose(float t, int side);
 // Number of times the car touched down in (t0, t1].
 int crash_landings(float t0, float t1);
 
+// A train's horn at a level crossing, `to_road` seconds before its
+// locomotive reaches the road: long, long, short, and a last long held
+// while it crosses.
+bool train_horn_on(float to_road);
+
 } // namespace racer
