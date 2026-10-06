@@ -78,7 +78,11 @@ private:
     void push_quad_rotated(float cx, float cy, float w, float h, float angle, float u0, float v0, float u1,
                            float v1, Color c);
     void flush_solid();
-    void flush_textured(unsigned tex);
+    // Draw pending textured_ with active_tex_, then clear the batch.
+    void flush_textured();
+    // Bind tex for subsequent push_quad* into textured_. Flushes if the
+    // active texture changes so consecutive same-tex quads share one draw.
+    void set_textured(unsigned tex);
     // Immutable scenery: cache by px.data(). dynamic=true re-uploads pixels
     // each call (player_bitmap_ is composited into a reused buffer).
     unsigned texture_for(const Bitmap& bmp, bool dynamic = false);
@@ -118,6 +122,7 @@ private:
 
     std::vector<Vertex> solid_;
     std::vector<Vertex> textured_;
+    unsigned active_tex_ = 0; // GL texture for the current textured_ batch
     std::vector<Slice> slices_;
     std::vector<float> row_depth_;
     std::vector<LampSpot> lamps_;

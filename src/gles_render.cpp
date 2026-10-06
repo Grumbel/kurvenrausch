@@ -388,6 +388,7 @@ void GlesRenderer::set_size(int width, int height) {
 void GlesRenderer::clear_batch() {
     solid_.clear();
     textured_.clear();
+    active_tex_ = 0;
 }
 
 void GlesRenderer::push_trap(float y0, float x0l, float x0r, float y1, float x1l, float x1r, Color c) {
@@ -453,6 +454,9 @@ void GlesRenderer::push_quad_rotated(float cx, float cy, float w, float h, float
 
 void GlesRenderer::flush_solid() {
     if (solid_.empty()) return;
+    // Solids that must sit on top of earlier sprites need those drawn first
+    // (near rails after far trees in the far→near walk).
+    flush_textured();
     g.Uniform1i(u_use_tex_, 0);
     g.BindBuffer(GL_ARRAY_BUFFER_, vbo_);
     g.BufferData(GL_ARRAY_BUFFER_, static_cast<std::ptrdiff_t>(solid_.size() * sizeof(Vertex)), solid_.data(),
@@ -468,11 +472,14 @@ void GlesRenderer::flush_solid() {
     solid_.clear();
 }
 
-void GlesRenderer::flush_textured(unsigned tex) {
-    if (textured_.empty()) return;
+void GlesRenderer::flush_textured() {
+    if (textured_.empty() || !active_tex_) {
+        textured_.clear();
+        return;
+    }
     g.Uniform1i(u_use_tex_, 1);
     g.ActiveTexture(GL_TEXTURE0_);
-    g.BindTexture(GL_TEXTURE_2D_, tex);
+    g.BindTexture(GL_TEXTURE_2D_, active_tex_);
     g.Uniform1i(u_tex_, 0);
     g.BindBuffer(GL_ARRAY_BUFFER_, vbo_);
     g.BufferData(GL_ARRAY_BUFFER_, static_cast<std::ptrdiff_t>(textured_.size() * sizeof(Vertex)), textured_.data(),
@@ -486,6 +493,12 @@ void GlesRenderer::flush_textured(unsigned tex) {
     g.VertexAttribPointer(2, 4, GL_FLOAT_, GL_FALSE_, stride, reinterpret_cast<void*>(sizeof(float) * 4));
     g.DrawArrays(GL_TRIANGLES_, 0, static_cast<int>(textured_.size()));
     textured_.clear();
+}
+
+void GlesRenderer::set_textured(unsigned tex) {
+    if (!tex) return;
+    if (tex != active_tex_ && !textured_.empty()) flush_textured();
+    active_tex_ = tex;
 }
 
 unsigned GlesRenderer::texture_for(const Bitmap& bmp, bool dynamic) {
@@ -736,10 +749,11 @@ void GlesRenderer::draw_backdrop(const RoadTheme& theme, const Background* backd
             // Tint only (software blit_scaled with cloud_tint_amount) — no distance fog.
             Color tint = blend(Color{255, 255, 255}, theme.cloud_tint, theme.cloud_tint_amount);
             tint.a = 0; // fog amount 0
+            set_textured(tex);
             push_quad(rep, horizon - c.altitude, bw, bh, 0.f, 0.f, 1.f, 1.f, tint, false);
-            flush_textured(tex);
         }
     }
+    flush_textured();
 }
 
 void GlesRenderer::draw_segment(const Track& track, const Slice& s, const RoadTheme& theme) {
@@ -1082,8 +1096,8 @@ void GlesRenderer::draw_sprites(const Track& track, const SpriteSheet& sprites, 
             const unsigned tex = texture_for(cliff);
             if (!tex) return;
             flush_solid();
+            set_textured(tex);
             push_quad(left, p0.y - height, width, height, 0.f, 0.f, 1.f, 1.f, tint, side < 0);
-            flush_textured(tex);
         };
         if (projectable) {
             const bool snow = track.look(s.index).cap_amount > 0.45f;
@@ -1113,8 +1127,8 @@ void GlesRenderer::draw_sprites(const Track& track, const SpriteSheet& sprites, 
             const unsigned tex = texture_for(bmp);
             if (!tex) return;
             flush_solid();
+            set_textured(tex);
             push_quad(left, p0.y - height, width, height, 0.f, 0.f, 1.f, 1.f, tint, flip);
-            flush_textured(tex);
             if (obj.kind == Scenery::StreetLamp) {
                 // Pool centre sits a little toward the road from the pole base.
                 const float toward_road = (obj.offset < 0.f ? 1.f : -1.f) * width * 0.15f;
@@ -1143,13 +1157,13 @@ void GlesRenderer::draw_sprites(const Track& track, const SpriteSheet& sprites, 
                 const unsigned tex = texture_for(bmp, true);
                 if (!tex) return;
                 flush_solid();
+                set_textured(tex);
                 if (o.angle != 0.f) {
                     push_quad_rotated(o.sx + o.sw * 0.5f, o.sy + o.sh * 0.5f, o.sw, o.sh, o.angle, 0.f, 0.f, 1.f,
                                       1.f, tint);
                 } else {
                     push_quad(o.sx, o.sy, o.sw, o.sh, 0.f, 0.f, 1.f, 1.f, tint, false);
                 }
-                flush_textured(tex);
                 return;
             }
             if (!projectable) return;
@@ -1168,8 +1182,8 @@ void GlesRenderer::draw_sprites(const Track& track, const SpriteSheet& sprites, 
             const unsigned tex = texture_for(bmp);
             if (!tex) return;
             flush_solid();
+            set_textured(tex);
             push_quad(cx - width / 2.f, y - height, width, height, 0.f, 0.f, 1.f, 1.f, tint, o.flip);
-            flush_textured(tex);
             if (o.lights != 0 && scale > 1e-4f) {
                 // Interpolate cam_z at the object (same units as row_depth_), not
                 // 1/scale which is noisier near the horizon and can "park" pools.
@@ -1191,6 +1205,7 @@ void GlesRenderer::draw_sprites(const Track& track, const SpriteSheet& sprites, 
         flush_solid();
         if (use_scissor && g.Disable) g.Disable(GL_SCISSOR_TEST_);
     }
+    flush_textured();
 }
 
 
@@ -1551,6 +1566,7 @@ void GlesRenderer::render(const Track& track, const RoadView& view, const Sprite
     read_fbo_argb(ground_argb);
 
     draw_sprites(track, sprites, objects);
+    flush_textured();
     flush_solid();
     if (weather) draw_weather(*weather);
     flush_solid();

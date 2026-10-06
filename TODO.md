@@ -2,6 +2,13 @@
 
 ## Current tip
 
+### Grok: GLES textured draw batching
+- No texture atlas yet: one GL texture per `Bitmap` (keyed by `px.data()`).
+- Was one `DrawArrays` per sprite (`flush_textured` after every quad).
+- Now `set_textured` keeps a batch for the active texture; flush on texture
+  change, before solids, or at pass end. Same-kind scenery/cliffs coalesce.
+
+
 ### Grok: R36S GLES without system GLES headers
 - `SDL_opengles2.h` includes `GLES2/gl2platform.h`, missing from the ArkOS
   eoan sysroot. For `KURVEN_OPENGLES2` skip that include: entry points still
