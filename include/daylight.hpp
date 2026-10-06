@@ -81,10 +81,29 @@ struct Beam {
     float camera_depth = 1.f;
     float x_scale = 160.f;
     int bottom = 0;
+    // Screen row of eye level, where a level beam's far end converges; below
+    // 0: half the picture's height.
+    float horizon = -1.f;
 };
 constexpr float beam_reach = 6000.f;    // world units: half as bright this far from the lamps
 constexpr float beam_half_width = 300.f; // at the lamps, world units ...
 constexpr float beam_spread = 0.7f;      // ... widening by this per unit ahead (35 degrees)
+
+// The headlight cone on one screen row: its centre and half width in pixels
+// and the share of the day colour it brings back at its middle (0: unlit).
+struct BeamRow {
+    float mid = 0.f;
+    float half = 0.f;
+    float k = 0.f;
+};
+// The cone row by row (rows[y] for y < height): on the ground ahead, from
+// the lamps on, widening, fading with distance; where no ground shows above
+// a lit stretch (over a crest), it goes on into the air as a glow that eases
+// in from the crest's brightness and fades out towards the horizon, so the
+// cone has no hard top. `dark` is
+// 1 - daylight level.
+void beam_rows(const Beam& beam, float dark, const std::vector<float>& row_depth, int height,
+               std::vector<BeamRow>& rows);
 
 // The headlights' beam: the darkened ground ahead lit again, the original
 // picture `day` (before apply_daylight) blended back in: from the lamps on,

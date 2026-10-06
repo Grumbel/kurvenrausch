@@ -1247,6 +1247,26 @@ void test_daylight() {
     }
     const uint32_t dark = fb.pixels()[0];
     CHECK(((dark >> 8) & 0xff) < grass.g / 3);
+    {
+        // Over a crest the beam goes on into the air, with no hard edge:
+        // the road below row 60, far ground beyond the hill above it, sky
+        // over that.
+        std::vector<float> depth(100, 0.f);
+        for (int y = 60; y < 100; ++y) depth[static_cast<size_t>(y)] = 20000.f / static_cast<float>(y - 40);
+        for (int y = 45; y < 60; ++y) depth[static_cast<size_t>(y)] = 30000.f;
+        Beam beam;
+        beam.start = 0.f;
+        beam.center = 50.f;
+        beam.camera_depth = 1.f;
+        beam.x_scale = 50.f;
+        beam.bottom = 100;
+        beam.horizon = 50.f;
+        std::vector<BeamRow> rows;
+        beam_rows(beam, 0.9f, depth, 100, rows);
+        CHECK(rows[60].k > 0.f && rows[59].k > 0.8f * rows[60].k); // eases on past the crest
+        for (int y = 45; y < 60; ++y) CHECK(rows[static_cast<size_t>(y)].k <= rows[static_cast<size_t>(y) + 1].k + 1e-6f);
+        CHECK(rows[44].k == 0.f && rows[10].k == 0.f); // gone by the sky
+    }
     // The headlights' beam brings the road ahead back, not the sky.
     Framebuffer road(40, 40);
     road.clear(grass);

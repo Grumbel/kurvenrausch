@@ -213,6 +213,7 @@ private:
     unsigned rows_tex_ = 0;     // per-row lanes for the light program (rows_)
     int rows_tex_h_ = 0;        // rows (texture width) rows_tex_ was allocated for
     std::vector<uint8_t> rows_;
+    std::vector<BeamRow> beam_rows_;
     int fbo_w_ = 0, fbo_h_ = 0;
 
     std::vector<Vertex> solid_;

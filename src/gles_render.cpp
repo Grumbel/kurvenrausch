@@ -2404,59 +2404,24 @@ void GlesRenderer::draw_lamp_pools(float dark) {
 }
 
 bool GlesRenderer::headlight_rows(const Beam& beam, float dark, float box[4]) {
-    // Per row as headlight_beam(): the cone's centre, half width and strength,
-    // continued into the air above the far crest in fog.
+    // Per row the cone of headlight_beam() (beam_rows), into lanes 2..4.
     rows_.resize(static_cast<size_t>(row_lanes) * static_cast<size_t>(height_) * 4);
-    const int h = std::min(beam.bottom, height_);
-    int horizon_y = -1;
-    float horizon_depth = 0.f;
-    for (int y = 0; y < height_; ++y) {
-        if (row_depth_[static_cast<size_t>(y)] > 0.f) {
-            horizon_y = y;
-            horizon_depth = row_depth_[static_cast<size_t>(y)];
-            break;
-        }
-    }
-    auto smoothstep = [](float a, float b, float x) {
-        const float t = std::clamp((x - a) / (b - a), 0.f, 1.f);
-        return t * t * (3.f - 2.f * t);
-    };
+    beam_rows(beam, dark, row_depth_, height_, beam_rows_);
     int y0 = height_, y1 = -1;
     float x0 = static_cast<float>(width_), x1 = 0.f;
     for (int y = 0; y < height_; ++y) {
-        float k = 0.f, mid = 0.f, half = 0.f;
-        float depth = row_depth_[static_cast<size_t>(y)];
-        float air = 1.f;
-        bool lit = y < h;
-        if (lit && depth <= 0.f) {
-            if (horizon_y < 0 || y >= horizon_y) {
-                lit = false;
-            } else {
-                const float t = static_cast<float>(horizon_y - y) / static_cast<float>(std::max(1, horizon_y));
-                depth = horizon_depth * (1.f + 1.8f * t);
-                air = 0.55f * (1.f - 0.65f * t);
-            }
-        }
-        const float ahead = depth - beam.start;
-        if (lit && ahead > 0.f && ahead <= 4.f * beam_reach) {
-            const float reach =
-                smoothstep(0.f, 200.f, ahead) / (1.f + (ahead / beam_reach) * (ahead / beam_reach));
-            const float px_per_unit = beam.camera_depth / depth * beam.x_scale;
-            half = (beam_half_width + beam_spread * ahead) * px_per_unit;
-            mid = beam.center + beam.aim * ahead * px_per_unit;
-            k = 0.9f * dark * reach * air;
-        }
-        if (k > 0.f && half > 0.f) {
+        BeamRow row = beam_rows_[static_cast<size_t>(y)];
+        if (row.k > 0.f && row.half > 0.f) {
             y0 = std::min(y0, y);
             y1 = std::max(y1, y);
-            x0 = std::min(x0, mid - half);
-            x1 = std::max(x1, mid + half + 1.f);
+            x0 = std::min(x0, row.mid - row.half);
+            x1 = std::max(x1, row.mid + row.half + 1.f);
         } else {
-            k = 0.f;
+            row = BeamRow{};
         }
-        set_row(2, y, (mid + 32768.f) * 256.f);
-        set_row(3, y, half * 256.f);
-        set_row(4, y, k * 8388608.f);
+        set_row(2, y, (row.mid + 32768.f) * 256.f);
+        set_row(3, y, row.half * 256.f);
+        set_row(4, y, row.k * 8388608.f);
     }
     box[0] = std::max(x0, 0.f);
     box[1] = static_cast<float>(y0);
