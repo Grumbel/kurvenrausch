@@ -2,6 +2,11 @@
 
 ## Current tip
 
+### Grok: GLES mountains as continuous ridge quads
+- Replaced vertical step columns with 1px-wide quads along the height profile
+  (slanted tops). Snow/rock split preserved.
+
+
 ### Grok: fix CPU clip warping road corners
 - push_trap: y-edge interpolate only; no X clamp into clip box.
 - solid/tint quads: AABB reject only (no corner clamp).

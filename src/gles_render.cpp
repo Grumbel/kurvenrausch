@@ -996,41 +996,52 @@ void GlesRenderer::draw_backdrop(const RoadTheme& theme, const Background* backd
         flush_solid();
         return;
     }
-    // Mountain / hill columns. Snow only on the upper altitude band (software:
-    // alt = horizon - y > snow_line), not the whole column.
+    // Mountain / hill ridges as continuous quads along the height profile
+    // (slanted tops), not vertical column rects.
     auto ridge2 = [&](const std::vector<float>& h, float offset, Color lit, Color shade, float scale_mul,
                       float snow_line) {
         if (h.empty()) return;
         const int period = static_cast<int>(h.size());
-        const int step = std::max(1, width_ / 200);
-        for (int x = 0; x < width_; x += step) {
+        auto height_at = [&](int x) -> float {
             const int i = ((static_cast<int>(std::lround(offset)) + x) % period + period) % period;
-            const float here = h[static_cast<size_t>(i)] * scale_mul;
-            const float top_y = horizon - here;
-            if (top_y >= horizon - 0.5f) continue;
-            const float slope = h[static_cast<size_t>((i + 6) % period)] - h[static_cast<size_t>((i + period - 6) % period)];
-            const float light = std::clamp(0.5f - slope * 0.08f, 0.f, 1.f);
-            const Color rock = blend(shade, lit, light);
-            const Color snow = light > 0.45f ? theme.snow : blend(theme.snow, theme.mountain_shade, 0.5f);
+            return h[static_cast<size_t>(i)] * scale_mul;
+        };
+        auto slope_light = [&](int x) -> float {
+            const int i = ((static_cast<int>(std::lround(offset)) + x) % period + period) % period;
+            const float slope =
+                h[static_cast<size_t>((i + 6) % period)] - h[static_cast<size_t>((i + period - 6) % period)];
+            return std::clamp(0.5f - slope * 0.08f, 0.f, 1.f);
+        };
+        auto haze_at = [&](float alt) {
+            return std::max(theme.haze, std::clamp(1.f - alt / (14.f * scale_mul + 1.f), 0.f, 1.f) * 0.75f);
+        };
+        const bool do_snow = snow_line < 1.0e8f;
+        const float snow_y = horizon - snow_line;
+        for (int x = 0; x < width_; ++x) {
+            const float h0 = height_at(x);
+            const float h1 = height_at(x + 1);
+            if (h0 < 0.5f && h1 < 0.5f) continue;
             const float x0 = static_cast<float>(x);
-            const float x1 = std::min(wf, static_cast<float>(x + step));
-            // Screen row where altitude == snow_line (snow above, rock below).
-            const float snow_y = horizon - snow_line;
-            auto haze_at = [&](float alt) {
-                return std::max(theme.haze, std::clamp(1.f - alt / (14.f * scale_mul + 1.f), 0.f, 1.f) * 0.75f);
+            const float x1 = static_cast<float>(x + 1);
+            const float top0 = horizon - h0;
+            const float top1 = horizon - h1;
+            const float light = 0.5f * (slope_light(x) + slope_light(x + 1));
+            const Color rock = blend(shade, lit, light);
+            const Color snowc = light > 0.45f ? theme.snow : blend(theme.snow, theme.mountain_shade, 0.5f);
+            // Quad order: top-left, top-right, bottom-right, bottom-left.
+            auto face = [&](float ty0, float ty1, float by0, float by1, Color base, float mid_alt) {
+                if (std::max(by0, by1) <= std::min(ty0, ty1) + 0.01f) return;
+                const Color c = fogged(base, fog_air_, haze_at(mid_alt), daylight_);
+                push_solid_quad(x0, ty0, x1, ty1, x1, by1, x0, by0, c);
             };
-            if (top_y < snow_y && snow_line < 1.0e8f) {
-                // Cap: top → snow_y
-                const float mid_alt = (horizon - top_y + snow_line) * 0.5f;
-                const Color cs = fogged(snow, fog_air_, haze_at(mid_alt), daylight_);
-                push_trap(top_y, x0, x1, snow_y, x0, x1, cs);
-                // Rock: snow_y → horizon (smooth shade via vertical gradient optional)
-                const float rock_alt = snow_line * 0.5f;
-                const Color cr = fogged(rock, fog_air_, haze_at(rock_alt), daylight_);
-                push_trap(snow_y, x0, x1, horizon, x0, x1, cr);
+            if (do_snow && (top0 < snow_y || top1 < snow_y)) {
+                // Snow cap above snow_line, rock below.
+                const float st0 = std::min(top0, snow_y);
+                const float st1 = std::min(top1, snow_y);
+                face(top0, top1, st0, st1, snowc, (h0 + h1) * 0.25f + snow_line * 0.5f);
+                face(st0, st1, horizon, horizon, rock, snow_line * 0.5f);
             } else {
-                const Color c = fogged(rock, fog_air_, haze_at(here * 0.5f), daylight_);
-                push_trap(top_y, x0, x1, horizon, x0, x1, c);
+                face(top0, top1, horizon, horizon, rock, (h0 + h1) * 0.25f);
             }
         }
     };
