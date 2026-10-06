@@ -2,6 +2,13 @@
 
 ## Current tip
 
+### Grok: GLES GPU night (no ReadPixels)
+- Dropped CPU night (ReadPixels → apply_daylight / street_lights / upload).
+- Passes: full-bright albedo FBO → lightmap FBO (ambient clear + additive
+  lamp pools / headlight) → compose FBO (albedo × lightmap, bright emissives
+  kept via luminance soft-threshold). Present `night_tex_` when applied.
+
+
 ### Grok: GLES day path — no ReadPixels; coalesce scissor
 - CPU night was keyed on `!lamps_.empty()`, but vehicle head/tail lamps are
   collected every frame → two full FBO ReadPixels even at noon. Gate is now

@@ -259,6 +259,57 @@ const char* k_frag =
     "}\n";
 #endif
 
+
+// Fullscreen composite: albedo × lightmap, keep bright emissives near full.
+const char* k_compose_vert =
+#if KURVEN_GLES
+    "attribute vec2 a_pos;\n"
+    "attribute vec2 a_uv;\n"
+    "varying vec2 v_uv;\n"
+    "void main(){\n"
+    "  v_uv = a_uv;\n"
+    "  gl_Position = vec4(a_pos, 0.0, 1.0);\n"
+    "}\n";
+#else
+    "#version 110\n"
+    "attribute vec2 a_pos;\n"
+    "attribute vec2 a_uv;\n"
+    "varying vec2 v_uv;\n"
+    "void main(){\n"
+    "  v_uv = a_uv;\n"
+    "  gl_Position = vec4(a_pos, 0.0, 1.0);\n"
+    "}\n";
+#endif
+
+const char* k_compose_frag =
+#if KURVEN_GLES
+    "precision mediump float;\n"
+    "varying vec2 v_uv;\n"
+    "uniform sampler2D u_albedo;\n"
+    "uniform sampler2D u_light;\n"
+    "void main(){\n"
+    "  vec4 a = texture2D(u_albedo, v_uv);\n"
+    "  vec3 l = texture2D(u_light, v_uv).rgb;\n"
+    "  float lum = max(a.r, max(a.g, a.b));\n"
+    "  float em = smoothstep(0.65, 0.88, lum);\n"
+    "  vec3 lit = a.rgb * l;\n"
+    "  gl_FragColor = vec4(mix(lit, a.rgb, em), a.a);\n"
+    "}\n";
+#else
+    "#version 110\n"
+    "varying vec2 v_uv;\n"
+    "uniform sampler2D u_albedo;\n"
+    "uniform sampler2D u_light;\n"
+    "void main(){\n"
+    "  vec4 a = texture2D(u_albedo, v_uv);\n"
+    "  vec3 l = texture2D(u_light, v_uv).rgb;\n"
+    "  float lum = max(a.r, max(a.g, a.b));\n"
+    "  float em = smoothstep(0.65, 0.88, lum);\n"
+    "  vec3 lit = a.rgb * l;\n"
+    "  gl_FragColor = vec4(mix(lit, a.rgb, em), a.a);\n"
+    "}\n";
+#endif
+
 unsigned compile(unsigned type, const char* src) {
     const unsigned s = g.CreateShader(type);
     g.ShaderSource(s, 1, &src, nullptr);
@@ -325,18 +376,27 @@ void GlesRenderer::shutdown() {
         g.DeleteRenderbuffers(1, &depth_rb_);
         depth_rb_ = 0;
     }
-    if (color_tex_) {
-        g.DeleteTextures(1, &color_tex_);
-        color_tex_ = 0;
-    }
-    if (fbo_ && g.DeleteFramebuffers) {
-        g.DeleteFramebuffers(1, &fbo_);
-        fbo_ = 0;
-    }
+    auto del_tex = [&](unsigned& t) {
+        if (t) { g.DeleteTextures(1, &t); t = 0; }
+    };
+    del_tex(color_tex_);
+    del_tex(night_tex_);
+    del_tex(light_tex_);
+    present_tex_ = 0;
+    auto del_fbo = [&](unsigned& f) {
+        if (f && g.DeleteFramebuffers) { g.DeleteFramebuffers(1, &f); f = 0; }
+    };
+    del_fbo(fbo_);
+    del_fbo(light_fbo_);
+    del_fbo(night_fbo_);
     fbo_w_ = fbo_h_ = 0;
     if (vbo_) {
         g.DeleteBuffers(1, &vbo_);
         vbo_ = 0;
+    }
+    if (compose_program_) {
+        g.DeleteProgram(compose_program_);
+        compose_program_ = 0;
     }
     if (program_) {
         g.DeleteProgram(program_);
@@ -376,6 +436,31 @@ bool GlesRenderer::init() {
     u_use_tex_ = g.GetUniformLocation(program_, "u_use_tex");
     u_tex_ = g.GetUniformLocation(program_, "u_tex");
     u_fog_air_ = g.GetUniformLocation(program_, "u_fog_air");
+
+    const unsigned cvs = compile(GL_VERTEX_SHADER_, k_compose_vert);
+    const unsigned cfs = compile(GL_FRAGMENT_SHADER_, k_compose_frag);
+    if (!cvs || !cfs) return false;
+    compose_program_ = g.CreateProgram();
+    g.AttachShader(compose_program_, cvs);
+    g.AttachShader(compose_program_, cfs);
+    g.BindAttribLocation(compose_program_, 0, "a_pos");
+    g.BindAttribLocation(compose_program_, 1, "a_uv");
+    g.LinkProgram(compose_program_);
+    g.DeleteShader(cvs);
+    g.DeleteShader(cfs);
+    int cok = 0;
+    g.GetProgramiv(compose_program_, GL_LINK_STATUS_, &cok);
+    if (!cok) {
+        char log[256];
+        g.GetProgramInfoLog(compose_program_, sizeof log, nullptr, log);
+        std::cerr << "kurvenrausch: gles compose link: " << log << "\n";
+        g.DeleteProgram(compose_program_);
+        compose_program_ = 0;
+        return false;
+    }
+    u_albedo_ = g.GetUniformLocation(compose_program_, "u_albedo");
+    u_light_ = g.GetUniformLocation(compose_program_, "u_light");
+
     g.GenBuffers(1, &vbo_);
     return true;
 }
@@ -1305,13 +1390,15 @@ void GlesRenderer::draw_weather(const Weather& weather) {
 }
 
 bool GlesRenderer::ensure_fbo() {
-    if (fbo_ && light_fbo_ && fbo_w_ == width_ && fbo_h_ == height_) return true;
+    if (fbo_ && light_fbo_ && night_fbo_ && fbo_w_ == width_ && fbo_h_ == height_) return true;
     if (depth_rb_ && g.DeleteRenderbuffers) g.DeleteRenderbuffers(1, &depth_rb_);
     if (color_tex_) g.DeleteTextures(1, &color_tex_);
+    if (night_tex_) g.DeleteTextures(1, &night_tex_);
     if (light_tex_) g.DeleteTextures(1, &light_tex_);
     if (light_fbo_ && g.DeleteFramebuffers) g.DeleteFramebuffers(1, &light_fbo_);
+    if (night_fbo_ && g.DeleteFramebuffers) g.DeleteFramebuffers(1, &night_fbo_);
     if (fbo_ && g.DeleteFramebuffers) g.DeleteFramebuffers(1, &fbo_);
-    fbo_ = color_tex_ = depth_rb_ = light_fbo_ = light_tex_ = 0;
+    fbo_ = color_tex_ = night_tex_ = depth_rb_ = light_fbo_ = light_tex_ = night_fbo_ = present_tex_ = 0;
 
     auto make_color_tex = [&](unsigned& tex) {
         g.GenTextures(1, &tex);
@@ -1338,7 +1425,6 @@ bool GlesRenderer::ensure_fbo() {
         return false;
     }
 
-    // Lightmap: ambient + additive lamps; no depth.
     g.GenFramebuffers(1, &light_fbo_);
     make_color_tex(light_tex_);
     g.BindFramebuffer(GL_FRAMEBUFFER_, light_fbo_);
@@ -1348,10 +1434,67 @@ bool GlesRenderer::ensure_fbo() {
         g.BindFramebuffer(GL_FRAMEBUFFER_, 0);
         return false;
     }
+
+    g.GenFramebuffers(1, &night_fbo_);
+    make_color_tex(night_tex_);
+    g.BindFramebuffer(GL_FRAMEBUFFER_, night_fbo_);
+    g.FramebufferTexture2D(GL_FRAMEBUFFER_, GL_COLOR_ATTACHMENT0_, GL_TEXTURE_2D_, night_tex_, 0);
+    if (g.CheckFramebufferStatus(GL_FRAMEBUFFER_) != GL_FRAMEBUFFER_COMPLETE_) {
+        std::cerr << "kurvenrausch: gles night FBO incomplete\n";
+        g.BindFramebuffer(GL_FRAMEBUFFER_, 0);
+        return false;
+    }
+
     g.BindFramebuffer(GL_FRAMEBUFFER_, 0);
     fbo_w_ = width_;
     fbo_h_ = height_;
     return true;
+}
+
+void GlesRenderer::draw_fullscreen_quad() {
+    const Vertex verts[6] = {
+        {-1.f, -1.f, 0.f, 0.f, 1, 1, 1, 1}, {1.f, -1.f, 1.f, 0.f, 1, 1, 1, 1}, {-1.f, 1.f, 0.f, 1.f, 1, 1, 1, 1},
+        {1.f, -1.f, 1.f, 0.f, 1, 1, 1, 1},  {1.f, 1.f, 1.f, 1.f, 1, 1, 1, 1},  {-1.f, 1.f, 0.f, 1.f, 1, 1, 1, 1},
+    };
+    g.BindBuffer(GL_ARRAY_BUFFER_, vbo_);
+    g.BufferData(GL_ARRAY_BUFFER_, static_cast<std::ptrdiff_t>(sizeof verts), verts, GL_DYNAMIC_DRAW_);
+    g.EnableVertexAttribArray(0);
+    g.EnableVertexAttribArray(1);
+    const int stride = static_cast<int>(sizeof(Vertex));
+    g.VertexAttribPointer(0, 2, GL_FLOAT_, GL_FALSE_, stride, reinterpret_cast<void*>(0));
+    g.VertexAttribPointer(1, 2, GL_FLOAT_, GL_FALSE_, stride, reinterpret_cast<void*>(sizeof(float) * 2));
+    // Disable colour attribute if previous solid batch left it enabled — safe to leave.
+    g.DrawArrays(GL_TRIANGLES_, 0, 6);
+}
+
+void GlesRenderer::apply_gpu_night(const Daylight& light, const Beam* headlight) {
+    const float ambient = std::clamp(light.level, 0.02f, 1.f);
+    g.BindFramebuffer(GL_FRAMEBUFFER_, light_fbo_);
+    g.Viewport(0, 0, width_, height_);
+    g.ClearColor(ambient, ambient, ambient, 1.f);
+    g.Clear(GL_COLOR_BUFFER_BIT_);
+    g.UseProgram(program_);
+    g.Uniform2f(u_screen_, static_cast<float>(width_), static_cast<float>(height_));
+    if (g.Uniform3f && u_fog_air_ >= 0) g.Uniform3f(u_fog_air_, 0.f, 0.f, 0.f);
+    g.Enable(GL_BLEND_);
+    draw_lamp_pools(ambient);
+    if (headlight) draw_headlight(*headlight, ambient);
+
+    g.BindFramebuffer(GL_FRAMEBUFFER_, night_fbo_);
+    g.Viewport(0, 0, width_, height_);
+    g.Disable(GL_BLEND_);
+    g.UseProgram(compose_program_);
+    g.ActiveTexture(GL_TEXTURE0_);
+    g.BindTexture(GL_TEXTURE_2D_, color_tex_);
+    g.Uniform1i(u_albedo_, 0);
+    g.ActiveTexture(0x84C1u); // GL_TEXTURE1
+    g.BindTexture(GL_TEXTURE_2D_, light_tex_);
+    g.Uniform1i(u_light_, 1);
+    draw_fullscreen_quad();
+    g.ActiveTexture(GL_TEXTURE0_);
+    g.Enable(GL_BLEND_);
+    g.BlendFunc(GL_SRC_ALPHA_, GL_ONE_MINUS_SRC_ALPHA_);
+    present_tex_ = night_tex_;
 }
 
 void GlesRenderer::draw_headlight(const Beam& beam, float ambient) {
@@ -1412,8 +1555,9 @@ void GlesRenderer::render(const Track& track, const RoadView& view, const Sprite
                           std::vector<RoadSprite>& objects, const RoadTheme& theme, const Daylight& light,
                           const Background* backdrop, float hour, const Beam* headlight,
                           const Weather* weather) {
-    if (!program_ || !ensure_fbo()) return;
-    // Albedo at full day colour; night uses the same CPU path as software.
+    if (!program_ || !compose_program_ || !ensure_fbo()) return;
+    present_tex_ = color_tex_;
+    // Albedo at full day colour; night is a separate lightmap + composite pass.
     daylight_ = 1.f;
     fog_air_ = view.fog_air;
     window_wake_ = view.window_wake;
@@ -1559,72 +1703,18 @@ void GlesRenderer::render(const Track& track, const RoadView& view, const Sprite
     }
     flush_solid();
 
-    // CPU night needs a pre-sprite ground mask and a post-sprite day buffer.
-    // Do NOT key this on lamps_.empty(): vehicle head/tail lamps are collected
-    // every frame, which forced two full ReadPixels even in broad daylight.
-    const bool need_cpu_night = light.level < 0.999f || headlight != nullptr;
-
-    auto read_fbo_argb = [&](std::vector<uint32_t>& out) {
-        out.resize(static_cast<size_t>(width_) * static_cast<size_t>(height_));
-        if (!g.ReadPixels) {
-            std::fill(out.begin(), out.end(), 0u);
-            return;
-        }
-        std::vector<uint8_t> rgba(static_cast<size_t>(width_) * static_cast<size_t>(height_) * 4);
-        g.ReadPixels(0, 0, width_, height_, GL_RGBA_, GL_UNSIGNED_BYTE_, rgba.data());
-        // FBO origin is bottom-left; our y=0 is top.
-        for (int y = 0; y < height_; ++y) {
-            const int src_y = height_ - 1 - y;
-            for (int x = 0; x < width_; ++x) {
-                const size_t si = (static_cast<size_t>(src_y) * static_cast<size_t>(width_) + static_cast<size_t>(x)) * 4;
-                const uint32_t r = rgba[si], gc = rgba[si + 1], b = rgba[si + 2], a = rgba[si + 3];
-                out[static_cast<size_t>(y) * static_cast<size_t>(width_) + static_cast<size_t>(x)] =
-                    (a << 24) | (r << 16) | (gc << 8) | b;
-            }
-        }
-    };
-
-    std::vector<uint32_t> ground_argb;
-    if (need_cpu_night) read_fbo_argb(ground_argb);
-
     draw_sprites(track, sprites, objects);
     flush_textured();
     flush_solid();
     if (weather) draw_weather(*weather);
     flush_solid();
 
-    // Day picture (full-bright albedo + sprites + weather).
-    if (need_cpu_night) {
-    std::vector<uint32_t> day_argb;
-    read_fbo_argb(day_argb);
-
-    // Same night stack as Game::render for the software path.
-    Framebuffer night(width_, height_);
-    std::copy(day_argb.begin(), day_argb.end(), night.pixels_mut());
-    apply_daylight(night, light);
-    street_lights(night, day_argb, ground_argb, light, row_depth_, lamps_, camera_depth_, x_scale_);
-    if (headlight) headlight_beam(night, day_argb, light, row_depth_, *headlight);
-
-    // Upload ARGB result back into the scene colour attachment (flip to GL origin).
-    if (g.TexSubImage2D && color_tex_) {
-        std::vector<uint8_t> rgba(static_cast<size_t>(width_) * static_cast<size_t>(height_) * 4);
-        const uint32_t* src = night.pixels();
-        for (int y = 0; y < height_; ++y) {
-            const int dst_y = height_ - 1 - y;
-            for (int x = 0; x < width_; ++x) {
-                const uint32_t p = src[static_cast<size_t>(y) * static_cast<size_t>(width_) + static_cast<size_t>(x)];
-                const size_t di = (static_cast<size_t>(dst_y) * static_cast<size_t>(width_) + static_cast<size_t>(x)) * 4;
-                rgba[di + 0] = static_cast<uint8_t>((p >> 16) & 0xff);
-                rgba[di + 1] = static_cast<uint8_t>((p >> 8) & 0xff);
-                rgba[di + 2] = static_cast<uint8_t>(p & 0xff);
-                rgba[di + 3] = static_cast<uint8_t>((p >> 24) & 0xff);
-            }
-        }
-        g.BindTexture(GL_TEXTURE_2D_, color_tex_);
-        g.PixelStorei(0x0CF5 /* GL_UNPACK_ALIGNMENT */, 1);
-        g.TexSubImage2D(GL_TEXTURE_2D_, 0, 0, 0, width_, height_, GL_RGBA_, GL_UNSIGNED_BYTE_, rgba.data());
+    // GPU night: lightmap pass + multiply composite (no ReadPixels).
+    present_tex_ = color_tex_;
+    if ((light.level < 0.999f || headlight != nullptr) && compose_program_ && light_fbo_ && night_fbo_) {
+        apply_gpu_night(light, headlight);
     }
-    } // CPU night
+
 
     g.BindFramebuffer(GL_FRAMEBUFFER_, static_cast<unsigned>(prev_fbo));
 }

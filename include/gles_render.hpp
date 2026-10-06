@@ -37,15 +37,15 @@ public:
     void set_size(int width, int height);
 
     // Draws the road scene into the internal FBO (not the window).
-    // `light` drives CPU night (apply_daylight / street_lights / headlight_beam)
-    // after the full-bright GPU albedo pass — same math as the software path.
+    // Full-bright albedo pass, then (when dark / headlights) a lightmap FBO
+    // pass and a multiply composite — no ReadPixels.
     void render(const Track& track, const RoadView& view, const SpriteSheet& sprites,
                 std::vector<RoadSprite>& objects, const RoadTheme& theme, const Daylight& light,
                 const Background* backdrop = nullptr, float hour = 12.f,
                 const Beam* headlight = nullptr, const Weather* weather = nullptr);
 
-    // Colour attachment of the scene FBO (RGBA, size width_ × height_).
-    unsigned color_texture() const { return color_tex_; }
+    // Presentable scene texture (albedo, or night composite when applied).
+    unsigned color_texture() const { return present_tex_ ? present_tex_ : color_tex_; }
     int texture_width() const { return width_; }
     int texture_height() const { return height_; }
 
@@ -90,6 +90,9 @@ private:
     void draw_headlight(const Beam& beam, float dark);
     void draw_lamp_pools(float dark);
     void draw_weather(const Weather& weather);
+    // Build lightmap in light_tex_, composite albedo×light into night_tex_.
+    void apply_gpu_night(const Daylight& light, const Beam* headlight);
+    void draw_fullscreen_quad();
     void draw_segment(const Track& track, const Slice& s, const RoadTheme& theme);
     void draw_sprites(const Track& track, const SpriteSheet& sprites, std::vector<RoadSprite>& objects);
     void project_point(ScreenPoint& p, float world_x, float world_y, float world_z, float cam_x, float cam_y,
@@ -107,17 +110,24 @@ private:
     float daylight_ = 1.f;
 
     unsigned program_ = 0;
+    unsigned compose_program_ = 0;
     unsigned vbo_ = 0;
     int u_screen_ = -1;
     int u_use_tex_ = -1;
     int u_tex_ = -1;
     int u_fog_air_ = -1;
+    int u_compose_screen_ = -1;
+    int u_albedo_ = -1;
+    int u_light_ = -1;
 
     unsigned fbo_ = 0;
-    unsigned color_tex_ = 0;
+    unsigned color_tex_ = 0;   // albedo (and default present)
+    unsigned night_tex_ = 0;   // albedo × lightmap composite
+    unsigned present_tex_ = 0; // color_tex_ or night_tex_ for this frame
     unsigned depth_rb_ = 0;
     unsigned light_fbo_ = 0;
     unsigned light_tex_ = 0;
+    unsigned night_fbo_ = 0;
     int fbo_w_ = 0, fbo_h_ = 0;
 
     std::vector<Vertex> solid_;
