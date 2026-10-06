@@ -115,7 +115,8 @@ void RoadRenderer::render(Framebuffer& fb, const Track& track, const RoadView& v
             const bool way_out = seg.tunnel && !track.segment(index + dir).tunnel;
             if (way_in || way_out) {
                 const ScreenPoint& mouth = way_out ? s.p2 : s.p1;
-                const float half = mouth.scale * tunnel_half_width * track.road_width * x_scale_;
+                // mouth.w is the local road half-width in screen pixels (includes road_scale).
+                const float half = mouth.w * tunnel_half_width;
                 const float x0 = mouth.x - half, x1 = mouth.x + half;
                 const float mouth_top = mouth.y - mouth.scale * tunnel_height * y_scale;
                 if (way_out) {
@@ -467,7 +468,7 @@ void RoadRenderer::draw_sprites(Framebuffer& fb, const Track& track, const Sprit
         auto plant = [&](const RoadsideObject& obj, float shift) {
             const SceneryInfo& info = scenery_info(obj.kind);
             const float px_per_unit = p0.scale * x_scale_;
-            const float width = info.width * px_per_unit;
+            float width = info.width * px_per_unit;
             float left = p0.x + (obj.offset + shift) * track.half_width(s.index) * px_per_unit;
             if (info.centered) left -= width / 2.f;
             else if (obj.offset < 0.f) left -= width;
@@ -482,8 +483,14 @@ void RoadRenderer::draw_sprites(Framebuffer& fb, const Track& track, const Sprit
             // showed sky through the top of the arch.
             float height = width * static_cast<float>(bmp.h) / static_cast<float>(bmp.w);
             if (obj.kind == Scenery::TunnelPortal) {
-                constexpr float open_frac = 36.f / 128.f; // matches make_tunnel_portal
-                height = (tunnel_height * p0.scale * y_scale_) / open_frac;
+                // Opening is 72×36 in a 256×128 bitmap. Scale so the hole matches
+                // the tunnel interior (2 * tunnel_half_width * local half-width).
+                constexpr float open_frac_x = 72.f / 256.f;
+                constexpr float open_frac_y = 36.f / 128.f;
+                const float interior = 2.f * tunnel_half_width * track.half_width(s.index);
+                width = (interior / open_frac_x) * px_per_unit;
+                if (info.centered) left = p0.x + (obj.offset + shift) * track.half_width(s.index) * px_per_unit - width / 2.f;
+                height = (tunnel_height * p0.scale * y_scale_) / open_frac_y;
             }
             const bool flip = info.mirrorable && obj.offset < 0.f;
             fb.blit_scaled(bmp, left, p0.y - height, width, height, flip,

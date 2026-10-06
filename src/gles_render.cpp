@@ -1268,7 +1268,7 @@ void GlesRenderer::draw_segment(const Track& track, const Slice& s, const RoadTh
         const bool way_in = seg.tunnel && !track.segment(s.index - dir).tunnel;
         if (way_out || way_in) {
             const ScreenPoint& mouth = way_out ? b : a;
-            const float half = mouth.scale * tunnel_half_width * track.road_width * x_scale_;
+            const float half = mouth.w * tunnel_half_width; // local road half-width (road_scale)
             const float x0 = mouth.x - half, x1 = mouth.x + half;
             const float ceil_y = mouth.y - mouth.scale * tunnel_height * y_scale_;
             const Color mouth_wall = fogc(Color{0x6c, 0x68, 0x62});
@@ -1571,7 +1571,7 @@ void GlesRenderer::draw_sprites(const Track& track, const SpriteSheet& sprites, 
             if (!projectable) return;
             const SceneryInfo& info = scenery_info(obj.kind);
             const float px = p0.scale * x_scale_;
-            const float width = info.width * px;
+            float width = info.width * px;
             float left = p0.x + (obj.offset + shift) * track.half_width(s.index) * px;
             if (info.centered) left -= width / 2.f;
             else if (obj.offset < 0.f) left -= width;
@@ -1579,8 +1579,14 @@ void GlesRenderer::draw_sprites(const Track& track, const SpriteSheet& sprites, 
             const Bitmap& bmp = direction_ > 0 ? sprites.scenery(obj.kind, wake) : sprites.scenery_back(obj.kind, wake);
             float height = width * static_cast<float>(bmp.h) / static_cast<float>(std::max(1, bmp.w));
             if (obj.kind == Scenery::TunnelPortal) {
-                constexpr float open_frac = 36.f / 128.f;
-                height = (tunnel_height * p0.scale * y_scale_) / open_frac;
+                // Opening 72×36 in 256×128; match hole to tunnel interior width/height.
+                constexpr float open_frac_x = 72.f / 256.f;
+                constexpr float open_frac_y = 36.f / 128.f;
+                const float interior = 2.f * tunnel_half_width * track.half_width(s.index);
+                width = (interior / open_frac_x) * px;
+                if (info.centered)
+                    left = p0.x + (obj.offset + shift) * track.half_width(s.index) * px - width / 2.f;
+                height = (tunnel_height * p0.scale * y_scale_) / open_frac_y;
             }
             const bool flip = info.mirrorable && obj.offset < 0.f;
             const uint8_t day = static_cast<uint8_t>(std::min(255.f, daylight_ * 255.f + 0.5f));
@@ -1681,7 +1687,8 @@ void GlesRenderer::draw_lamp_pools(float ambient) {
         const float tint_g = lamp.glow == Glow::Street ? 0.85f : lamp.glow == Glow::Tail ? 0.35f : 1.f;
         const float tint_b = lamp.glow == Glow::Street ? 0.55f : lamp.glow == Glow::Tail ? 0.2f : 0.95f;
         const float strength = lamp.glow == Glow::Tail ? 0.85f : lamp.glow == Glow::Head ? 0.8f : 0.9f;
-        // Full 1px × 4-ring falloff — matches software street_lights quality.
+        // Soft radial falloff: many thin additive rings so the pool is continuous
+        // (software is per-pixel; 4 coarse rings banded badly in the lightmap).
         for (int y = 0; y < height_; ++y) {
             const float depth = row_depth_[static_cast<size_t>(y)];
             if (depth <= 0.f) continue;
@@ -1690,19 +1697,23 @@ void GlesRenderer::draw_lamp_pools(float ambient) {
             const float px_per_unit = camera_depth_ / depth * x_scale_;
             const float half = std::sqrt(lamp.reach * lamp.reach - dz * dz) * px_per_unit;
             if (half < 0.5f) continue;
-            static constexpr float frac[4] = {1.f, 0.72f, 0.45f, 0.2f};
-            static constexpr float wgt[4] = {0.15f, 0.3f, 0.45f, 0.7f};
-            for (int ring = 0; ring < 4; ++ring) {
-                const float edge = frac[ring];
+            constexpr int rings = 12;
+            for (int ring = 0; ring < rings; ++ring) {
+                // Outer → inner: edge from 1 down to ~1/rings
+                const float edge0 = 1.f - static_cast<float>(ring) / static_cast<float>(rings);
+                const float edge1 = 1.f - static_cast<float>(ring + 1) / static_cast<float>(rings);
+                const float edge = 0.5f * (edge0 + edge1);
                 const float r_lat = 1.f - edge;
                 const float r2 = (dz * dz) / (lamp.reach * lamp.reach) + r_lat * r_lat * 0.5f;
                 if (r2 >= 1.f) continue;
-                const float k = strength * dark * (1.f - r2) * (1.f - r2) * wgt[ring];
-                if (k < 0.01f) continue;
-                Color c{static_cast<uint8_t>(std::min(255.f, tint_r * k * 255.f)),
-                        static_cast<uint8_t>(std::min(255.f, tint_g * k * 255.f)),
-                        static_cast<uint8_t>(std::min(255.f, tint_b * k * 255.f)), 255};
-                const float h = half * edge;
+                // Same (1-r2)^2 shape as software street_lights centre falloff.
+                const float fall = (1.f - r2) * (1.f - r2);
+                const float k = strength * dark * fall * (edge0 - edge1) * static_cast<float>(rings) * 0.55f;
+                if (k < 0.008f) continue;
+                Color c{static_cast<uint8_t>(std::min(255.f, tint_r * k * 255.f + 0.5f)),
+                        static_cast<uint8_t>(std::min(255.f, tint_g * k * 255.f + 0.5f)),
+                        static_cast<uint8_t>(std::min(255.f, tint_b * k * 255.f + 0.5f)), 255};
+                const float h = half * edge0;
                 push_trap(static_cast<float>(y), lamp.x - h, lamp.x + h, static_cast<float>(y + 1), lamp.x - h,
                           lamp.x + h, c);
             }
@@ -1970,18 +1981,20 @@ void GlesRenderer::draw_headlight(const Beam& beam, float ambient) {
         const float mid = beam.center + beam.aim * ahead * px_per_unit;
         const float k0 = 0.75f * dark * reach * air;
         if (k0 < 0.01f) continue;
-        static constexpr float frac[4] = {1.f, 0.7f, 0.4f, 0.18f};
-        static constexpr float wgt[4] = {0.12f, 0.28f, 0.45f, 0.65f};
-        for (int ring = 0; ring < 4; ++ring) {
-            const float edge = frac[ring];
+        // Soft lateral falloff (software uses continuous smoothstep across).
+        constexpr int rings = 12;
+        for (int ring = 0; ring < rings; ++ring) {
+            const float edge0 = 1.f - static_cast<float>(ring) / static_cast<float>(rings);
+            const float edge1 = 1.f - static_cast<float>(ring + 1) / static_cast<float>(rings);
+            const float edge = 0.5f * (edge0 + edge1);
             const float across = 1.f - edge;
             const float side = (1.f - across) * (1.f - across);
-            const float k = k0 * side * wgt[ring];
-            if (k < 0.01f) continue;
-            Color c{static_cast<uint8_t>(std::min(255.f, k * 255.f)),
-                    static_cast<uint8_t>(std::min(255.f, k * 245.f)),
-                    static_cast<uint8_t>(std::min(255.f, k * 220.f)), 255};
-            const float h = half * edge;
+            const float k = k0 * side * (edge0 - edge1) * static_cast<float>(rings) * 0.5f;
+            if (k < 0.008f) continue;
+            Color c{static_cast<uint8_t>(std::min(255.f, k * 255.f + 0.5f)),
+                    static_cast<uint8_t>(std::min(255.f, k * 245.f + 0.5f)),
+                    static_cast<uint8_t>(std::min(255.f, k * 220.f + 0.5f)), 255};
+            const float h = half * edge0;
             push_trap(static_cast<float>(y), mid - h, mid + h, static_cast<float>(y + 1), mid - h, mid + h, c);
         }
     }
@@ -2060,7 +2073,7 @@ void GlesRenderer::render(const Track& track, const RoadView& view, const Sprite
             const bool way_out = seg.tunnel && !track.segment(index + dir).tunnel;
             if (way_in || way_out) {
                 const ScreenPoint& mouth = way_out ? s.p2 : s.p1;
-                const float half = mouth.scale * tunnel_half_width * track.road_width * x_scale_;
+                const float half = mouth.w * tunnel_half_width; // local road half-width (road_scale)
                 const float x0 = mouth.x - half, x1 = mouth.x + half;
                 const float mouth_top = mouth.y - mouth.scale * tunnel_height * y_scale_;
                 ceiling = std::max(ceiling, mouth_top);

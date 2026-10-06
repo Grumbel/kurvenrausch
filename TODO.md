@@ -2,6 +2,16 @@
 
 ## Current tip
 
+### Grok: tunnel mouth scale + soft night lamp pools
+- Mouth clip used `track.road_width` (unscaled) so on narrow roads (Japan
+  road_scale 0.75) the aperture was wider than the walls — see-through past
+  the rock. Clip is now `mouth.w * tunnel_half_width` (local half-width).
+- TunnelPortal sprite width scaled so the opening matches
+  `2 * tunnel_half_width * half_width` (was fixed 16000 wu).
+- Lamp / headlight lightmap pools: 12 fine rings with continuous falloff
+  instead of 4 coarse steps (banding in the multiply compose).
+
+
 ### Grok: player car as layered sprites (no per-frame composite)
 - Body, dirt overlay, occupants, lightbar are separate fixed RoadSprites
   sharing the same screen rect / crash pose.
