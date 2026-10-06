@@ -13,10 +13,11 @@
 #include <type_traits>
 #include <vector>
 
-// GLES2 on the web and Android; desktop GL 2.x via SDL's loader. Entry points
-// are resolved with SDL_GL_GetProcAddress so we do not depend on GLEW/glad or
-// GL_GLEXT_PROTOTYPES (which many Linux toolchains leave undeclared).
-#if defined(__EMSCRIPTEN__) || defined(__ANDROID__)
+// GLES2 on the web, Android, and R36S/ArkOS (KURVEN_OPENGLES2); desktop GL 2.x
+// otherwise. Entry points are resolved with SDL_GL_GetProcAddress so we do not
+// depend on GLEW/glad or GL_GLEXT_PROTOTYPES (which many Linux toolchains leave
+// undeclared).
+#if defined(__EMSCRIPTEN__) || defined(__ANDROID__) || defined(KURVEN_OPENGLES2)
 #include <SDL2/SDL_opengles2.h>
 #define KURVEN_GLES 1
 #else
@@ -326,6 +327,14 @@ bool Display::init(const char* title, const char* app_id, int fb_width, int fb_h
     }
 
     SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "nearest");
+#if KURVEN_GLES
+    // Prefer the EGL/GLES driver on Mali (ArkOS / R36S). Without this, SDL may
+    // try a desktop GL path that never creates a context. SuperTux Origins uses
+    // the same hint for SUPERTUX_R36S.
+#ifdef SDL_HINT_OPENGL_ES_DRIVER
+    SDL_SetHint(SDL_HINT_OPENGL_ES_DRIVER, "1");
+#endif
+#endif
 
     Uint32 flags = SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL;
     if (fullscreen) flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
@@ -418,6 +427,9 @@ bool Display::init_sdl_present() {
 
 bool Display::init_gl_present() {
 #if KURVEN_GLES
+    // GLES stacks (Android, R36S, WebGL): request ES 2.0 only. Do not force
+    // colour-buffer sizes — hand-tuned RGBA sizes have caused "Could not
+    // create EGL window surface" on ArkOS (SuperTux Origins PORTING.md).
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);

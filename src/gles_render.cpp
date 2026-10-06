@@ -17,7 +17,7 @@
 namespace racer {
 namespace {
 
-#if defined(__ANDROID__) || defined(__EMSCRIPTEN__)
+#if defined(__ANDROID__) || defined(__EMSCRIPTEN__) || defined(KURVEN_OPENGLES2)
 #define KURVEN_GLES 1
 #else
 #define KURVEN_GLES 0

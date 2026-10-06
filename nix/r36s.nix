@@ -157,6 +157,8 @@ let
       # eoan's SDL2 CMake files name /usr: give the sysroot's directly.
       "-DSDL2_INCLUDE_DIRS=${sysroot}/usr/include"
       "-DSDL2_LIBRARIES=${sdlStub}/lib/libSDL2.so"
+      # Mali-G31 / ArkOS: ES 2.0 context (see SuperTux Origins SUPERTUX_R36S).
+      "-DENABLE_OPENGLES2=ON"
     ];
     # A device binary: no nix store RPATH, interpreter or shebangs.
     dontPatchELF = true;

@@ -48,6 +48,14 @@ elseif(NOT SDL2_LIBRARIES)
     find_package(SDL2 REQUIRED)
 endif()
 
+
+# OpenGL ES 2.0 present path (Android, Emscripten, R36S / ArkOS Mali). Desktop
+# defaults to GL 2.x compatibility via SDL_opengl.h.
+option(ENABLE_OPENGLES2 "Use OpenGL ES 2.0 (shaders + ES context profile)" OFF)
+if(ENABLE_OPENGLES2)
+    message(STATUS "ENABLE_OPENGLES2: GLES2 present path")
+endif()
+
 # Everything except main() lives in a library so the tests can link it too.
 add_library(kurvenrausch_core STATIC
     src/animals.cpp
@@ -84,8 +92,13 @@ add_library(kurvenrausch_core STATIC
 )
 target_include_directories(kurvenrausch_core PUBLIC include ${SDL2_INCLUDE_DIRS})
 target_link_libraries(kurvenrausch_core PUBLIC ${SDL2_LIBRARIES})
-# GL present path (desktop); GLES is provided by the platform / Emscripten.
-if(NOT EMSCRIPTEN AND NOT ANDROID)
+if(ENABLE_OPENGLES2)
+    target_compile_definitions(kurvenrausch_core PUBLIC KURVEN_OPENGLES2=1)
+endif()
+# Desktop GL: link libGL so SDL_GL_GetProcAddress can resolve symbols.
+# GLES2 targets (Emscripten, Android, R36S) get entry points from the EGL
+# driver via SDL — do not pull desktop OpenGL::GL.
+if(NOT EMSCRIPTEN AND NOT ANDROID AND NOT ENABLE_OPENGLES2)
     find_package(OpenGL)
     if(OpenGL_FOUND)
         target_link_libraries(kurvenrausch_core PUBLIC OpenGL::GL)
