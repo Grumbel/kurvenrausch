@@ -2,6 +2,28 @@
 
 ## Current tip
 
+### Claude: lightbar, train sound, advance signs, the garage
+- The player car's layers (dirt, people, movie parts, lightbar) were drawn
+  under the body (far-to-near order, layers had *farther* z): the
+  ambulance's lightbar never lit and dirt never showed. Fixed in render().
+- Trains: diesel + rail roar + bogie clacks + three-note horn
+  (SynthParams::train, train_horn, train_clack); horn pattern in
+  train_horn_on(). The horn shares its pitch range with the engine, so it
+  is not prominent at full revs; tune by ear on hardware.
+- Advance signs: Scenery::AdvanceSign + RoadsideObject::variant
+  (advance_sign_variant(lot, distance)); 500/400/300 m and 200/100 m,
+  placed in TrackBuilder::forecourt_lot via free_for_sign(). 3 Grand Tour
+  lots walled in by cliff + rail get none; idea: mount signs on the rail.
+- Garage: Lot::Garage at the end of both tracks; owned cars in
+  Game::owned_cars_ / Choices::garage; a car counts as owned when driven
+  off a lot (visit_lot) or found (movie cars).
+- Sanitizer recipe changes: SDL_VIDEODRIVER=dummy no longer starts the game
+  (the GL present path needs a GL window); use xvfb-run. Sanitizer builds
+  need LD_LIBRARY_PATH with SDL3's lib (the one sdl2-compat names: `strings
+  libSDL2-2.0.so.0 | grep sdl3`), and for GL also libglvnd's lib and
+  /run/opengl-driver/lib. TSan then reports races inside Mesa llvmpipe
+  (GL calls vs its worker threads), none in the game or synth.
+
 ### Claude: pause menu reorganised, rebindable controls
 - Generic menu engine in menu.hpp/.cpp: MenuPage (items: Action, Submenu,
   Choice, Slider, Binding, Heading, Info), MenuView (selection, scroll with a
