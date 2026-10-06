@@ -17,7 +17,8 @@ enum class Phase : int {
     GlesBackdrop,  // sky / mountains / sun
     GlesRoad,      // road strips, tunnels, beyond
     GlesSprites,   // rails, cliffs, scenery, cars
-    GlesNight,     // ground copy, lightmap, compose
+    GlesLight,     // night lightmap: lamp pools, headlight
+    GlesCompose,   // night compose (albedo × lightmap)
     Hud,           // CPU HUD / cockpit / menus into fb_
     Present,       // upload + composite + swap
     Count
@@ -30,7 +31,8 @@ inline const char* phase_name(Phase p) {
         case Phase::GlesBackdrop: return "g-sky";
         case Phase::GlesRoad: return "g-road";
         case Phase::GlesSprites: return "g-spr";
-        case Phase::GlesNight: return "g-night";
+        case Phase::GlesLight: return "g-light";
+        case Phase::GlesCompose: return "g-comp";
         case Phase::Hud: return "hud";
         case Phase::Present: return "present";
         default: return "?";

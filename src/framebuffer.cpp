@@ -6,7 +6,6 @@
 #include "font.hpp"
 
 #include <algorithm>
-#include <array>
 #include <cmath>
 
 namespace racer {
@@ -16,10 +15,10 @@ int pixel_edge(float v) {
     return static_cast<int>(std::ceil(std::clamp(v, -limit, limit) - 0.5f));
 }
 
-bool is_emissive_argb(uint32_t argb) {
-    static const auto sorted = [] {
+const std::vector<uint32_t>& emissive_colors() {
+    static const std::vector<uint32_t> sorted = [] {
         // Keep in sync with lamps / stars / neon in sprites and daylight.
-        static constexpr uint32_t emissive[] = {
+        std::vector<uint32_t> a = {
             0xffff543c, 0xfffff0e0, 0xff8c1212, 0xffc01818, 0xffc84438, 0xffe85040, 0xffff3020,
             0xffffc038, 0xfffff4c0,
             0xfff0ecc8, 0xffffffff,
@@ -32,11 +31,14 @@ bool is_emissive_argb(uint32_t argb) {
             0xfffff0a0,
             0xffe0e4ec, 0xffb0b8c8, 0xffc8d0e0,
         };
-        std::array<uint32_t, sizeof(emissive) / sizeof(emissive[0])> a{};
-        for (size_t i = 0; i < a.size(); ++i) a[i] = emissive[i];
         std::sort(a.begin(), a.end());
         return a;
     }();
+    return sorted;
+}
+
+bool is_emissive_argb(uint32_t argb) {
+    const std::vector<uint32_t>& sorted = emissive_colors();
     return std::binary_search(sorted.begin(), sorted.end(), argb);
 }
 

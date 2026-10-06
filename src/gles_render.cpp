@@ -62,6 +62,10 @@ constexpr unsigned GL_RENDERBUFFER_ = 0x8D41;
 constexpr unsigned GL_DEPTH_COMPONENT16_ = 0x81A5;
 constexpr unsigned GL_FRAMEBUFFER_COMPLETE_ = 0x8CD5;
 constexpr unsigned GL_FRAMEBUFFER_BINDING_ = 0x8CA6;
+constexpr unsigned GL_DEPTH_BUFFER_BIT_ = 0x00000100;
+constexpr unsigned GL_DEPTH_TEST_ = 0x0B71;
+constexpr unsigned GL_LESS_ = 0x0201;
+constexpr unsigned GL_ALWAYS_ = 0x0207;
 
 struct GlApi {
     void (*ClearColor)(float, float, float, float) = nullptr;
@@ -70,6 +74,9 @@ struct GlApi {
     void (*Enable)(unsigned) = nullptr;
     void (*Disable)(unsigned) = nullptr;
     void (*BlendFunc)(unsigned, unsigned) = nullptr;
+    void (*BlendFuncSeparate)(unsigned, unsigned, unsigned, unsigned) = nullptr;
+    void (*DepthFunc)(unsigned) = nullptr;
+    void (*DepthMask)(unsigned char) = nullptr;
     void (*Finish)() = nullptr;
     void (*Scissor)(int, int, int, int) = nullptr;
     unsigned (*CreateShader)(unsigned) = nullptr;
@@ -90,6 +97,7 @@ struct GlApi {
     void (*Uniform1i)(int, int) = nullptr;
     void (*Uniform2f)(int, float, float) = nullptr;
     void (*Uniform3f)(int, float, float, float) = nullptr;
+    void (*Uniform1f)(int, float) = nullptr;
     void (*GenBuffers)(int, unsigned*) = nullptr;
     void (*DeleteBuffers)(int, const unsigned*) = nullptr;
     void (*BindBuffer)(unsigned, unsigned) = nullptr;
@@ -152,6 +160,10 @@ bool load_gl() {
     g.Uniform1i = load<decltype(g.Uniform1i)>("glUniform1i");
     g.Uniform2f = load<decltype(g.Uniform2f)>("glUniform2f");
     g.Uniform3f = load<decltype(g.Uniform3f)>("glUniform3f");
+    g.Uniform1f = load<decltype(g.Uniform1f)>("glUniform1f");
+    g.BlendFuncSeparate = load<decltype(g.BlendFuncSeparate)>("glBlendFuncSeparate");
+    g.DepthFunc = load<decltype(g.DepthFunc)>("glDepthFunc");
+    g.DepthMask = load<decltype(g.DepthMask)>("glDepthMask");
     g.Finish = load<decltype(g.Finish)>("glFinish");
     g.GenBuffers = load<decltype(g.GenBuffers)>("glGenBuffers");
     g.DeleteBuffers = load<decltype(g.DeleteBuffers)>("glDeleteBuffers");
@@ -191,7 +203,8 @@ bool load_gl() {
     if (!g.CheckFramebufferStatus) g.CheckFramebufferStatus = load<decltype(g.CheckFramebufferStatus)>("glCheckFramebufferStatusOES");
     g.GetIntegerv = load<decltype(g.GetIntegerv)>("glGetIntegerv");
     g.ReadPixels = load<decltype(g.ReadPixels)>("glReadPixels");
-    return g.Clear && g.CreateShader && g.DrawArrays && g.TexImage2D && g.GenFramebuffers && g.BindFramebuffer;
+    return g.Clear && g.CreateShader && g.DrawArrays && g.TexImage2D && g.GenFramebuffers && g.BindFramebuffer &&
+           g.BlendFuncSeparate && g.DepthFunc && g.DepthMask && g.Uniform1f;
 }
 
 const char* k_vert =
@@ -200,12 +213,13 @@ const char* k_vert =
     "attribute vec2 a_uv;\n"
     "attribute vec4 a_col;\n"
     "uniform vec2 u_screen;\n"
+    "uniform float u_z;\n"
     "varying vec2 v_uv;\n"
     "varying vec4 v_col;\n"
     "void main(){\n"
     "  v_uv = a_uv; v_col = a_col;\n"
     "  vec2 ndc = vec2(a_pos.x / u_screen.x * 2.0 - 1.0, 1.0 - a_pos.y / u_screen.y * 2.0);\n"
-    "  gl_Position = vec4(ndc, 0.0, 1.0);\n"
+    "  gl_Position = vec4(ndc, u_z, 1.0);\n"
     "}\n";
 #else
     "#version 110\n"
@@ -213,12 +227,13 @@ const char* k_vert =
     "attribute vec2 a_uv;\n"
     "attribute vec4 a_col;\n"
     "uniform vec2 u_screen;\n"
+    "uniform float u_z;\n"
     "varying vec2 v_uv;\n"
     "varying vec4 v_col;\n"
     "void main(){\n"
     "  v_uv = a_uv; v_col = a_col;\n"
     "  vec2 ndc = vec2(a_pos.x / u_screen.x * 2.0 - 1.0, 1.0 - a_pos.y / u_screen.y * 2.0);\n"
-    "  gl_Position = vec4(ndc, 0.0, 1.0);\n"
+    "  gl_Position = vec4(ndc, u_z, 1.0);\n"
     "}\n";
 #endif
 
@@ -287,72 +302,115 @@ const char* k_compose_vert =
     "}\n";
 #endif
 
+// Night composite. The lightmap holds what the software light stack does to
+// each pixel, applied in order: alpha is the share of the night colour left,
+// RGB the tinted share of the day colour (see k_light_frag). Emissive
+// albedo (lamps, windows, stars) stays at full day colour, as in
+// apply_daylight(); u_emissive is a 256×256 (red, green) table holding up to
+// two matching blues in R and G, A = 1 where there is any.
+#define KURVEN_COMPOSE_BODY \
+    "varying vec2 v_uv;\n" \
+    "uniform sampler2D u_albedo;\n" \
+    "uniform sampler2D u_light;\n" \
+    "uniform sampler2D u_emissive;\n" \
+    "uniform vec3 u_day_scale;\n" \
+    "void main(){\n" \
+    "  vec4 a = texture2D(u_albedo, v_uv);\n" \
+    "  vec4 e = texture2D(u_emissive, (floor(a.rg * 255.0 + 0.5) + 0.5) / 256.0);\n" \
+    "  float tol = 0.5 / 255.0;\n" \
+    "  if (e.a > 0.5 && (abs(a.b - e.r) < tol || abs(a.b - e.g) < tol)) {\n" \
+    "    gl_FragColor = vec4(a.rgb, 1.0);\n" \
+    "    return;\n" \
+    "  }\n" \
+    "  vec4 L = texture2D(u_light, v_uv);\n" \
+    "  gl_FragColor = vec4(min(a.rgb * (u_day_scale * L.a + L.rgb), 1.0), 1.0);\n" \
+    "}\n"
+
 const char* k_compose_frag =
 #if KURVEN_GLES
+    "#ifdef GL_FRAGMENT_PRECISION_HIGH\n"
+    "precision highp float;\n"
+    "#else\n"
     "precision mediump float;\n"
-    "varying vec2 v_uv;\n"
-    "uniform sampler2D u_albedo;\n"
-    "uniform sampler2D u_light;\n"
-    "uniform sampler2D u_ground;\n"
-    "uniform sampler2D u_emissive;\n"
-    "uniform vec3 u_day_scale;\n"
-    "uniform int u_emissive_count;\n"
-    "bool is_emissive(vec3 c){\n"
-    "  for (int i = 0; i < 32; ++i) {\n"
-    "    if (i >= u_emissive_count) break;\n"
-    "    vec3 e = texture2D(u_emissive, vec2((float(i) + 0.5) / 32.0, 0.5)).rgb;\n"
-    "    if (distance(c, e) < 0.0035) return true;\n"
-    "  }\n"
-    "  return false;\n"
-    "}\n"
-    "void main(){\n"
-    "  vec4 a = texture2D(u_albedo, v_uv);\n"
-    "  if (is_emissive(a.rgb)) { gl_FragColor = vec4(a.rgb, 1.0); return; }\n"
-    "  vec3 night = a.rgb * u_day_scale;\n"
-    "  vec3 L = clamp(texture2D(u_light, v_uv).rgb, 0.0, 1.0);\n"
-    "  vec3 lit = mix(night, a.rgb, L);\n"
-    "  gl_FragColor = vec4(lit, 1.0);\n"
-    "}\n";
+    "#endif\n"
 #else
     "#version 110\n"
-    "varying vec2 v_uv;\n"
-    "uniform sampler2D u_albedo;\n"
-    "uniform sampler2D u_light;\n"
-    "uniform sampler2D u_ground;\n"
-    "uniform sampler2D u_emissive;\n"
-    "uniform vec3 u_day_scale;\n"
-    "uniform int u_emissive_count;\n"
-    "bool is_emissive(vec3 c){\n"
-    "  for (int i = 0; i < 32; ++i) {\n"
-    "    if (i >= u_emissive_count) break;\n"
-    "    vec3 e = texture2D(u_emissive, vec2((float(i) + 0.5) / 32.0, 0.5)).rgb;\n"
-    "    if (distance(c, e) < 0.0035) return true;\n"
-    "  }\n"
-    "  return false;\n"
-    "}\n"
-    "void main(){\n"
-    "  vec4 a = texture2D(u_albedo, v_uv);\n"
-    "  if (is_emissive(a.rgb)) { gl_FragColor = vec4(a.rgb, 1.0); return; }\n"
-    "  vec3 night = a.rgb * u_day_scale;\n"
-    "  vec3 L = clamp(texture2D(u_light, v_uv).rgb, 0.0, 1.0);\n"
-    "  vec3 lit = mix(night, a.rgb, L);\n"
-    "  gl_FragColor = vec4(lit, 1.0);\n"
-    "}\n";
 #endif
+    KURVEN_COMPOSE_BODY;
 
-// Fullscreen copy: src texture → bound FBO.
-const char* k_copy_frag =
+// Lightmap: the software street_lights() / headlight_beam() formulas per
+// pixel. u_rows holds per screen row (texel x = row): lane 0 the ground's
+// depth, lane 1 the road centre's x, lanes 2..4 the headlight cone's centre,
+// half width and strength (24-bit fixed point, see GlesRenderer::upload_rows).
+// Lamp quads carry (world offset from the road centre, depth) in a_uv and
+// (reach, strength, green tint, blue tint) in a_col.
+const char* k_light_vert =
+#if !KURVEN_GLES
+    "#version 110\n"
+#endif
+    "attribute vec2 a_pos;\n"
+    "attribute vec2 a_uv;\n"
+    "attribute vec4 a_col;\n"
+    "uniform vec2 u_screen;\n"
+    "uniform float u_z;\n"
+    "varying vec2 v_lamp;\n"
+    "varying vec4 v_par;\n"
+    "void main(){\n"
+    "  v_lamp = a_uv; v_par = a_col;\n"
+    "  vec2 ndc = vec2(a_pos.x / u_screen.x * 2.0 - 1.0, 1.0 - a_pos.y / u_screen.y * 2.0);\n"
+    "  gl_Position = vec4(ndc, u_z, 1.0);\n"
+    "}\n";
+
+#define KURVEN_LIGHT_BODY \
+    "varying vec2 v_lamp;\n" \
+    "varying vec4 v_par;\n" \
+    "uniform sampler2D u_rows;\n" \
+    "uniform vec2 u_screen;\n" \
+    "uniform float u_px;\n" \
+    "uniform int u_beam;\n" \
+    "float row_value(float lane, float row){\n" \
+    "  vec3 c = floor(texture2D(u_rows, vec2((row + 0.5) / u_screen.y, (lane + 0.5) / 8.0)).rgb * 255.0 + 0.5);\n" \
+    "  return c.r * 65536.0 + c.g * 256.0 + c.b;\n" \
+    "}\n" \
+    "void main(){\n" \
+    "  float row = floor(u_screen.y - gl_FragCoord.y);\n" \
+    "  float x = gl_FragCoord.x;\n" \
+    "  if (u_beam != 0) {\n" \
+    "    float k = row_value(4.0, row) / 8388608.0;\n" \
+    "    if (k <= 0.0) discard;\n" \
+    "    float mid = row_value(2.0, row) / 256.0 - 32768.0;\n" \
+    "    float hw = row_value(3.0, row) / 256.0;\n" \
+    "    float across = abs(x - mid) / hw;\n" \
+    "    if (across >= 1.0) discard;\n" \
+    "    float t = clamp((1.0 - across) / 0.45, 0.0, 1.0);\n" \
+    "    float edge = t * t * (3.0 - 2.0 * t) * (0.75 + 0.25 * (1.0 - across * across));\n" \
+    "    gl_FragColor = vec4(1.0, 1.0, 1.0, k * edge);\n" \
+    "    return;\n" \
+    "  }\n" \
+    "  float depth = row_value(0.0, row) / 16.0;\n" \
+    "  if (depth <= 0.0) discard;\n" \
+    "  float dz = depth - v_lamp.y;\n" \
+    "  float reach2 = v_par.x * v_par.x;\n" \
+    "  if (dz * dz >= reach2) discard;\n" \
+    "  float px = u_px / depth;\n" \
+    "  float cx = row_value(1.0, row) / 256.0 - 32768.0 + v_lamp.x * px;\n" \
+    "  float dx = (x - cx) / px;\n" \
+    "  float r2 = (dx * dx + dz * dz) / reach2;\n" \
+    "  if (r2 >= 1.0) discard;\n" \
+    "  gl_FragColor = vec4(1.0, v_par.z, v_par.w, v_par.y * (1.0 - r2) * (1.0 - r2));\n" \
+    "}\n"
+
+const char* k_light_frag =
 #if KURVEN_GLES
+    "#ifdef GL_FRAGMENT_PRECISION_HIGH\n"
+    "precision highp float;\n"
+    "#else\n"
     "precision mediump float;\n"
-    "varying vec2 v_uv;\n"
-    "uniform sampler2D u_tex;\n"
-    "void main(){ gl_FragColor = texture2D(u_tex, v_uv); }\n";
+    "#endif\n"
 #else
     "#version 110\n"
-    "varying vec2 v_uv;\n"
-    "uniform sampler2D u_tex;\n"
-    "void main(){ gl_FragColor = texture2D(u_tex, v_uv); }\n";
 #endif
+    KURVEN_LIGHT_BODY;
 
 unsigned compile(unsigned type, const char* src) {
     const unsigned s = g.CreateShader(type);
@@ -388,6 +446,36 @@ void gpu_finish() {
     if (g.Finish) g.Finish();
 }
 
+// Program from two shader sources, attributes a_pos / a_uv / a_col at 0 / 1 / 2.
+unsigned link(const char* vert, const char* frag, const char* name) {
+    const unsigned vs = compile(GL_VERTEX_SHADER_, vert);
+    const unsigned fs = compile(GL_FRAGMENT_SHADER_, frag);
+    if (!vs || !fs) {
+        if (vs) g.DeleteShader(vs);
+        if (fs) g.DeleteShader(fs);
+        return 0;
+    }
+    unsigned prog = g.CreateProgram();
+    g.AttachShader(prog, vs);
+    g.AttachShader(prog, fs);
+    g.BindAttribLocation(prog, 0, "a_pos");
+    g.BindAttribLocation(prog, 1, "a_uv");
+    g.BindAttribLocation(prog, 2, "a_col");
+    g.LinkProgram(prog);
+    g.DeleteShader(vs);
+    g.DeleteShader(fs);
+    int ok = 0;
+    g.GetProgramiv(prog, GL_LINK_STATUS_, &ok);
+    if (!ok) {
+        char log[256];
+        g.GetProgramInfoLog(prog, sizeof log, nullptr, log);
+        std::cerr << "kurvenrausch: gles " << name << " link: " << log << "\n";
+        g.DeleteProgram(prog);
+        prog = 0;
+    }
+    return prog;
+}
+
 } // namespace
 
 GlesRenderer::~GlesRenderer() { shutdown(); }
@@ -403,11 +491,11 @@ void GlesRenderer::invalidate() {
     light_tex_ = 0;
     night_fbo_ = 0;
     night_tex_ = 0;
-    ground_fbo_ = 0;
-    ground_tex_ = 0;
+    rows_tex_ = 0;
+    rows_tex_h_ = 0;
     emissive_tex_ = 0;
-    falloff_tex_ = 0;
-    beam_falloff_tex_ = 0;
+    compose_program_ = 0;
+    light_program_ = 0;
     present_tex_ = 0;
     fbo_w_ = fbo_h_ = 0;
     textures_.clear();
@@ -451,10 +539,9 @@ void GlesRenderer::shutdown() {
     del_tex(color_tex_);
     del_tex(night_tex_);
     del_tex(light_tex_);
-    del_tex(ground_tex_);
+    del_tex(rows_tex_);
+    rows_tex_h_ = 0;
     del_tex(emissive_tex_);
-    del_tex(falloff_tex_);
-    del_tex(beam_falloff_tex_);
     present_tex_ = 0;
     auto del_fbo = [&](unsigned& f) {
         if (f && g.DeleteFramebuffers) { g.DeleteFramebuffers(1, &f); f = 0; }
@@ -462,7 +549,6 @@ void GlesRenderer::shutdown() {
     del_fbo(fbo_);
     del_fbo(light_fbo_);
     del_fbo(night_fbo_);
-    del_fbo(ground_fbo_);
     fbo_w_ = fbo_h_ = 0;
     if (vbo_) {
         g.DeleteBuffers(1, &vbo_);
@@ -472,9 +558,9 @@ void GlesRenderer::shutdown() {
         g.DeleteProgram(compose_program_);
         compose_program_ = 0;
     }
-    if (copy_program_) {
-        g.DeleteProgram(copy_program_);
-        copy_program_ = 0;
+    if (light_program_) {
+        g.DeleteProgram(light_program_);
+        light_program_ = 0;
     }
     if (program_) {
         g.DeleteProgram(program_);
@@ -519,56 +605,22 @@ bool GlesRenderer::init() {
     u_tex_ = g.GetUniformLocation(program_, "u_tex");
     u_fog_air_ = g.GetUniformLocation(program_, "u_fog_air");
 
-    const unsigned cvs = compile(GL_VERTEX_SHADER_, k_compose_vert);
-    const unsigned cfs = compile(GL_FRAGMENT_SHADER_, k_compose_frag);
-    if (!cvs || !cfs) return false;
-    compose_program_ = g.CreateProgram();
-    g.AttachShader(compose_program_, cvs);
-    g.AttachShader(compose_program_, cfs);
-    g.BindAttribLocation(compose_program_, 0, "a_pos");
-    g.BindAttribLocation(compose_program_, 1, "a_uv");
-    g.LinkProgram(compose_program_);
-    g.DeleteShader(cvs);
-    g.DeleteShader(cfs);
-    int cok = 0;
-    g.GetProgramiv(compose_program_, GL_LINK_STATUS_, &cok);
-    if (!cok) {
-        char log[256];
-        g.GetProgramInfoLog(compose_program_, sizeof log, nullptr, log);
-        std::cerr << "kurvenrausch: gles compose link: " << log << "\n";
-        g.DeleteProgram(compose_program_);
-        compose_program_ = 0;
-        return false;
-    }
+    u_z_ = g.GetUniformLocation(program_, "u_z");
+
+    compose_program_ = link(k_compose_vert, k_compose_frag, "compose");
+    if (!compose_program_) return false;
     u_albedo_ = g.GetUniformLocation(compose_program_, "u_albedo");
     u_light_ = g.GetUniformLocation(compose_program_, "u_light");
-    u_ground_ = g.GetUniformLocation(compose_program_, "u_ground");
     u_emissive_ = g.GetUniformLocation(compose_program_, "u_emissive");
     u_day_scale_ = g.GetUniformLocation(compose_program_, "u_day_scale");
-    u_emissive_count_ = g.GetUniformLocation(compose_program_, "u_emissive_count");
 
-    const unsigned copy_fs = compile(GL_FRAGMENT_SHADER_, k_copy_frag);
-    if (!copy_fs) return false;
-    // Reuse compose vertex shader source (same attributes).
-    const unsigned copy_vs = compile(GL_VERTEX_SHADER_, k_compose_vert);
-    if (!copy_vs) return false;
-    copy_program_ = g.CreateProgram();
-    g.AttachShader(copy_program_, copy_vs);
-    g.AttachShader(copy_program_, copy_fs);
-    g.BindAttribLocation(copy_program_, 0, "a_pos");
-    g.BindAttribLocation(copy_program_, 1, "a_uv");
-    g.LinkProgram(copy_program_);
-    g.DeleteShader(copy_vs);
-    g.DeleteShader(copy_fs);
-    int copy_ok = 0;
-    g.GetProgramiv(copy_program_, GL_LINK_STATUS_, &copy_ok);
-    if (!copy_ok) {
-        std::cerr << "kurvenrausch: gles copy link failed\n";
-        g.DeleteProgram(copy_program_);
-        copy_program_ = 0;
-        return false;
-    }
-    u_copy_tex_ = g.GetUniformLocation(copy_program_, "u_tex");
+    light_program_ = link(k_light_vert, k_light_frag, "light");
+    if (!light_program_) return false;
+    u_light_screen_ = g.GetUniformLocation(light_program_, "u_screen");
+    u_light_z_ = g.GetUniformLocation(light_program_, "u_z");
+    u_light_rows_ = g.GetUniformLocation(light_program_, "u_rows");
+    u_light_px_ = g.GetUniformLocation(light_program_, "u_px");
+    u_light_beam_ = g.GetUniformLocation(light_program_, "u_beam");
 
     g.GenBuffers(1, &vbo_);
     return true;
@@ -1700,6 +1752,7 @@ void GlesRenderer::draw_sprites(const Track& track, const SpriteSheet& sprites, 
                                      [](const RoadSprite& o, float z) { return o.z < z; });
         auto draw_object = [&](const RoadSprite& o) {
             const Bitmap& bmp = *o.bitmap;
+            set_depth(o.fixed ? player_z : sprite_z);
             if (o.fixed) {
                 // Fixed screen layers (player body/dirt/people/…): near plane, no fog.
                 const uint8_t day = static_cast<uint8_t>(std::min(255.f, daylight_ * 255.f + 0.5f));
@@ -1758,71 +1811,6 @@ void GlesRenderer::draw_sprites(const Track& track, const SpriteSheet& sprites, 
 
 
 
-void GlesRenderer::draw_lamp_pools(float ambient) {
-    if (lamps_.empty()) return;
-    const float dark = 1.f - ambient;
-    if (dark <= 0.02f) return;
-    ensure_falloff_tex();
-    if (!falloff_tex_) return;
-    g.BlendFunc(GL_ONE_, GL_ONE_);
-    flush_solid();
-    flush_textured();
-    set_textured(falloff_tex_);
-    const float max_hx = 0.65f * static_cast<float>(width_);
-    const float max_hy = 0.35f * static_cast<float>(height_);
-
-    for (const LampSpot& lamp : lamps_) {
-        if (lamp.depth <= 1e-3f) continue;
-        int cy = -1;
-        float best = 1.0e9f;
-        for (int y = 0; y < height_; ++y) {
-            const float d = row_depth_[static_cast<size_t>(y)];
-            if (d <= 0.f) continue;
-            const float err = std::abs(d - lamp.depth);
-            if (err < best) {
-                best = err;
-                cy = y;
-            }
-        }
-        if (cy < 0) continue;
-        const float depth = row_depth_[static_cast<size_t>(cy)];
-        if (depth <= 1e-3f) continue;
-        // Skip pools glued to the bumper: projection blows up at tiny depth.
-        if (depth < camera_depth_ * 0.35f) continue;
-
-        const float px = camera_depth_ / depth * x_scale_;
-        float half_x = lamp.reach * px;
-        // Vertical radius from local depth gradient (world reach → screen px).
-        float d_lo = depth, d_hi = depth;
-        if (cy > 0 && row_depth_[static_cast<size_t>(cy - 1)] > 0.f)
-            d_lo = row_depth_[static_cast<size_t>(cy - 1)];
-        if (cy + 1 < height_ && row_depth_[static_cast<size_t>(cy + 1)] > 0.f)
-            d_hi = row_depth_[static_cast<size_t>(cy + 1)];
-        const float dd = std::max(std::abs(d_hi - d_lo) * 0.5f, 1.f);
-        float half_y = lamp.reach / dd;
-
-        half_x = std::min(half_x, max_hx);
-        half_y = std::min(half_y, max_hy);
-        if (half_x < 1.f || half_y < 1.f) continue;
-
-        const float cx = lamp.x;
-        const float cy_f = static_cast<float>(cy) + 0.5f;
-        const float tint_r = 1.f;
-        const float tint_g = lamp.glow == Glow::Street ? 0.85f : lamp.glow == Glow::Tail ? 0.35f : 1.f;
-        const float tint_b = lamp.glow == Glow::Street ? 0.55f : lamp.glow == Glow::Tail ? 0.2f : 0.95f;
-        const float strength = lamp.glow == Glow::Tail ? 0.85f : lamp.glow == Glow::Head ? 0.8f : 0.9f;
-        const float k = strength * dark;
-        Color c{static_cast<uint8_t>(std::min(255.f, tint_r * k * 255.f + 0.5f)),
-                static_cast<uint8_t>(std::min(255.f, tint_g * k * 255.f + 0.5f)),
-                static_cast<uint8_t>(std::min(255.f, tint_b * k * 255.f + 0.5f)), 0};
-        // Ellipse centred on the lamp: radial texture maps cleanly without
-        // stretching across the whole depth±reach span.
-        push_quad(cx - half_x, cy_f - half_y, half_x * 2.f, half_y * 2.f, 0.f, 0.f, 1.f, 1.f, c, false);
-    }
-    flush_textured();
-    g.BlendFunc(GL_SRC_ALPHA_, GL_ONE_MINUS_SRC_ALPHA_);
-}
-
 void GlesRenderer::draw_weather(const Weather& weather) {
     const int nr = weather.rain_count();
     const int ns = weather.snow_count();
@@ -1873,7 +1861,7 @@ void GlesRenderer::draw_weather(const Weather& weather) {
 }
 
 bool GlesRenderer::ensure_fbo() {
-    if (fbo_ && light_fbo_ && night_fbo_ && ground_fbo_ && fbo_w_ == width_ && fbo_h_ == height_) return true;
+    if (fbo_ && light_fbo_ && night_fbo_ && fbo_w_ == width_ && fbo_h_ == height_) return true;
     if (depth_rb_ && g.DeleteRenderbuffers) g.DeleteRenderbuffers(1, &depth_rb_);
     auto del_tex = [&](unsigned& t) {
         if (t) {
@@ -1890,12 +1878,9 @@ bool GlesRenderer::ensure_fbo() {
     del_tex(color_tex_);
     del_tex(night_tex_);
     del_tex(light_tex_);
-    del_tex(ground_tex_);
     del_fbo(fbo_);
     del_fbo(light_fbo_);
     del_fbo(night_fbo_);
-    del_fbo(ground_fbo_);
-    del_fbo(ground_fbo_);
     depth_rb_ = 0;
     present_tex_ = 0;
 
@@ -1915,9 +1900,11 @@ bool GlesRenderer::ensure_fbo() {
         g.BindFramebuffer(GL_FRAMEBUFFER_, fbo);
         g.FramebufferTexture2D(GL_FRAMEBUFFER_, GL_COLOR_ATTACHMENT0_, GL_TEXTURE_2D_, tex, 0);
         if (with_depth) {
-            g.GenRenderbuffers(1, &depth_rb_);
-            g.BindRenderbuffer(GL_RENDERBUFFER_, depth_rb_);
-            g.RenderbufferStorage(GL_RENDERBUFFER_, GL_DEPTH_COMPONENT16_, width_, height_);
+            if (!depth_rb_) {
+                g.GenRenderbuffers(1, &depth_rb_);
+                g.BindRenderbuffer(GL_RENDERBUFFER_, depth_rb_);
+                g.RenderbufferStorage(GL_RENDERBUFFER_, GL_DEPTH_COMPONENT16_, width_, height_);
+            }
             g.FramebufferRenderbuffer(GL_FRAMEBUFFER_, GL_DEPTH_ATTACHMENT_, GL_RENDERBUFFER_, depth_rb_);
         }
         if (g.CheckFramebufferStatus(GL_FRAMEBUFFER_) != GL_FRAMEBUFFER_COMPLETE_) {
@@ -1930,12 +1917,13 @@ bool GlesRenderer::ensure_fbo() {
 
     make_color_tex(color_tex_);
     if (!make_fbo(fbo_, color_tex_, true)) return false;
+    // The lightmap shares the scene's depth buffer: it tells the bare ground
+    // (never written, 1) from what stands on it (sprite_z) and the player's
+    // car (player_z), as the software path tells them by the ground snapshot.
     make_color_tex(light_tex_);
-    if (!make_fbo(light_fbo_, light_tex_, false)) return false;
+    if (!make_fbo(light_fbo_, light_tex_, true)) return false;
     make_color_tex(night_tex_);
     if (!make_fbo(night_fbo_, night_tex_, false)) return false;
-    make_color_tex(ground_tex_);
-    if (!make_fbo(ground_fbo_, ground_tex_, false)) return false;
 
     g.BindFramebuffer(GL_FRAMEBUFFER_, 0);
     fbo_w_ = width_;
@@ -1959,106 +1947,28 @@ void GlesRenderer::draw_fullscreen_quad() {
     frame_stats::add_draw(6, true);
 }
 
-void GlesRenderer::copy_tex_to_fbo(unsigned src_tex, unsigned dst_fbo) {
-    g.BindFramebuffer(GL_FRAMEBUFFER_, dst_fbo);
-    g.Viewport(0, 0, width_, height_);
-    g.Disable(GL_BLEND_);
-    g.UseProgram(copy_program_);
-    g.ActiveTexture(GL_TEXTURE0_);
-    g.BindTexture(GL_TEXTURE_2D_, src_tex);
-    g.Uniform1i(u_copy_tex_, 0);
-    draw_fullscreen_quad();
-}
-
 void GlesRenderer::ensure_emissive_lut() {
     if (emissive_tex_ || !g.GenTextures) return;
-    // Same colours as is_emissive_argb() (RGB only, opaque matches software).
-    static constexpr uint32_t emissive[] = {
-        0xffff543c, 0xfffff0e0, 0xff8c1212, 0xffc01818, 0xffc84438, 0xffe85040, 0xffff3020,
-        0xffffc038, 0xfffff4c0, 0xfff0ecc8, 0xffffffff, 0xffff3030, 0xff4070ff, 0xfffff8f0,
-        0xffe8eeff, 0xffb8c8ff, 0xffffd888, 0xffffecb0, 0xfffffff0, 0xffff40c0, 0xff40f0ff,
-        0xffffe060, 0xfff0f4ff, 0xff80c0ff, 0xfffff0a0, 0xffe0e4ec, 0xffb0b8c8, 0xffc8d0e0,
-    };
-    emissive_count_ = static_cast<int>(sizeof(emissive) / sizeof(emissive[0]));
-    std::vector<uint8_t> rgba(32 * 4, 0);
-    for (int i = 0; i < emissive_count_; ++i) {
-        const uint32_t p = emissive[i];
-        rgba[static_cast<size_t>(i) * 4 + 0] = static_cast<uint8_t>((p >> 16) & 0xff);
-        rgba[static_cast<size_t>(i) * 4 + 1] = static_cast<uint8_t>((p >> 8) & 0xff);
-        rgba[static_cast<size_t>(i) * 4 + 2] = static_cast<uint8_t>(p & 0xff);
-        rgba[static_cast<size_t>(i) * 4 + 3] = 255;
+    // Texel (red, green) holds the blues that make an emissive colour with
+    // them (at most two share a red and green), A = 255 where any does.
+    constexpr int n = 256;
+    std::vector<uint8_t> rgba(static_cast<size_t>(n) * n * 4, 0);
+    for (const uint32_t c : emissive_colors()) {
+        const size_t i = ((static_cast<size_t>((c >> 8) & 0xff) * n) + ((c >> 16) & 0xff)) * 4;
+        const uint8_t b = static_cast<uint8_t>(c & 0xff);
+        if (rgba[i + 3] == 0) {
+            rgba[i + 0] = rgba[i + 1] = b;
+            rgba[i + 3] = 255;
+        } else if (rgba[i + 0] == rgba[i + 1] && rgba[i + 0] != b) {
+            rgba[i + 1] = b;
+        } else if (rgba[i + 0] != b && rgba[i + 1] != b) {
+            std::cerr << "kurvenrausch: gles: more than two emissive blues share a red and green\n";
+        }
     }
     g.GenTextures(1, &emissive_tex_);
     g.BindTexture(GL_TEXTURE_2D_, emissive_tex_);
     g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_MIN_FILTER_, GL_NEAREST_);
     g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_MAG_FILTER_, GL_NEAREST_);
-    g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_WRAP_S_, GL_CLAMP_TO_EDGE_);
-    g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_WRAP_T_, GL_CLAMP_TO_EDGE_);
-    g.PixelStorei(0x0CF5 /* GL_UNPACK_ALIGNMENT */, 1);
-    g.TexImage2D(GL_TEXTURE_2D_, 0, static_cast<int>(GL_RGBA_), 32, 1, 0, GL_RGBA_, GL_UNSIGNED_BYTE_, rgba.data());
-}
-
-void GlesRenderer::ensure_falloff_tex() {
-    if (falloff_tex_ || !g.GenTextures) return;
-    constexpr int n = 64;
-    std::vector<uint8_t> rgba(static_cast<size_t>(n) * static_cast<size_t>(n) * 4);
-    const float mid = 0.5f * static_cast<float>(n - 1);
-    for (int y = 0; y < n; ++y) {
-        for (int x = 0; x < n; ++x) {
-            const float dx = (static_cast<float>(x) - mid) / mid;
-            const float dy = (static_cast<float>(y) - mid) / mid;
-            const float r2 = dx * dx + dy * dy;
-            // Falloff in RGB (shader multiplies tex.rgb * v_col.rgb); alpha opaque
-            // so the emissive/fog branch does not discard soft edges.
-            const float a = r2 >= 1.f ? 0.f : (1.f - r2) * (1.f - r2); // software (1-r2)^2
-            const size_t i = (static_cast<size_t>(y) * static_cast<size_t>(n) + static_cast<size_t>(x)) * 4;
-            const uint8_t g8 = static_cast<uint8_t>(std::min(255.f, a * 255.f + 0.5f));
-            rgba[i + 0] = g8;
-            rgba[i + 1] = g8;
-            rgba[i + 2] = g8;
-            rgba[i + 3] = 255;
-        }
-    }
-    g.GenTextures(1, &falloff_tex_);
-    g.BindTexture(GL_TEXTURE_2D_, falloff_tex_);
-    g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_MIN_FILTER_, GL_LINEAR_);
-    g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_MAG_FILTER_, GL_LINEAR_);
-    g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_WRAP_S_, GL_CLAMP_TO_EDGE_);
-    g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_WRAP_T_, GL_CLAMP_TO_EDGE_);
-    g.PixelStorei(0x0CF5 /* GL_UNPACK_ALIGNMENT */, 1);
-    g.TexImage2D(GL_TEXTURE_2D_, 0, static_cast<int>(GL_RGBA_), n, n, 0, GL_RGBA_, GL_UNSIGNED_BYTE_, rgba.data());
-}
-
-void GlesRenderer::ensure_beam_falloff_tex() {
-    if (beam_falloff_tex_ || !g.GenTextures) return;
-    // 2D cone sprite: U = lateral (0..1), V = along beam near→far (0..1).
-    // Matches software headlight shape continuously under linear filtering.
-    constexpr int n = 128;
-    std::vector<uint8_t> rgba(static_cast<size_t>(n) * static_cast<size_t>(n) * 4);
-    auto smoothstep = [](float a, float b, float x) {
-        const float t = std::clamp((x - a) / (b - a), 0.f, 1.f);
-        return t * t * (3.f - 2.f * t);
-    };
-    for (int y = 0; y < n; ++y) {
-        const float along = (static_cast<float>(y) + 0.5f) / static_cast<float>(n); // 0 near, 1 far
-        // Distance: soft start then 1/(1+(along*k)^2)
-        const float dist = smoothstep(0.f, 0.12f, along) / (1.f + (along * 2.2f) * (along * 2.2f));
-        for (int x = 0; x < n; ++x) {
-            const float across = std::abs((static_cast<float>(x) + 0.5f) / static_cast<float>(n) * 2.f - 1.f);
-            const float edge = smoothstep(1.f, 0.55f, across) * (0.75f + 0.25f * (1.f - across * across));
-            const float a = dist * edge;
-            const uint8_t g8 = static_cast<uint8_t>(std::min(255.f, a * 255.f + 0.5f));
-            const size_t i = (static_cast<size_t>(y) * static_cast<size_t>(n) + static_cast<size_t>(x)) * 4;
-            rgba[i + 0] = g8;
-            rgba[i + 1] = g8;
-            rgba[i + 2] = g8;
-            rgba[i + 3] = 255;
-        }
-    }
-    g.GenTextures(1, &beam_falloff_tex_);
-    g.BindTexture(GL_TEXTURE_2D_, beam_falloff_tex_);
-    g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_MIN_FILTER_, GL_LINEAR_);
-    g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_MAG_FILTER_, GL_LINEAR_);
     g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_WRAP_S_, GL_CLAMP_TO_EDGE_);
     g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_WRAP_T_, GL_CLAMP_TO_EDGE_);
     g.PixelStorei(0x0CF5 /* GL_UNPACK_ALIGNMENT */, 1);
@@ -2095,59 +2005,128 @@ void GlesRenderer::read_scene_argb(std::vector<uint32_t>& out) {
     g.BindFramebuffer(GL_FRAMEBUFFER_, static_cast<unsigned>(prev_fbo));
 }
 
-void GlesRenderer::apply_cpu_night(const Daylight& light, const Beam* headlight,
-                                   const std::vector<uint32_t>& ground_argb,
-                                   const std::vector<uint32_t>& day_argb) {
-    // Identical stack to the software renderer — continuous pools, no ring bands.
-    Framebuffer night(width_, height_);
-    std::copy(day_argb.begin(), day_argb.end(), night.pixels_mut());
-    apply_daylight(night, light);
-    street_lights(night, day_argb, ground_argb, light, row_depth_, lamps_, camera_depth_, x_scale_, row_center_x_);
-    if (headlight) headlight_beam(night, day_argb, light, row_depth_, *headlight, row_center_x_);
-
-    if (!g.TexSubImage2D || !color_tex_) return;
-    std::vector<uint8_t> rgba(static_cast<size_t>(width_) * static_cast<size_t>(height_) * 4);
-    const uint32_t* src = night.pixels();
-    for (int y = 0; y < height_; ++y) {
-        const int dst_y = height_ - 1 - y;
-        for (int x = 0; x < width_; ++x) {
-            const uint32_t p = src[static_cast<size_t>(y) * static_cast<size_t>(width_) + static_cast<size_t>(x)];
-            const size_t di = (static_cast<size_t>(dst_y) * static_cast<size_t>(width_) + static_cast<size_t>(x)) * 4;
-            rgba[di + 0] = static_cast<uint8_t>((p >> 16) & 0xff);
-            rgba[di + 1] = static_cast<uint8_t>((p >> 8) & 0xff);
-            rgba[di + 2] = static_cast<uint8_t>(p & 0xff);
-            rgba[di + 3] = static_cast<uint8_t>((p >> 24) & 0xff);
-        }
-    }
-    g.BindTexture(GL_TEXTURE_2D_, color_tex_);
-    g.PixelStorei(0x0CF5 /* GL_UNPACK_ALIGNMENT */, 1);
-    g.TexSubImage2D(GL_TEXTURE_2D_, 0, 0, 0, width_, height_, GL_RGBA_, GL_UNSIGNED_BYTE_, rgba.data());
-    present_tex_ = color_tex_;
+void GlesRenderer::set_depth(float z) {
+    if (z == depth_z_) return;
+    flush_textured();
+    flush_solid();
+    g.Uniform1f(u_z_, z);
+    depth_z_ = z;
 }
 
-void GlesRenderer::apply_gpu_night(const Daylight& light, const Beam* headlight) {
-    clear_draw_clip(); // lamp traps must not inherit road/sprite scissor
+void GlesRenderer::set_row(int lane, int row, float value) {
+    const uint32_t v = static_cast<uint32_t>(std::clamp(value + 0.5f, 0.f, 16777215.f));
+    uint8_t* p = &rows_[(static_cast<size_t>(lane) * static_cast<size_t>(height_) + static_cast<size_t>(row)) * 4];
+    p[0] = static_cast<uint8_t>(v >> 16);
+    p[1] = static_cast<uint8_t>(v >> 8);
+    p[2] = static_cast<uint8_t>(v);
+    p[3] = 255;
+}
+
+void GlesRenderer::upload_rows() {
+    // Lane encodings as decoded by k_light_frag.
+    rows_.resize(static_cast<size_t>(row_lanes) * static_cast<size_t>(height_) * 4);
+    for (int y = 0; y < height_; ++y) {
+        set_row(0, y, row_depth_[static_cast<size_t>(y)] * 16.f);
+        set_row(1, y, (row_center_x_[static_cast<size_t>(y)] + 32768.f) * 256.f);
+    }
+    if (!rows_tex_) {
+        g.GenTextures(1, &rows_tex_);
+        g.BindTexture(GL_TEXTURE_2D_, rows_tex_);
+        g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_MIN_FILTER_, GL_NEAREST_);
+        g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_MAG_FILTER_, GL_NEAREST_);
+        g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_WRAP_S_, GL_CLAMP_TO_EDGE_);
+        g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_WRAP_T_, GL_CLAMP_TO_EDGE_);
+    }
+    g.BindTexture(GL_TEXTURE_2D_, rows_tex_);
+    g.PixelStorei(0x0CF5 /* GL_UNPACK_ALIGNMENT */, 1);
+    if (rows_tex_h_ != height_) {
+        g.TexImage2D(GL_TEXTURE_2D_, 0, static_cast<int>(GL_RGBA_), height_, row_lanes, 0, GL_RGBA_,
+                     GL_UNSIGNED_BYTE_, rows_.data());
+        rows_tex_h_ = height_;
+    } else {
+        g.TexSubImage2D(GL_TEXTURE_2D_, 0, 0, 0, height_, row_lanes, GL_RGBA_, GL_UNSIGNED_BYTE_, rows_.data());
+    }
+}
+
+// Pushes a light quad: a_uv = (u, v), a_col = (r, g, b, a) as raw floats.
+void GlesRenderer::push_light_quad(float x0, float y0, float x1, float y1, float u, float v, float r, float gc,
+                                   float b, float a) {
+    const Vertex tl{x0, y0, u, v, r, gc, b, a}, tr{x1, y0, u, v, r, gc, b, a};
+    const Vertex bl{x0, y1, u, v, r, gc, b, a}, br{x1, y1, u, v, r, gc, b, a};
+    const Vertex verts[6] = {tl, tr, bl, tr, br, bl};
+    solid_.insert(solid_.end(), verts, verts + 6);
+}
+
+void GlesRenderer::flush_light() {
+    if (solid_.empty()) return;
+    g.BindBuffer(GL_ARRAY_BUFFER_, vbo_);
+    g.BufferData(GL_ARRAY_BUFFER_, static_cast<std::ptrdiff_t>(solid_.size() * sizeof(Vertex)), solid_.data(),
+                 GL_DYNAMIC_DRAW_);
+    g.EnableVertexAttribArray(0);
+    g.EnableVertexAttribArray(1);
+    g.EnableVertexAttribArray(2);
+    const int stride = static_cast<int>(sizeof(Vertex));
+    g.VertexAttribPointer(0, 2, GL_FLOAT_, GL_FALSE_, stride, reinterpret_cast<void*>(0));
+    g.VertexAttribPointer(1, 2, GL_FLOAT_, GL_FALSE_, stride, reinterpret_cast<void*>(sizeof(float) * 2));
+    g.VertexAttribPointer(2, 4, GL_FLOAT_, GL_FALSE_, stride, reinterpret_cast<void*>(sizeof(float) * 4));
+    const int n = static_cast<int>(solid_.size());
+    g.DrawArrays(GL_TRIANGLES_, 0, n);
+    frame_stats::add_draw(n, false);
+    solid_.clear();
+}
+
+void GlesRenderer::apply_night(const Daylight& light, const Beam* headlight) {
+    clear_draw_clip();
     ensure_emissive_lut();
+    const float dark = 1.f - light.level;
     // Daylight channel scales — same formulas as apply_daylight().
     const float night = (1.f - light.level) / (1.f - night_level);
     const float rf = light.level * (1.f - 0.15f * night) * (1.f - 0.05f * light.glow);
     const float gf = light.level * (1.f - 0.05f * night) * (1.f - 0.15f * light.glow);
     const float bf = light.level * (1.f + 0.45f * night) * (1.f - 0.30f * light.glow);
-    const float ambient = std::clamp(light.level, 0.02f, 1.f);
 
-    // Lightmap: mix-to-day factors (0 = pure night scale, 1 = full day colour).
-    g.BindFramebuffer(GL_FRAMEBUFFER_, light_fbo_);
-    g.Viewport(0, 0, width_, height_);
-    g.ClearColor(0.f, 0.f, 0.f, 1.f);
-    g.Clear(GL_COLOR_BUFFER_BIT_);
-    g.UseProgram(program_);
-    g.Uniform2f(u_screen_, static_cast<float>(width_), static_cast<float>(height_));
-    if (g.Uniform3f && u_fog_air_ >= 0) g.Uniform3f(u_fog_air_, 0.f, 0.f, 0.f);
-    g.Enable(GL_BLEND_);
-    draw_lamp_pools(ambient);
-    if (headlight) draw_headlight(*headlight, ambient);
+    {
+        frame_stats::Scope lights(frame_stats::Phase::GlesLight);
+        // Lightmap, cleared to "all night colour, no day colour". Each light
+        // blends its tint over RGB by its strength k and scales the night
+        // share in A by (1 - k): the software mix px += (day·tint - px)·k,
+        // applied in the same order (lamps, then the headlight).
+        g.BindFramebuffer(GL_FRAMEBUFFER_, light_fbo_);
+        g.Viewport(0, 0, width_, height_);
+        g.ClearColor(0.f, 0.f, 0.f, 1.f);
+        g.Clear(GL_COLOR_BUFFER_BIT_);
+        if (dark > 0.01f && (!lamps_.empty() || headlight)) {
+            float beam_box[4];
+            const bool beam = headlight && headlight_rows(*headlight, dark, beam_box);
+            upload_rows();
+            g.UseProgram(light_program_);
+            g.Uniform2f(u_light_screen_, static_cast<float>(width_), static_cast<float>(height_));
+            g.Uniform1f(u_light_px_, camera_depth_ * x_scale_);
+            g.ActiveTexture(GL_TEXTURE0_);
+            g.BindTexture(GL_TEXTURE_2D_, rows_tex_);
+            g.Uniform1i(u_light_rows_, 0);
+            g.Enable(GL_BLEND_);
+            g.BlendFuncSeparate(GL_SRC_ALPHA_, GL_ONE_MINUS_SRC_ALPHA_, GL_ZERO_, GL_ONE_MINUS_SRC_ALPHA_);
+            g.Enable(GL_DEPTH_TEST_);
+            g.DepthFunc(GL_LESS_);
+            g.DepthMask(0);
+            // Street lamps and the other cars' lights on the bare ground only.
+            g.Uniform1i(u_light_beam_, 0);
+            g.Uniform1f(u_light_z_, lamp_z);
+            draw_lamp_pools(dark);
+            // The headlights on everything but the player's own car.
+            if (beam) {
+                g.Uniform1i(u_light_beam_, 1);
+                g.Uniform1f(u_light_z_, beam_z);
+                push_light_quad(beam_box[0], beam_box[1], beam_box[2], beam_box[3], 0.f, 0.f, 0.f, 0.f, 0.f, 0.f);
+                flush_light();
+            }
+            g.DepthMask(1);
+            g.Disable(GL_DEPTH_TEST_);
+        }
+    }
 
-    // Compose: night = albedo * day_scale; lamps mix toward albedo on ground only.
+    frame_stats::Scope compose(frame_stats::Phase::GlesCompose);
     g.BindFramebuffer(GL_FRAMEBUFFER_, night_fbo_);
     g.Viewport(0, 0, width_, height_);
     g.Disable(GL_BLEND_);
@@ -2159,13 +2138,9 @@ void GlesRenderer::apply_gpu_night(const Daylight& light, const Beam* headlight)
     g.BindTexture(GL_TEXTURE_2D_, light_tex_);
     g.Uniform1i(u_light_, 1);
     g.ActiveTexture(0x84C2u); // GL_TEXTURE2
-    g.BindTexture(GL_TEXTURE_2D_, ground_tex_);
-    g.Uniform1i(u_ground_, 2);
-    g.ActiveTexture(0x84C3u); // GL_TEXTURE3
     g.BindTexture(GL_TEXTURE_2D_, emissive_tex_);
-    g.Uniform1i(u_emissive_, 3);
-    if (g.Uniform3f && u_day_scale_ >= 0) g.Uniform3f(u_day_scale_, rf, gf, bf);
-    if (u_emissive_count_ >= 0) g.Uniform1i(u_emissive_count_, emissive_count_);
+    g.Uniform1i(u_emissive_, 2);
+    g.Uniform3f(u_day_scale_, rf, gf, bf);
     draw_fullscreen_quad();
     g.ActiveTexture(GL_TEXTURE0_);
     g.Enable(GL_BLEND_);
@@ -2173,60 +2148,116 @@ void GlesRenderer::apply_gpu_night(const Daylight& light, const Beam* headlight)
     present_tex_ = night_tex_;
 }
 
-void GlesRenderer::draw_headlight(const Beam& beam, float ambient) {
-    const float dark = 1.f - ambient;
-    if (dark <= 0.01f) return;
-    ensure_beam_falloff_tex();
-    if (!beam_falloff_tex_) return;
-    g.BlendFunc(GL_ONE_, GL_ONE_);
-    flush_solid();
-    flush_textured();
-    set_textured(beam_falloff_tex_);
-
-    // Near edge: first ground row with enough ahead that projection stays sane.
-    // Far edge: last lit ground row. Avoid pinning the trapezoid to the bumper.
-    constexpr float min_ahead = 180.f;
-    int y_near = -1, y_far = -1;
-    float depth_near = 0.f, depth_far = 0.f;
-    for (int y = 0; y < std::min(beam.bottom, height_); ++y) {
-        const float d = row_depth_[static_cast<size_t>(y)];
-        if (d <= 0.f) continue;
-        const float ahead = d - beam.start;
-        if (ahead <= min_ahead || ahead > 4.f * beam_reach) continue;
-        if (y_near < 0) {
-            y_near = y;
-            depth_near = d;
+void GlesRenderer::draw_lamp_pools(float dark) {
+    // Placement as street_lights(): each lamp's world offset from the road
+    // centre at its depth, so the pool follows the road on every row.
+    const int h = height_;
+    const float screen_c = 0.5f * static_cast<float>(width_);
+    for (const LampSpot& lamp : lamps_) {
+        if (lamp.depth <= 1e-3f) continue;
+        float road_c = screen_c;
+        float best = 1.0e9f;
+        int y0 = h, y1 = -1;
+        for (int y = 0; y < h; ++y) {
+            const float d = row_depth_[static_cast<size_t>(y)];
+            if (d <= 0.f) continue;
+            const float err = std::abs(d - lamp.depth);
+            if (err < best) {
+                best = err;
+                road_c = row_center_x_[static_cast<size_t>(y)];
+            }
+            if (err < lamp.reach) {
+                y0 = std::min(y0, y);
+                y1 = std::max(y1, y);
+            }
         }
-        y_far = y;
-        depth_far = d;
+        if (y1 < y0) continue;
+        const float world_off = (lamp.x - road_c) / (camera_depth_ / lamp.depth * x_scale_);
+        // Horizontal extent over the rows the pool covers.
+        float x0 = static_cast<float>(width_), x1 = 0.f;
+        for (int y = y0; y <= y1; ++y) {
+            const float d = row_depth_[static_cast<size_t>(y)];
+            const float dz = d - lamp.depth;
+            if (d <= 0.f || std::abs(dz) >= lamp.reach) continue;
+            const float px = camera_depth_ / d * x_scale_;
+            const float cx = row_center_x_[static_cast<size_t>(y)] + world_off * px;
+            const float half = std::sqrt(lamp.reach * lamp.reach - dz * dz) * px;
+            x0 = std::min(x0, cx - half);
+            x1 = std::max(x1, cx + half + 1.f);
+        }
+        x0 = std::max(x0, 0.f);
+        x1 = std::min(x1, static_cast<float>(width_));
+        if (x1 <= x0) continue;
+        // Sodium yellow, headlight white, tail light red; the red only a glow.
+        const float tint_g = lamp.glow == Glow::Street ? 0.85f : lamp.glow == Glow::Tail ? 0.35f : 1.f;
+        const float tint_b = lamp.glow == Glow::Street ? 0.55f : lamp.glow == Glow::Tail ? 0.2f : 0.95f;
+        const float strength = lamp.glow == Glow::Tail ? 0.85f : lamp.glow == Glow::Head ? 0.8f : 0.9f;
+        push_light_quad(x0, static_cast<float>(y0), x1, static_cast<float>(y1 + 1), world_off, lamp.depth, lamp.reach,
+                        strength * dark, tint_g, tint_b);
     }
-    if (y_near < 0 || y_far <= y_near) {
-        g.BlendFunc(GL_SRC_ALPHA_, GL_ONE_MINUS_SRC_ALPHA_);
-        return;
+    flush_light();
+}
+
+bool GlesRenderer::headlight_rows(const Beam& beam, float dark, float box[4]) {
+    // Per row as headlight_beam(): the cone's centre, half width and strength,
+    // continued into the air above the far crest in fog.
+    rows_.resize(static_cast<size_t>(row_lanes) * static_cast<size_t>(height_) * 4);
+    const int h = std::min(beam.bottom, height_);
+    int horizon_y = -1;
+    float horizon_depth = 0.f;
+    for (int y = 0; y < height_; ++y) {
+        if (row_depth_[static_cast<size_t>(y)] > 0.f) {
+            horizon_y = y;
+            horizon_depth = row_depth_[static_cast<size_t>(y)];
+            break;
+        }
     }
-
-    const float max_half = 0.55f * static_cast<float>(width_);
-    auto half_at = [&](float depth) {
-        const float ahead = depth - beam.start;
-        const float px = beam.camera_depth / depth * beam.x_scale;
-        return std::min((beam_half_width + beam_spread * ahead) * px, max_half);
+    auto smoothstep = [](float a, float b, float x) {
+        const float t = std::clamp((x - a) / (b - a), 0.f, 1.f);
+        return t * t * (3.f - 2.f * t);
     };
-    auto mid_at = [&](float depth) {
+    int y0 = height_, y1 = -1;
+    float x0 = static_cast<float>(width_), x1 = 0.f;
+    for (int y = 0; y < height_; ++y) {
+        float k = 0.f, mid = 0.f, half = 0.f;
+        float depth = row_depth_[static_cast<size_t>(y)];
+        float air = 1.f;
+        bool lit = y < h;
+        if (lit && depth <= 0.f) {
+            if (horizon_y < 0 || y >= horizon_y) {
+                lit = false;
+            } else {
+                const float t = static_cast<float>(horizon_y - y) / static_cast<float>(std::max(1, horizon_y));
+                depth = horizon_depth * (1.f + 1.8f * t);
+                air = 0.55f * (1.f - 0.65f * t);
+            }
+        }
         const float ahead = depth - beam.start;
-        const float px = beam.camera_depth / depth * beam.x_scale;
-        return beam.center + beam.aim * ahead * px;
-    };
-    const float hn = half_at(depth_near), hf = half_at(depth_far);
-    const float mn = mid_at(depth_near), mf = mid_at(depth_far);
-    const float yn = static_cast<float>(y_near), yf = static_cast<float>(y_far + 1);
-    const float k = 0.9f * dark;
-    Color c{static_cast<uint8_t>(std::min(255.f, k * 255.f + 0.5f)),
-            static_cast<uint8_t>(std::min(255.f, k * 245.f + 0.5f)),
-            static_cast<uint8_t>(std::min(255.f, k * 220.f + 0.5f)), 0};
-    push_tex_quad(mn - hn, yn, 0.f, 0.f, mn + hn, yn, 1.f, 0.f, mf + hf, yf, 1.f, 1.f, mf - hf, yf, 0.f, 1.f, c);
-
-    flush_textured();
-    g.BlendFunc(GL_SRC_ALPHA_, GL_ONE_MINUS_SRC_ALPHA_);
+        if (lit && ahead > 0.f && ahead <= 4.f * beam_reach) {
+            const float reach =
+                smoothstep(0.f, 200.f, ahead) / (1.f + (ahead / beam_reach) * (ahead / beam_reach));
+            const float px_per_unit = beam.camera_depth / depth * beam.x_scale;
+            half = (beam_half_width + beam_spread * ahead) * px_per_unit;
+            mid = beam.center + beam.aim * ahead * px_per_unit;
+            k = 0.9f * dark * reach * air;
+        }
+        if (k > 0.f && half > 0.f) {
+            y0 = std::min(y0, y);
+            y1 = std::max(y1, y);
+            x0 = std::min(x0, mid - half);
+            x1 = std::max(x1, mid + half + 1.f);
+        } else {
+            k = 0.f;
+        }
+        set_row(2, y, (mid + 32768.f) * 256.f);
+        set_row(3, y, half * 256.f);
+        set_row(4, y, k * 8388608.f);
+    }
+    box[0] = std::max(x0, 0.f);
+    box[1] = static_cast<float>(y0);
+    box[2] = std::min(x1, static_cast<float>(width_));
+    box[3] = static_cast<float>(y1 + 1);
+    return y1 >= y0 && box[2] > box[0];
 }
 
 void GlesRenderer::render(const Track& track, const RoadView& view, const SpriteSheet& sprites,
@@ -2335,11 +2366,16 @@ void GlesRenderer::render(const Track& track, const RoadView& view, const Sprite
     g.BindFramebuffer(GL_FRAMEBUFFER_, fbo_);
     g.Viewport(0, 0, width_, height_);
     g.ClearColor(air.r / 255.f, air.g / 255.f, air.b / 255.f, 1.f);
-    g.Clear(GL_COLOR_BUFFER_BIT_);
+    // Depth stays 1 (bare ground and sky) until the sprite pass.
+    g.DepthMask(1);
+    g.Clear(GL_COLOR_BUFFER_BIT_ | GL_DEPTH_BUFFER_BIT_);
+    g.Disable(GL_DEPTH_TEST_);
     g.Enable(GL_BLEND_);
     g.BlendFunc(GL_SRC_ALPHA_, GL_ONE_MINUS_SRC_ALPHA_);
     g.UseProgram(program_);
     g.Uniform2f(u_screen_, static_cast<float>(width_), static_cast<float>(height_));
+    depth_z_ = sprite_z;
+    g.Uniform1f(u_z_, depth_z_);
     if (g.Uniform3f && u_fog_air_ >= 0) {
         g.Uniform3f(u_fog_air_, fog_air_.r / 255.f, fog_air_.g / 255.f, fog_air_.b / 255.f);
     }
@@ -2371,36 +2407,23 @@ void GlesRenderer::render(const Track& track, const RoadView& view, const Sprite
         flush_solid();
     }
 
-    // Pre-sprite ground into its own FBO (compose uses it as the ground mask).
-    // GPU lightmap path — no ReadPixels (was ~30ms G-NIGHT on R36S).
-    const bool need_night = light.level < 0.999f || headlight != nullptr;
-    if (need_night && copy_program_ && ground_fbo_) {
-        frame_stats::Scope night(frame_stats::Phase::GlesNight);
-        flush_solid();
-        flush_textured();
-        copy_tex_to_fbo(color_tex_, ground_fbo_);
-        g.BindFramebuffer(GL_FRAMEBUFFER_, fbo_);
-        g.Viewport(0, 0, width_, height_);
-        g.UseProgram(program_);
-        g.Uniform2f(u_screen_, static_cast<float>(width_), static_cast<float>(height_));
-        g.Enable(GL_BLEND_);
-        g.BlendFunc(GL_SRC_ALPHA_, GL_ONE_MINUS_SRC_ALPHA_);
-    }
-
     {
         frame_stats::Scope spr(frame_stats::Phase::GlesSprites);
+        // Everything standing on the ground writes depth, for the lightmap.
+        g.Enable(GL_DEPTH_TEST_);
+        g.DepthFunc(GL_ALWAYS_);
         draw_sprites(track, sprites, objects);
         flush_textured();
         flush_solid();
+        set_depth(sprite_z);
         if (weather) draw_weather(*weather);
         flush_solid();
+        g.Disable(GL_DEPTH_TEST_);
     }
 
     present_tex_ = color_tex_;
-    if (need_night && compose_program_ && light_fbo_ && night_fbo_ && ground_tex_) {
-        frame_stats::Scope night(frame_stats::Phase::GlesNight);
-        apply_gpu_night(light, headlight);
-    }
+    // As apply_daylight(): nothing to do in plain daylight.
+    if (light.level < 0.999f || light.glow > 0.001f) apply_night(light, headlight);
     frame_stats::set_scene_counts(static_cast<int>(slices_.size()), static_cast<int>(objects.size()),
                                   static_cast<int>(lamps_.size()), true);
 

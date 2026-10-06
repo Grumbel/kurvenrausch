@@ -36,10 +36,9 @@ public:
 
     void set_size(int width, int height);
 
-    // Draws the road scene into the internal FBO (not the window).
-    // Full-bright albedo → ground ReadPixels → sprites → CPU night
-    // (apply_daylight / street_lights / headlight_beam) → upload. Same math
-    // as the software path so pools and cones stay smooth.
+    // Draws the road scene into the internal FBO (not the window): full-bright
+    // albedo, then at night a lightmap evaluating the software street_lights /
+    // headlight_beam formulas per pixel and a compose pass (apply_daylight).
     void render(const Track& track, const RoadView& view, const SpriteSheet& sprites,
                 std::vector<RoadSprite>& objects, const RoadTheme& theme, const Daylight& light,
                 const Background* backdrop = nullptr, float hour = 12.f,
@@ -105,21 +104,26 @@ private:
     // Pack static SpriteSheet bitmaps into one atlas (idempotent).
     void ensure_sprite_atlas(const SpriteSheet& sprites);
     void draw_backdrop(const RoadTheme& theme, const Background* backdrop, float hour, float horizon);
-    void draw_headlight(const Beam& beam, float dark);
+    // Per-row headlight cone into rows_ lanes 2..4; its screen bounds into
+    // box (x0, y0, x1, y1). False when no row is lit.
+    bool headlight_rows(const Beam& beam, float dark, float box[4]);
     void draw_lamp_pools(float dark);
     void draw_weather(const Weather& weather);
-    // GPU lightmap path kept for reference; night uses apply_cpu_night.
-    void apply_gpu_night(const Daylight& light, const Beam* headlight);
-    // Pixel-perfect night: software light stack on ReadPixels albedo.
-    void apply_cpu_night(const Daylight& light, const Beam* headlight,
-                         const std::vector<uint32_t>& ground_argb,
-                         const std::vector<uint32_t>& day_argb);
+    // Lightmap (lamps, headlight) and the night compose into night_tex_.
+    void apply_night(const Daylight& light, const Beam* headlight);
     void read_fbo_argb(std::vector<uint32_t>& out);
     void draw_fullscreen_quad();
-    void copy_tex_to_fbo(unsigned src_tex, unsigned dst_fbo);
     void ensure_emissive_lut();
-    void ensure_falloff_tex();
-    void ensure_beam_falloff_tex();
+    // Depth written by the following sprite draws (flushes on change).
+    void set_depth(float z);
+    // rows_ texel (lane, row) = value as 24-bit fixed point.
+    void set_row(int lane, int row, float value);
+    // row_depth_ / row_center_x_ into lanes 0 / 1, then rows_ to rows_tex_.
+    void upload_rows();
+    // Light-program quad: a_uv = (u, v), a_col = (r, g, b, a), unclamped.
+    void push_light_quad(float x0, float y0, float x1, float y1, float u, float v, float r, float g, float b,
+                         float a);
+    void flush_light();
     void draw_segment(const Track& track, const Slice& s, const RoadTheme& theme);
     void draw_sprites(const Track& track, const SpriteSheet& sprites, std::vector<RoadSprite>& objects);
     void project_point(ScreenPoint& p, float world_x, float world_y, float world_z, float cam_x, float cam_y,
@@ -136,21 +140,33 @@ private:
     float window_wake_ = 0.f;
     float daylight_ = 1.f;
 
+    // Depth (NDC z) of the sprite pass and of the light quads tested against
+    // it (GL_LESS against the depth buffer, cleared to 1 = bare ground).
+    static constexpr float sprite_z = 0.f;
+    static constexpr float player_z = -0.9f;
+    static constexpr float lamp_z = 0.5f;  // lamps: bare ground only
+    static constexpr float beam_z = -0.5f; // headlight: all but the player's car
+    static constexpr int row_lanes = 8;
+    float depth_z_ = sprite_z;
+
     unsigned program_ = 0;
     unsigned compose_program_ = 0;
+    unsigned light_program_ = 0;
     unsigned vbo_ = 0;
     int u_screen_ = -1;
     int u_use_tex_ = -1;
     int u_tex_ = -1;
     int u_fog_air_ = -1;
-    int u_compose_screen_ = -1;
+    int u_z_ = -1;
     int u_albedo_ = -1;
     int u_light_ = -1;
-    int u_ground_ = -1;
     int u_emissive_ = -1;
     int u_day_scale_ = -1;
-    int u_emissive_count_ = -1;
-    int u_copy_tex_ = -1;
+    int u_light_screen_ = -1;
+    int u_light_z_ = -1;
+    int u_light_rows_ = -1;
+    int u_light_px_ = -1;
+    int u_light_beam_ = -1;
 
     unsigned fbo_ = 0;
     unsigned color_tex_ = 0;   // albedo
@@ -158,15 +174,12 @@ private:
     unsigned present_tex_ = 0; // color_tex_ or night_tex_
     unsigned depth_rb_ = 0;
     unsigned light_fbo_ = 0;
-    unsigned light_tex_ = 0;   // per-channel mix-to-day factors
+    unsigned light_tex_ = 0;   // RGB: day colour share (tinted), A: night colour share
     unsigned night_fbo_ = 0;
-    unsigned ground_fbo_ = 0;
-    unsigned ground_tex_ = 0;  // pre-sprite road/backdrop copy
-    unsigned copy_program_ = 0;
-    unsigned emissive_tex_ = 0;
-    unsigned falloff_tex_ = 0; // soft radial (1-r^2)^2 for lamp pools
-    unsigned beam_falloff_tex_ = 0; // 1D lateral headlight falloff (software shape)
-    int emissive_count_ = 0;
+    unsigned emissive_tex_ = 0; // (red, green) → emissive blues, see k_compose_frag
+    unsigned rows_tex_ = 0;     // per-row lanes for the light program (rows_)
+    int rows_tex_h_ = 0;        // rows (texture width) rows_tex_ was allocated for
+    std::vector<uint8_t> rows_;
     int fbo_w_ = 0, fbo_h_ = 0;
 
     std::vector<Vertex> solid_;

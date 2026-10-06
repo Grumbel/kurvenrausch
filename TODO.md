@@ -2,6 +2,39 @@
 
 ## Current tip
 
+### Claude: GLES night lighting = software formulas, cheaper compose
+- Light pass evaluates street_lights() / headlight_beam() per pixel
+  (k_light_frag). Per-row data (ground depth, road centre, beam centre /
+  half width / strength) goes to the GPU in a small RGBA texture as 24-bit
+  fixed point (`rows_tex_`, 8 lanes × height). Needs highp in fragment
+  shaders (Mali-G31 has it); with only mediump the decode would break.
+- Lightmap blends lights in software order: RGB = tinted day share, A = night
+  share (BlendFuncSeparate). Compose: albedo × (day_scale·A + RGB).
+- Ground vs sprite vs player car comes from the scene depth buffer, shared
+  with light_fbo_: road never writes depth, sprites write sprite_z, player
+  layers player_z; lamps test GL_LESS at lamp_z (ground only), the headlight
+  at beam_z (all but the player's car) — same as the software ground check
+  and car mask. The full-screen ground copy pass is gone.
+- Emissive test in compose: one lookup in a 256×256 (r,g) → blue table built
+  from `emissive_colors()` instead of a 28-iteration texture-fetch loop per
+  pixel (likely the main R36S night cost; not yet measured on device).
+- Debug tools: `--screenshot … --renderer gles` renders via GLES (hidden
+  window, needs a display / xvfb-run) for side-by-side comparison;
+  `KURVENRAUSCH_GPU_SYNC=1` glFinish-es at phase boundaries so the FPS
+  overlay (`g-light`, `g-comp`, …) shows real GPU cost per phase.
+- Next on R36S: run night with FPS overlay + KURVENRAUSCH_GPU_SYNC=1 and
+  check which phase dominates. If g-comp is still big, fold the compose into
+  Display::present_gles_scene (saves one full-screen pass + FBO switch).
+- Remaining GLES vs software differences seen in comparisons (not the light
+  pass): the HUD layer (mirror, spray/dust particles, sparks, nitro flame,
+  cockpit dashboard) is drawn into fb_ and not darkened at night in GLES;
+  far street-lamp heads stay lit in GLES (fog skips bright texels) but turn
+  dark in software (fogged colour no longer matches the emissive table).
+- Pre-existing test failures on master: test_daylight stars check
+  (tests.cpp `at_daytime(look, midnight).stars == 1`) and man page missing
+  `--sprites`.
+
+
 ### Grok: one textured quad per light source
 - Lamps: radial falloff sprite (one quad). Headlight: one cone trapezoid
   with 2D lateral×distance falloff texture. No per-row strips.

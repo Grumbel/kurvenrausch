@@ -1174,6 +1174,13 @@ void test_daylight() {
     CHECK(std::vector<uint32_t>(fb.pixels(), fb.pixels() + 4) == before);
     apply_daylight(fb, midnight);
     CHECK(fb.pixels()[1] == tail.argb() && night_emissive(tail));
+    // The GLES compose looks emissive colours up by red and green, with room
+    // for two blues each (GlesRenderer::ensure_emissive_lut).
+    for (const uint32_t c : emissive_colors()) {
+        int same = 0;
+        for (const uint32_t o : emissive_colors()) same += (o >> 8) == (c >> 8);
+        CHECK(same <= 2 && (c >> 24) == 0xff && is_emissive_argb(c));
+    }
     const uint32_t dark = fb.pixels()[0];
     CHECK(((dark >> 8) & 0xff) < grass.g / 3);
     // The headlights' beam brings the road ahead back, not the sky.
