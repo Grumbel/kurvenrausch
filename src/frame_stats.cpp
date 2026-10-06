@@ -19,6 +19,7 @@ Uint64 phase_start[static_cast<int>(Phase::Count)]{};
 int phase_depth[static_cast<int>(Phase::Count)]{};
 int open_stack[8]{};
 int open_n = 0;
+void (*sync_finish)() = nullptr;
 
 double ticks_to_ms(Uint64 delta) {
     const double freq = static_cast<double>(SDL_GetPerformanceFrequency());
@@ -48,7 +49,10 @@ void begin(Phase p) {
     if (i < 0 || i >= static_cast<int>(Phase::Count)) return;
     if (open_n < static_cast<int>(sizeof open_stack / sizeof open_stack[0]))
         open_stack[open_n++] = i;
-    if (phase_depth[i]++ == 0) phase_start[i] = SDL_GetPerformanceCounter();
+    if (phase_depth[i]++ == 0) {
+        if (sync_finish) sync_finish(); // earlier GPU work is not this phase's
+        phase_start[i] = SDL_GetPerformanceCounter();
+    }
 }
 
 void end(Phase p) {
@@ -56,6 +60,7 @@ void end(Phase p) {
     if (i < 0 || i >= static_cast<int>(Phase::Count)) return;
     if (phase_depth[i] <= 0) return;
     if (--phase_depth[i] == 0) {
+        if (sync_finish) sync_finish();
         const Uint64 now = SDL_GetPerformanceCounter();
         cur.ms[i] += ticks_to_ms(now - phase_start[i]);
         phase_start[i] = 0;
@@ -75,6 +80,9 @@ void set_scene_counts(int slices, int sprites, int lamps, bool gles) {
     cur.lamps = lamps;
     cur.gles = gles;
 }
+
+void set_gpu_sync(void (*finish)()) { sync_finish = finish; }
+bool gpu_sync() { return sync_finish != nullptr; }
 
 const Snapshot& current() { return cur; }
 const Snapshot& last() { return prev; }

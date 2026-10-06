@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <cstring>
 #include <iostream>
 
@@ -69,6 +70,7 @@ struct GlApi {
     void (*Enable)(unsigned) = nullptr;
     void (*Disable)(unsigned) = nullptr;
     void (*BlendFunc)(unsigned, unsigned) = nullptr;
+    void (*Finish)() = nullptr;
     void (*Scissor)(int, int, int, int) = nullptr;
     unsigned (*CreateShader)(unsigned) = nullptr;
     void (*ShaderSource)(unsigned, int, const char* const*, const int*) = nullptr;
@@ -150,6 +152,7 @@ bool load_gl() {
     g.Uniform1i = load<decltype(g.Uniform1i)>("glUniform1i");
     g.Uniform2f = load<decltype(g.Uniform2f)>("glUniform2f");
     g.Uniform3f = load<decltype(g.Uniform3f)>("glUniform3f");
+    g.Finish = load<decltype(g.Finish)>("glFinish");
     g.GenBuffers = load<decltype(g.GenBuffers)>("glGenBuffers");
     g.DeleteBuffers = load<decltype(g.DeleteBuffers)>("glDeleteBuffers");
     g.BindBuffer = load<decltype(g.BindBuffer)>("glBindBuffer");
@@ -381,6 +384,10 @@ Color fogged(Color c, Color air, float amount, float daylight) {
     return f;
 }
 
+void gpu_finish() {
+    if (g.Finish) g.Finish();
+}
+
 } // namespace
 
 GlesRenderer::~GlesRenderer() { shutdown(); }
@@ -480,6 +487,10 @@ bool GlesRenderer::init() {
     if (!load_gl()) {
         std::cerr << "kurvenrausch: gles: missing GL entry points\n";
         return false;
+    }
+    if (const char* sync = std::getenv("KURVENRAUSCH_GPU_SYNC"); sync && *sync && *sync != '0') {
+        frame_stats::set_gpu_sync(gpu_finish);
+        std::cout << "kurvenrausch: GPU-sync profiling on (glFinish per frame_stats phase)\n";
     }
     const unsigned vs = compile(GL_VERTEX_SHADER_, k_vert);
     const unsigned fs = compile(GL_FRAGMENT_SHADER_, k_frag);

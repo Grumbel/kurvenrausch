@@ -397,7 +397,8 @@ void draw_audio_menu(Framebuffer& fb, const AudioMenu& menu, bool muted, int eng
 void draw_fps(Framebuffer& fb, float fps, const frame_stats::Snapshot& stats) {
     const Color col{0xe0, 0xe8, 0x40};
     char buf[96];
-    std::snprintf(buf, sizeof buf, "%.0f FPS  %.1fms", static_cast<double>(fps), stats.ms_frame);
+    std::snprintf(buf, sizeof buf, "%.0f FPS  %.1fms%s", static_cast<double>(fps), stats.ms_frame,
+                  frame_stats::gpu_sync() ? "  GPU SYNC" : "");
     fb.draw_text(4, 4, buf, col);
     if (stats.ms_frame <= 0.0 && stats.draw_calls == 0) return;
     // Second line: draws + vertex totals.

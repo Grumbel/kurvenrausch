@@ -59,6 +59,13 @@ void begin(Phase p);
 void end(Phase p);
 
 void add_draw(int vertex_count, bool textured);
+
+// GPU-sync profiling: when set, `finish` (glFinish) runs at the start and end
+// of every phase, so each phase's time includes the GPU work it queued
+// instead of that work landing in whatever blocks later (usually present).
+// Slows the frame down; turned on by KURVENRAUSCH_GPU_SYNC=1.
+void set_gpu_sync(void (*finish)());
+bool gpu_sync();
 void set_scene_counts(int slices, int sprites, int lamps, bool gles);
 
 const Snapshot& current(); // in-progress (for mid-frame)
