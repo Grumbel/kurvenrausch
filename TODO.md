@@ -11,6 +11,10 @@
 - Weather rain/snow drawn into the scene FBO (`draw_weather`); software
   `Weather::render` skipped when the GLES path owns the frame. Particle
   data exposed read-only from `Weather` for the GPU path.
+- Build fix: define `GL_ONE_` for additive pools; repair init log string
+  literals that had raw newlines (broke compile). Verified: Debug build
+  links; unit/man failures on tip are pre-existing (stars daytime check,
+  man `--sprites`).
 
 
 
