@@ -1034,10 +1034,6 @@ void GlesRenderer::draw_sprites(const Track& track, const SpriteSheet& sprites, 
                 // Wall face at tunnel_half_width road half-widths from centre.
                 const float xa = a.x + sd * tunnel_half_width * a.w;
                 const float xb = b.x + sd * tunnel_half_width * b.w;
-                // Road edge (inner) — fill bulk between edge and wall so the
-                // aperture cannot show scenery behind the tunnel.
-                const float xa_in = a.x + sd * a.w;
-                const float xb_in = b.x + sd * b.w;
                 // Outer bulk to screen edge (blocks see-through past the wall).
                 const float xa_out = sd < 0.f ? 0.f : static_cast<float>(width_);
                 const float xb_out = xa_out;

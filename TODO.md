@@ -2,6 +2,11 @@
 
 ## Current tip
 
+### Grok: drop unused tunnel xa_in/xb_in
+- GLES tunnel wall loop declared road-edge coords never used (outer bulk
+  only). Removed to silence -Wunused-variable under -Wall.
+
+
 ### Grok: R36S GLES2 present path (ArkOS / Mali)
 - R36S is aarch64 Linux, so the build used desktop GL 2.1 COMPATIBILITY and
   fell back to SDL when the Mali driver refused the context.
