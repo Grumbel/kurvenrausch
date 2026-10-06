@@ -2,6 +2,12 @@
 
 ## Current tip
 
+### Grok: GLES road strip seam fix
+- 1px horizontal gaps between segments: GPU edges + sub-pixel spans.
+- Software fill_trapezoid forces ≥1 row; GLES now expands each strip by
+  ½px and never thinner than 1px so neighbours always overlap.
+
+
 ### Grok: fix sprite atlas UVs
 - Atlas UVs used a V flip that did not match TexSubImage(y), so samples
   hit the wrong cells (wrong scenery everywhere). UVs are now x/W, y/H

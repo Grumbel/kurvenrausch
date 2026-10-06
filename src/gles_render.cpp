@@ -1044,10 +1044,52 @@ void GlesRenderer::draw_segment(const Track& track, const Slice& s, const RoadTh
     const float wf = static_cast<float>(width_);
     auto fogc = [&](Color c) { return fogged(c, fog_air_, fog_amount, daylight_); };
 
+    // Screen y of the strip ends. Software fill_trapezoid forces ≥1 pixel row
+    // when the span is sub-pixel; GPU triangle edges can still open a 1px seam
+    // between neighbours, so expand by half a pixel and never thinner than 1px.
+    float ya = a.y, yb = b.y;
+    {
+        const float lo = std::min(ya, yb), hi = std::max(ya, yb);
+        if (hi - lo < 1.f) {
+            const float mid = 0.5f * (ya + yb);
+            if (ya >= yb) {
+                ya = mid + 0.5f;
+                yb = mid - 0.5f;
+            } else {
+                yb = mid + 0.5f;
+                ya = mid - 0.5f;
+            }
+        } else if (ya > yb) {
+            ya += 0.5f;
+            yb -= 0.5f;
+        } else if (yb > ya) {
+            yb += 0.5f;
+            ya -= 0.5f;
+        }
+    }
+
     const Color wall[2] = {{0x6c, 0x68, 0x62}, {0x60, 0x5c, 0x56}};
-    push_trap(b.y, 0.f, wf, a.y, 0.f, wf, fogc(seg.tunnel ? wall[band] : theme.grass[band]));
+    push_trap(yb, 0.f, wf, ya, 0.f, wf, fogc(seg.tunnel ? wall[band] : theme.grass[band]));
     if (seg.tunnel) {
-        const float ca = a.y - a.scale * tunnel_height * y_scale_, cb = b.y - b.scale * tunnel_height * y_scale_;
+        float ca = a.y - a.scale * tunnel_height * y_scale_, cb = b.y - b.scale * tunnel_height * y_scale_;
+        if (std::abs(ca - cb) < 1.f) {
+            const float mid = 0.5f * (ca + cb);
+            if (ca >= cb) {
+                ca = mid + 0.5f;
+                cb = mid - 0.5f;
+            } else {
+                cb = mid + 0.5f;
+                ca = mid - 0.5f;
+            }
+        } else {
+            if (ca > cb) {
+                ca += 0.5f;
+                cb -= 0.5f;
+            } else {
+                cb += 0.5f;
+                ca -= 0.5f;
+            }
+        }
         push_trap(ca, 0.f, wf, cb, 0.f, wf, fogc(Color{0x34, 0x32, 0x30}));
         // Ceiling lamps every few segments (software uses unfogged warm yellow).
         if (s.index % 6 == 0) {
@@ -1065,8 +1107,8 @@ void GlesRenderer::draw_segment(const Track& track, const Slice& s, const RoadTh
         const Color c = kind == Edge::Rail ? fogc(theme.beyond[band]) : fogc(theme.rock[0]);
         const float xa = a.x + static_cast<float>(side) * off * a.w;
         const float xb = b.x + static_cast<float>(side) * off * b.w;
-        if (side < 0) push_trap(b.y, 0.f, xb, a.y, 0.f, xa, c);
-        else push_trap(b.y, xb, wf, a.y, xa, wf, c);
+        if (side < 0) push_trap(yb, 0.f, xb, ya, 0.f, xa, c);
+        else push_trap(yb, xb, wf, ya, xa, wf, c);
     }
 
     // Tunnel mouth: solid wall around the opening so scenery cannot show past
@@ -1100,36 +1142,36 @@ void GlesRenderer::draw_segment(const Track& track, const Slice& s, const RoadTh
         const Color paving = fogc(blend(theme.road[band], Color{0xb4, 0xb0, 0xa8}, 0.3f));
         const float a0 = a.x + side * 1.f * a.w, a1 = a.x + side * fa * a.w;
         const float b0 = b.x + side * 1.f * b.w, b1 = b.x + side * fb_ * b.w;
-        push_trap(b.y, std::min(b0, b1), std::max(b0, b1), a.y, std::min(a0, a1), std::max(a0, a1), paving);
+        push_trap(yb, std::min(b0, b1), std::max(b0, b1), ya, std::min(a0, a1), std::max(a0, a1), paving);
     }
 
     const float ra = a.w / static_cast<float>(std::max(6, 2 * lanes));
     const float rb = b.w / static_cast<float>(std::max(6, 2 * lanes));
     const Color rumble = fogc(theme.rumble[band]);
     if (other_road) {
-        push_trap(b.y, ocb - b.w - rb, ocb + b.w + rb, a.y, oca - a.w - ra, oca + a.w + ra, rumble);
+        push_trap(yb, ocb - b.w - rb, ocb + b.w + rb, ya, oca - a.w - ra, oca + a.w + ra, rumble);
     }
-    push_trap(b.y, b.x - b.w - rb, b.x - b.w, a.y, a.x - a.w - ra, a.x - a.w, rumble);
-    push_trap(b.y, b.x + b.w, b.x + b.w + rb, a.y, a.x + a.w, a.x + a.w + ra, rumble);
+    push_trap(yb, b.x - b.w - rb, b.x - b.w, ya, a.x - a.w - ra, a.x - a.w, rumble);
+    push_trap(yb, b.x + b.w, b.x + b.w + rb, ya, a.x + a.w, a.x + a.w + ra, rumble);
     if (other_road) {
-        push_trap(b.y, ocb - b.w, ocb + b.w, a.y, oca - a.w, oca + a.w, fogc(theme.road[band]));
+        push_trap(yb, ocb - b.w, ocb + b.w, ya, oca - a.w, oca + a.w, fogc(theme.road[band]));
     }
 
     if (seg.checker) {
         for (int i = 0; i < 8; ++i) {
             const float f0 = static_cast<float>(i) / 8.f, f1 = static_cast<float>(i + 1) / 8.f;
             const Color c = fogc(theme.checker[(i + s.index) % 2]);
-            push_trap(b.y, b.x - b.w + 2.f * b.w * f0, b.x - b.w + 2.f * b.w * f1, a.y, a.x - a.w + 2.f * a.w * f0,
+            push_trap(yb, b.x - b.w + 2.f * b.w * f0, b.x - b.w + 2.f * b.w * f1, ya, a.x - a.w + 2.f * a.w * f0,
                       a.x - a.w + 2.f * a.w * f1, c);
         }
     } else {
-        push_trap(b.y, b.x - b.w, b.x + b.w, a.y, a.x - a.w, a.x + a.w, fogc(theme.road[band]));
+        push_trap(yb, b.x - b.w, b.x + b.w, ya, a.x - a.w, a.x + a.w, fogc(theme.road[band]));
         if (theme.us_markings) {
             const Color white = fogc(theme.lane);
             const float e = 0.93f, th = 1.f / 60.f;
             for (int side = -1; side <= 1; side += 2) {
                 const float sd = static_cast<float>(side);
-                push_trap(b.y, b.x + sd * e * b.w - b.w * th, b.x + sd * e * b.w + b.w * th, a.y,
+                push_trap(yb, b.x + sd * e * b.w - b.w * th, b.x + sd * e * b.w + b.w * th, ya,
                           a.x + sd * e * a.w - a.w * th, a.x + sd * e * a.w + a.w * th, white);
             }
             if (lanes == 2) {
@@ -1137,7 +1179,7 @@ void GlesRenderer::draw_segment(const Track& track, const Slice& s, const RoadTh
                 const float gap = 0.035f, yt = 1.f / 80.f;
                 for (int side = -1; side <= 1; side += 2) {
                     const float sd = static_cast<float>(side);
-                    push_trap(b.y, b.x + sd * gap * b.w - b.w * yt, b.x + sd * gap * b.w + b.w * yt, a.y,
+                    push_trap(yb, b.x + sd * gap * b.w - b.w * yt, b.x + sd * gap * b.w + b.w * yt, ya,
                               a.x + sd * gap * a.w - a.w * yt, a.x + sd * gap * a.w + a.w * yt, yellow);
                 }
             }
@@ -1149,7 +1191,7 @@ void GlesRenderer::draw_segment(const Track& track, const Slice& s, const RoadTh
             for (int i = 1; i < lanes; ++i) {
                 const float f = static_cast<float>(i) / static_cast<float>(lanes);
                 const float xa = a.x - a.w + 2.f * a.w * f, xb = b.x - b.w + 2.f * b.w * f;
-                push_trap(b.y, xb - lb, xb + lb, a.y, xa - la, xa + la, lane);
+                push_trap(yb, xb - lb, xb + lb, ya, xa - la, xa + la, lane);
             }
         }
         if (other_road && seg.alt) {
@@ -1158,7 +1200,7 @@ void GlesRenderer::draw_segment(const Track& track, const Slice& s, const RoadTh
             for (int i = 1; i < lanes; ++i) {
                 const float f = static_cast<float>(i) / static_cast<float>(lanes);
                 const float xa = oca - a.w + 2.f * a.w * f, xb = ocb - b.w + 2.f * b.w * f;
-                push_trap(b.y, xb - lb, xb + lb, a.y, xa - la, xa + la,
+                push_trap(yb, xb - lb, xb + lb, ya, xa - la, xa + la,
                           fogc(theme.us_markings ? theme.center_line : theme.lane));
             }
         }
@@ -1172,7 +1214,7 @@ void GlesRenderer::draw_segment(const Track& track, const Slice& s, const RoadTh
             const float ca = track.patch_center_at(near), cb = track.patch_center_at(near + direction_);
             const float xa = a.x + ca * a.w, xb = b.x + cb * b.w;
             auto band_of = [&](float from, float to, Color c) {
-                push_trap(b.y, xb + from * wb * b.w, xb + to * wb * b.w, a.y, xa + from * wa * a.w,
+                push_trap(yb, xb + from * wb * b.w, xb + to * wb * b.w, ya, xa + from * wa * a.w,
                           xa + to * wa * a.w, fogc(c));
             };
             const int glint = s.index % 4;
