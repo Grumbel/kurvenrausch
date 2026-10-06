@@ -2,6 +2,12 @@
 
 ## Current tip
 
+### Grok: frame_stats profiler (FPS overlay)
+- VIDEO → FPS: shows frame ms, draws, solid/tex verts, slices/sprites/lamps,
+  and top phase times (sim, g-sky, g-road, g-spr, g-night, hud, present).
+- Console every ~60 frames when FPS is on.
+
+
 ### Grok: present path — no CPU HUD swizzle; cache overlays; pause FBO reuse
 - GLES present: upload ARGB as RGBA, shader swaps R/B (was full-buffer loop).
 - Overlay bitmaps: cache GL textures by px.data(); no Gen/Delete per frame.

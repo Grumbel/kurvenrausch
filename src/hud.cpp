@@ -394,10 +394,41 @@ void draw_audio_menu(Framebuffer& fb, const AudioMenu& menu, bool muted, int eng
     }
 }
 
-void draw_fps(Framebuffer& fb, float fps) {
-    char buf[16];
-    std::snprintf(buf, sizeof buf, "%.0f FPS", static_cast<double>(fps));
-    fb.draw_text(4, 4, buf, Color{0xe0, 0xe8, 0x40});
+void draw_fps(Framebuffer& fb, float fps, const frame_stats::Snapshot& stats) {
+    const Color col{0xe0, 0xe8, 0x40};
+    char buf[96];
+    std::snprintf(buf, sizeof buf, "%.0f FPS  %.1fms", static_cast<double>(fps), stats.ms_frame);
+    fb.draw_text(4, 4, buf, col);
+    if (stats.ms_frame <= 0.0 && stats.draw_calls == 0) return;
+    // Second line: draws + vertex totals.
+    std::snprintf(buf, sizeof buf, "draws %d  solid %dk  tex %dk", stats.draw_calls,
+                  stats.solid_verts / 1000, stats.tex_verts / 1000);
+    fb.draw_text(4, 14, buf, col);
+    // Third: scene counts when GLES.
+    if (stats.gles) {
+        std::snprintf(buf, sizeof buf, "slices %d  spr %d  lamps %d", stats.slices, stats.sprites, stats.lamps);
+        fb.draw_text(4, 24, buf, col);
+    }
+    // Phase times — only show phases that took ≥0.1ms, sorted by cost.
+    struct Row {
+        const char* name;
+        double ms;
+    };
+    Row rows[static_cast<int>(frame_stats::Phase::Count)];
+    int n = 0;
+    for (int i = 0; i < static_cast<int>(frame_stats::Phase::Count); ++i) {
+        if (stats.ms[i] < 0.1) continue;
+        rows[n++] = {frame_stats::phase_name(static_cast<frame_stats::Phase>(i)), stats.ms[i]};
+    }
+    for (int i = 0; i < n; ++i)
+        for (int j = i + 1; j < n; ++j)
+            if (rows[j].ms > rows[i].ms) std::swap(rows[i], rows[j]);
+    int y = stats.gles ? 34 : 24;
+    for (int i = 0; i < n && i < 6; ++i) {
+        std::snprintf(buf, sizeof buf, "%-7s %5.1fms", rows[i].name, rows[i].ms);
+        fb.draw_text(4, y, buf, col);
+        y += 10;
+    }
 }
 
 } // namespace racer

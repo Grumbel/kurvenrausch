@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "gles_render.hpp"
+
+#include "frame_stats.hpp"
 #include "framebuffer.hpp"
 
 #include "daylight.hpp"
@@ -749,7 +751,9 @@ void GlesRenderer::flush_solid() {
     g.VertexAttribPointer(0, 2, GL_FLOAT_, GL_FALSE_, stride, reinterpret_cast<void*>(0));
     g.VertexAttribPointer(1, 2, GL_FLOAT_, GL_FALSE_, stride, reinterpret_cast<void*>(sizeof(float) * 2));
     g.VertexAttribPointer(2, 4, GL_FLOAT_, GL_FALSE_, stride, reinterpret_cast<void*>(sizeof(float) * 4));
-    g.DrawArrays(GL_TRIANGLES_, 0, static_cast<int>(solid_.size()));
+    const int n = static_cast<int>(solid_.size());
+    g.DrawArrays(GL_TRIANGLES_, 0, n);
+    frame_stats::add_draw(n, false);
     solid_.clear();
 }
 
@@ -772,7 +776,9 @@ void GlesRenderer::flush_textured() {
     g.VertexAttribPointer(0, 2, GL_FLOAT_, GL_FALSE_, stride, reinterpret_cast<void*>(0));
     g.VertexAttribPointer(1, 2, GL_FLOAT_, GL_FALSE_, stride, reinterpret_cast<void*>(sizeof(float) * 2));
     g.VertexAttribPointer(2, 4, GL_FLOAT_, GL_FALSE_, stride, reinterpret_cast<void*>(sizeof(float) * 4));
-    g.DrawArrays(GL_TRIANGLES_, 0, static_cast<int>(textured_.size()));
+    const int n = static_cast<int>(textured_.size());
+    g.DrawArrays(GL_TRIANGLES_, 0, n);
+    frame_stats::add_draw(n, true);
     textured_.clear();
 }
 
@@ -1817,6 +1823,7 @@ void GlesRenderer::draw_fullscreen_quad() {
     g.VertexAttribPointer(0, 2, GL_FLOAT_, GL_FALSE_, stride, reinterpret_cast<void*>(0));
     g.VertexAttribPointer(1, 2, GL_FLOAT_, GL_FALSE_, stride, reinterpret_cast<void*>(sizeof(float) * 2));
     g.DrawArrays(GL_TRIANGLES_, 0, 6);
+    frame_stats::add_draw(6, true);
 }
 
 void GlesRenderer::copy_tex_to_fbo(unsigned src_tex, unsigned dst_fbo) {
@@ -2073,27 +2080,34 @@ void GlesRenderer::render(const Track& track, const RoadView& view, const Sprite
     clear_batch();
     solid_.reserve(std::max(solid_.capacity(), static_cast<size_t>(48 * 1024)));
     textured_.reserve(std::max(textured_.capacity(), static_cast<size_t>(16 * 1024)));
-    draw_backdrop(theme, backdrop, hour, horizon);
+    {
+        frame_stats::Scope sky(frame_stats::Phase::GlesBackdrop);
+        draw_backdrop(theme, backdrop, hour, horizon);
+    }
     // CPU clip per slice (same rect as software set_clip) — no GL scissor, so
     // the whole road stays in one solid batch even when max_y changes every hill.
-    for (const Slice& s : slices_) {
-        if (!s.road_visible) continue;
-        const int clip_x0 = std::max(0, static_cast<int>(s.left));
-        const int clip_x1 = std::min(width_, static_cast<int>(std::ceil(s.right)));
-        const int clip_y0 = std::max(0, pixel_edge(s.top));
-        const int clip_y1 = std::min(height_, clip_row(s.clip));
-        if (clip_x1 > clip_x0 && clip_y1 > clip_y0)
-            set_draw_clip(clip_x0, clip_y0, clip_x1, clip_y1);
-        else
-            clear_draw_clip();
-        draw_segment(track, s, theme);
+    {
+        frame_stats::Scope road(frame_stats::Phase::GlesRoad);
+        for (const Slice& s : slices_) {
+            if (!s.road_visible) continue;
+            const int clip_x0 = std::max(0, static_cast<int>(s.left));
+            const int clip_x1 = std::min(width_, static_cast<int>(std::ceil(s.right)));
+            const int clip_y0 = std::max(0, pixel_edge(s.top));
+            const int clip_y1 = std::min(height_, clip_row(s.clip));
+            if (clip_x1 > clip_x0 && clip_y1 > clip_y0)
+                set_draw_clip(clip_x0, clip_y0, clip_x1, clip_y1);
+            else
+                clear_draw_clip();
+            draw_segment(track, s, theme);
+        }
+        clear_draw_clip();
+        flush_solid();
     }
-    clear_draw_clip();
-    flush_solid();
 
     // Pre-sprite ground into its own FBO (software street_lights ground mask).
     const bool need_night = light.level < 0.999f || headlight != nullptr;
     if (need_night && copy_program_ && ground_fbo_) {
+        frame_stats::Scope night(frame_stats::Phase::GlesNight);
         flush_solid();
         flush_textured();
         copy_tex_to_fbo(color_tex_, ground_fbo_);
@@ -2105,16 +2119,22 @@ void GlesRenderer::render(const Track& track, const RoadView& view, const Sprite
         g.BlendFunc(GL_SRC_ALPHA_, GL_ONE_MINUS_SRC_ALPHA_);
     }
 
-    draw_sprites(track, sprites, objects);
-    flush_textured();
-    flush_solid();
-    if (weather) draw_weather(*weather);
-    flush_solid();
+    {
+        frame_stats::Scope spr(frame_stats::Phase::GlesSprites);
+        draw_sprites(track, sprites, objects);
+        flush_textured();
+        flush_solid();
+        if (weather) draw_weather(*weather);
+        flush_solid();
+    }
 
     present_tex_ = color_tex_;
     if (need_night && compose_program_ && light_fbo_ && night_fbo_ && ground_tex_) {
+        frame_stats::Scope night(frame_stats::Phase::GlesNight);
         apply_gpu_night(light, headlight);
     }
+    frame_stats::set_scene_counts(static_cast<int>(slices_.size()), static_cast<int>(objects.size()),
+                                  static_cast<int>(lamps_.size()), true);
 
 
 

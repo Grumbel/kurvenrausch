@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "game.hpp"
+
+#include "frame_stats.hpp"
 #include "sprite_viewer.hpp"
 
 #include "drivetrain.hpp"
@@ -473,6 +475,7 @@ bool Game::frame() {
     const float dt = std::min(static_cast<float>((now - prev_counter_) / freq), 0.25f);
     prev_counter_ = now;
     if (dt > 0.f) fps_ = fps_ * 0.9f + (1.f / dt) * 0.1f;
+    frame_stats::begin_frame();
 
     InputState& input = input_state_;
     input_.poll(input);
@@ -501,7 +504,9 @@ bool Game::frame() {
         }
         set_width(screen_width());
         render();
+        if (debug_.fps) draw_fps(fb_, fps_, frame_stats::last());
         present();
+        frame_stats::end_frame(static_cast<double>(dt) * 1000.0);
         return true;
     }
     idle_ = input.any_input ? 0.f : idle_ + dt;
@@ -570,6 +575,7 @@ bool Game::frame() {
     if (paused_) {
         accumulator_ = 0.f;
     } else {
+        frame_stats::Scope sim(frame_stats::Phase::Sim);
         accumulator_ += dt;
         while (accumulator_ >= fixed_dt_) {
             fixed_update(input, fixed_dt_);
@@ -580,17 +586,35 @@ bool Game::frame() {
 
     set_width(screen_width());
     render();
-    if (paused_ && options_open_)
-        draw_options_menu(fb_, options_menu_, options_, zone_label(options_menu_.zone),
-                          track_name(options_menu_.track));
-    else if (paused_ && video_open_)
-        draw_video_menu(fb_, video_menu_, wide_, pixel_scale_ >= 2, present_backend_, debug_);
-    else if (paused_ && audio_open_) draw_audio_menu(fb_, audio_menu_, muted_, engine_vol_, music_vol_, music_);
-    else if (paused_ && debug_open_)
-        draw_debug_menu(fb_, debug_menu_, debug_, hour_, car_model_, driver_, passenger_);
-    else if (paused_) draw_pause_menu(fb_, menu_, zone_label(zone_), track_name(track_index_));
-    if (debug_.fps) draw_fps(fb_, fps_);
+    {
+        frame_stats::Scope hud(frame_stats::Phase::Hud);
+        if (paused_ && options_open_)
+            draw_options_menu(fb_, options_menu_, options_, zone_label(options_menu_.zone),
+                              track_name(options_menu_.track));
+        else if (paused_ && video_open_)
+            draw_video_menu(fb_, video_menu_, wide_, pixel_scale_ >= 2, present_backend_, debug_);
+        else if (paused_ && audio_open_) draw_audio_menu(fb_, audio_menu_, muted_, engine_vol_, music_vol_, music_);
+        else if (paused_ && debug_open_)
+            draw_debug_menu(fb_, debug_menu_, debug_, hour_, car_model_, driver_, passenger_);
+        else if (paused_) draw_pause_menu(fb_, menu_, zone_label(zone_), track_name(track_index_));
+        if (debug_.fps) draw_fps(fb_, fps_, frame_stats::last());
+    }
     present();
+    frame_stats::end_frame(static_cast<double>(dt) * 1000.0);
+    if (debug_.fps) {
+        static int log_i = 0;
+        if (++log_i >= 60) {
+            log_i = 0;
+            const auto& s = frame_stats::last();
+            std::cout << "kurvenrausch fps=" << static_cast<int>(fps_ + 0.5f) << " frame=" << s.ms_frame
+                      << "ms draws=" << s.draw_calls << " solidV=" << s.solid_verts << " texV=" << s.tex_verts;
+            for (int i = 0; i < static_cast<int>(frame_stats::Phase::Count); ++i) {
+                if (s.ms[i] < 0.15) continue;
+                std::cout << ' ' << frame_stats::phase_name(static_cast<frame_stats::Phase>(i)) << '=' << s.ms[i];
+            }
+            std::cout << "\n";
+        }
+    }
     return true;
 }
 
@@ -684,6 +708,7 @@ void Game::draw_touch() {
 
 void Game::present() {
     draw_touch();
+    frame_stats::Scope present(frame_stats::Phase::Present);
     if (use_gles_ && gles_.color_texture()) {
         display_->present_gles_scene(gles_.color_texture(), gles_.texture_width(), gles_.texture_height(),
                                      fb_.pixels(), overlay_);

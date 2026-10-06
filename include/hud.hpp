@@ -4,6 +4,8 @@
 #pragma once
 #include "framebuffer.hpp"
 #include "menu.hpp"
+
+#include "frame_stats.hpp"
 #include "options.hpp"
 #include "debug.hpp"
 #include "track.hpp"
@@ -74,7 +76,7 @@ void draw_video_menu(Framebuffer& fb, const VideoMenu& menu, bool wide, bool hd,
                      const DebugOptions& debug);
 void draw_audio_menu(Framebuffer& fb, const AudioMenu& menu, bool muted, int engine_vol, int music_vol,
                        int music);
-void draw_fps(Framebuffer& fb, float fps);
+void draw_fps(Framebuffer& fb, float fps, const frame_stats::Snapshot& stats = {});
 
 // Formats seconds as m'ss"cc, the classic arcade lap time.
 std::string format_lap_time(float seconds);
