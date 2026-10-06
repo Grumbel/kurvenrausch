@@ -2,6 +2,11 @@
 
 ## Current tip
 
+### Grok: fix headlight mask after player layering
+- Software headlight beam still masked the car silhouette with `car.w/h`
+  after the composite was removed; use `body` instead.
+
+
 ### Grok: tunnel mouth scale + soft night lamp pools
 - Mouth clip used `track.road_width` (unscaled) so on narrow roads (Japan
   road_scale 0.75) the aperture was wider than the walls — see-through past

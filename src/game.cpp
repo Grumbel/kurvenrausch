@@ -2917,9 +2917,9 @@ void Game::render() {
             const uint32_t* night = car_night_.data();
             for (int y = cy0; y < cy1; ++y) {
                 for (int x = cx0; x < cx1; ++x, ++night) {
-                    const int u = static_cast<int>((static_cast<float>(x) + 0.5f - me.sx) / me.sw * static_cast<float>(car.w));
-                    const int v = static_cast<int>((static_cast<float>(y) + 0.5f - me.sy) / me.sh * static_cast<float>(car.h));
-                    if (car.opaque(u, v)) fb_.pixels_mut()[y * width_ + x] = *night;
+                    const int u = static_cast<int>((static_cast<float>(x) + 0.5f - me.sx) / me.sw * static_cast<float>(body.w));
+                    const int v = static_cast<int>((static_cast<float>(y) + 0.5f - me.sy) / me.sh * static_cast<float>(body.h));
+                    if (body.opaque(u, v)) fb_.pixels_mut()[y * width_ + x] = *night;
                 }
             }
         }
