@@ -2,6 +2,11 @@
 
 ## Current tip
 
+### Grok: player headlight stays on beam.center
+- Following row_center_x put the cone beside the car. Player is screen-centred;
+  headlight is camera-relative. row_center_x remains for traffic lamp pools only.
+
+
 ### Grok: declare row_center_x_ member
 - Accessor was added without the private vector — compile fix.
 

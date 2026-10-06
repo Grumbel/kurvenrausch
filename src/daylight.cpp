@@ -108,12 +108,11 @@ void apply_daylight(Framebuffer& fb, const Daylight& light) {
 
 void headlight_beam(Framebuffer& fb, const std::vector<uint32_t>& day, const Daylight& light,
                     const std::vector<float>& row_depth, const Beam& beam,
-                    const std::vector<float>& row_center_x) {
+                    const std::vector<float>& /*row_center_x*/) {
     const float dark = 1.f - light.level;
     if (dark <= 0.01f) return;
     uint32_t* px = fb.pixels_mut();
     const int w = fb.width(), h = std::min(fb.height(), static_cast<int>(row_depth.size()));
-    const bool have_rc = row_center_x.size() >= static_cast<size_t>(h);
     // First road row from the top of the screen (far crest / horizon). Above it,
     // row_depth is 0 — in fog that made the cone look flat-topped. Extend a
     // softer volumetric cone into that air using the horizon depth.
@@ -141,10 +140,9 @@ void headlight_beam(Framebuffer& fb, const std::vector<uint32_t>& day, const Day
         const float reach = smoothstep(0.f, 200.f, ahead) / (1.f + (ahead / beam_reach) * (ahead / beam_reach));
         const float px_per_unit = beam.camera_depth / depth * beam.x_scale;
         const float half = (beam_half_width + beam_spread * ahead) * px_per_unit;
-        // Follow the road centre (not a fixed screen column) so the cone stays
-        // in front of the car through bends; aim still steers within that frame.
-        const float base = have_rc ? row_center_x[static_cast<size_t>(y)] : beam.center;
-        const float mid = base + beam.aim * ahead * px_per_unit;
+        // Player car is fixed at screen centre; the beam is camera-relative,
+        // not road-centre-relative (that path was shifting cones beside the car).
+        const float mid = beam.center + beam.aim * ahead * px_per_unit;
         const int x0 = std::max(0, static_cast<int>(mid - half)), x1 = std::min(w, static_cast<int>(mid + half) + 1);
         for (int x = x0; x < x1; ++x) {
             const float across = std::abs(static_cast<float>(x) + 0.5f - mid) / half;
