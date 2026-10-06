@@ -1277,6 +1277,9 @@ void GlesRenderer::draw_sprites(const Track& track, const SpriteSheet& sprites, 
                                   (clip_x0 > 0 || clip_x1 < width_ || clip_y0 > 0 || clip_y1 < height_);
         if (want_scissor) {
             if (!scissor_on || clip_x0 != sc_x0 || clip_y0 != sc_y0 || clip_x1 != sc_x1 || clip_y1 != sc_y1) {
+                // flush_solid() alone skips textured when solid_ is empty — batched
+                // sprites would then draw under the next (wrong) scissor.
+                flush_textured();
                 flush_solid();
                 g.Enable(GL_SCISSOR_TEST_);
                 g.Scissor(clip_x0, height_ - clip_y1, clip_x1 - clip_x0, clip_y1 - clip_y0);
@@ -1287,6 +1290,7 @@ void GlesRenderer::draw_sprites(const Track& track, const SpriteSheet& sprites, 
                 sc_y1 = clip_y1;
             }
         } else if (scissor_on) {
+            flush_textured();
             flush_solid();
             g.Disable(GL_SCISSOR_TEST_);
             scissor_on = false;
@@ -1536,6 +1540,7 @@ void GlesRenderer::draw_sprites(const Track& track, const SpriteSheet& sprites, 
 
     }
     if (scissor_on) {
+        flush_textured();
         flush_solid();
         g.Disable(GL_SCISSOR_TEST_);
     }
@@ -1996,6 +2001,9 @@ void GlesRenderer::render(const Track& track, const RoadView& view, const Sprite
                                   (clip_x0 > 0 || clip_x1 < width_ || clip_y0 > 0 || clip_y1 < height_);
         if (want_scissor) {
             if (!scissor_on || clip_x0 != sc_x0 || clip_y0 != sc_y0 || clip_x1 != sc_x1 || clip_y1 != sc_y1) {
+                // flush_solid() alone skips textured when solid_ is empty — batched
+                // sprites would then draw under the next (wrong) scissor.
+                flush_textured();
                 flush_solid();
                 g.Enable(GL_SCISSOR_TEST_);
                 g.Scissor(clip_x0, height_ - clip_y1, clip_x1 - clip_x0, clip_y1 - clip_y0);
@@ -2006,6 +2014,7 @@ void GlesRenderer::render(const Track& track, const RoadView& view, const Sprite
                 sc_y1 = clip_y1;
             }
         } else if (scissor_on) {
+            flush_textured();
             flush_solid();
             g.Disable(GL_SCISSOR_TEST_);
             scissor_on = false;
@@ -2013,6 +2022,7 @@ void GlesRenderer::render(const Track& track, const RoadView& view, const Sprite
         draw_segment(track, s, theme);
     }
     if (scissor_on) {
+        flush_textured();
         flush_solid();
         g.Disable(GL_SCISSOR_TEST_);
     }

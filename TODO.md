@@ -2,6 +2,12 @@
 
 ## Current tip
 
+### Grok: flush textured on scissor change
+- Sprite scissor coalescing called flush_solid() only; that no-ops when
+  solid_ is empty, so textured quads kept batching across clip rects and
+  drew through nearer road. Flush textured before every scissor change.
+
+
 ### Grok: GLES road strip seam fix
 - 1px horizontal gaps between segments: GPU edges + sub-pixel spans.
 - Software fill_trapezoid forces ≥1 row; GLES now expands each strip by
