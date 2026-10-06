@@ -157,7 +157,7 @@ constexpr float mirror_depth = 1.2f;
 constexpr float mirror_horizon = 13.f; // screen row in the mirror
 
 // Housing around the mirror glass, with the stem holding it from the roof.
-void draw_mirror_frame(Framebuffer& fb, int x, int y, int w, int h) {
+void draw_mirror_frame(Canvas& fb, int x, int y, int w, int h) {
     const Color dark{0x16, 0x16, 0x1a}, body{0x2e, 0x2e, 0x34}, light{0x50, 0x50, 0x58};
     fb.fill_rect(x + w / 2 - 4, 0, 8, y, dark);
     fb.fill_rect(x + w / 2 - 3, 0, 6, y, body);
@@ -177,7 +177,7 @@ void draw_mirror_frame(Framebuffer& fb, int x, int y, int w, int h) {
 }
 
 // Faint diagonal reflections across the glass.
-void draw_mirror_sheen(Framebuffer& fb, int x, int y, int w, int h) {
+void draw_mirror_sheen(Canvas& fb, int x, int y, int w, int h) {
     constexpr int streaks[][2] = {{0, 6}, {9, 2}}; // first column at the bottom, width
     for (int row = 0; row < h; ++row) {
         for (const auto& streak : streaks) {
@@ -193,7 +193,7 @@ void draw_mirror_sheen(Framebuffer& fb, int x, int y, int w, int h) {
 // +1 right): a white-hot core in an orange glow, with flickering tongues
 // flaring outwards and upwards (the pipes sit too low on the screen for a
 // flame streaming towards the camera), and a few sparks.
-void draw_flame(Framebuffer& fb, float x, float y, int side, float intensity, uint32_t& rng) {
+void draw_flame(Canvas& fb, float x, float y, int side, float intensity, uint32_t& rng) {
     auto random = [&rng] {
         rng = rng * 1664525u + 1013904223u;
         return static_cast<float>(rng >> 8) / 16777216.f;
@@ -520,7 +520,7 @@ bool Game::frame() {
         }
         set_width(screen_width());
         render();
-        if (debug_.fps) draw_fps(fb_, fps_, frame_stats::last());
+        if (debug_.fps) draw_fps(hud_canvas(), fps_, frame_stats::last());
         present();
         frame_stats::end_frame(static_cast<double>(dt) * 1000.0);
         log_frame_stats();
@@ -606,16 +606,17 @@ bool Game::frame() {
     render();
     {
         frame_stats::Scope hud(frame_stats::Phase::Hud);
+        Canvas& c = hud_canvas();
         if (paused_ && options_open_)
-            draw_options_menu(fb_, options_menu_, options_, zone_label(options_menu_.zone),
+            draw_options_menu(c, options_menu_, options_, zone_label(options_menu_.zone),
                               track_name(options_menu_.track));
         else if (paused_ && video_open_)
-            draw_video_menu(fb_, video_menu_, wide_, pixel_scale_ >= 2, present_backend_, debug_);
-        else if (paused_ && audio_open_) draw_audio_menu(fb_, audio_menu_, muted_, engine_vol_, music_vol_, music_);
+            draw_video_menu(c, video_menu_, wide_, pixel_scale_ >= 2, present_backend_, debug_);
+        else if (paused_ && audio_open_) draw_audio_menu(c, audio_menu_, muted_, engine_vol_, music_vol_, music_);
         else if (paused_ && debug_open_)
-            draw_debug_menu(fb_, debug_menu_, debug_, hour_, car_model_, driver_, passenger_);
-        else if (paused_) draw_pause_menu(fb_, menu_, zone_label(zone_), track_name(track_index_));
-        if (debug_.fps) draw_fps(fb_, fps_, frame_stats::last());
+            draw_debug_menu(c, debug_menu_, debug_, hour_, car_model_, driver_, passenger_);
+        else if (paused_) draw_pause_menu(c, menu_, zone_label(zone_), track_name(track_index_));
+        if (debug_.fps) draw_fps(c, fps_, frame_stats::last());
     }
     present();
     frame_stats::end_frame(static_cast<double>(dt) * 1000.0);
@@ -723,8 +724,7 @@ void Game::present() {
     draw_touch();
     frame_stats::Scope present(frame_stats::Phase::Present);
     if (use_gles_ && gles_.color_texture()) {
-        display_->present_gles_scene(gles_.color_texture(), gles_.texture_width(), gles_.texture_height(),
-                                     fb_.pixels(), overlay_);
+        display_->present_gles_scene(gles_.color_texture(), [this] { gles_.draw_list(hud_list_); }, overlay_);
     } else {
         display_->present(fb_.pixels(), overlay_);
     }
@@ -1164,27 +1164,20 @@ bool Game::screenshot(const ScreenshotOptions& opts) {
     paused_ = opts.pause;
     frame_stats::begin_frame();
     render();
-    if (use_gles_) {
-        frame_stats::end_frame(0.0);
-        std::cout << "kurvenrausch gles " << frame_stats::format(frame_stats::last()) << "\n";
-        // The HUD over the scene read back from the GPU, as present() does.
-        std::vector<uint32_t> scene;
-        gles_.read_scene_argb(scene);
-        uint32_t* px = fb_.pixels_mut();
-        for (size_t i = 0; i < scene.size(); ++i) {
-            const uint32_t h = px[i], a = h >> 24;
-            if (a == 255) continue;
-            const uint32_t s = scene[i];
-            const auto mix = [a](uint32_t over, uint32_t under) { return (over * a + under * (255 - a)) / 255; };
-            px[i] = 0xff000000u | mix((h >> 16) & 0xff, (s >> 16) & 0xff) << 16 |
-                    mix((h >> 8) & 0xff, (s >> 8) & 0xff) << 8 | mix(h & 0xff, s & 0xff);
-        }
-    }
     draw_touch();
-    overlay_.draw(fb_);
+    overlay_.draw(hud_canvas());
     if (opts.pause) {
         menu_.open();
-        draw_pause_menu(fb_, menu_, zone_label(zone_), track_name(track_index_));
+        draw_pause_menu(hud_canvas(), menu_, zone_label(zone_), track_name(track_index_));
+    }
+    if (use_gles_) {
+        // Everything over the scene drawn into it, and the picture read back.
+        gles_.draw_over_scene(hud_list_);
+        frame_stats::end_frame(0.0);
+        std::cout << "kurvenrausch gles " << frame_stats::format(frame_stats::last()) << "\n";
+        std::vector<uint32_t> picture;
+        gles_.read_scene_argb(picture);
+        std::copy(picture.begin(), picture.end(), fb_.pixels_mut());
     }
     return save_bmp(opts.path, fb_.pixels(), width_, fb_height());
 }
@@ -2661,7 +2654,11 @@ void Game::update_laps(float prev_z, float z, float dt) {
     ++lap_;
 }
 
+Canvas& Game::hud_canvas() { return use_gles_ ? static_cast<Canvas&>(hud_list_) : fb_canvas_; }
+
 void Game::render() {
+    hud_list_.resize(width_, fb_height());
+    scene_list_.resize(width_, fb_height());
     const auto& tr = world_.get<Transform>(player_);
     const auto& vel = world_.get<Velocity>(player_);
     const auto& player = world_.get<Player>(player_);
@@ -2841,6 +2838,81 @@ void Game::render() {
         }
     }
 
+    // Sparks, spray, dust and the nitro flame, over the road and the cars.
+    auto car_effects = [&](Canvas& c) {
+        if (scraping_ && vel.speed > 0.f && setup.car) {
+            // Sparks flying off the side of the car that scrapes the barrier.
+            const float x = static_cast<float>(width_) / 2.f + static_cast<float>(scrape_side_) * me.sw / 2.f;
+            for (int i = 0; i < 16; ++i) {
+                rng_ = rng_ * 1664525u + 1013904223u;
+                const int dx = static_cast<int>((rng_ >> 8) % 11) - 5 + scrape_side_ * 2;
+                const int dy = static_cast<int>((rng_ >> 16) % 16);
+                const bool bright = (rng_ >> 28) & 1;
+                const int px = static_cast<int>(x) + dx, py = fb_height() - 4 * pixel_scale_ - dy + static_cast<int>(bounce_);
+                // A short streak trailing away from the barrier, hot end first.
+                c.put_pixel(px, py, bright ? Color{255, 240, 120} : Color{255, 170, 50});
+                c.put_pixel(px - scrape_side_, py + 1, Color{255, 130, 30});
+                if (i % 2 == 0) c.put_pixel(px - 2 * scrape_side_, py + 2, Color{200, 80, 25});
+            }
+        }
+        for (const Particle& p : particles_) {
+            // From inside the car only the water of a car wash shows, on the
+            // windscreen; the rest is thrown up behind and beside it.
+            if (!setup.car && !washing_) break;
+            const float fade = p.life / p.max_life;
+            if (p.kind == Particle::Kind::Spray) {
+                // A drop: one pixel, or a small cluster for the big ones.
+                const int x = static_cast<int>(p.x), y = static_cast<int>(p.y);
+                c.blend_pixel(x, y, p.color, 0.9f * fade);
+                if (p.size > 1.4f) {
+                    c.blend_pixel(x + 1, y, p.color, 0.6f * fade);
+                    c.blend_pixel(x, y + 1, p.color, 0.6f * fade);
+                }
+            } else if (p.kind == Particle::Kind::Dust) {
+                c.dither_disc(static_cast<int>(p.x), static_cast<int>(p.y), static_cast<int>(p.size), p.color,
+                              0.85f * fade, 0.8f);
+            } else {
+                c.put_pixel(static_cast<int>(p.x), static_cast<int>(p.y), p.color);
+                if (fade > 0.5f) c.put_pixel(static_cast<int>(p.x) + 1, static_cast<int>(p.y), p.color);
+            }
+        }
+        if (nitro_.burning() && setup.car) {
+            for (int side = -1; side <= 1; side += 2) {
+                // The pipes at a quarter and three quarters across, low on the
+                // body, whatever the car and the view.
+                draw_flame(c, me.sx + me.sw * (side < 0 ? 0.25f : 0.75f) + static_cast<float>(steer_),
+                           me.sy + me.sh * 0.9f,
+                           side, nitro_.intensity(), rng_);
+            }
+        }
+    };
+    // The dashboard and the wheel, over the weather.
+    auto cockpit = [&](Canvas& c) {
+        if (setup.cockpit) {
+            // The dashboard and the wheel, shaking with the car. On a wide
+            // screen the dashboard is centred and its outer edges carry on to
+            // the sides.
+            const Bitmap& dash = sprites_.dashboard(car_model_);
+            const int ps = pixel_scale_;
+            const int dash_w = dash.w * ps, dash_h = dash.h * ps;
+            const int dash_x = (width_ - dash_w) / 2;
+            const int dash_y = fb_height() - dashboard_height * ps + static_cast<int>(bounce_);
+            const float dw = static_cast<float>(dash.w), dh = static_cast<float>(dash.h);
+            const float fx = static_cast<float>(dash_x), fy = static_cast<float>(dash_y);
+            c.blit(dash, 0.f, 0.f, dw, dh, fx, fy, static_cast<float>(dash_w), static_cast<float>(dash_h));
+            // Its outer columns stretched to the screen's edges.
+            if (dash_x > 0) c.blit(dash, 0.f, 0.f, 0.f, dh, 0.f, fy, fx, static_cast<float>(dash_h));
+            if (dash_x + dash_w < width_)
+                c.blit(dash, dw - 1.f, 0.f, dw - 1.f, dh, fx + static_cast<float>(dash_w), fy,
+                       static_cast<float>(width_ - dash_x - dash_w), static_cast<float>(dash_h));
+            const float twitch = spin_time_ > 0.f ? (static_cast<int>(clock_ * 16.f) % 2 ? 0.3f : -0.3f) : 0.f;
+            c.blit_rotated(sprites_.wheel(driver_), static_cast<float>(dash_x + dashboard_wheel_x * ps),
+                           static_cast<float>(fb_height()) + 6.f * static_cast<float>(ps) + bounce_,
+                           static_cast<float>(wheel_size * ps), static_cast<float>(wheel_size * ps),
+                           wheel_angle_ + twitch);
+        }
+    };
+
     if (use_gles_ && display_ && display_->make_gl_current()) {
         gles_.set_size(width_, fb_height());
         const Daylight scene_light = lit_by(daylight_at(hour_), look.night_glow);
@@ -2860,98 +2932,21 @@ void Game::render() {
             weather_ptr = &weather_;
         // Pause menus reuse the last scene FBO — no full road rebuild.
         if (!paused_) {
+            car_effects(scene_list_);
+            scene_list_.set_layer(1);
+            cockpit(scene_list_);
             gles_.render(track_, view, sprites_, road_sprites_, look, scene_light, &background_, hour_, beam_ptr,
-                         weather_ptr);
+                         weather_ptr, &scene_list_);
         }
-        // Transparent buffer so only HUD / menus / cockpit composite over the
-        // GLES scene (including pause and options — no software backdrop).
-        std::fill(fb_.pixels_mut(), fb_.pixels_mut() + width_ * fb_height(), 0u);
     } else {
         background_.render(fb_, look, hour_);
         road_.render(fb_, track_, view, sprites_, road_sprites_);
+        car_effects(fb_canvas_);
+        // No rain or snow falls in a tunnel (GLES draws it into the scene).
+        if (debug_.weather && !track_.segment_at(tr.z + cam.player_z()).tunnel) weather_.render(fb_);
+        cockpit(fb_canvas_);
     }
-
-    if (scraping_ && vel.speed > 0.f && setup.car) {
-        // Sparks flying off the side of the car that scrapes the barrier.
-        const float x = static_cast<float>(width_) / 2.f + static_cast<float>(scrape_side_) * me.sw / 2.f;
-        for (int i = 0; i < 16; ++i) {
-            rng_ = rng_ * 1664525u + 1013904223u;
-            const int dx = static_cast<int>((rng_ >> 8) % 11) - 5 + scrape_side_ * 2;
-            const int dy = static_cast<int>((rng_ >> 16) % 16);
-            const bool bright = (rng_ >> 28) & 1;
-            const int px = static_cast<int>(x) + dx, py = fb_height() - 4 * pixel_scale_ - dy + static_cast<int>(bounce_);
-            // A short streak trailing away from the barrier, hot end first.
-            fb_.put_pixel(px, py, bright ? Color{255, 240, 120} : Color{255, 170, 50});
-            fb_.put_pixel(px - scrape_side_, py + 1, Color{255, 130, 30});
-            if (i % 2 == 0) fb_.put_pixel(px - 2 * scrape_side_, py + 2, Color{200, 80, 25});
-        }
-    }
-    for (const Particle& p : particles_) {
-        // From inside the car only the water of a car wash shows, on the
-        // windscreen; the rest is thrown up behind and beside it.
-        if (!setup.car && !washing_) break;
-        const float fade = p.life / p.max_life;
-        if (p.kind == Particle::Kind::Spray) {
-            // A drop: one pixel, or a small cluster for the big ones.
-            const int x = static_cast<int>(p.x), y = static_cast<int>(p.y);
-            fb_.blend_pixel(x, y, p.color, 0.9f * fade);
-            if (p.size > 1.4f) {
-                fb_.blend_pixel(x + 1, y, p.color, 0.6f * fade);
-                fb_.blend_pixel(x, y + 1, p.color, 0.6f * fade);
-            }
-        } else if (p.kind == Particle::Kind::Dust) {
-            const int r = static_cast<int>(p.size);
-            for (int dy = -r; dy <= r; ++dy) {
-                for (int dx = -r; dx <= r; ++dx) {
-                    if (dx * dx + dy * dy > r * r) continue;
-                    const int px = static_cast<int>(p.x) + dx, py = static_cast<int>(p.y) + dy;
-                    if (bayer4(px, py) < 0.85f * fade) fb_.blend_pixel(px, py, p.color, 0.8f);
-                }
-            }
-        } else {
-            fb_.put_pixel(static_cast<int>(p.x), static_cast<int>(p.y), p.color);
-            if (fade > 0.5f) fb_.put_pixel(static_cast<int>(p.x) + 1, static_cast<int>(p.y), p.color);
-        }
-    }
-    if (nitro_.burning() && setup.car) {
-        for (int side = -1; side <= 1; side += 2) {
-            // The pipes at a quarter and three quarters across, low on the
-            // body, whatever the car and the view.
-            draw_flame(fb_, me.sx + me.sw * (side < 0 ? 0.25f : 0.75f) + static_cast<float>(steer_),
-                       me.sy + me.sh * 0.9f,
-                       side, nitro_.intensity(), rng_);
-        }
-    }
-    // No rain or snow falls in a tunnel. On the GLES path the particles are
-    // drawn into the scene FBO; only fall back to software when that path is
-    // not active (pause menus, headless, no GL).
-    // Weather is already in the GLES scene FBO when that path is active.
-    if (debug_.weather && !track_.segment_at(tr.z + cam.player_z()).tunnel && !use_gles_)
-        weather_.render(fb_);
-    if (setup.cockpit) {
-        // The dashboard and the wheel, shaking with the car. On a wide
-        // screen the dashboard is centred and its outer edges carry on to
-        // the sides.
-        const Bitmap& dash = sprites_.dashboard(car_model_);
-        const int ps = pixel_scale_;
-        const int dash_w = dash.w * ps, dash_h = dash.h * ps;
-        const int dash_x = (width_ - dash_w) / 2;
-        const int dash_y = fb_height() - dashboard_height * ps + static_cast<int>(bounce_);
-        for (int y = 0; y < dash_h; ++y) {
-            for (int x = 0; x < width_; ++x) {
-                const int dx = std::clamp((x - dash_x) / ps, 0, dash.w - 1);
-                const int dy = std::clamp(y / ps, 0, dash.h - 1);
-                const uint32_t p = dash.px[static_cast<size_t>(dy) * dash.w + dx];
-                if (p >> 24) fb_.put_pixel(x, dash_y + y, Color{static_cast<uint8_t>(p >> 16), static_cast<uint8_t>(p >> 8),
-                                                                static_cast<uint8_t>(p)});
-            }
-        }
-        const float twitch = spin_time_ > 0.f ? (static_cast<int>(clock_ * 16.f) % 2 ? 0.3f : -0.3f) : 0.f;
-        fb_.blit_rotated(sprites_.wheel(driver_), static_cast<float>(dash_x + dashboard_wheel_x * ps),
-                         static_cast<float>(fb_height()) + 6.f * static_cast<float>(ps) + bounce_,
-                         static_cast<float>(wheel_size * ps), static_cast<float>(wheel_size * ps), wheel_angle_ + twitch);
-    }
-    if (debug_.mirror) render_mirror();
+    if (debug_.mirror) render_mirror(hud_canvas());
 
     // Nightfall: the picture darkened but for its lamps; the headlights
     // light the road ahead again, from the car's front up (above the
@@ -2995,14 +2990,12 @@ void Game::render() {
             }
         }
     }
+    } // !use_gles_ night post
     if (flash_time_ > 0.f) {
         // Lightning lights up everything for a moment.
         const float a = std::min(0.75f, flash_time_ * 5.f);
-        for (int y = 0; y < fb_height(); ++y) {
-            for (int x = 0; x < width_; ++x) fb_.blend_pixel(x, y, Color{0xf0, 0xf4, 0xff}, a);
-        }
+        hud_canvas().blend_rect(0, 0, width_, fb_height(), Color{0xf0, 0xf4, 0xff}, a);
     }
-    } // !use_gles_ night post
 
     HudState hud;
     hud.speed_fraction = std::abs(vel.speed) / player.max_speed;
@@ -3074,14 +3067,14 @@ void Game::render() {
         hud.banner = track_.zones[static_cast<size_t>(zone_)].country;
         hud.banner_sub = track_.zones[static_cast<size_t>(zone_)].region;
     }
-    if (debug_.hud) draw_hud(fb_, hud);
+    if (debug_.hud) draw_hud(hud_canvas(), hud);
 }
 
 // The road behind the car, drawn into its own small framebuffer and set into
 // the mirror housing at the top of the screen. The road renderer looks back
 // from the car with sides kept, which is what a mirror shows; the traffic
 // shows its front and billboards their back.
-void Game::render_mirror() {
+void Game::render_mirror(Canvas& c) {
     const auto& tr = world_.get<Transform>(player_);
     const auto& cam = world_.get<Camera>(camera_);
     const float car_z = tr.z + cam.player_z();
@@ -3153,9 +3146,15 @@ void Game::render_mirror() {
     }
 
     const int mirror_x = (width_ - mir_width()) / 2;
-    draw_mirror_frame(fb_, mirror_x, mirror_y * pixel_scale_, mir_width(), mir_height());
-    fb_.blit(mirror_fb_, mirror_x, mirror_y * pixel_scale_);
-    draw_mirror_sheen(fb_, mirror_x, mirror_y * pixel_scale_, mir_width(), mir_height());
+    draw_mirror_frame(c, mirror_x, mirror_y * pixel_scale_, mir_width(), mir_height());
+    mirror_bitmap_.w = mirror_fb_.width();
+    mirror_bitmap_.h = mirror_fb_.height();
+    mirror_bitmap_.px.assign(mirror_fb_.pixels(), mirror_fb_.pixels() + mirror_bitmap_.w * mirror_bitmap_.h);
+    if (use_gles_) hud_list_.set_dynamic(true);
+    c.blit(mirror_bitmap_, static_cast<float>(mirror_x), static_cast<float>(mirror_y * pixel_scale_),
+           static_cast<float>(mirror_bitmap_.w), static_cast<float>(mirror_bitmap_.h));
+    if (use_gles_) hud_list_.set_dynamic(false);
+    draw_mirror_sheen(c, mirror_x, mirror_y * pixel_scale_, mir_width(), mir_height());
 }
 
 } // namespace racer

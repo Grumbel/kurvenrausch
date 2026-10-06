@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #pragma once
+#include "canvas.hpp"
 #include "framebuffer.hpp"
 #include "menu.hpp"
 
@@ -62,21 +63,21 @@ struct HudState {
     std::string banner_sub;      // region below it
 };
 
-void draw_hud(Framebuffer& fb, const HudState& hud);
+void draw_hud(Canvas& fb, const HudState& hud);
 
 // The pause menu over the dimmed game; `country` is the start choice's name.
 // `place` names where START IN would start, `track` the track picked.
-void draw_pause_menu(Framebuffer& fb, const PauseMenu& menu, const std::string& place, const std::string& track);
+void draw_pause_menu(Canvas& fb, const PauseMenu& menu, const std::string& place, const std::string& track);
 // The pause menu's OPTIONS page, laid out like the pause menu.
-void draw_options_menu(Framebuffer& fb, const OptionsMenu& menu, const Options& options,
+void draw_options_menu(Canvas& fb, const OptionsMenu& menu, const Options& options,
                        const std::string& place, const std::string& track);
-void draw_debug_menu(Framebuffer& fb, const DebugMenu& menu, const DebugOptions& debug, float hour, int car,
+void draw_debug_menu(Canvas& fb, const DebugMenu& menu, const DebugOptions& debug, float hour, int car,
                      int driver, int passenger);
-void draw_video_menu(Framebuffer& fb, const VideoMenu& menu, bool wide, bool hd, PresentBackend present,
+void draw_video_menu(Canvas& fb, const VideoMenu& menu, bool wide, bool hd, PresentBackend present,
                      const DebugOptions& debug);
-void draw_audio_menu(Framebuffer& fb, const AudioMenu& menu, bool muted, int engine_vol, int music_vol,
+void draw_audio_menu(Canvas& fb, const AudioMenu& menu, bool muted, int engine_vol, int music_vol,
                        int music);
-void draw_fps(Framebuffer& fb, float fps, const frame_stats::Snapshot& stats = {});
+void draw_fps(Canvas& fb, float fps, const frame_stats::Snapshot& stats = {});
 
 // Formats seconds as m'ss"cc, the classic arcade lap time.
 std::string format_lap_time(float seconds);

@@ -4,6 +4,7 @@
 #pragma once
 #include <SDL2/SDL.h>
 #include <cstdint>
+#include <functional>
 #include <map>
 #include <string>
 
@@ -56,10 +57,10 @@ public:
     // The window's icon, an ARGB8888 image.
     void set_icon(const uint32_t* argb_pixels, int width, int height);
     void present(const uint32_t* argb_pixels, const Overlay& overlay);
-    // Scene texture (RGBA, nearest) letterboxed, then optional HUD ARGB pixels
-    // (alpha blended) and overlay, then swap. Used by the GLES road path.
-    void present_gles_scene(unsigned scene_tex, int tex_w, int tex_h, const uint32_t* hud_argb,
-                            const Overlay& overlay);
+    // Scene texture (RGBA, nearest) letterboxed; then draw_over with the
+    // viewport on the picture (framebuffer pixels map onto it), the overlay,
+    // and swap. Used by the GLES road path.
+    void present_gles_scene(unsigned scene_tex, const std::function<void()>& draw_over, const Overlay& overlay);
     // Scene already drawn into the GL backbuffer; only overlay + swap.
     void present_overlay(const Overlay& overlay);
     // A framebuffer of another size from now on.
@@ -127,7 +128,6 @@ private:
     SDL_GLContext gl_ = nullptr;
     unsigned gl_program_ = 0;
     unsigned gl_fb_tex_ = 0;
-    unsigned gl_hud_fbo_ = 0; // clear HUD texture without a full CPU upload
     unsigned gl_vbo_ = 0;
     int gl_u_tex_ = -1;
     int gl_u_swizzle_ = -1; // 1: sample ARGB uploaded as RGBA (swap R/B)

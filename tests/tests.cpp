@@ -4,6 +4,8 @@
 // Minimal self-contained unit tests; no framework needed. Run with `ctest`
 // or directly: ./kurvenrausch_tests
 
+#include "canvas.hpp"
+#include "font.hpp"
 #include "drivetrain.hpp"
 #include "driving.hpp"
 #include "input.hpp"
@@ -504,6 +506,50 @@ void test_road_width() {
     const int wide = road_pixels(40.f * t.segment_length), narrow = road_pixels(140.f * t.segment_length);
     CHECK(wide > 0 && narrow > 0);
     CHECK(std::abs(static_cast<float>(narrow) / static_cast<float>(wide) - 0.5f) < 0.1f);
+}
+
+void test_draw_list() {
+    using namespace racer;
+    DrawList list(40, 30);
+    // A row of same-coloured pixels becomes one quad.
+    for (int x = 3; x < 9; ++x) list.put_pixel(x, 5, Color{10, 20, 30});
+    CHECK(list.vertices().size() == 6 && list.runs().size() == 1);
+    CHECK(list.vertices()[0].x == 3.f && list.vertices()[1].x == 9.f && list.vertices()[2].y == 6.f);
+    // Another colour, or a gap, starts a new quad.
+    list.put_pixel(9, 5, Color{1, 2, 3});
+    list.put_pixel(11, 5, Color{1, 2, 3});
+    CHECK(list.vertices().size() == 18);
+    // Clipped on the CPU, texture coordinates following the edges.
+    list.clear();
+    list.set_clip(10, 10, 20, 20);
+    list.fill_rect(5, 12, 10, 2, Color{});
+    CHECK(list.vertices().size() == 6 && list.vertices()[0].x == 10.f && list.vertices()[1].x == 15.f);
+    list.fill_rect(0, 0, 5, 5, Color{}); // outside
+    CHECK(list.vertices().size() == 6);
+    Bitmap bmp(8, 4);
+    list.blit(bmp, 0.f, 0.f, 8.f, 4.f, 6.f, 10.f, 8.f, 4.f);
+    const DrawList::Vertex& tl = list.vertices()[6];
+    CHECK(list.runs().size() == 2 && list.runs()[1].bitmap == &bmp);
+    CHECK(tl.x == 10.f && std::abs(tl.u - 4.f) < 1e-5f);
+    // Text: a quad per visible glyph, from the font atlas.
+    list.clear();
+    list.draw_text(0, 0, "A B", Color{});
+    CHECK(list.vertices().size() == 12 && list.runs()[0].source == DrawList::Source::Font);
+    CHECK(list.vertices()[6].x == static_cast<float>(2 * font::advance));
+    const Bitmap atlas = font_atlas::make();
+    CHECK(atlas.w == font_atlas::width && (atlas.get(127 % 16 * 8 + 4, 127 / 16 * 8 + 4) >> 24) == 0xff);
+
+    // FbCanvas's dust disc is the old per-pixel loop.
+    Framebuffer a(20, 20), b(20, 20);
+    a.clear(Color{50, 60, 70});
+    b.clear(Color{50, 60, 70});
+    FbCanvas canvas(a);
+    canvas.dither_disc(9, 8, 4, Color{200, 200, 210}, 0.6f, 0.8f);
+    for (int dy = -4; dy <= 4; ++dy)
+        for (int dx = -4; dx <= 4; ++dx)
+            if (dx * dx + dy * dy <= 16 && bayer4(9 + dx, 8 + dy) < 0.6f)
+                b.blend_pixel(9 + dx, 8 + dy, Color{200, 200, 210}, 0.8f);
+    CHECK(std::equal(a.pixels(), a.pixels() + 400, b.pixels()));
 }
 
 void test_framebuffer_blit() {
@@ -2545,6 +2591,7 @@ int main() {
     test_steer_rate();
     test_pause_menu();
     test_daylight();
+    test_draw_list();
     test_touch();
     test_options();
     test_animals();

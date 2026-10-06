@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <deque>
 
 namespace racer {
 
@@ -20,48 +21,27 @@ constexpr Color Label{0xff, 0xd8, 0x30};
 constexpr Color Value{0xf8, 0xf8, 0xf8};
 constexpr Color Shadow{0x10, 0x10, 0x20};
 
-// Full-screen menu dim. GLES HUD buffers are transparent → one fill. Software
-// path blends with integer math (the old per-pixel blend_pixel was ~15fps on HD).
-void dim_menu_bg(Framebuffer& fb) {
-    uint32_t* p = fb.pixels_mut();
-    const int n = fb.width() * fb.height();
-    if (n <= 0) return;
-    constexpr uint8_t amt = 140; // ≈ 0.55 * 255
-    if ((p[0] >> 24) == 0) {
-        std::fill(p, p + n, Color(0x10, 0x10, 0x20, amt).argb());
-        return;
-    }
-    constexpr int inv = 255 - static_cast<int>(amt);
-    for (int i = 0; i < n; ++i) {
-        const uint32_t d = p[i];
-        const int dr = static_cast<int>((d >> 16) & 0xff);
-        const int dg = static_cast<int>((d >> 8) & 0xff);
-        const int db = static_cast<int>(d & 0xff);
-        const int r = (dr * inv + 0x10 * static_cast<int>(amt)) / 255;
-        const int g = (dg * inv + 0x10 * static_cast<int>(amt)) / 255;
-        const int b = (db * inv + 0x20 * static_cast<int>(amt)) / 255;
-        p[i] = (0xffu << 24) | (static_cast<uint32_t>(r) << 16) | (static_cast<uint32_t>(g) << 8) |
-               static_cast<uint32_t>(b);
-    }
+// Full-screen dim behind the menus.
+void dim_menu_bg(Canvas& fb) {
+    fb.blend_rect(0, 0, fb.width(), fb.height(), Color{0x10, 0x10, 0x20}, 140.f / 255.f);
 }
 
-
-void text(Framebuffer& fb, int x, int y, std::string_view s, Color c, int scale = 1) {
+void text(Canvas& fb, int x, int y, std::string_view s, Color c, int scale = 1) {
     fb.draw_text(x + 1, y + 1, s, Shadow, scale);
     fb.draw_text(x, y, s, c, scale);
 }
 
-void text_right(Framebuffer& fb, int right, int y, std::string_view s, Color c, int scale = 1) {
+void text_right(Canvas& fb, int right, int y, std::string_view s, Color c, int scale = 1) {
     text(fb, right - font::text_width(s, scale), y, s, c, scale);
 }
 
-void text_center(Framebuffer& fb, int y, std::string_view s, Color c, int scale = 1) {
+void text_center(Canvas& fb, int y, std::string_view s, Color c, int scale = 1) {
     text(fb, (fb.width() - font::text_width(s, scale)) / 2, y, s, c, scale);
 }
 
 // The dashboard lamps above the rev counter, shown only while lit: green
 // arrows for the indicators, a blue headlight symbol.
-void draw_lamps(Framebuffer& fb, int x, int y, const HudState& hud) {
+void draw_lamps(Canvas& fb, int x, int y, const HudState& hud) {
     const Color green{0x40, 0xf0, 0x60}, blue{0x50, 0x90, 0xff};
     auto arrow = [&](int ax, int dir) { // 9 wide, 7 high, pointing `dir`
         // The whole shape in shadow a pixel down and right, then in green:
@@ -88,7 +68,7 @@ void draw_lamps(Framebuffer& fb, int x, int y, const HudState& hud) {
 
 // Segmented rev counter. Speed is split into virtual gears; the needle
 // climbs through each gear and drops back on the shift.
-void draw_tacho(Framebuffer& fb, int x, int y, float speed_fraction) {
+void draw_tacho(Canvas& fb, int x, int y, float speed_fraction) {
     const float rpm = drivetrain::rpm(speed_fraction);
 
     constexpr int segments = 20;
@@ -102,42 +82,72 @@ void draw_tacho(Framebuffer& fb, int x, int y, float speed_fraction) {
     }
 }
 
-// Mini map in a size x size box at (x, y): the track as a light line with a
-// dark border, the start line, the gas stations and a blinking dot for the car.
-void draw_minimap(Framebuffer& fb, int x, int y, int size, const HudState& hud) {
-    const std::vector<MapPoint>& map = *hud.map;
+// The track of the mini map at `inner` pixels across, drawn once: a light
+// line with a dark border, minimap_margin pixels in from the bitmap's edges.
+constexpr int minimap_margin = 3;
+const Bitmap& minimap_layer(const std::vector<MapPoint>& map, float inner) {
+    struct Entry {
+        const MapPoint* data;
+        size_t n;
+        float inner, x0, y0;
+        Bitmap bitmap;
+    };
+    static std::deque<Entry> cache; // stable references: draw lists keep them a frame
+    const float x0 = map.empty() ? 0.f : map.front().x, y0 = map.empty() ? 0.f : map.front().y;
+    for (const Entry& e : cache)
+        if (e.data == map.data() && e.n == map.size() && e.inner == inner && e.x0 == x0 && e.y0 == y0) return e.bitmap;
     const int n = static_cast<int>(map.size());
-    if (n == 0) return;
-    for (int j = y; j < y + size; ++j)
-        for (int i = x; i < x + size; ++i) fb.blend_pixel(i, j, Shadow, 0.45f);
-
-    // The whole lap fits the box at zoom 1; zoomed in, the box follows the
-    // car and cuts off the rest.
-    const float inner = static_cast<float>(size - 6) * hud.map_zoom;
-    const MapPoint& here = map[static_cast<size_t>(((hud.map_player % n) + n) % n)];
-    const float cx0 = hud.map_zoom > 1.f ? static_cast<float>(size) / 2.f - here.x * inner : 3.f;
-    const float cy0 = hud.map_zoom > 1.f ? static_cast<float>(size) / 2.f - here.y * inner : 3.f;
+    const int extent = static_cast<int>(std::lround(inner)) + 2 * minimap_margin + 1;
+    Framebuffer fb(extent, extent); // transparent
     auto px = [&](int seg) {
         const MapPoint& p = map[static_cast<size_t>(((seg % n) + n) % n)];
-        return std::make_pair(x + static_cast<int>(std::lround(cx0 + p.x * inner)),
-                              y + static_cast<int>(std::lround(cy0 + p.y * inner)));
+        return std::make_pair(minimap_margin + static_cast<int>(std::lround(p.x * inner)),
+                              minimap_margin + static_cast<int>(std::lround(p.y * inner)));
     };
-    fb.set_clip(x, y, x + size, y + size);
     const int step = std::max(1, n / 240);
     for (int pass = 0; pass < 2; ++pass) {
         for (int i = 0; i < n; i += step) {
-            const auto [x0, y0] = px(i);
-            const auto [x1, y1] = px(i + step);
+            const auto [ax, ay] = px(i);
+            const auto [bx, by] = px(i + step);
             if (pass == 0) {
                 for (int d = -1; d <= 1; d += 2) {
-                    fb.line(x0 + d, y0, x1 + d, y1, Shadow);
-                    fb.line(x0, y0 + d, x1, y1 + d, Shadow);
+                    fb.line(ax + d, ay, bx + d, by, Shadow);
+                    fb.line(ax, ay + d, bx, by + d, Shadow);
                 }
             } else {
-                fb.line(x0, y0, x1, y1, Color{0xd8, 0xdc, 0xe4});
+                fb.line(ax, ay, bx, by, Color{0xd8, 0xdc, 0xe4});
             }
         }
     }
+    Bitmap b(extent, extent);
+    b.px.assign(fb.pixels(), fb.pixels() + b.px.size());
+    cache.push_back(Entry{map.data(), map.size(), inner, x0, y0, std::move(b)});
+    return cache.back().bitmap;
+}
+
+// Mini map in a size x size box at (x, y): the track as a light line with a
+// dark border, the start line, the gas stations and a blinking dot for the car.
+void draw_minimap(Canvas& fb, int x, int y, int size, const HudState& hud) {
+    const std::vector<MapPoint>& map = *hud.map;
+    const int n = static_cast<int>(map.size());
+    if (n == 0) return;
+    fb.blend_rect(x, y, size, size, Shadow, 0.45f);
+
+    // The whole lap fits the box at zoom 1; zoomed in, the box follows the
+    // car and cuts off the rest. The track itself is a cached bitmap.
+    const float inner = static_cast<float>(size - 6) * hud.map_zoom;
+    const MapPoint& here = map[static_cast<size_t>(((hud.map_player % n) + n) % n)];
+    const int ox = hud.map_zoom > 1.f ? static_cast<int>(std::lround(static_cast<float>(size) / 2.f - here.x * inner)) : 3;
+    const int oy = hud.map_zoom > 1.f ? static_cast<int>(std::lround(static_cast<float>(size) / 2.f - here.y * inner)) : 3;
+    auto px = [&](int seg) {
+        const MapPoint& p = map[static_cast<size_t>(((seg % n) + n) % n)];
+        return std::make_pair(x + ox + static_cast<int>(std::lround(p.x * inner)),
+                              y + oy + static_cast<int>(std::lround(p.y * inner)));
+    };
+    fb.set_clip(x, y, x + size, y + size);
+    const Bitmap& track = minimap_layer(map, inner);
+    fb.blit(track, static_cast<float>(x + ox - minimap_margin), static_cast<float>(y + oy - minimap_margin),
+            static_cast<float>(track.w), static_cast<float>(track.h));
     auto dot = [&](int seg, Color c, Color centre) {
         const auto [cx, cy] = px(seg);
         fb.fill_rect(cx - 2, cy - 2, 5, 5, Shadow);
@@ -174,7 +184,7 @@ void draw_minimap(Framebuffer& fb, int x, int y, int size, const HudState& hud) 
 }
 
 // Fuel gauge: a pump symbol and a bar, red and blinking when low.
-void draw_fuel(Framebuffer& fb, int x, int y, float level, bool warning) {
+void draw_fuel(Canvas& fb, int x, int y, float level, bool warning) {
     const Color icon = warning ? Color{0xf0, 0x30, 0x20} : Label;
     fb.fill_rect(x, y + 1, 5, 7, icon); // the pump
     fb.fill_rect(x + 1, y + 2, 3, 2, Shadow);
@@ -190,7 +200,7 @@ void draw_fuel(Framebuffer& fb, int x, int y, float level, bool warning) {
 
 // Nitro canisters, right-aligned at `right`: full ones, the one burning now
 // draining, and the empty ones.
-void draw_nitro(Framebuffer& fb, int right, int y, int count, int full, float burning) {
+void draw_nitro(Canvas& fb, int right, int y, int count, int full, float burning) {
     constexpr int w = 7, gap = 3, h = 14;
     const Color glass{0x1c, 0x24, 0x3c}, fill{0x30, 0x90, 0xf0}, shine{0xb0, 0xe0, 0xff}, cap{0xc8, 0xc8, 0xd0};
     for (int i = 0; i < count; ++i) {
@@ -216,7 +226,7 @@ std::string format_lap_time(float seconds) {
     return buf;
 }
 
-void draw_hud(Framebuffer& fb, const HudState& hud) {
+void draw_hud(Canvas& fb, const HudState& hud) {
     const int w = fb.width();
     const int h = fb.height();
 
@@ -317,7 +327,7 @@ void draw_hud(Framebuffer& fb, const HudState& hud) {
     }
 }
 
-void draw_pause_menu(Framebuffer& fb, const PauseMenu& menu, const std::string& /*place*/,
+void draw_pause_menu(Canvas& fb, const PauseMenu& menu, const std::string& /*place*/,
                      const std::string& /*track*/) {
     dim_menu_bg(fb);
     const int top = fb.height() / 2 - 50;
@@ -331,7 +341,7 @@ void draw_pause_menu(Framebuffer& fb, const PauseMenu& menu, const std::string& 
     }
 }
 
-void draw_options_menu(Framebuffer& fb, const OptionsMenu& menu, const Options& options,
+void draw_options_menu(Canvas& fb, const OptionsMenu& menu, const Options& options,
                        const std::string& place, const std::string& track) {
     dim_menu_bg(fb);
     const int top = fb.height() / 2 - 70;
@@ -347,7 +357,7 @@ void draw_options_menu(Framebuffer& fb, const OptionsMenu& menu, const Options& 
 }
 
 
-void draw_debug_menu(Framebuffer& fb, const DebugMenu& menu, const DebugOptions& debug, float hour, int car,
+void draw_debug_menu(Canvas& fb, const DebugMenu& menu, const DebugOptions& debug, float hour, int car,
                      int driver, int passenger) {
     dim_menu_bg(fb);
     // Sit near the top so the longer list still fits on a 240-tall framebuffer.
@@ -364,7 +374,7 @@ void draw_debug_menu(Framebuffer& fb, const DebugMenu& menu, const DebugOptions&
 }
 
 
-void draw_video_menu(Framebuffer& fb, const VideoMenu& menu, bool wide, bool hd, PresentBackend present,
+void draw_video_menu(Canvas& fb, const VideoMenu& menu, bool wide, bool hd, PresentBackend present,
                      const DebugOptions& debug) {
     dim_menu_bg(fb);
     const int top = 12;
@@ -379,7 +389,7 @@ void draw_video_menu(Framebuffer& fb, const VideoMenu& menu, bool wide, bool hd,
     }
 }
 
-void draw_audio_menu(Framebuffer& fb, const AudioMenu& menu, bool muted, int engine_vol, int music_vol,
+void draw_audio_menu(Canvas& fb, const AudioMenu& menu, bool muted, int engine_vol, int music_vol,
                      int music) {
     dim_menu_bg(fb);
     const int top = fb.height() / 2 - 50;
@@ -394,7 +404,7 @@ void draw_audio_menu(Framebuffer& fb, const AudioMenu& menu, bool muted, int eng
     }
 }
 
-void draw_fps(Framebuffer& fb, float fps, const frame_stats::Snapshot& stats) {
+void draw_fps(Canvas& fb, float fps, const frame_stats::Snapshot& stats) {
     const Color col{0xe0, 0xe8, 0x40};
     char buf[96];
     std::snprintf(buf, sizeof buf, "%.0f FPS  %.1fms%s", static_cast<double>(fps), stats.ms_frame,

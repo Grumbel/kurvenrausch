@@ -3,6 +3,8 @@
 
 #include "gles_render.hpp"
 
+#include "canvas.hpp"
+
 #include "frame_stats.hpp"
 #include "framebuffer.hpp"
 
@@ -412,6 +414,69 @@ const char* k_light_frag =
 #endif
     KURVEN_LIGHT_BODY;
 
+// 2D layer (DrawList): texture × vertex colour, straight alpha. a_par holds
+// a dither disc (centre, radius + 0.5, threshold): the framebuffer pixels
+// inside it whose 4×4 Bayer value is below the threshold, as
+// Canvas::dither_disc draws them; a threshold below 0 marks an opaque
+// texture (render targets whose alpha is not coverage).
+const char* k_ui_vert =
+#if !KURVEN_GLES
+    "#version 110\n"
+#endif
+    "attribute vec2 a_pos;\n"
+    "attribute vec2 a_uv;\n"
+    "attribute vec4 a_col;\n"
+    "attribute vec4 a_par;\n"
+    "uniform vec2 u_screen;\n"
+    "uniform float u_z;\n"
+    "varying vec2 v_uv;\n"
+    "varying vec4 v_col;\n"
+    "varying vec4 v_par;\n"
+    "varying vec2 v_pos;\n"
+    "void main(){\n"
+    "  v_uv = a_uv; v_col = a_col; v_par = a_par; v_pos = a_pos;\n"
+    "  vec2 ndc = vec2(a_pos.x / u_screen.x * 2.0 - 1.0, 1.0 - a_pos.y / u_screen.y * 2.0);\n"
+    "  gl_Position = vec4(ndc, u_z, 1.0);\n"
+    "}\n";
+
+#define KURVEN_UI_BODY \
+    "varying vec2 v_uv;\n" \
+    "varying vec4 v_col;\n" \
+    "varying vec4 v_par;\n" \
+    "varying vec2 v_pos;\n" \
+    "uniform sampler2D u_tex;\n" \
+    "void main(){\n" \
+    "  if (v_par.z > 0.0) {\n" \
+    "    vec2 p = floor(v_pos);\n" \
+    "    vec2 d = p - v_par.xy;\n" \
+    "    float r = floor(v_par.z);\n" \
+    "    if (dot(d, d) > r * r) discard;\n" \
+    "    vec2 q = mod(p, 4.0);\n" \
+    "    vec2 lo = mod(q, 2.0);\n" \
+    "    vec2 hi = floor(q * 0.5);\n" \
+    "    float m = 4.0 * (2.0 * lo.x + 3.0 * lo.y - 4.0 * lo.x * lo.y) + (2.0 * hi.x + 3.0 * hi.y - 4.0 * hi.x * hi.y);\n" \
+    "    if (m / 16.0 >= v_par.w) discard;\n" \
+    "    gl_FragColor = v_col;\n" \
+    "    return;\n" \
+    "  }\n" \
+    "  vec4 c = texture2D(u_tex, v_uv) * v_col;\n" \
+    "  if (v_par.w < 0.0) c.a = v_col.a;\n" \
+    "  if (c.a <= 0.0) discard;\n" \
+    "  gl_FragColor = c;\n" \
+    "}\n"
+
+const char* k_ui_frag =
+#if KURVEN_GLES
+    "#ifdef GL_FRAGMENT_PRECISION_HIGH\n"
+    "precision highp float;\n"
+    "#else\n"
+    "precision mediump float;\n"
+    "#endif\n"
+#else
+    "#version 110\n"
+#endif
+    KURVEN_UI_BODY;
+
 unsigned compile(unsigned type, const char* src) {
     const unsigned s = g.CreateShader(type);
     g.ShaderSource(s, 1, &src, nullptr);
@@ -461,6 +526,7 @@ unsigned link(const char* vert, const char* frag, const char* name) {
     g.BindAttribLocation(prog, 0, "a_pos");
     g.BindAttribLocation(prog, 1, "a_uv");
     g.BindAttribLocation(prog, 2, "a_col");
+    g.BindAttribLocation(prog, 3, "a_par");
     g.LinkProgram(prog);
     g.DeleteShader(vs);
     g.DeleteShader(fs);
@@ -496,6 +562,8 @@ void GlesRenderer::invalidate() {
     emissive_tex_ = 0;
     compose_program_ = 0;
     light_program_ = 0;
+    ui_program_ = 0;
+    font_tex_ = 0;
     present_tex_ = 0;
     fbo_w_ = fbo_h_ = 0;
     textures_.clear();
@@ -542,6 +610,7 @@ void GlesRenderer::shutdown() {
     del_tex(rows_tex_);
     rows_tex_h_ = 0;
     del_tex(emissive_tex_);
+    del_tex(font_tex_);
     present_tex_ = 0;
     auto del_fbo = [&](unsigned& f) {
         if (f && g.DeleteFramebuffers) { g.DeleteFramebuffers(1, &f); f = 0; }
@@ -557,6 +626,10 @@ void GlesRenderer::shutdown() {
     if (compose_program_) {
         g.DeleteProgram(compose_program_);
         compose_program_ = 0;
+    }
+    if (ui_program_) {
+        g.DeleteProgram(ui_program_);
+        ui_program_ = 0;
     }
     if (light_program_) {
         g.DeleteProgram(light_program_);
@@ -621,6 +694,12 @@ bool GlesRenderer::init() {
     u_light_rows_ = g.GetUniformLocation(light_program_, "u_rows");
     u_light_px_ = g.GetUniformLocation(light_program_, "u_px");
     u_light_beam_ = g.GetUniformLocation(light_program_, "u_beam");
+
+    ui_program_ = link(k_ui_vert, k_ui_frag, "ui");
+    if (!ui_program_) return false;
+    u_ui_screen_ = g.GetUniformLocation(ui_program_, "u_screen");
+    u_ui_z_ = g.GetUniformLocation(ui_program_, "u_z");
+    u_ui_tex_ = g.GetUniformLocation(ui_program_, "u_tex");
 
     g.GenBuffers(1, &vbo_);
     return true;
@@ -850,13 +929,110 @@ void GlesRenderer::push_quad_rotated(float cx, float cy, float w, float h, float
 }
 
 // Screen area of a triangle list (pixels drawn, before depth test or discard).
-double GlesRenderer::covered(const std::vector<Vertex>& tris) {
+template <typename V>
+double triangle_area(const std::vector<V>& tris) {
     double area = 0.0;
     for (size_t i = 0; i + 2 < tris.size(); i += 3) {
-        const Vertex &a = tris[i], &b = tris[i + 1], &c = tris[i + 2];
+        const V &a = tris[i], &b = tris[i + 1], &c = tris[i + 2];
         area += std::abs(static_cast<double>((b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y)));
     }
     return 0.5 * area;
+}
+
+double GlesRenderer::covered(const std::vector<Vertex>& tris) { return triangle_area(tris); }
+
+void GlesRenderer::ensure_font_tex() {
+    if (font_tex_ || !g.GenTextures) return;
+    const Bitmap atlas = font_atlas::make();
+    std::vector<uint8_t> rgba(atlas.px.size() * 4);
+    for (size_t i = 0; i < atlas.px.size(); ++i) {
+        const uint32_t p = atlas.px[i];
+        rgba[i * 4 + 0] = static_cast<uint8_t>(p >> 16);
+        rgba[i * 4 + 1] = static_cast<uint8_t>(p >> 8);
+        rgba[i * 4 + 2] = static_cast<uint8_t>(p);
+        rgba[i * 4 + 3] = static_cast<uint8_t>(p >> 24);
+    }
+    g.GenTextures(1, &font_tex_);
+    g.BindTexture(GL_TEXTURE_2D_, font_tex_);
+    g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_MIN_FILTER_, GL_NEAREST_);
+    g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_MAG_FILTER_, GL_NEAREST_);
+    g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_WRAP_S_, GL_CLAMP_TO_EDGE_);
+    g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_WRAP_T_, GL_CLAMP_TO_EDGE_);
+    g.PixelStorei(0x0CF5 /* GL_UNPACK_ALIGNMENT */, 1);
+    g.TexImage2D(GL_TEXTURE_2D_, 0, static_cast<int>(GL_RGBA_), atlas.w, atlas.h, 0, GL_RGBA_, GL_UNSIGNED_BYTE_,
+                 rgba.data());
+}
+
+void GlesRenderer::draw_list(const DrawList& list, int layer, float z) {
+    if (list.empty() || !ui_program_) return;
+    ensure_font_tex();
+    g.UseProgram(ui_program_);
+    g.Uniform2f(u_ui_screen_, static_cast<float>(list.width()), static_cast<float>(list.height()));
+    g.Uniform1f(u_ui_z_, z);
+    g.Uniform1i(u_ui_tex_, 0);
+    g.ActiveTexture(GL_TEXTURE0_);
+    g.Enable(GL_BLEND_);
+    g.BlendFunc(GL_SRC_ALPHA_, GL_ONE_MINUS_SRC_ALPHA_);
+    unsigned bound = 0;
+    auto flush = [&] {
+        if (ui_batch_.empty()) return;
+        g.BindTexture(GL_TEXTURE_2D_, bound);
+        g.BindBuffer(GL_ARRAY_BUFFER_, vbo_);
+        g.BufferData(GL_ARRAY_BUFFER_, static_cast<std::ptrdiff_t>(ui_batch_.size() * sizeof(DrawList::Vertex)),
+                     ui_batch_.data(), GL_DYNAMIC_DRAW_);
+        const int stride = static_cast<int>(sizeof(DrawList::Vertex));
+        for (unsigned i = 0; i < 4; ++i) g.EnableVertexAttribArray(i);
+        g.VertexAttribPointer(0, 2, GL_FLOAT_, GL_FALSE_, stride, reinterpret_cast<void*>(0));
+        g.VertexAttribPointer(1, 2, GL_FLOAT_, GL_FALSE_, stride, reinterpret_cast<void*>(sizeof(float) * 2));
+        g.VertexAttribPointer(2, 4, GL_FLOAT_, GL_FALSE_, stride, reinterpret_cast<void*>(sizeof(float) * 4));
+        g.VertexAttribPointer(3, 4, GL_FLOAT_, GL_FALSE_, stride, reinterpret_cast<void*>(sizeof(float) * 8));
+        const int n = static_cast<int>(ui_batch_.size());
+        g.DrawArrays(GL_TRIANGLES_, 0, n);
+        g.DisableVertexAttribArray(3);
+        frame_stats::add_draw(n, true);
+        frame_stats::add_fill(triangle_area(ui_batch_));
+        ui_batch_.clear();
+    };
+    const std::vector<DrawList::Vertex>& verts = list.vertices();
+    for (const DrawList::Run& run : list.runs()) {
+        if (run.layer != layer || run.count == 0) continue;
+        unsigned tex = 0;
+        float ou = 0.f, ov = 0.f, su = 1.f, sv = 1.f;
+        bool opaque = false;
+        switch (run.source) {
+            case DrawList::Source::Font:
+                tex = font_tex_;
+                su = 1.f / static_cast<float>(font_atlas::width);
+                sv = 1.f / static_cast<float>(font_atlas::height);
+                break;
+            case DrawList::Source::Bitmap: {
+                const TexRef t = texture_for(*run.bitmap, run.dynamic);
+                tex = t.id;
+                ou = t.u0;
+                ov = t.v0;
+                su = (t.u1 - t.u0) / static_cast<float>(run.bitmap->w);
+                sv = (t.v1 - t.v0) / static_cast<float>(run.bitmap->h);
+                break;
+            }
+            case DrawList::Source::Texture:
+                tex = run.texture;
+                opaque = true;
+                break;
+        }
+        if (!tex) continue;
+        if (tex != bound) {
+            flush();
+            bound = tex;
+        }
+        for (size_t i = run.first; i < run.first + run.count; ++i) {
+            DrawList::Vertex v = verts[i];
+            v.u = ou + v.u * su;
+            v.v = ov + v.v * sv;
+            if (opaque) v.threshold = -1.f;
+            ui_batch_.push_back(v);
+        }
+    }
+    flush();
 }
 
 void GlesRenderer::flush_solid() {
@@ -2012,6 +2188,21 @@ void GlesRenderer::read_fbo_argb(std::vector<uint32_t>& out) {
     }
 }
 
+void GlesRenderer::use_scene_program() {
+    g.UseProgram(program_);
+    g.Enable(GL_BLEND_);
+    g.BlendFunc(GL_SRC_ALPHA_, GL_ONE_MINUS_SRC_ALPHA_);
+}
+
+void GlesRenderer::draw_over_scene(const DrawList& list) {
+    int prev_fbo = 0;
+    if (g.GetIntegerv) g.GetIntegerv(GL_FRAMEBUFFER_BINDING_, &prev_fbo);
+    g.BindFramebuffer(GL_FRAMEBUFFER_, present_tex_ == night_tex_ && night_fbo_ ? night_fbo_ : fbo_);
+    g.Viewport(0, 0, width_, height_);
+    draw_list(list);
+    g.BindFramebuffer(GL_FRAMEBUFFER_, static_cast<unsigned>(prev_fbo));
+}
+
 void GlesRenderer::read_scene_argb(std::vector<uint32_t>& out) {
     int prev_fbo = 0;
     if (g.GetIntegerv) g.GetIntegerv(GL_FRAMEBUFFER_BINDING_, &prev_fbo);
@@ -2280,7 +2471,7 @@ bool GlesRenderer::headlight_rows(const Beam& beam, float dark, float box[4]) {
 void GlesRenderer::render(const Track& track, const RoadView& view, const SpriteSheet& sprites,
                           std::vector<RoadSprite>& objects, const RoadTheme& theme, const Daylight& light,
                           const Background* backdrop, float hour, const Beam* headlight,
-                          const Weather* weather) {
+                          const Weather* weather, const DrawList* overlay) {
     if (!program_ || !ensure_fbo()) return;
     present_tex_ = color_tex_;
     ensure_sprite_atlas(sprites);
@@ -2433,8 +2624,16 @@ void GlesRenderer::render(const Track& track, const RoadView& view, const Sprite
         flush_textured();
         flush_solid();
         set_depth(sprite_z);
+        // Over the road and cars: sparks, spray, dust, the nitro flame (as
+        // standing on the ground, for the lights); the cockpit over the weather
+        // and out of the headlights.
+        if (overlay) {
+            draw_list(*overlay, 0, sprite_z);
+            use_scene_program();
+        }
         if (weather) draw_weather(*weather);
         flush_solid();
+        if (overlay) draw_list(*overlay, 1, player_z);
         g.Disable(GL_DEPTH_TEST_);
     }
 

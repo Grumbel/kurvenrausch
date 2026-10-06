@@ -78,7 +78,7 @@ void Overlay::rect(float x, float y, float w, float h, Color c) {
     });
 }
 
-void Overlay::draw(Framebuffer& fb) const {
+void Overlay::draw(Canvas& fb) const {
     for (const Item& item : items_) {
         const Bitmap& b = *item.image;
         for (int y = 0; y < b.h; ++y) {

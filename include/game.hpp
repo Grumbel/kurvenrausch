@@ -206,7 +206,11 @@ private:
     InputState autopilot() const;
     void update_fuel(const InputState& input, float dt);
     void render();
-    void render_mirror();
+    // The mirror (housing, the view behind, its sheen) onto c.
+    void render_mirror(Canvas& c);
+    // Where the HUD, menus and the rest over the scene go: the framebuffer, or
+    // on the GLES path hud_list_, drawn over the scene when presenting.
+    Canvas& hud_canvas();
     // The framebuffer to the screen, the touch controls over it.
     void present();
     // frame_stats on stdout about once a second while the FPS overlay is on.
@@ -230,6 +234,11 @@ private:
 
     std::unique_ptr<Display> display_;
     Framebuffer fb_;
+    FbCanvas fb_canvas_{fb_};
+    // GLES: particles and the cockpit, drawn into the scene (layer 0 under
+    // the weather, layer 1 over it), and everything over the scene.
+    DrawList scene_list_{base_width, height};
+    DrawList hud_list_{base_width, height};
     Input input_;
     World world_;
     Track track_;
@@ -238,6 +247,7 @@ private:
     bool use_gles_ = false;
     std::vector<RoadSprite> road_sprites_;
     Framebuffer mirror_fb_;
+    Bitmap mirror_bitmap_; // mirror_fb_'s pixels, for a Canvas
     RoadRenderer mirror_road_;
     std::vector<RoadSprite> mirror_sprites_;
     SpriteSheet sprites_;

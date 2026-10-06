@@ -4,6 +4,7 @@
 #pragma once
 
 #include "background.hpp"
+#include "canvas.hpp"
 #include "daylight.hpp"
 #include "road.hpp"
 #include "sprites.hpp"
@@ -42,10 +43,18 @@ public:
     void render(const Track& track, const RoadView& view, const SpriteSheet& sprites,
                 std::vector<RoadSprite>& objects, const RoadTheme& theme, const Daylight& light,
                 const Background* backdrop = nullptr, float hour = 12.f,
-                const Beam* headlight = nullptr, const Weather* weather = nullptr);
+                const Beam* headlight = nullptr, const Weather* weather = nullptr,
+                const DrawList* overlay = nullptr);
+    // Headless: `list` drawn over the presentable scene (into its FBO).
+    void draw_over_scene(const DrawList& list);
 
     // Presentable scene texture (albedo, or night composite when applied).
     unsigned color_texture() const { return present_tex_ ? present_tex_ : color_tex_; }
+    // A DrawList's runs of `layer` into the current framebuffer and viewport,
+    // which map list.width() x list.height() framebuffer pixels; z is the
+    // depth written where depth testing is on.
+    void draw_list(const DrawList& list, int layer = 0, float z = 0.f);
+
     // The presentable scene as ARGB pixels, top row first (headless screenshots).
     void read_scene_argb(std::vector<uint32_t>& out);
     int texture_width() const { return width_; }
@@ -88,6 +97,9 @@ private:
     void push_quad_rotated(float cx, float cy, float w, float h, float angle, float u0, float v0, float u1,
                            float v1, Color c);
     static double covered(const std::vector<Vertex>& tris);
+    void ensure_font_tex();
+    // Back to the scene program after a draw_list in the sprite pass.
+    void use_scene_program();
     void flush_solid();
     // Draw pending textured_ with active_tex_, then clear the batch.
     void flush_textured();
@@ -153,6 +165,12 @@ private:
     unsigned program_ = 0;
     unsigned compose_program_ = 0;
     unsigned light_program_ = 0;
+    unsigned ui_program_ = 0;
+    unsigned font_tex_ = 0; // font_atlas::make()
+    int u_ui_screen_ = -1;
+    int u_ui_z_ = -1;
+    int u_ui_tex_ = -1;
+    std::vector<DrawList::Vertex> ui_batch_;
     unsigned vbo_ = 0;
     int u_screen_ = -1;
     int u_use_tex_ = -1;

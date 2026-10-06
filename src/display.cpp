@@ -304,10 +304,6 @@ void Display::destroy_present() {
     // can raise BadWindow during later TranslateCoords from SDL teardown.
     if (gl_ && window_) {
         SDL_GL_MakeCurrent(window_, gl_);
-        if (gl_hud_fbo_ && g_gl.DeleteFramebuffers) {
-            g_gl.DeleteFramebuffers(1, &gl_hud_fbo_);
-            gl_hud_fbo_ = 0;
-        }
         if (gl_fb_tex_ && g_gl.DeleteTextures) {
             g_gl.DeleteTextures(1, &gl_fb_tex_);
             gl_fb_tex_ = 0;
@@ -727,7 +723,7 @@ void Display::present_gl(const uint32_t* argb_pixels, const Overlay& overlay) {
 
 
 
-void Display::present_gles_scene(unsigned scene_tex, int tex_w, int tex_h, const uint32_t* hud_argb,
+void Display::present_gles_scene(unsigned scene_tex, const std::function<void()>& draw_over,
                                  const Overlay& overlay) {
     if (!is_gl() || !window_ || !gl_program_ || !scene_tex) {
         present_overlay(overlay);
@@ -756,90 +752,29 @@ void Display::present_gles_scene(unsigned scene_tex, int tex_w, int tex_h, const
     const float scene_verts[] = {
         x0, y0, 0.f, 0.f, x1, y0, 1.f, 0.f, x0, y1, 0.f, 1.f, x1, y1, 1.f, 1.f,
     };
-    g_gl.BindBuffer(GL_ARRAY_BUFFER_, gl_vbo_);
+    auto bind_quad = [&] {
+        g_gl.BindBuffer(GL_ARRAY_BUFFER_, gl_vbo_);
+        g_gl.EnableVertexAttribArray(0);
+        g_gl.EnableVertexAttribArray(1);
+        g_gl.VertexAttribPointer(0, 2, GL_FLOAT_, GL_FALSE_, 16, reinterpret_cast<void*>(0));
+        g_gl.VertexAttribPointer(1, 2, GL_FLOAT_, GL_FALSE_, 16, reinterpret_cast<void*>(8));
+    };
+    bind_quad();
     g_gl.BufferData(GL_ARRAY_BUFFER_, sizeof scene_verts, scene_verts, GL_STREAM_DRAW_);
-    g_gl.EnableVertexAttribArray(0);
-    g_gl.EnableVertexAttribArray(1);
-    g_gl.VertexAttribPointer(0, 2, GL_FLOAT_, GL_FALSE_, 16, reinterpret_cast<void*>(0));
-    g_gl.VertexAttribPointer(1, 2, GL_FLOAT_, GL_FALSE_, 16, reinterpret_cast<void*>(8));
     g_gl.DrawArrays(GL_TRIANGLE_STRIP_, 0, 4);
 
-    // HUD: upload only the non-transparent bbox (full-buffer TexSubImage was ~20ms on Mali HD).
-    if (hud_argb && gl_fb_tex_ && tex_w == fb_w_ && tex_h == fb_h_) {
-        int x0b = fb_w_, y0b = fb_h_, x1b = 0, y1b = 0;
-        for (int y = 0; y < fb_h_; ++y) {
-            const uint32_t* row = hud_argb + static_cast<size_t>(y) * static_cast<size_t>(fb_w_);
-            for (int x = 0; x < fb_w_; ++x) {
-                if ((row[x] >> 24) == 0) continue;
-                if (x < x0b) x0b = x;
-                if (x >= x1b) x1b = x + 1;
-                if (y < y0b) y0b = y;
-                if (y >= y1b) y1b = y + 1;
-            }
-        }
-        if (x1b > x0b && y1b > y0b) {
-            // Clear previous HUD so pixels outside the bbox do not ghost.
-            if (g_gl.GenFramebuffers && g_gl.BindFramebuffer && g_gl.FramebufferTexture2D) {
-                if (!gl_hud_fbo_) {
-                    g_gl.GenFramebuffers(1, &gl_hud_fbo_);
-                    g_gl.BindFramebuffer(GL_FRAMEBUFFER_, gl_hud_fbo_);
-                    g_gl.FramebufferTexture2D(GL_FRAMEBUFFER_, GL_COLOR_ATTACHMENT0_, GL_TEXTURE_2D_, gl_fb_tex_, 0);
-                } else {
-                    g_gl.BindFramebuffer(GL_FRAMEBUFFER_, gl_hud_fbo_);
-                }
-                g_gl.Viewport(0, 0, fb_w_, fb_h_);
-                g_gl.ClearColor(0.f, 0.f, 0.f, 0.f);
-                g_gl.Clear(GL_COLOR_BUFFER_BIT_);
-                g_gl.BindFramebuffer(GL_FRAMEBUFFER_, 0);
-                g_gl.Viewport(0, 0, s.w, s.h);
-            }
-            g_gl.BindTexture(GL_TEXTURE_2D_, gl_fb_tex_);
-            const int bw = x1b - x0b, bh = y1b - y0b;
-#if KURVEN_GLES
-            // GLES2 has no UNPACK_ROW_LENGTH — pack the bbox tightly.
-            static thread_local std::vector<uint32_t> pack;
-            pack.resize(static_cast<size_t>(bw * bh));
-            for (int y = 0; y < bh; ++y) {
-                const uint32_t* src = hud_argb + static_cast<size_t>(y0b + y) * static_cast<size_t>(fb_w_) +
-                                      static_cast<size_t>(x0b);
-                std::copy(src, src + bw, pack.begin() + static_cast<size_t>(y) * static_cast<size_t>(bw));
-            }
-            g_gl.TexSubImage2D(GL_TEXTURE_2D_, 0, x0b, y0b, bw, bh, GL_RGBA_, GL_UNSIGNED_BYTE_, pack.data());
-#else
-            for (int y = 0; y < bh; ++y) {
-                g_gl.TexSubImage2D(GL_TEXTURE_2D_, 0, x0b, y0b + y, bw, 1, GL_BGRA_, GL_UNSIGNED_BYTE_,
-                                   hud_argb + static_cast<size_t>(y0b + y) * static_cast<size_t>(fb_w_) +
-                                       static_cast<size_t>(x0b));
-            }
-#endif
-            g_gl.Enable(GL_BLEND_);
-            g_gl.BlendFunc(GL_SRC_ALPHA_, GL_ONE_MINUS_SRC_ALPHA_);
-            if (gl_u_swizzle_ >= 0)
-                g_gl.Uniform1i(gl_u_swizzle_,
-#if KURVEN_GLES
-                               1
-#else
-                               0
-#endif
-                );
-            // Buffer y=0 is the top of the picture. NDC y0=bottom, y1=top of the letterbox.
-            const float u0 = static_cast<float>(x0b) / static_cast<float>(fb_w_);
-            const float u1 = static_cast<float>(x1b) / static_cast<float>(fb_w_);
-            const float vt = static_cast<float>(y0b) / static_cast<float>(fb_h_); // top of bbox
-            const float vb = static_cast<float>(y1b) / static_cast<float>(fb_h_); // bottom of bbox
-            const float fx0 = x0 + (x1 - x0) * static_cast<float>(x0b) / static_cast<float>(fb_w_);
-            const float fx1 = x0 + (x1 - x0) * static_cast<float>(x1b) / static_cast<float>(fb_w_);
-            const float fyt = y1 + (y0 - y1) * vt; // top of bbox on screen
-            const float fyb = y1 + (y0 - y1) * vb; // bottom of bbox on screen
-            const float hud_verts[] = {
-                fx0, fyb, u0, vb, fx1, fyb, u1, vb, fx0, fyt, u0, vt, fx1, fyt, u1, vt,
-            };
-            g_gl.BufferData(GL_ARRAY_BUFFER_, sizeof hud_verts, hud_verts, GL_STREAM_DRAW_);
-            g_gl.BindTexture(GL_TEXTURE_2D_, gl_fb_tex_);
-            g_gl.DrawArrays(GL_TRIANGLE_STRIP_, 0, 4);
-            g_gl.Disable(GL_BLEND_);
-        }
+    // HUD, menus, mirror: drawn by the scene renderer straight onto the
+    // picture, in framebuffer pixels.
+    if (draw_over) {
+        g_gl.Viewport(pic.x, s.h - pic.y - pic.h, pic.w, pic.h);
+        draw_over();
+        g_gl.Viewport(0, 0, s.w, s.h);
+        g_gl.UseProgram(gl_program_);
+        g_gl.Uniform1i(gl_u_tex_, 0);
+        g_gl.ActiveTexture(GL_TEXTURE0_);
+        bind_quad();
     }
+
     g_gl.Enable(GL_BLEND_);
     g_gl.BlendFunc(GL_SRC_ALPHA_, GL_ONE_MINUS_SRC_ALPHA_);
     if (gl_u_swizzle_ >= 0)
@@ -849,7 +784,7 @@ void Display::present_gles_scene(unsigned scene_tex, int tex_w, int tex_h, const
 #else
                        0
 #endif
-        ); // GLES: ARGB as RGBA; desktop: BGRA upload
+        );
     for (const Overlay::Item& item : overlay.items()) {
         if (!item.image || item.image->w <= 0 || item.image->h <= 0 || item.image->px.empty()) continue;
         const void* key = item.image->px.data();
@@ -884,8 +819,6 @@ void Display::present_gles_scene(unsigned scene_tex, int tex_w, int tex_h, const
         g_gl.DrawArrays(GL_TRIANGLE_STRIP_, 0, 4);
     }
     g_gl.Disable(GL_BLEND_);
-    (void)tex_w;
-    (void)tex_h;
     SDL_GL_SwapWindow(window_);
 }
 

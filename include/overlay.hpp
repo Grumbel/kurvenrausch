@@ -3,6 +3,7 @@
 
 #pragma once
 #include "bitmap.hpp"
+#include "canvas.hpp"
 #include "framebuffer.hpp"
 #include "types.hpp"
 
@@ -39,7 +40,7 @@ public:
     const std::vector<Item>& items() const { return items_; }
     // Draws the shapes into a framebuffer whose pixels are the screen's (the
     // headless screenshots).
-    void draw(Framebuffer& fb) const;
+    void draw(Canvas& fb) const;
 
 private:
     // Places the image named `key` with its top-left at (x, y), making it
