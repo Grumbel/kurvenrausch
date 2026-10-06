@@ -1789,10 +1789,10 @@ void GlesRenderer::draw_sprites(const Track& track, const SpriteSheet& sprites, 
             const RoadTheme& th = track.look(s.index);
             const Color post_c = fogc(th.rail[1]);
             const Color bar_c = fogc(th.rail[0]);
-            Color top_c = bar_c;
-            top_c.r = static_cast<uint8_t>(std::min(255, top_c.r + 40));
-            top_c.g = static_cast<uint8_t>(std::min(255, top_c.g + 40));
-            top_c.b = static_cast<uint8_t>(std::min(255, top_c.b + 40));
+            // The lit top edge as RoadRenderer::draw_edge has it. (Adding 40
+            // per channel made the default bars 0xffffff, a lamp colour that
+            // stayed lit at night.)
+            const Color top_c = fogc(blend(th.rail[0], Color{255, 255, 255}, 0.4f));
             // Height fractions along the post (road = 0, top = 1), software bands.
             auto at = [&](float t, float r) {
                 const float x = xa + (xb - xa) * t;
