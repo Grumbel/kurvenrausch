@@ -1031,40 +1031,38 @@ void GlesRenderer::draw_sprites(const Track& track, const SpriteSheet& sprites, 
 
 void GlesRenderer::draw_lamp_pools(float dark) {
     if (dark <= 0.02f || lamps_.empty()) return;
-    // Approximate the software street_lights() pools: soft ground discs whose
-    // screen size follows row_depth. Only rows that already show ground/road
-    // (row_depth > 0) are lit so sky and walls stay dark.
-    g.BlendFunc(GL_SRC_ALPHA_, GL_ONE_); // additive over the night-darkened scene
+    // Match software street_lights(): circular pools on ground rows only.
+    // Screen half-width is sqrt(reach² − dz²) · px_per_unit (a disc, not a
+    // full-reach rectangle). Additive SRC_ALPHA, ONE: rgb = tint, a = strength.
+    g.BlendFunc(GL_SRC_ALPHA_, GL_ONE_);
     for (const LampSpot& lamp : lamps_) {
         const float tint_g = lamp.glow == Glow::Street ? 0.85f : lamp.glow == Glow::Tail ? 0.35f : 1.f;
         const float tint_b = lamp.glow == Glow::Street ? 0.55f : lamp.glow == Glow::Tail ? 0.2f : 0.95f;
         const float strength = lamp.glow == Glow::Tail ? 0.85f : lamp.glow == Glow::Head ? 0.8f : 0.9f;
-        const float base_r = lamp.glow == Glow::Tail ? 1.f : 1.f;
-        const float base_g = lamp.glow == Glow::Tail ? 0.25f : lamp.glow == Glow::Street ? 0.75f : 0.95f;
-        const float base_b = lamp.glow == Glow::Tail ? 0.12f : lamp.glow == Glow::Street ? 0.4f : 0.85f;
         for (int y = 0; y < height_; ++y) {
             const float depth = row_depth_[static_cast<size_t>(y)];
             if (depth <= 0.f) continue;
             const float dz = depth - lamp.depth;
-            if (dz * dz > lamp.reach * lamp.reach) continue;
+            if (std::abs(dz) >= lamp.reach) continue;
             const float px_per_unit = camera_depth_ / depth * x_scale_;
-            const float half = lamp.reach * px_per_unit;
+            const float half = std::sqrt(lamp.reach * lamp.reach - dz * dz) * px_per_unit;
             if (half < 0.5f) continue;
-            const float r2_z = (dz * dz) / (lamp.reach * lamp.reach);
-            const float k = strength * dark * (1.f - r2_z) * (1.f - r2_z);
-            if (k < 0.03f) continue;
-            const float a = std::min(0.55f, k * 0.45f);
-            Color c{static_cast<uint8_t>(std::min(255.f, base_r * 255.f * a)),
-                    static_cast<uint8_t>(std::min(255.f, base_g * tint_g * 255.f * a)),
-                    static_cast<uint8_t>(std::min(255.f, base_b * tint_b * 255.f * a)),
-                    static_cast<uint8_t>(std::min(255.f, a * 200.f))};
-            // Soft falloff: outer strip + brighter core
+            // Intensity at the strip centre (dx = 0), same (1−r²)² as software.
+            const float r2 = (dz * dz) / (lamp.reach * lamp.reach);
+            const float k = strength * dark * (1.f - r2) * (1.f - r2);
+            if (k < 0.02f) continue;
+            const uint8_t rg = 255;
+            const uint8_t gg = static_cast<uint8_t>(std::min(255.f, tint_g * 255.f));
+            const uint8_t bb = static_cast<uint8_t>(std::min(255.f, tint_b * 255.f));
+            // Outer ring softer; core brighter — approximates radial falloff.
+            const float a_outer = std::min(1.f, k * 0.4f);
+            const float a_core = std::min(1.f, k * 0.85f);
+            Color outer{rg, gg, bb, static_cast<uint8_t>(a_outer * 255.f)};
+            Color core{rg, gg, bb, static_cast<uint8_t>(a_core * 255.f)};
             push_trap(static_cast<float>(y), lamp.x - half, lamp.x + half, static_cast<float>(y + 1),
-                      lamp.x - half, lamp.x + half, c);
-            Color core = c;
-            core.a = static_cast<uint8_t>(std::min(255, core.a + 40));
-            push_trap(static_cast<float>(y), lamp.x - half * 0.35f, lamp.x + half * 0.35f,
-                      static_cast<float>(y + 1), lamp.x - half * 0.35f, lamp.x + half * 0.35f, core);
+                      lamp.x - half, lamp.x + half, outer);
+            push_trap(static_cast<float>(y), lamp.x - half * 0.4f, lamp.x + half * 0.4f, static_cast<float>(y + 1),
+                      lamp.x - half * 0.4f, lamp.x + half * 0.4f, core);
         }
     }
     flush_solid();
@@ -1154,6 +1152,7 @@ bool GlesRenderer::ensure_fbo() {
 
 void GlesRenderer::draw_headlight(const Beam& beam, float dark) {
     if (dark <= 0.01f) return;
+    g.BlendFunc(GL_SRC_ALPHA_, GL_ONE_);
     auto smoothstep = [](float a, float b, float x) {
         const float t = std::clamp((x - a) / (b - a), 0.f, 1.f);
         return t * t * (3.f - 2.f * t);
@@ -1184,17 +1183,17 @@ void GlesRenderer::draw_headlight(const Beam& beam, float dark) {
         const float mid = beam.center + beam.aim * ahead * px_per_unit;
         const float k = 0.55f * dark * reach * air;
         if (k < 0.02f) continue;
-        // Soft cone strip: brighter centre via two overlapping traps
-        const float a = std::min(1.f, k);
-        Color c{static_cast<uint8_t>(0xe8 * a), static_cast<uint8_t>(0xe4 * a), static_cast<uint8_t>(0xd0 * a),
-                static_cast<uint8_t>(std::min(255.f, a * 180.f))};
+        // Additive: tint in rgb, strength in alpha (do not premultiply rgb by k).
+        const float a_outer = std::min(1.f, k * 0.55f);
+        const float a_core = std::min(1.f, k * 0.9f);
+        Color c{0xe8, 0xe4, 0xd0, static_cast<uint8_t>(a_outer * 255.f)};
         push_trap(static_cast<float>(y), mid - half, mid + half, static_cast<float>(y + 1), mid - half, mid + half, c);
-        Color core{static_cast<uint8_t>(0xff * a), static_cast<uint8_t>(0xf8 * a), static_cast<uint8_t>(0xe8 * a),
-                   static_cast<uint8_t>(std::min(255.f, a * 120.f))};
+        Color core{0xff, 0xf8, 0xe8, static_cast<uint8_t>(a_core * 255.f)};
         push_trap(static_cast<float>(y), mid - half * 0.35f, mid + half * 0.35f, static_cast<float>(y + 1),
                   mid - half * 0.35f, mid + half * 0.35f, core);
     }
     flush_solid();
+    g.BlendFunc(GL_SRC_ALPHA_, GL_ONE_MINUS_SRC_ALPHA_);
 }
 
 void GlesRenderer::render(const Track& track, const RoadView& view, const SpriteSheet& sprites,

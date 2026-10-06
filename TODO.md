@@ -2,6 +2,12 @@
 
 ## Current tip
 
+### Grok: night lamp pools and headlight additive fix
+- Lamp pools used full `reach` width (horizontal bars) instead of software's
+  circular `sqrt(reach²−dz²)`. Fixed geometry + additive rgb/alpha packing.
+- Headlight cone now uses SRC_ALPHA, ONE with the same packing.
+
+
 ### Grok: dynamic GLES upload for player composite (no pixel hash)
 - Scenery stays cached by `px.data()` (immutable).
 - Fixed sprites call `texture_for(bmp, true)` → TexSubImage2D each frame.
