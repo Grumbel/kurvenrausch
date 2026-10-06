@@ -605,13 +605,9 @@ void GlesRenderer::push_trap(float y0, float x0l, float x0r, float y1, float x1l
             yb = cy1;
         }
         if (!(yb > ya)) return;
-        auto clampx = [&](float& xl, float& xr) {
-            if (xr < cx0 || xl > cx1) return false;
-            xl = std::max(xl, cx0);
-            xr = std::min(xr, cx1);
-            return xr > xl;
-        };
-        if (!clampx(xl0, xr0) || !clampx(xl1, xr1)) return;
+        const float xmin = std::min(std::min(xl0, xr0), std::min(xl1, xr1));
+        const float xmax = std::max(std::max(xl0, xr0), std::max(xl1, xr1));
+        if (xmax <= cx0 || xmin >= cx1) return;
         y0 = ya;
         y1 = yb;
         x0l = xl0;
@@ -656,15 +652,7 @@ void GlesRenderer::push_solid_quad(float x0, float y0, float x1, float y1, float
         const float xmin = std::min(std::min(x0, x1), std::min(x2, x3));
         const float xmax = std::max(std::max(x0, x1), std::max(x2, x3));
         if (ymax <= cy0 || ymin >= cy1 || xmax <= cx0 || xmin >= cx1) return;
-        // Soft clip: clamp vertices into the rect (rails/tunnels stay inside the mouth).
-        auto cl = [&](float& x, float& y) {
-            x = std::clamp(x, cx0, cx1);
-            y = std::clamp(y, cy0, cy1);
-        };
-        cl(x0, y0);
-        cl(x1, y1);
-        cl(x2, y2);
-        cl(x3, y3);
+        // AABB reject only (above) — no vertex clamp.
     }
     const float r = c.r / 255.f, gch = c.g / 255.f, b = c.b / 255.f, a = c.a / 255.f;
     const Vertex verts[6] = {
@@ -691,14 +679,6 @@ void GlesRenderer::push_tint_quad(float x0, float y0, float x1, float y1, float 
         const float xmin = std::min(std::min(x0, x1), std::min(x2, x3));
         const float xmax = std::max(std::max(x0, x1), std::max(x2, x3));
         if (ymax <= cy0 || ymin >= cy1 || xmax <= cx0 || xmin >= cx1) return;
-        auto cl = [&](float& x, float& y) {
-            x = std::clamp(x, cx0, cx1);
-            y = std::clamp(y, cy0, cy1);
-        };
-        cl(x0, y0);
-        cl(x1, y1);
-        cl(x2, y2);
-        cl(x3, y3);
     }
     set_textured(atlas_tex_);
     const float r = c.r / 255.f, gch = c.g / 255.f, b = c.b / 255.f, a = c.a / 255.f;

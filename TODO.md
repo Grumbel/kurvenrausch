@@ -2,6 +2,11 @@
 
 ## Current tip
 
+### Grok: fix CPU clip warping road corners
+- push_trap: y-edge interpolate only; no X clamp into clip box.
+- solid/tint quads: AABB reject only (no corner clamp).
+
+
 ### Grok: restore night lamp quality
 - Reverted HD 2px/3-ring lamp thinning; full 1px × 4-ring falloff again.
 - clear_draw_clip before night pass; atlas white texel at corner (not 0,0).
