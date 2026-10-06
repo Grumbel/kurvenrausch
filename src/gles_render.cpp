@@ -2019,6 +2019,23 @@ void GlesRenderer::draw_sprites(const Track& track, const SpriteSheet& sprites, 
 
 
 
+void GlesRenderer::push_streak(float x, float y, float ux, float uy, int steps, Color c, float a_head,
+                               float a_tail) {
+    // The pixels (x - ux·k, y - uy·k), k < steps, as one quad one pixel wide
+    // whose opacity runs linearly from the head to the tail.
+    if (steps <= 0) return;
+    const float hx = x + 0.5f + ux * 0.5f, hy = y + 0.5f + uy * 0.5f; // past the head pixel's centre
+    const float back = static_cast<float>(steps);
+    const float tx = hx - ux * back, ty = hy - uy * back;
+    const float nx = -uy * 0.5f, ny = ux * 0.5f;
+    const float r = c.r / 255.f, gc = c.g / 255.f, b = c.b / 255.f;
+    const float ah = std::clamp(a_head, 0.f, 1.f), at = std::clamp(a_tail, 0.f, 1.f);
+    const Vertex h0{hx + nx, hy + ny, 0.f, 0.f, r, gc, b, ah}, h1{hx - nx, hy - ny, 0.f, 0.f, r, gc, b, ah};
+    const Vertex t0{tx + nx, ty + ny, 0.f, 0.f, r, gc, b, at}, t1{tx - nx, ty - ny, 0.f, 0.f, r, gc, b, at};
+    const Vertex v[6] = {h0, h1, t0, h1, t1, t0};
+    solid_.insert(solid_.end(), v, v + 6);
+}
+
 void GlesRenderer::draw_weather(const Weather& weather) {
     const int nr = weather.rain_count();
     const int ns = weather.snow_count();
@@ -2032,14 +2049,8 @@ void GlesRenderer::draw_weather(const Weather& weather) {
         const float alpha = 0.3f + 0.4f * p.depth;
         const float ux = v > 1e-3f ? p.vx / v : 0.f, uy = v > 1e-3f ? p.vy / v : 1.f;
         const int steps = std::max(1, static_cast<int>(len));
-        for (int k = 0; k < steps; ++k) {
-            const float t = static_cast<float>(k);
-            const float a = alpha * (1.f - 0.6f * t / len);
-            Color c{0xc4, 0xd2, 0xe8, static_cast<uint8_t>(std::min(255.f, a * 255.f))};
-            const float x = p.x - ux * t;
-            const float y = p.y - uy * t;
-            push_trap(y, x, x + 1.f, y + 1.f, x, x + 1.f, c);
-        }
+        push_streak(p.x, p.y, ux, uy, steps, Color{0xc4, 0xd2, 0xe8}, alpha,
+                    alpha * (1.f - 0.6f * static_cast<float>(steps - 1) / len));
     }
     // Snow flakes / short streaks
     for (int i = 0; i < ns; ++i) {
@@ -2049,14 +2060,9 @@ void GlesRenderer::draw_weather(const Weather& weather) {
         if (len > 1.5f && v > 1e-3f) {
             const float ux = p.vx / v, uy = p.vy / v;
             const float alpha = 0.55f + 0.45f * p.depth;
-            for (int k = 0; k < static_cast<int>(len); ++k) {
-                const float t = static_cast<float>(k);
-                const float a = alpha * (1.f - 0.7f * t / len);
-                Color c{255, 255, 255, static_cast<uint8_t>(std::min(255.f, a * 255.f))};
-                const float x = p.x - ux * t;
-                const float y = p.y - uy * t;
-                push_trap(y, x, x + 1.f, y + 1.f, x, x + 1.f, c);
-            }
+            const int steps = static_cast<int>(len);
+            push_streak(p.x, p.y, ux, uy, steps, Color{255, 255, 255}, alpha,
+                        alpha * (1.f - 0.7f * static_cast<float>(steps - 1) / len));
         } else if (p.depth > 0.72f) {
             Color c{255, 255, 255, 242};
             push_trap(p.y, p.x, p.x + 2.f, p.y + 2.f, p.x, p.x + 2.f, c);

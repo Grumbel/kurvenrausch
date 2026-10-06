@@ -131,6 +131,8 @@ private:
     bool headlight_rows(const Beam& beam, float dark, float box[4]);
     void draw_lamp_pools(float dark);
     void draw_weather(const Weather& weather);
+    // A rain or snow streak as one quad (see draw_weather).
+    void push_streak(float x, float y, float ux, float uy, int steps, Color c, float a_head, float a_tail);
     // Lightmap (lamps, headlight) and the night compose into night_tex_.
     void apply_night(const Daylight& light, const Beam* headlight);
     void read_fbo_argb(std::vector<uint32_t>& out);
