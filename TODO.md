@@ -1593,6 +1593,56 @@ curves, crests, downhill, countryside, traffic. Not verified here: the Nix
 build (no Nix in the sandbox) and interactive play/feel with a real
 display and keyboard.
 
+## Release tags: candidates (not tagged yet)
+
+Nothing is tagged so far. Survey of the history up to 675d884 (321
+commits, 2026-10-01 .. 10-06), to come back to: pick tags, possibly
+rewrite history to set VERSION at those points, or fork off a software-only
+line. Version numbers below are only a proposal. Every candidate was built
+in a clean worktree (RelWithDebInfo, -Wall -Wextra -Wpedantic): no
+warnings, `--screenshot --frames 600` renders, unit tests as noted.
+
+| Tag | Commit | # | What it is |
+|-----|--------|---|------------|
+| v0.0 (optional) | d66c91a178b957d7296a1cbe5e4b6aa0bcb7b103 | 1 | "Bitmap Racer" initial skeleton (~1k lines); only as a root |
+| v0.1.0 first playable | 64fda32abd10f9b8ec3acd385ba7e1ceb92cd251 | 13 | the rewrite: correct projection and hill occlusion, sprites, parallax sky, HUD with lap timing, traffic; no tests yet |
+| v0.2.0 first real game loop | a3c752103c1f5b2951162290a8bbc52a187b847b | 44 | end of day 1 (rounds 2-5): gamepad + rumble, six zones Europe/USA, weather, rails and cliffs, synthesised sound, mirror, horn, nitro, crashes, mini map, fuel and gas stations; tests pass. The next commit (824869d2d1c929961b2825bc750b67bab48be254) adds VERSION = 0.1.0-dev |
+| v0.3.0 feature-complete core | 5feca792c67b8231e42acc0e3f2f7f96fa4df1e5 | 96 | round 12, end of day 2: jumps, San Francisco, forks, 15+ countries, dealers, motels, hospitals, truck stops, car wash, saved laps and choices, camera views, radio, police, handbrake, reverse, desktop integration; tests pass |
+| v0.4.0 ports | 72ca106dcc2c2ce7726d2664e101cd913db986ec | 110 | round 14: web (Emscripten), Windows, Android, R36S/PortMaster, touch controls; tests pass |
+| v0.5.0 | bb66bf657c6de32aa9d8a1645269db719c4ee344 | 128 | round 18: day and night, attract mode, all cars drivable, Grand Tour, oncoming traffic, gameplay options, wide screen; tests pass |
+| v0.6.0 last stable pure software | 22f0782ad4a5063bbd15813070e372111576c495 | 155 | end of day 3, last commit before the Grok sessions: movie cars, tunnels, bridges, trains, animals, taxi fares; every commit up to here builds and passes the tests |
+| (skip, or "last SDL-only") | 6d2258dc9ce2307809ad9ecbf734ecca320445b4 | 183 | last with pure software presentation (e48be51571c3f408c45d7acc5689d1e0bfe431b7 adds the GL present next); has Grok's menus, HD, debug menu; tests pass |
+| (skip) | 7579ced0abeaf5b4460cc99e02309df04738a06f | 217 | last software-only scene renderer (914b5cc595fcbd87a50c888a9397f34bc0ed42d4 starts GLES); test_daylight already fails |
+| v0.7.0 GLES | 5488aab95cde688a6ee357220a04ce8d05646865 | 318 | GLES2 renderer at parity, GPU HUD and mirror, profiler, README screenshots regenerated; test_daylight fails |
+| v0.8.0 or untagged | 675d884085140d5cc7ece1c214c5e36ef242115c | 321 | pause menu overhaul, rebindable controls |
+
+Notes for the rewrite:
+- Eras by author: Claude 10-01 .. 10-04 (rounds 2-18; rounds 2-7 were
+  bundles 003.1 .. 008.1), Grok from 53950f9f1f8404d4024dfbd1d0a0af2a8ec03508
+  (10-05 16:22) to just before 370263bd56b037578419710934dca06d5eef7d14
+  (10-06 17:49): menus, HD, GL present, cliff/fog work, the GLES renderer;
+  then Claude again.
+- Grok commits that do not build alone (each fixed by a follow-up; squash
+  them into the commit they repair so bisect works):
+  8e458608c14970bb9aa51b1978829b00263a6b1c (fixed by
+  48223fec9ae7542bfb34a0615f4bdbecd40d84b0),
+  b5dafab22e1428688d792d8247027b1046ac4b2f,
+  2819ba072feed9409906c4ff901f8bb9323cd121,
+  4cea7ac878c2ed93355b31c2bc425838cf56bf08,
+  9074ad3c36ebfa5e05bf8d49dc79e2064e81e602,
+  5a37d6aa88450f6f641882615210a5cc62355397 are such fixes; the commits
+  just before them are the broken ones (not each verified).
+- test_daylight (midnight stars / sun_amount) starts failing between
+  6d2258dc9ce2307809ad9ecbf734ecca320445b4 and
+  7579ced0abeaf5b4460cc99e02309df04738a06f, likely the night/fog commits
+  a03b48b3c34f8f5b43e3d969156b9fb866a417ac /
+  fa4a816ef76c57fa2175d10663afacbcb77d3659; not bisected.
+- Commit dates are out of order (d66c91a178b957d7296a1cbe5e4b6aa0bcb7b103
+  is dated 11:35, its successors from 09:42): the history was rebased once.
+- Natural fork point for a software-only line:
+  22f0782ad4a5063bbd15813070e372111576c495 (or
+  6d2258dc9ce2307809ad9ecbf734ecca320445b4).
+
 ## Open work / ideas
 
 - Play-test handling and tune: grip values per zone (rain 0.8, snow 0.7),
