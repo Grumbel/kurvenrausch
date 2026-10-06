@@ -879,9 +879,10 @@ void GlesRenderer::ensure_sprite_atlas(const SpriteSheet& sprites) {
     constexpr int pad = 1;
     constexpr int atlas_limit = 4096;
     auto pot = [](int v) {
+        constexpr int limit = 4096;
         int p = 64;
-        while (p < v && p < atlas_limit) p *= 2;
-        return std::min(p, atlas_limit);
+        while (p < v && p < limit) p *= 2;
+        return std::min(p, limit);
     };
 
     struct Place {
