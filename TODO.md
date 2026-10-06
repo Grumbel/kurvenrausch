@@ -2,6 +2,11 @@
 
 ## Current tip
 
+### Grok: menu dim was the 45fps stall
+- Not font draw calls — full-screen blend_pixel (W×H float blends) every
+  frame. Replaced with fill (GLES transparent HUD) or integer row blend.
+
+
 ### Grok: GLES draw-call batching (CPU clip)
 - Road + sprites: per-slice GL scissor caused a flush every hill. Clip is
   applied in push_trap / push_quad / push_solid_quad instead so the solid

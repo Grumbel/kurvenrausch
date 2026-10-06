@@ -20,6 +20,31 @@ constexpr Color Label{0xff, 0xd8, 0x30};
 constexpr Color Value{0xf8, 0xf8, 0xf8};
 constexpr Color Shadow{0x10, 0x10, 0x20};
 
+// Full-screen menu dim. GLES HUD buffers are transparent → one fill. Software
+// path blends with integer math (the old per-pixel blend_pixel was ~15fps on HD).
+void dim_menu_bg(Framebuffer& fb) {
+    uint32_t* p = fb.pixels_mut();
+    const int n = fb.width() * fb.height();
+    if (n <= 0) return;
+    constexpr uint8_t amt = 140; // ≈ 0.55 * 255
+    if ((p[0] >> 24) == 0) {
+        std::fill(p, p + n, Color(0x10, 0x10, 0x20, amt).argb());
+        return;
+    }
+    constexpr int inv = 255 - static_cast<int>(amt);
+    for (int i = 0; i < n; ++i) {
+        const uint32_t d = p[i];
+        const int dr = static_cast<int>((d >> 16) & 0xff);
+        const int dg = static_cast<int>((d >> 8) & 0xff);
+        const int db = static_cast<int>(d & 0xff);
+        const int r = (dr * inv + 0x10 * static_cast<int>(amt)) / 255;
+        const int g = (dg * inv + 0x10 * static_cast<int>(amt)) / 255;
+        const int b = (db * inv + 0x20 * static_cast<int>(amt)) / 255;
+        p[i] = (0xffu << 24) | (static_cast<uint32_t>(r) << 16) | (static_cast<uint32_t>(g) << 8) |
+               static_cast<uint32_t>(b);
+    }
+}
+
 
 void text(Framebuffer& fb, int x, int y, std::string_view s, Color c, int scale = 1) {
     fb.draw_text(x + 1, y + 1, s, Shadow, scale);
@@ -294,9 +319,7 @@ void draw_hud(Framebuffer& fb, const HudState& hud) {
 
 void draw_pause_menu(Framebuffer& fb, const PauseMenu& menu, const std::string& /*place*/,
                      const std::string& /*track*/) {
-    for (int y = 0; y < fb.height(); ++y) {
-        for (int x = 0; x < fb.width(); ++x) fb.blend_pixel(x, y, Shadow, 0.55f);
-    }
+    dim_menu_bg(fb);
     const int top = fb.height() / 2 - 50;
     text_center(fb, top, "PAUSED", Value, 3);
     const std::string items[PauseMenu::items] = {"RESUME", "RESTART", "GAME OPTIONS", "VIDEO", "AUDIO", "DEBUG",
@@ -310,9 +333,7 @@ void draw_pause_menu(Framebuffer& fb, const PauseMenu& menu, const std::string& 
 
 void draw_options_menu(Framebuffer& fb, const OptionsMenu& menu, const Options& options,
                        const std::string& place, const std::string& track) {
-    for (int y = 0; y < fb.height(); ++y) {
-        for (int x = 0; x < fb.width(); ++x) fb.blend_pixel(x, y, Shadow, 0.55f);
-    }
+    dim_menu_bg(fb);
     const int top = fb.height() / 2 - 70;
     text_center(fb, top, "GAME OPTIONS", Value, 3);
     for (int i = 0; i < OptionsMenu::items; ++i) {
@@ -328,9 +349,7 @@ void draw_options_menu(Framebuffer& fb, const OptionsMenu& menu, const Options& 
 
 void draw_debug_menu(Framebuffer& fb, const DebugMenu& menu, const DebugOptions& debug, float hour, int car,
                      int driver, int passenger) {
-    for (int y = 0; y < fb.height(); ++y) {
-        for (int x = 0; x < fb.width(); ++x) fb.blend_pixel(x, y, Shadow, 0.55f);
-    }
+    dim_menu_bg(fb);
     // Sit near the top so the longer list still fits on a 240-tall framebuffer.
     const int top = 8;
     text_center(fb, top, "DEBUG", Value, 3);
@@ -347,9 +366,7 @@ void draw_debug_menu(Framebuffer& fb, const DebugMenu& menu, const DebugOptions&
 
 void draw_video_menu(Framebuffer& fb, const VideoMenu& menu, bool wide, bool hd, PresentBackend present,
                      const DebugOptions& debug) {
-    for (int y = 0; y < fb.height(); ++y) {
-        for (int x = 0; x < fb.width(); ++x) fb.blend_pixel(x, y, Shadow, 0.55f);
-    }
+    dim_menu_bg(fb);
     const int top = 12;
     text_center(fb, top, "VIDEO", Value, 3);
     for (int i = 0; i < VideoMenu::items; ++i) {
@@ -364,9 +381,7 @@ void draw_video_menu(Framebuffer& fb, const VideoMenu& menu, bool wide, bool hd,
 
 void draw_audio_menu(Framebuffer& fb, const AudioMenu& menu, bool muted, int engine_vol, int music_vol,
                      int music) {
-    for (int y = 0; y < fb.height(); ++y) {
-        for (int x = 0; x < fb.width(); ++x) fb.blend_pixel(x, y, Shadow, 0.55f);
-    }
+    dim_menu_bg(fb);
     const int top = fb.height() / 2 - 50;
     text_center(fb, top, "AUDIO", Value, 3);
     for (int i = 0; i < AudioMenu::items; ++i) {
