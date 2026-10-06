@@ -36,6 +36,21 @@
 - Fragment shader skips fog on bright texels so building windows survive night.
 
 
+### Grok: cliff billboard pop-in (software + GLES)
+- Subsample stride was 3 when far and 2 when near. Those sets are not nested:
+  indices ≡ 3 (mod 6) drew far away and vanished a few segments ahead of the
+  car. Now nested power-of-two strides (far=4, near=2) so the near set is a
+  strict superset of the far set. GLES also keeps the run-end exception and
+  matches software height (`max(h1, h2*0.5)`).
+
+### Grok: GLES water / oil patches
+- Patches were drawn *under* the road surface trap, so they never showed.
+  Moved after the road + markings (like software). Oil keeps the iridescent
+  sheen bands; water uses a cooler blue mid-band + sparse glints (no sky
+  mirror — software's mirror was weak on solid traps anyway).
+  (Upstream scenery-parity added multi-band patches but still before the road
+  trap; this move is what makes them visible.)
+
 ### Grok: GLES crash car rotation
 - Fixed sprites honour `RoadSprite::angle` via `push_quad_rotated` (matches
   software `blit_rotated` during crash tumble).
