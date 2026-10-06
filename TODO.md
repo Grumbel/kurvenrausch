@@ -2,6 +2,11 @@
 
 ## Current tip
 
+### Grok: sky haze only at horizon
+- GLES sky: pure sky_top at zenith; horizon blends sky_horizon → atmosphere_air by theme.haze.
+- Clouds: tint only (no distance fog), matching software.
+
+
 ### Grok: tunnel walls sealed + collision
 - Walls at `tunnel_half_width` with opaque bulk outside so nothing shows past.
 - Mouth draws side+header fill for way_in and way_out.

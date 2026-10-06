@@ -549,10 +549,13 @@ void GlesRenderer::draw_backdrop(const RoadTheme& theme, const Background* backd
     // Extreme fog: solid air only (already cleared).
     if (theme.haze >= 0.99f || theme.fog_density >= 80.f) return;
     const float wf = static_cast<float>(width_);
-    // Smooth sky gradient (software dithers 16 bands; GPU interpolates vertex colours).
+    // Sky gradient: pure sky_top at the zenith; only the horizon end picks up
+    // haze (blend toward atmosphere_air). Matches the idea that sky_horizon is
+    // already the near-horizon colour, with theme.haze adding extra wash.
     {
-        const Color top = fogged(theme.sky_top, fog_air_, theme.haze * 0.5f, daylight_);
-        const Color bot = fogged(theme.sky_horizon, fog_air_, theme.haze * 0.35f, daylight_);
+        const Color air = atmosphere_air(theme);
+        const Color top = theme.sky_top; // no haze at the top
+        const Color bot = blend(theme.sky_horizon, air, std::clamp(theme.haze, 0.f, 1.f));
         push_trap_vcol(0.f, 0.f, wf, horizon, 0.f, wf, top, bot);
     }
     if (!backdrop) {
@@ -730,9 +733,9 @@ void GlesRenderer::draw_backdrop(const RoadTheme& theme, const Background* backd
         const float x = wrap(c.x - offset, period);
         for (float rep : {x, x - period}) {
             if (rep + bw <= 0.f || rep >= wf) continue;
-            // Cloud tint in RGB (daylight already applied); haze as fog amount in A.
-            Color tint = fogged(Color{255, 255, 255}, theme.cloud_tint, theme.cloud_tint_amount * 0.5f, daylight_);
-            tint.a = static_cast<uint8_t>(std::min(255.f, theme.haze * 0.25f * 255.f + 0.5f));
+            // Tint only (software blit_scaled with cloud_tint_amount) — no distance fog.
+            Color tint = blend(Color{255, 255, 255}, theme.cloud_tint, theme.cloud_tint_amount);
+            tint.a = 0; // fog amount 0
             push_quad(rep, horizon - c.altitude, bw, bh, 0.f, 0.f, 1.f, 1.f, tint, false);
             flush_textured(tex);
         }
