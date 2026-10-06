@@ -2,6 +2,11 @@
 
 ## Current tip
 
+### Grok: restore night lamp quality
+- Reverted HD 2px/3-ring lamp thinning; full 1px × 4-ring falloff again.
+- clear_draw_clip before night pass; atlas white texel at corner (not 0,0).
+
+
 ### Grok: cut draw calls (rails in atlas batch) + HUD dirty upload
 - Rails/tunnel solids in the sprite pass use atlas white texel → one textured
   batch with scenery (was flush-per-slice → ~90 draws).

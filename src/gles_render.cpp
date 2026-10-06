@@ -953,13 +953,14 @@ void GlesRenderer::ensure_sprite_atlas(const SpriteSheet& sprites) {
     g.TexParameteri(GL_TEXTURE_2D_, GL_TEXTURE_WRAP_T_, GL_CLAMP_TO_EDGE_);
     g.TexImage2D(GL_TEXTURE_2D_, 0, static_cast<int>(GL_RGBA_), atlas_w_, atlas_h_, 0, GL_RGBA_, GL_UNSIGNED_BYTE_,
                  nullptr);
-    // Opaque white texel for tinted solid geometry in the same draw as sprites.
+    // Opaque white texel in the corner, clear of shelf packing (starts at pad).
     {
         const uint8_t white[4] = {255, 255, 255, 255};
+        const int wx = atlas_w_ - 1, wy = atlas_h_ - 1;
         if (g.TexSubImage2D)
-            g.TexSubImage2D(GL_TEXTURE_2D_, 0, 0, 0, 1, 1, GL_RGBA_, GL_UNSIGNED_BYTE_, white);
-        white_u_ = 0.5f / static_cast<float>(atlas_w_);
-        white_v_ = 0.5f / static_cast<float>(atlas_h_);
+            g.TexSubImage2D(GL_TEXTURE_2D_, 0, wx, wy, 1, 1, GL_RGBA_, GL_UNSIGNED_BYTE_, white);
+        white_u_ = (static_cast<float>(wx) + 0.5f) / static_cast<float>(atlas_w_);
+        white_v_ = (static_cast<float>(wy) + 0.5f) / static_cast<float>(atlas_h_);
     }
     g.PixelStorei(0x0CF5 /* GL_UNPACK_ALIGNMENT */, 1);
 
@@ -1695,10 +1696,8 @@ void GlesRenderer::draw_lamp_pools(float ambient) {
         const float tint_g = lamp.glow == Glow::Street ? 0.85f : lamp.glow == Glow::Tail ? 0.35f : 1.f;
         const float tint_b = lamp.glow == Glow::Street ? 0.55f : lamp.glow == Glow::Tail ? 0.2f : 0.95f;
         const float strength = lamp.glow == Glow::Tail ? 0.85f : lamp.glow == Glow::Head ? 0.8f : 0.9f;
-        // Stride rows in HD: full density is a major cost on Mali; visual falloff
-        // still holds with 2px bands.
-        const int y_step = height_ > 300 ? 2 : 1;
-        for (int y = 0; y < height_; y += y_step) {
+        // Full 1px × 4-ring falloff — matches software street_lights quality.
+        for (int y = 0; y < height_; ++y) {
             const float depth = row_depth_[static_cast<size_t>(y)];
             if (depth <= 0.f) continue;
             const float dz = depth - lamp.depth;
@@ -1706,22 +1705,21 @@ void GlesRenderer::draw_lamp_pools(float ambient) {
             const float px_per_unit = camera_depth_ / depth * x_scale_;
             const float half = std::sqrt(lamp.reach * lamp.reach - dz * dz) * px_per_unit;
             if (half < 0.5f) continue;
-            static constexpr float frac[3] = {1.f, 0.55f, 0.22f};
-            static constexpr float wgt[3] = {0.25f, 0.45f, 0.7f};
-            for (int ring = 0; ring < 3; ++ring) {
+            static constexpr float frac[4] = {1.f, 0.72f, 0.45f, 0.2f};
+            static constexpr float wgt[4] = {0.15f, 0.3f, 0.45f, 0.7f};
+            for (int ring = 0; ring < 4; ++ring) {
                 const float edge = frac[ring];
                 const float r_lat = 1.f - edge;
                 const float r2 = (dz * dz) / (lamp.reach * lamp.reach) + r_lat * r_lat * 0.5f;
                 if (r2 >= 1.f) continue;
                 const float k = strength * dark * (1.f - r2) * (1.f - r2) * wgt[ring];
                 if (k < 0.01f) continue;
-                // Additive headroom toward tint (lightmap ends ≤ ~1).
                 Color c{static_cast<uint8_t>(std::min(255.f, tint_r * k * 255.f)),
                         static_cast<uint8_t>(std::min(255.f, tint_g * k * 255.f)),
                         static_cast<uint8_t>(std::min(255.f, tint_b * k * 255.f)), 255};
                 const float h = half * edge;
-                push_trap(static_cast<float>(y), lamp.x - h, lamp.x + h, static_cast<float>(y + y_step),
-                          lamp.x - h, lamp.x + h, c);
+                push_trap(static_cast<float>(y), lamp.x - h, lamp.x + h, static_cast<float>(y + 1), lamp.x - h,
+                          lamp.x + h, c);
             }
         }
     }
