@@ -69,6 +69,8 @@ private:
 
     bool ensure_fbo();
     void clear_batch();
+    void set_draw_clip(int x0, int y0, int x1, int y1);
+    void clear_draw_clip();
     void push_trap(float y0, float x0l, float x0r, float y1, float x1l, float x1r, Color c);
     // Smooth gradient: colour c0 on the y0 edge, c1 on the y1 edge (GPU interpolates).
     void push_trap_vcol(float y0, float x0l, float x0r, float y1, float x1l, float x1r, Color c0, Color c1);
@@ -155,6 +157,9 @@ private:
     std::vector<Slice> slices_;
     std::vector<float> row_depth_;
     std::vector<LampSpot> lamps_;
+    // CPU clip for solid/textured pushes (avoids GL scissor flushes per slice).
+    int draw_clip_x0_ = 0, draw_clip_y0_ = 0, draw_clip_x1_ = 0, draw_clip_y1_ = 0;
+    bool draw_clip_ = false;
     struct CachedTex {
         unsigned id = 0;
         int w = 0;

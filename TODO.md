@@ -2,6 +2,13 @@
 
 ## Current tip
 
+### Grok: GLES draw-call batching (CPU clip)
+- Road + sprites: per-slice GL scissor caused a flush every hill. Clip is
+  applied in push_trap / push_quad / push_solid_quad instead so the solid
+  and atlas batches survive the whole pass.
+- Night lamp pools: 2px row stride + 3 rings in HD (was 1px × 4).
+
+
 ### Grok: GLES menus + R36S conf path
 - Pause/options keep the GLES scene under the UI (no software backdrop).
 - State dir: $KURVENRAUSCH_STATE_DIR, or XDG_STATE_HOME when it is already

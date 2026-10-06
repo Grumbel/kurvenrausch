@@ -559,9 +559,65 @@ void GlesRenderer::clear_batch() {
     active_tex_ = 0;
 }
 
+void GlesRenderer::set_draw_clip(int x0, int y0, int x1, int y1) {
+    draw_clip_x0_ = x0;
+    draw_clip_y0_ = y0;
+    draw_clip_x1_ = x1;
+    draw_clip_y1_ = y1;
+    draw_clip_ = true;
+}
+
+void GlesRenderer::clear_draw_clip() { draw_clip_ = false; }
+
 void GlesRenderer::push_trap(float y0, float x0l, float x0r, float y1, float x1l, float x1r, Color c) {
+    if (draw_clip_) {
+        const float cy0 = static_cast<float>(draw_clip_y0_);
+        const float cy1 = static_cast<float>(draw_clip_y1_);
+        const float cx0 = static_cast<float>(draw_clip_x0_);
+        const float cx1 = static_cast<float>(draw_clip_x1_);
+        // Order so ya <= yb and edges (x0*, x1*) match that order.
+        float ya = y0, yb = y1, xl0 = x0l, xr0 = x0r, xl1 = x1l, xr1 = x1r;
+        if (ya > yb) {
+            std::swap(ya, yb);
+            std::swap(xl0, xl1);
+            std::swap(xr0, xr1);
+        }
+        if (yb <= cy0 || ya >= cy1) return;
+        auto at_y = [&](float y, float& xl, float& xr) {
+            const float dy = yb - ya;
+            if (std::abs(dy) < 1e-6f) {
+                xl = xl0;
+                xr = xr0;
+                return;
+            }
+            const float t = (y - ya) / dy;
+            xl = xl0 + (xl1 - xl0) * t;
+            xr = xr0 + (xr1 - xr0) * t;
+        };
+        if (ya < cy0) {
+            at_y(cy0, xl0, xr0);
+            ya = cy0;
+        }
+        if (yb > cy1) {
+            at_y(cy1, xl1, xr1);
+            yb = cy1;
+        }
+        if (!(yb > ya)) return;
+        auto clampx = [&](float& xl, float& xr) {
+            if (xr < cx0 || xl > cx1) return false;
+            xl = std::max(xl, cx0);
+            xr = std::min(xr, cx1);
+            return xr > xl;
+        };
+        if (!clampx(xl0, xr0) || !clampx(xl1, xr1)) return;
+        y0 = ya;
+        y1 = yb;
+        x0l = xl0;
+        x0r = xr0;
+        x1l = xl1;
+        x1r = xr1;
+    }
     const float r = c.r / 255.f, gch = c.g / 255.f, b = c.b / 255.f, a = c.a / 255.f;
-    // two triangles: (x0l,y0)-(x0r,y0)-(x1l,y1) and (x0r,y0)-(x1r,y1)-(x1l,y1)
     const Vertex verts[6] = {
         {x0l, y0, 0, 0, r, gch, b, a}, {x0r, y0, 0, 0, r, gch, b, a}, {x1l, y1, 0, 0, r, gch, b, a},
         {x0r, y0, 0, 0, r, gch, b, a}, {x1r, y1, 0, 0, r, gch, b, a}, {x1l, y1, 0, 0, r, gch, b, a},
@@ -570,6 +626,12 @@ void GlesRenderer::push_trap(float y0, float x0l, float x0r, float y1, float x1l
 }
 
 void GlesRenderer::push_trap_vcol(float y0, float x0l, float x0r, float y1, float x1l, float x1r, Color c0, Color c1) {
+    // Reuse solid trap clip by averaging colours if clipped away is rare for backdrop.
+    if (draw_clip_) {
+        const float cy0 = static_cast<float>(draw_clip_y0_), cy1 = static_cast<float>(draw_clip_y1_);
+        float ya = std::min(y0, y1), yb = std::max(y0, y1);
+        if (yb <= cy0 || ya >= cy1) return;
+    }
     const float r0 = c0.r / 255.f, g0 = c0.g / 255.f, b0 = c0.b / 255.f, a0 = c0.a / 255.f;
     const float r1 = c1.r / 255.f, g1 = c1.g / 255.f, b1 = c1.b / 255.f, a1 = c1.a / 255.f;
     const Vertex verts[6] = {
@@ -582,6 +644,26 @@ void GlesRenderer::push_trap_vcol(float y0, float x0l, float x0r, float y1, floa
 // General solid quad (two triangles). Vertices in order around the perimeter.
 void GlesRenderer::push_solid_quad(float x0, float y0, float x1, float y1, float x2, float y2, float x3, float y3,
                                    Color c) {
+    if (draw_clip_) {
+        const float cy0 = static_cast<float>(draw_clip_y0_);
+        const float cy1 = static_cast<float>(draw_clip_y1_);
+        const float cx0 = static_cast<float>(draw_clip_x0_);
+        const float cx1 = static_cast<float>(draw_clip_x1_);
+        const float ymin = std::min(std::min(y0, y1), std::min(y2, y3));
+        const float ymax = std::max(std::max(y0, y1), std::max(y2, y3));
+        const float xmin = std::min(std::min(x0, x1), std::min(x2, x3));
+        const float xmax = std::max(std::max(x0, x1), std::max(x2, x3));
+        if (ymax <= cy0 || ymin >= cy1 || xmax <= cx0 || xmin >= cx1) return;
+        // Soft clip: clamp vertices into the rect (rails/tunnels stay inside the mouth).
+        auto cl = [&](float& x, float& y) {
+            x = std::clamp(x, cx0, cx1);
+            y = std::clamp(y, cy0, cy1);
+        };
+        cl(x0, y0);
+        cl(x1, y1);
+        cl(x2, y2);
+        cl(x3, y3);
+    }
     const float r = c.r / 255.f, gch = c.g / 255.f, b = c.b / 255.f, a = c.a / 255.f;
     const Vertex verts[6] = {
         {x0, y0, 0, 0, r, gch, b, a}, {x1, y1, 0, 0, r, gch, b, a}, {x2, y2, 0, 0, r, gch, b, a},
@@ -593,6 +675,37 @@ void GlesRenderer::push_solid_quad(float x0, float y0, float x1, float y1, float
 void GlesRenderer::push_quad(float x, float y, float w, float h, float u0, float v0, float u1, float v1, Color c,
                              bool flip) {
     if (flip) std::swap(u0, u1);
+    if (draw_clip_ && w > 0.f && h > 0.f) {
+        const float cx0 = static_cast<float>(draw_clip_x0_);
+        const float cy0 = static_cast<float>(draw_clip_y0_);
+        const float cx1 = static_cast<float>(draw_clip_x1_);
+        const float cy1 = static_cast<float>(draw_clip_y1_);
+        float x0 = x, y0 = y, x1 = x + w, y1 = y + h;
+        if (x1 <= cx0 || x0 >= cx1 || y1 <= cy0 || y0 >= cy1) return;
+        // Clip dest rect and remap UVs so partial occlusion stays correct.
+        const float uw = u1 - u0, vh = v1 - v0;
+        if (x0 < cx0) {
+            u0 += uw * (cx0 - x0) / w;
+            x0 = cx0;
+        }
+        if (x1 > cx1) {
+            u1 -= uw * (x1 - cx1) / w;
+            x1 = cx1;
+        }
+        if (y0 < cy0) {
+            v0 += vh * (cy0 - y0) / h;
+            y0 = cy0;
+        }
+        if (y1 > cy1) {
+            v1 -= vh * (y1 - cy1) / h;
+            y1 = cy1;
+        }
+        if (!(x1 > x0) || !(y1 > y0)) return;
+        x = x0;
+        y = y0;
+        w = x1 - x0;
+        h = y1 - y0;
+    }
     const float r = c.r / 255.f, gch = c.g / 255.f, b = c.b / 255.f, a = c.a / 255.f;
     const float x1 = x + w, y1 = y + h;
     const Vertex verts[6] = {
@@ -1257,8 +1370,6 @@ void GlesRenderer::draw_segment(const Track& track, const Slice& s, const RoadTh
 
 void GlesRenderer::draw_sprites(const Track& track, const SpriteSheet& sprites, std::vector<RoadSprite>& objects) {
     const float seg_len = track.segment_length;
-    bool scissor_on = false;
-    int sc_x0 = 0, sc_y0 = 0, sc_x1 = 0, sc_y1 = 0;
     for (auto it = slices_.rbegin(); it != slices_.rend(); ++it) {
         const Slice& s = *it;
         const bool projectable = s.p1.cam_z > camera_depth_;
@@ -1266,35 +1377,15 @@ void GlesRenderer::draw_sprites(const Track& track, const SpriteSheet& sprites, 
         const float fog_amount = 1.f - s.fog;
         const ScreenPoint& p0 = direction_ > 0 ? s.p1 : s.p2;
 
-        // Clip to the tunnel mouth / nearer-road occlusion (software set_clip).
-        // Coalesce consecutive slices with the same rect so rails/beyond solids
-        // stay in one batch (per-slice flush was the coastal-road stall).
+        // CPU clip (software set_clip) — keeps atlas sprites in one batch.
         const int clip_x0 = std::max(0, static_cast<int>(s.left));
         const int clip_x1 = std::min(width_, static_cast<int>(std::ceil(s.right)));
         const int clip_y0 = std::max(0, pixel_edge(s.top));
         const int clip_y1 = std::min(height_, clip_row(s.clip));
-        const bool want_scissor = g.Scissor && g.Enable && clip_x1 > clip_x0 && clip_y1 > clip_y0 &&
-                                  (clip_x0 > 0 || clip_x1 < width_ || clip_y0 > 0 || clip_y1 < height_);
-        if (want_scissor) {
-            if (!scissor_on || clip_x0 != sc_x0 || clip_y0 != sc_y0 || clip_x1 != sc_x1 || clip_y1 != sc_y1) {
-                // flush_solid() alone skips textured when solid_ is empty — batched
-                // sprites would then draw under the next (wrong) scissor.
-                flush_textured();
-                flush_solid();
-                g.Enable(GL_SCISSOR_TEST_);
-                g.Scissor(clip_x0, height_ - clip_y1, clip_x1 - clip_x0, clip_y1 - clip_y0);
-                scissor_on = true;
-                sc_x0 = clip_x0;
-                sc_y0 = clip_y0;
-                sc_x1 = clip_x1;
-                sc_y1 = clip_y1;
-            }
-        } else if (scissor_on) {
-            flush_textured();
-            flush_solid();
-            g.Disable(GL_SCISSOR_TEST_);
-            scissor_on = false;
-        }
+        if (clip_x1 > clip_x0 && clip_y1 > clip_y0)
+            set_draw_clip(clip_x0, clip_y0, clip_x1, clip_y1);
+        else
+            clear_draw_clip();
 
         // Guard rails: same bands as software RoadRenderer::draw_edge (posts +
         // upper/lower bars with gaps). Drawn far→near so nearer rails win.
@@ -1539,11 +1630,7 @@ void GlesRenderer::draw_sprites(const Track& track, const SpriteSheet& sprites, 
         }
 
     }
-    if (scissor_on) {
-        flush_textured();
-        flush_solid();
-        g.Disable(GL_SCISSOR_TEST_);
-    }
+    clear_draw_clip();
     flush_textured();
     flush_solid();
 }
@@ -1562,7 +1649,10 @@ void GlesRenderer::draw_lamp_pools(float ambient) {
         const float tint_g = lamp.glow == Glow::Street ? 0.85f : lamp.glow == Glow::Tail ? 0.35f : 1.f;
         const float tint_b = lamp.glow == Glow::Street ? 0.55f : lamp.glow == Glow::Tail ? 0.2f : 0.95f;
         const float strength = lamp.glow == Glow::Tail ? 0.85f : lamp.glow == Glow::Head ? 0.8f : 0.9f;
-        for (int y = 0; y < height_; ++y) {
+        // Stride rows in HD: full density is a major cost on Mali; visual falloff
+        // still holds with 2px bands.
+        const int y_step = height_ > 300 ? 2 : 1;
+        for (int y = 0; y < height_; y += y_step) {
             const float depth = row_depth_[static_cast<size_t>(y)];
             if (depth <= 0.f) continue;
             const float dz = depth - lamp.depth;
@@ -1570,10 +1660,9 @@ void GlesRenderer::draw_lamp_pools(float ambient) {
             const float px_per_unit = camera_depth_ / depth * x_scale_;
             const float half = std::sqrt(lamp.reach * lamp.reach - dz * dz) * px_per_unit;
             if (half < 0.5f) continue;
-            // Concentric rings approximate radial (1−r²)² falloff.
-            static constexpr float frac[4] = {1.f, 0.72f, 0.45f, 0.2f};
-            static constexpr float wgt[4] = {0.15f, 0.3f, 0.45f, 0.7f};
-            for (int ring = 0; ring < 4; ++ring) {
+            static constexpr float frac[3] = {1.f, 0.55f, 0.22f};
+            static constexpr float wgt[3] = {0.25f, 0.45f, 0.7f};
+            for (int ring = 0; ring < 3; ++ring) {
                 const float edge = frac[ring];
                 const float r_lat = 1.f - edge;
                 const float r2 = (dz * dz) / (lamp.reach * lamp.reach) + r_lat * r_lat * 0.5f;
@@ -1585,8 +1674,8 @@ void GlesRenderer::draw_lamp_pools(float ambient) {
                         static_cast<uint8_t>(std::min(255.f, tint_g * k * 255.f)),
                         static_cast<uint8_t>(std::min(255.f, tint_b * k * 255.f)), 255};
                 const float h = half * edge;
-                push_trap(static_cast<float>(y), lamp.x - h, lamp.x + h, static_cast<float>(y + 1), lamp.x - h,
-                          lamp.x + h, c);
+                push_trap(static_cast<float>(y), lamp.x - h, lamp.x + h, static_cast<float>(y + y_step),
+                          lamp.x - h, lamp.x + h, c);
             }
         }
     }
@@ -1985,47 +2074,21 @@ void GlesRenderer::render(const Track& track, const RoadView& view, const Sprite
     solid_.reserve(std::max(solid_.capacity(), static_cast<size_t>(48 * 1024)));
     textured_.reserve(std::max(textured_.capacity(), static_cast<size_t>(16 * 1024)));
     draw_backdrop(theme, backdrop, hour, horizon);
-    // Coalesce consecutive segments that share the same scissor rect so we
-    // do not flush the solid batch on every slice (hill max_y often changes
-    // each segment, but tunnel mouths and flat runs share a box).
-    bool scissor_on = false;
-    int sc_x0 = 0, sc_y0 = 0, sc_x1 = 0, sc_y1 = 0;
+    // CPU clip per slice (same rect as software set_clip) — no GL scissor, so
+    // the whole road stays in one solid batch even when max_y changes every hill.
     for (const Slice& s : slices_) {
         if (!s.road_visible) continue;
-        // Match software set_clip: tunnel mouth and nearer-road occlusion.
         const int clip_x0 = std::max(0, static_cast<int>(s.left));
         const int clip_x1 = std::min(width_, static_cast<int>(std::ceil(s.right)));
         const int clip_y0 = std::max(0, pixel_edge(s.top));
         const int clip_y1 = std::min(height_, clip_row(s.clip));
-        const bool want_scissor = g.Scissor && g.Enable && clip_x1 > clip_x0 && clip_y1 > clip_y0 &&
-                                  (clip_x0 > 0 || clip_x1 < width_ || clip_y0 > 0 || clip_y1 < height_);
-        if (want_scissor) {
-            if (!scissor_on || clip_x0 != sc_x0 || clip_y0 != sc_y0 || clip_x1 != sc_x1 || clip_y1 != sc_y1) {
-                // flush_solid() alone skips textured when solid_ is empty — batched
-                // sprites would then draw under the next (wrong) scissor.
-                flush_textured();
-                flush_solid();
-                g.Enable(GL_SCISSOR_TEST_);
-                g.Scissor(clip_x0, height_ - clip_y1, clip_x1 - clip_x0, clip_y1 - clip_y0);
-                scissor_on = true;
-                sc_x0 = clip_x0;
-                sc_y0 = clip_y0;
-                sc_x1 = clip_x1;
-                sc_y1 = clip_y1;
-            }
-        } else if (scissor_on) {
-            flush_textured();
-            flush_solid();
-            g.Disable(GL_SCISSOR_TEST_);
-            scissor_on = false;
-        }
+        if (clip_x1 > clip_x0 && clip_y1 > clip_y0)
+            set_draw_clip(clip_x0, clip_y0, clip_x1, clip_y1);
+        else
+            clear_draw_clip();
         draw_segment(track, s, theme);
     }
-    if (scissor_on) {
-        flush_textured();
-        flush_solid();
-        g.Disable(GL_SCISSOR_TEST_);
-    }
+    clear_draw_clip();
     flush_solid();
 
     // Pre-sprite ground into its own FBO (software street_lights ground mask).
