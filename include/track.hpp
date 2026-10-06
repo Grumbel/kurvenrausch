@@ -91,6 +91,8 @@ enum class Scenery : uint8_t {
     FlatHouse,    // a flat-roofed house of sandstone or plaster, warm climates
     GoldenGate,   // San Francisco: Art Deco tower portal you drive through (the road is the bridge)
     AdvanceSign,  // a lot ahead, and how far: its variant is advance_sign_variant()
+    Garage,       // the player's own garage, beyond its forecourt
+    GarageSign,   // the sign announcing it
     Count
 };
 
@@ -127,8 +129,9 @@ enum class Lot : uint8_t {
     Truckstop, // a truck stop: trucks and vans
     SportsDealer, // a sports car dealer
     Chemical, // a chemical plant: the nitro canisters filled again
+    Garage,   // the player's own garage, before the start line: the cars had before
 };
-constexpr int lot_kinds = 8;
+constexpr int lot_kinds = 9;
 // The name the HUD shows, and the keyword --visit takes.
 const char* lot_name(Lot kind);
 const char* lot_keyword(Lot kind);

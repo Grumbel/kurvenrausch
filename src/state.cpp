@@ -3,6 +3,8 @@
 
 #include "state.hpp"
 
+#include "vehicles.hpp"
+
 #include <SDL2/SDL.h>
 
 #include <algorithm>
@@ -94,7 +96,8 @@ std::string format_choices(const Choices& c) {
         << "map_zoomed " << c.map_zoomed << "\n"
         << "rumble " << c.rumble << "\n"
         << "demo_text " << c.demo_text << "\n"
-        << "demo_idle " << c.demo_idle << "\n";
+        << "demo_idle " << c.demo_idle << "\n"
+        << "garage " << c.garage << "\n";
     for (int a = 0; a < action_count; ++a) {
         const auto& keys = c.bindings.keys[static_cast<size_t>(a)];
         const auto& pad = c.bindings.pad[static_cast<size_t>(a)];
@@ -146,6 +149,7 @@ Choices parse_choices(std::string_view text) {
         else if (key == "rumble") c.rumble = value;
         else if (key == "demo_text") c.demo_text = value;
         else if (key == "demo_idle") c.demo_idle = std::clamp(value, 0, demo_idle_choices - 1);
+        else if (key == "garage") c.garage = (static_cast<uint32_t>(value) & ((1u << car_models) - 1u)) | 1u;
         else if (key.size() > 4 && (key.compare(0, 4, "key_") == 0 || key.compare(0, 4, "pad_") == 0)) {
             int second = 0;
             if (!(fields >> second)) second = 0;

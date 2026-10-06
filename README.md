@@ -178,8 +178,13 @@ weather and road markings, fading smoothly into one another:
   driver's hands (higher up in the truck)
 - **Truck stops** (before the Autobahn, in the outback): the Big Rig, an
   orange cab-over tractor, the Van and the Box Truck, slow but planted
+- **Your garage**, just before the start line: every car you have driven
+  off a lot (or found) waits there; stop and steer to take another one
+- **Advance signs** announce every stop 500 and 200 m ahead (nearer where
+  there is no room), on its side of the road; they read at night too
 - **Mini map** of the lap with your position, the start line, the gas
-  stations, the car dealers, car washes, motels, hospitals and truck stops
+  stations, the car dealers, car washes, motels, hospitals, truck stops and
+  your garage
 - **Police chases**: now and then, driving fast, a police car turns up in
   the mirror, lights flashing and siren wailing. Close behind it is a little
   slower than the standard car flat out, so it gains only when you slow down

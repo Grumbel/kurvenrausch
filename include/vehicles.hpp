@@ -113,6 +113,9 @@ int next_car_in_range(int current, CarRange range, int step);
 // `arrived`: the dealer's range, and the car they came in, if it is not of
 // that range, ahead of it; so it is never lost by looking around.
 int next_car_offered(int current, int arrived, CarRange range, int step);
+// The player's garage: the next car of `owned` (a bit per car_model()) from
+// `current` in the direction of `step`; `current` if it is the only one.
+int next_owned_car(int current, uint32_t owned, int step);
 // The same at a dealer in `regions`: only the range's cars at home there,
 // unless there are fewer than two of them (then the whole range).
 int next_car_offered(int current, int arrived, CarRange range, int step, uint8_t regions);

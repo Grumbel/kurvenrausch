@@ -144,10 +144,11 @@ during the headless run, and stay there:
 .BR wash ,
 .BR motel ,
 .BR hospital ,
-.B truckstop
-or
+.BR truckstop ,
 .B chemical
-(nitro).
+(nitro) or
+.B garage
+(your own, before the start line).
 .TP
 .B \-\-pause
 Show the pause menu in the screenshot.

@@ -92,6 +92,8 @@ const SceneryInfo& scenery_info(Scenery kind) {
         /* FlatHouse */ {2400.f, true,  false, true},
         /* GoldenGate*/ {7200.f, false, true,  false},
         /* AdvanceSign*/{1700.f, true,  false, false},
+        /* Garage    */ {4800.f, true,  false, false},
+        /* GarageSign*/ { 700.f, true,  false, false},
     };
     static_assert(sizeof(infos) / sizeof(infos[0]) == static_cast<size_t>(Scenery::Count),
                   "scenery_info() needs an entry for every Scenery kind");
@@ -181,6 +183,7 @@ const LotNames& lot_names(Lot kind) {
         {"TRUCK STOP", "truckstop"},
         {"SPORTS CARS", "sports"},
         {"CHEMICAL PLANT", "chemical"},
+        {"YOUR GARAGE", "garage"},
     };
     static_assert(sizeof(names) / sizeof(names[0]) == static_cast<size_t>(lot_kinds), "every lot needs its names");
     return names[static_cast<size_t>(kind)];
@@ -580,6 +583,8 @@ public:
     void truckstop() { forecourt_lot(Lot::Truckstop); }
     // A chemical plant, where nitro is to be had.
     void chemical_plant() { forecourt_lot(Lot::Chemical); }
+    // The player's garage, at the end of the lap: just before the start line.
+    void garage() { forecourt_lot(Lot::Garage); }
 
     void forecourt_lot(Lot kind) {
         const int from = size();
@@ -655,6 +660,10 @@ public:
             case Lot::Chemical:
                 scenery(from + 1, Scenery::ChemicalSign, 1.25f);
                 scenery(from + start + 26, Scenery::ChemicalPlant, forecourt_width + 0.1f);
+                break;
+            case Lot::Garage:
+                scenery(from + 1, Scenery::GarageSign, 1.25f);
+                scenery(from + start + 26, Scenery::Garage, forecourt_width + 0.1f);
                 break;
         }
     }
@@ -1703,6 +1712,7 @@ Track build_demo_track() {
     b.gas_station();
     b.curve(Len::Medium, -Bend::Hard, Hill::None);
     b.downhill_to_end(Len::Long);
+    b.garage(); // home: just before the start line
 
     return finish_route(track, b);
 }
@@ -2071,6 +2081,7 @@ Track build_track(int index) {
     streets(-1);
     b.hospital();
     b.downhill_to_end(Len::Long);
+    b.garage(); // home: just before the start line
 
     return finish_route(track, b);
 }

@@ -279,6 +279,7 @@ const char* advance_sign_word(Lot kind) {
         case Lot::Truckstop: return "TRUCK STOP";
         case Lot::SportsDealer: return "SPORTS CARS";
         case Lot::Chemical: return "NITRO";
+        case Lot::Garage: return "YOUR GARAGE";
     }
     return "";
 }
@@ -730,6 +731,57 @@ Bitmap make_showroom(const ShowroomLook& look) {
         const int x = 6 + i * 8, y = 31 + (i % 2);
         for (int k = 0; k < 4; ++k) paint::rect(b, x + k, y, 1, 6 - k, pennant[i % 3]);
     }
+    paint::outline(b, Outline);
+    return b;
+}
+
+// The player's own garage: a brick row of roller doors, one open with a car
+// inside, lamps over the doors and a name board on the roof.
+Bitmap make_garage() {
+    Bitmap b(192, 96);
+    const Color brick{0x9c, 0x4c, 0x38}, mortar{0x7c, 0x3c, 0x2c}, roof{0x3c, 0x40, 0x48};
+    const Color door{0xb4, 0xb8, 0xbc}, rib{0x8c, 0x90, 0x94}, dark{0x24, 0x26, 0x2c}, white{0xf4, 0xf4, 0xf4};
+    const Color board{0x2c, 0x1c, 0x4c}, lamp = glowing(Color{0xff, 0xe8, 0xb0});
+    paint::rect(b, 4, 30, 184, 66, brick);
+    for (int y = 34; y < 96; y += 6) paint::rect(b, 4, y, 184, 1, mortar);
+    for (int y = 30; y < 96; y += 6)
+        for (int x = 4 + (y / 6 % 2) * 6; x < 188; x += 12) paint::rect(b, x, y, 1, 6, mortar);
+    paint::rect(b, 0, 24, 192, 7, roof);
+    for (int i = 0; i < 3; ++i) {
+        const int x = 14 + 60 * i;
+        paint::rect(b, x - 2, 44, 48, 52, Color{0x58, 0x5c, 0x64}); // the frame
+        if (i == 1) {
+            paint::rect(b, x, 46, 44, 50, dark); // open: a car inside
+            paint::rect(b, x, 46, 44, 8, door);  // the door rolled up
+            showroom_car(b, x + 10, 76, Color{0xd8, 0x20, 0x24}, Color{0xff, 0x80, 0x70});
+        } else {
+            paint::rect(b, x, 46, 44, 50, door);
+            for (int y = 48; y < 96; y += 4) paint::rect(b, x, y, 44, 1, rib);
+        }
+        paint::rect(b, x + 18, 38, 8, 3, lamp);
+    }
+    paint::rect(b, 46, 2, 100, 22, board);
+    paint::rect(b, 48, 4, 96, 18, Color{0x48, 0x30, 0x78});
+    paint::text(b, (192 - font::text_width("GARAGE", 2)) / 2, 6, "GARAGE", white, 2);
+    paint::outline(b, Outline);
+    return b;
+}
+
+// Its sign by the road: PRIVATE over a key.
+Bitmap make_garage_sign() {
+    Bitmap b(44, 112);
+    const Color purple{0x48, 0x30, 0x78}, white{0xf4, 0xf4, 0xf4}, gold{0xf0, 0xc8, 0x40};
+    paint::rect(b, 19, 44, 6, 68, Color{0x9a, 0x9a, 0xa4});
+    paint::rect(b, 23, 44, 2, 68, Color{0x6c, 0x6c, 0x74});
+    paint::rect(b, 0, 0, 44, 46, purple);
+    paint::text(b, (44 - font::text_width("YOURS")) / 2, 3, "YOURS", white);
+    paint::rect(b, 3, 13, 38, 30, white);
+    // A key: its bow, the shaft and two bits.
+    paint::rect(b, 8, 21, 10, 10, gold);
+    paint::rect(b, 11, 24, 4, 4, white);
+    paint::rect(b, 18, 25, 18, 3, gold);
+    paint::rect(b, 29, 28, 3, 5, gold);
+    paint::rect(b, 34, 28, 2, 4, gold);
     paint::outline(b, Outline);
     return b;
 }
@@ -3556,6 +3608,8 @@ SpriteSheet::SpriteSheet() {
                                {{0x24, 0x24, 0x2a}, {0xe0, 0xb0, 0x30}}, {{0x20, 0x20, 0x26}, {0xf0, 0xc0, 0x30}}}};
     scenery_[static_cast<size_t>(Scenery::Showroom)] = make_showroom(regular);
     scenery_[static_cast<size_t>(Scenery::DealerSign)] = make_dealer_sign(regular);
+    scenery_[static_cast<size_t>(Scenery::Garage)] = make_garage();
+    scenery_[static_cast<size_t>(Scenery::GarageSign)] = make_garage_sign();
     scenery_[static_cast<size_t>(Scenery::SportsShowroom)] = make_showroom(sports);
     scenery_[static_cast<size_t>(Scenery::SportsSign)] = make_dealer_sign(sports);
     scenery_[static_cast<size_t>(Scenery::DatePalm)] = make_date_palm();

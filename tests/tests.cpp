@@ -1574,6 +1574,32 @@ void test_yield_lane() {
     CHECK(yield_lane(3, 0.f, 0.07f, 0.45f, free3) == 0);
 }
 
+void test_garage() {
+    using namespace racer;
+    // On every track, once, at the end of the lap: the last stop before the start line.
+    for (int t = 0; t < track_count; ++t) {
+        const Track tr = build_track(t);
+        const std::vector<int> garages = tr.lots(Lot::Garage);
+        CHECK(garages.size() == 1);
+        if (garages.empty()) continue;
+        const int n = static_cast<int>(tr.segments.size());
+        CHECK(garages[0] > n - 120);
+        for (int i = garages[0]; i < n; ++i) CHECK(tr.segments[static_cast<size_t>(i)].forecourt == 0.f || tr.segments[static_cast<size_t>(i)].lot == Lot::Garage);
+    }
+    // Through the cars had, either way, round the end; alone, nothing else.
+    const uint32_t owned = (1u << 0) | (1u << 4) | (1u << 19);
+    CHECK(next_owned_car(0, owned, 1) == 4 && next_owned_car(4, owned, 1) == 19 && next_owned_car(19, owned, 1) == 0);
+    CHECK(next_owned_car(0, owned, -1) == 19 && next_owned_car(4, owned, -1) == 0);
+    CHECK(next_owned_car(3, 1u << 3, 1) == 3);
+    // Kept in the choices; the first car always, nothing beyond the last.
+    Choices c;
+    c.garage = owned;
+    CHECK(parse_choices(format_choices(c)).garage == owned);
+    CHECK(parse_choices("car 1\n").garage == 1u);
+    CHECK(parse_choices("garage -1\n").garage == (1u << car_models) - 1u);
+    CHECK((parse_choices("garage 16\n").garage & 1u) == 1u);
+}
+
 void test_advance_signs() {
     using namespace racer;
     for (int t = 0; t < track_count; ++t) {
@@ -2788,6 +2814,7 @@ int main() {
     test_track_map();
     test_gas_stations();
     test_advance_signs();
+    test_garage();
     test_wet_spots();
     test_san_francisco();
     test_branches();

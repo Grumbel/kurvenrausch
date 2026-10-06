@@ -6,6 +6,7 @@
 #include "bindings.hpp"
 #include "options.hpp"
 
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -58,6 +59,7 @@ struct Choices {
     int rumble = 1;      // pad vibration
     int demo_text = 1;   // the attract mode shows the title and the prompt
     int demo_idle = 2;   // see demo_idle_seconds()
+    uint32_t garage = 1; // the cars the player has had, a bit per car_model(); the first always
     // Keys and pad inputs, as "key_<action> a b" / "pad_<action> a b".
     Bindings bindings = default_bindings();
 };

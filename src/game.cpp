@@ -343,6 +343,7 @@ bool Game::init(bool fullscreen) {
         rumble_ = c->rumble != 0;
         demo_text_ = c->demo_text != 0;
         demo_idle_ = std::clamp(c->demo_idle, 0, demo_idle_choices - 1);
+        owned_cars_ = c->garage | (1u << car_model_); // the car last driven is the player's too
         bindings_ = c->bindings;
     }
 
@@ -1411,6 +1412,7 @@ void Game::save_choices() const {
     c.rumble = rumble_ ? 1 : 0;
     c.demo_text = demo_text_ ? 1 : 0;
     c.demo_idle = demo_idle_;
+    c.garage = owned_cars_;
     c.bindings = bindings_;
     // Where the race is, to go on from there next time; following the
     // traffic in the attract mode, where it was.
@@ -1428,6 +1430,13 @@ void Game::save_choices() const {
 
 // Into another car: it comes clean. Fuel stays as it is — a dealer is not a
 // free fill-up (gas stations are).
+void Game::own_car(int model) {
+    const uint32_t bit = 1u << (model % car_models);
+    if (owned_cars_ & bit) return;
+    owned_cars_ |= bit;
+    save_choices();
+}
+
 void Game::change_car() {
     apply_car();
     beacon_ = beacon_ && body_has_lightbar(car_model(car_model_).body);
@@ -1452,13 +1461,17 @@ void Game::visit_lot(const InputState& input) {
     const float speed_pct = std::abs(world_.get<Velocity>(player_).speed) / world_.get<Player>(player_).max_speed;
     const std::optional<Lot> here = speed_pct < refuel_speed ? lot_here() : std::nullopt;
     const bool choice = here == Lot::Dealer || here == Lot::SportsDealer || here == Lot::Motel ||
-                        here == Lot::Hospital || here == Lot::Truckstop;
+                        here == Lot::Hospital || here == Lot::Truckstop || here == Lot::Garage;
     // On offer only while the car stands, and not as it pulls away: steering
     // out of the lot must not pick another car.
     offer_ = choice && speed_pct < offer_speed && input.throttle < 0.1f ? here : std::nullopt;
     if (here != Lot::Hospital) hospital_ambulance_ = false; // back at a hospital, the drivers first
-    // The car the player came in, offered alongside the lot's.
-    if (!here) arrived_model_ = -1;
+    // The car the player came in, offered alongside the lot's. The one
+    // driven off the lot is theirs (browsing a dealer's is not).
+    if (!here) {
+        if (arrived_model_ >= 0) own_car(car_model_);
+        arrived_model_ = -1;
+    }
     else if (arrived_model_ < 0) arrived_model_ = car_model_;
     if (here == Lot::Hospital && bandaged_) {
         bandaged_ = false;
@@ -1478,6 +1491,18 @@ void Game::visit_lot(const InputState& input) {
                                                                        world_.get<Camera>(camera_).player_z()).country));
                 change_car();
                 break;
+            case Lot::Garage: {
+                // The cars the player has had, in turn.
+                const int next = next_owned_car(car_model_, owned_cars_ | (1u << car_model_), push);
+                if (next == car_model_) {
+                    show_message("NO OTHER CAR YET", 1.5f);
+                    lot_steer_ = push;
+                    return;
+                }
+                car_model_ = next;
+                change_car();
+                break;
+            }
             case Lot::Motel:
                 // The motel's people and the empty seat; a fare riding gets out.
                 passenger_ = ((passenger_ >= motel_passengers ? nobody : passenger_) + push + motel_passengers) %
@@ -1717,6 +1742,7 @@ void Game::update_movie_cars(const InputState& input, float dt) {
             car_model_ = model;
             change_car();
         }
+        own_car(model); // found: it waits in the garage from now on
         synth_.trigger_ding();
         show_message(message, 2.5f);
     };
@@ -3012,7 +3038,7 @@ void Game::render() {
     if (offer_) {
         hud.offer_title = lot_name(*offer_);
         if (*offer_ == Lot::Dealer || *offer_ == Lot::SportsDealer || *offer_ == Lot::Truckstop ||
-            (*offer_ == Lot::Hospital && hospital_ambulance_)) {
+            *offer_ == Lot::Garage || (*offer_ == Lot::Hospital && hospital_ambulance_)) {
             const CarModel& m = car_model(car_model_);
             hud.offer_name = m.name;
             hud.offer_stats = true;

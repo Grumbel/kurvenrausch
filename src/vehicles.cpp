@@ -73,6 +73,15 @@ bool body_shows_people(Body body) {
            body == Body::TimeCar || body == Body::SpyCar || body == Body::Interceptor;
 }
 
+int next_owned_car(int current, uint32_t owned, int step) {
+    const int dir = step < 0 ? -1 : 1;
+    for (int k = 1; k <= car_models; ++k) {
+        const int m = ((current + dir * k) % car_models + car_models) % car_models;
+        if (owned & (1u << m)) return m;
+    }
+    return current;
+}
+
 bool body_has_lightbar(Body body) { return body == Body::Police || body == Body::Ambulance; }
 
 bool body_is_tall(Body body) {

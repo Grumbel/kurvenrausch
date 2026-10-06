@@ -197,6 +197,8 @@ private:
     // the country, and the region or city where the country has several.
     static std::string zone_label(const Track& track, int track_index, int index);
     void change_car();
+    // The car is the player's now: it waits in their garage.
+    void own_car(int model);
     // Remembers the car, driver and passenger for the next run.
     void save_choices() const;
     void visit_lot(const InputState& input);
@@ -385,6 +387,7 @@ private:
     int lot_steer_ = 0;         // the steering last step, to choose once per push
     bool hospital_ambulance_ = false; // at the hospital, the ambulance (after the drivers) is chosen
     int arrived_model_ = -1;          // the car driven onto the lot standing on, -1 none
+    uint32_t owned_cars_ = 1;         // the cars had (a bit per car_model()), for the garage
     bool fuel_warned_ = false;        // the reserve warning was shown for this tank
     float nitro_fill_ = 0.f;          // seconds into filling the next canister
     struct Hail {
