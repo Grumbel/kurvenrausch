@@ -66,10 +66,10 @@ struct MenuEvent {
     int slot = 0; // Binding: which slot
 };
 
-// Where things are on screen for a page, in framebuffer pixels. Everything
-// scales with the framebuffer's height (2 in HD); the panel is as wide as
-// its widest line needs and centred, the list as long as fits, scrolling
-// when there is more.
+// Where things are on screen for a page, in framebuffer pixels. Scale is the
+// UI scale (1 = SD design size, independent of framebuffer HD); the panel is
+// as wide as its widest line needs and centred, the list as long as fits,
+// scrolling when there is more.
 struct MenuLayout {
     int scale = 1;
     int panel_x = 0, panel_y = 0, panel_w = 0, panel_h = 0;
@@ -85,7 +85,8 @@ struct MenuLayout {
     bool centred = false; // a page of only actions and submenus: lines centred
     int hint_y = 0;
 };
-MenuLayout menu_layout(const MenuPage& page, int width, int height);
+// ui_scale: 1..3 design-pixel scale for the panel (not tied to HD resolution).
+MenuLayout menu_layout(const MenuPage& page, int width, int height, int ui_scale = 1);
 
 struct MenuView {
     int selected = -1; // item index; -1: the first selectable one

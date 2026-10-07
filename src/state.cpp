@@ -83,6 +83,7 @@ std::string format_choices(const Choices& c) {
         << "engine_vol " << c.engine_vol << "\n"
         << "music_vol " << c.music_vol << "\n"
         << "hd " << c.hd << "\n"
+        << "ui_scale " << c.ui_scale << "\n"
         << "fullscreen " << c.fullscreen << "\n"
         << "muted " << c.muted << "\n"
         << "present " << c.present << "\n"
@@ -135,6 +136,7 @@ Choices parse_choices(std::string_view text) {
         else if (key == "engine_vol") c.engine_vol = value;
         else if (key == "music_vol") c.music_vol = value;
         else if (key == "hd") c.hd = value;
+        else if (key == "ui_scale") c.ui_scale = value;
         else if (key == "fullscreen") c.fullscreen = value;
         else if (key == "muted") c.muted = value;
         else if (key == "present") c.present = value;
@@ -168,6 +170,7 @@ Choices parse_choices(std::string_view text) {
     c.options = clamped(c.options);
     c.engine_vol = std::clamp(c.engine_vol, 0, max_volume);
     c.music_vol = std::clamp(c.music_vol, 0, max_volume);
+    c.ui_scale = std::clamp(c.ui_scale, 1, 3);
     return c;
 }
 

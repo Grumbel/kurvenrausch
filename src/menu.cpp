@@ -26,9 +26,9 @@ bool selectable(const MenuItem& item) {
     return item.enabled && item.kind != ItemKind::Heading && item.kind != ItemKind::Info;
 }
 
-MenuLayout menu_layout(const MenuPage& page, int width, int height) {
+MenuLayout menu_layout(const MenuPage& page, int width, int height, int ui_scale) {
     MenuLayout l;
-    const int s = std::max(1, height / 240);
+    const int s = std::max(1, ui_scale);
     l.scale = s;
     l.row_h = 12 * s;
     l.title_scale = (page.big_title ? 3 : 2) * s;

@@ -52,7 +52,7 @@ enum Id : int {
     // GAMEPLAY
     FuelPick, Nitros, Police, CameraPick,
     // VIDEO
-    Fullscreen, Screen, Resolution, Renderer, Hud, MiniMap, Mirror, WeatherFx, Fps,
+    Fullscreen, Screen, Resolution, UiScale, Renderer, Hud, MiniMap, Mirror, WeatherFx, Fps,
     // AUDIO
     Sound, EffectsVolume, MusicVolume, Radio,
     // CONTROLS
@@ -232,6 +232,8 @@ MenuPage Game::menu_page(MenuPageId id) const {
                 choice(Screen, "SCREEN", wide_ ? "WIDE" : "4:3", wide_ ? "AS WIDE AS THE SCREEN, UP TO 2:1" : "BLACK BARS ON WIDER SCREENS"),
                 choice(Resolution, "RESOLUTION", pixel_scale_ >= 2 ? "HD" : "SD",
                        pixel_scale_ >= 2 ? "640 X 480, SMOOTHER EDGES" : "320 X 240, CHUNKY PIXELS"),
+                choice(UiScale, "UI SCALE", std::to_string(ui_scale_) + "X",
+                       ui_scale_ == 1 ? "SAME SIZE AS SD, EVEN IN HD" : "LARGER MENUS AND HUD"),
                 choice(Renderer, "RENDERER", renderer, "RUNNING ON " + active + "  (F8)"),
                 heading("HUD"),
                 toggle(Hud, "HUD", debug_.hud, "LAP TIMES, SPEED, FUEL AND NITRO"),
@@ -431,8 +433,8 @@ void Game::draw_menu() {
     const MenuPageId id = menu_stack_.empty() ? MenuPageId::Pause : menu_stack_.back();
     const MenuPage page = menu_page(id);
     MenuView& view = menu_views_[static_cast<size_t>(id)];
-    view.settle(page, menu_layout(page, width_, fb_height()).rows);
-    racer::draw_menu(hud_canvas(), page, view, capturing_, std::fmod(clock_ + static_cast<float>(SDL_GetTicks()) / 1000.f, 0.6f) < 0.4f);
+    view.settle(page, menu_layout(page, width_, fb_height(), ui_scale_).rows);
+    racer::draw_menu(hud_canvas(), page, view, capturing_, std::fmod(clock_ + static_cast<float>(SDL_GetTicks()) / 1000.f, 0.6f) < 0.4f, ui_scale_);
 }
 
 bool Game::menu_event(MenuPageId page, const MenuEvent& ev) {
@@ -509,6 +511,11 @@ bool Game::menu_event(MenuPageId page, const MenuEvent& ev) {
             break;
         case Screen: wide_ = !wide_; break;
         case Resolution: set_pixel_scale(pixel_scale_ >= 2 ? 1 : 2); break;
+        case UiScale: {
+            const int next = ui_scale_ + (ev.step >= 0 ? 1 : -1);
+            set_ui_scale(next < 1 ? 3 : next > 3 ? 1 : next);
+            break;
+        }
         case Renderer:
             scene_backend_ = static_cast<SceneBackend>(wrap(static_cast<int>(scene_backend_) + step, 3));
             apply_scene_backend();

@@ -226,114 +226,118 @@ std::string format_lap_time(float seconds) {
     return buf;
 }
 
-void draw_hud(Canvas& fb, const HudState& hud) {
+void draw_hud(Canvas& fb, const HudState& hud, int ui_scale) {
     const int w = fb.width();
     const int h = fb.height();
+    const int s = std::max(1, ui_scale);
+    // Design coordinates assume scale 1 (SD). Scale them with s so a larger
+    // UI grows as a whole; default s=1 keeps the classic SD size even in HD.
 
     // The attract mode: the country, the title, and how to play.
     if (hud.attract) {
         if (!hud.attract_text) return;
         if (!hud.banner.empty()) {
-            text_center(fb, 48, hud.banner, Value, 2);
-            text_center(fb, 65, hud.banner_sub, Label);
+            text_center(fb, 48 * s, hud.banner, Value, 2 * s);
+            text_center(fb, 65 * s, hud.banner_sub, Label, s);
         }
         // Above the road, clear of the followed car.
-        text_center(fb, 84, "KURVENRAUSCH", Label, 3);
-        if (hud.attract_prompt) text_center(fb, 112, "PRESS ANY BUTTON", Value, 2);
-        text_center(fb, 130, "OR TAP THE SCREEN", Value);
+        text_center(fb, 84 * s, "KURVENRAUSCH", Label, 3 * s);
+        if (hud.attract_prompt) text_center(fb, 112 * s, "PRESS ANY BUTTON", Value, 2 * s);
+        text_center(fb, 130 * s, "OR TAP THE SCREEN", Value, s);
         return;
     }
 
     // Top left: current lap time.
-    text(fb, 6, 5, "TIME", Label);
-    text(fb, 6, 14, format_lap_time(hud.lap_time), Value, 2);
+    text(fb, 6 * s, 5 * s, "TIME", Label, s);
+    text(fb, 6 * s, 14 * s, format_lap_time(hud.lap_time), Value, 2 * s);
 
     // Below it the lap counter; the top centre holds the rear-view mirror.
-    text(fb, 6, 33, "LAP", Label);
-    text(fb, 6, 42, hud.lap > 0 ? std::to_string(hud.lap) : "-", Value, 2);
-    if (!hud.time_of_day.empty()) text(fb, 34, 49, hud.time_of_day, Value); // the clock
-    if (!hud.taxi.empty()) text(fb, 6, 62, hud.taxi, Label);
+    text(fb, 6 * s, 33 * s, "LAP", Label, s);
+    text(fb, 6 * s, 42 * s, hud.lap > 0 ? std::to_string(hud.lap) : "-", Value, 2 * s);
+    if (!hud.time_of_day.empty()) text(fb, 34 * s, 49 * s, hud.time_of_day, Value, s); // the clock
+    if (!hud.taxi.empty()) text(fb, 6 * s, 62 * s, hud.taxi, Label, s);
 
     // Top right: last and best laps.
-    text_right(fb, w - 6, 5, "BEST", Label);
-    text_right(fb, w - 6, 14, hud.best_lap > 0.f ? format_lap_time(hud.best_lap) : "-'--\"--", Value);
-    text_right(fb, w - 6, 25, "LAST", Label);
-    text_right(fb, w - 6, 34, hud.last_lap > 0.f ? format_lap_time(hud.last_lap) : "-'--\"--", Value);
+    text_right(fb, w - 6 * s, 5 * s, "BEST", Label, s);
+    text_right(fb, w - 6 * s, 14 * s, hud.best_lap > 0.f ? format_lap_time(hud.best_lap) : "-'--\"--", Value, s);
+    text_right(fb, w - 6 * s, 25 * s, "LAST", Label, s);
+    text_right(fb, w - 6 * s, 34 * s, hud.last_lap > 0.f ? format_lap_time(hud.last_lap) : "-'--\"--", Value, s);
 
     // Below them, the mini map.
-    if (hud.map) draw_minimap(fb, w - 6 - 58, 46, 58, hud);
+    if (hud.map) draw_minimap(fb, w - 6 * s - 58 * s, 46 * s, 58 * s, hud);
 
     // At a lot with a choice: what is on offer, for a car with bars for its
     // strengths.
-    int message_y = h / 2 - 42;
+    int message_y = h / 2 - 42 * s;
     if (!hud.offer_title.empty()) {
-        const int pw = 180, px = (w - pw) / 2, py = 68, ph = hud.offer_stats ? 70 : 36;
-        message_y = py + ph + 6; // below the panel, not over it
+        const int pw = 180 * s, px = (w - pw) / 2, py = 68 * s, ph = (hud.offer_stats ? 70 : 36) * s;
+        message_y = py + ph + 6 * s; // below the panel, not over it
         for (int y = py; y < py + ph; ++y)
             for (int x = px; x < px + pw; ++x) fb.blend_pixel(x, y, Shadow, 0.7f);
-        text_center(fb, py + 5, hud.offer_title, Label);
-        text_center(fb, py + 16, "< " + hud.offer_name + " >", Value, 2);
+        text_center(fb, py + 5 * s, hud.offer_title, Label, s);
+        text_center(fb, py + 16 * s, "< " + hud.offer_name + " >", Value, 2 * s);
         const char* labels[3] = {"SPEED", "ACCEL", "GRIP"};
         for (int i = 0; hud.offer_stats && i < 3; ++i) {
-            const int y = py + 36 + i * 10;
-            text(fb, px + 8, y, labels[i], Label);
-            const int bar = static_cast<int>(std::lround(std::clamp((hud.offer_values[i] - 0.6f) / 0.75f, 0.f, 1.f) * 90.f));
-            fb.fill_rect(px + 50, y, 90, 7, Color{0x30, 0x30, 0x40});
-            fb.fill_rect(px + 50, y, bar, 7, Color{0x30, 0xe0, 0x40});
+            const int y = py + 36 * s + i * 10 * s;
+            text(fb, px + 8 * s, y, labels[i], Label, s);
+            const int bar = static_cast<int>(std::lround(std::clamp((hud.offer_values[i] - 0.6f) / 0.75f, 0.f, 1.f) * 90.f * s));
+            fb.fill_rect(px + 50 * s, y, 90 * s, 7 * s, Color{0x30, 0x30, 0x40});
+            fb.fill_rect(px + 50 * s, y, bar, 7 * s, Color{0x30, 0xe0, 0x40});
         }
     }
 
     // A fork ahead: which way goes where.
     if (!hud.fork_left.empty()) {
-        text(fb, 6, 112, "< " + hud.fork_left, Value);
-        text_right(fb, w - 6, 112, hud.fork_right + " >", Value);
+        text(fb, 6 * s, 112 * s, "< " + hud.fork_left, Value, s);
+        text_right(fb, w - 6 * s, 112 * s, hud.fork_right + " >", Value, s);
     }
 
     // Bottom left: speed and revs.
     const int kmh = static_cast<int>(std::lround(hud.speed_kmh_fraction * top_speed_kmh));
-    text_right(fb, 52, h - 28, std::to_string(kmh), Value, 3);
-    text(fb, 56, h - 14, "KM/H", Label);
-    if (hud.reverse) text(fb, 86, h - 21, "R", Value, 2);
-    draw_tacho(fb, 6, h - 37, hud.speed_fraction);
-    draw_lamps(fb, 6, h - 47, hud);
-    draw_fuel(fb, 56, h - 28, hud.fuel, hud.fuel_warning);
+    text_right(fb, 52 * s, h - 28 * s, std::to_string(kmh), Value, 3 * s);
+    text(fb, 56 * s, h - 14 * s, "KM/H", Label, s);
+    if (hud.reverse) text(fb, 86 * s, h - 21 * s, "R", Value, 2 * s);
+    draw_tacho(fb, 6 * s, h - 37 * s, hud.speed_fraction);
+    draw_lamps(fb, 6 * s, h - 47 * s, hud);
+    draw_fuel(fb, 56 * s, h - 28 * s, hud.fuel, hud.fuel_warning);
 
     // Bottom right: nitro.
     if (hud.nitro_capacity > 0) {
-        text_right(fb, w - 6, h - 37, "NITRO", Label);
-        draw_nitro(fb, w - 6, h - 27, hud.nitro_capacity, hud.nitro, hud.nitro_burn);
+        text_right(fb, w - 6 * s, h - 37 * s, "NITRO", Label, s);
+        draw_nitro(fb, w - 6 * s, h - 27 * s, hud.nitro_capacity, hud.nitro, hud.nitro_burn);
     }
 
-    if (hud.muted) text_right(fb, w - 6, h - 9, "MUTE", Label);
+    if (hud.muted) text_right(fb, w - 6 * s, h - 9 * s, "MUTE", Label, s);
 
     // Chased: under the mirror, the police light and how near the car is to
     // getting away.
     if (hud.chase) {
-        constexpr int bar_w = 50;
-        const int lw = font::text_width("POLICE"), x = (w - lw - 4 - bar_w) / 2, y = 41;
-        text(fb, x, y, "POLICE", hud.chase_red ? Color{0xff, 0x40, 0x30} : Color{0x40, 0x80, 0xff});
-        const int bx = x + lw + 4;
-        fb.fill_rect(bx - 1, y, bar_w + 2, 7, Shadow);
+        const int bar_w = 50 * s;
+        const int lw = font::text_width("POLICE", s), x = (w - lw - 4 * s - bar_w) / 2, y = 41 * s;
+        text(fb, x, y, "POLICE", hud.chase_red ? Color{0xff, 0x40, 0x30} : Color{0x40, 0x80, 0xff}, s);
+        const int bx = x + lw + 4 * s;
+        fb.fill_rect(bx - 1 * s, y, bar_w + 2 * s, 7 * s, Shadow);
         const int filled = static_cast<int>(std::lround(std::clamp(hud.escape, 0.f, 1.f) * static_cast<float>(bar_w)));
-        if (filled > 0) fb.fill_rect(bx, y + 1, filled, 5, Color{0x30, 0xe0, 0x40});
+        if (filled > 0) fb.fill_rect(bx, y + 1 * s, filled, 5 * s, Color{0x30, 0xe0, 0x40});
     }
 
     if (!hud.banner.empty()) {
-        text_center(fb, 48, hud.banner, Value, 2);
-        text_center(fb, 65, hud.banner_sub, Label);
+        text_center(fb, 48 * s, hud.banner, Value, 2 * s);
+        text_center(fb, 65 * s, hud.banner_sub, Label, s);
     }
 
     if (!hud.message.empty() && hud.message_visible) {
-        text_center(fb, message_y, hud.message, Label, 3);
+        text_center(fb, message_y, hud.message, Label, 3 * s);
     }
 }
 
-void draw_menu(Canvas& fb, const MenuPage& page, const MenuView& view, bool capturing, bool blink) {
+void draw_menu(Canvas& fb, const MenuPage& page, const MenuView& view, bool capturing, bool blink,
+               int ui_scale) {
     constexpr Color Dim{0xa0, 0xa8, 0xb8};
     constexpr Color Off{0x5c, 0x60, 0x70};
     constexpr Color Section{0x70, 0xb8, 0xf0};
     constexpr Color Frame{0x50, 0x60, 0x90};
-    const MenuLayout l = menu_layout(page, fb.width(), fb.height());
+    const MenuLayout l = menu_layout(page, fb.width(), fb.height(), ui_scale);
     const int s = l.scale;
     const auto tw = [s](std::string_view t) { return font::text_width(t, s); };
 

@@ -64,11 +64,14 @@ struct HudState {
     std::string banner_sub;      // region below it
 };
 
-void draw_hud(Canvas& fb, const HudState& hud);
+// ui_scale: design-pixel scale for text and gauges (1 = SD size).
+void draw_hud(Canvas& fb, const HudState& hud, int ui_scale = 1);
 
 // A page of the pause menu over the dimmed game (see menu.hpp). While
 // `capturing` a new binding, the picked slot blinks (on when `blink`).
-void draw_menu(Canvas& fb, const MenuPage& page, const MenuView& view, bool capturing = false, bool blink = false);
+// ui_scale is independent of framebuffer HD (1 = same size as SD video).
+void draw_menu(Canvas& fb, const MenuPage& page, const MenuView& view, bool capturing = false,
+               bool blink = false, int ui_scale = 1);
 void draw_fps(Canvas& fb, float fps, const frame_stats::Snapshot& stats = {});
 
 // Formats seconds as m'ss"cc, the classic arcade lap time.

@@ -84,6 +84,8 @@ public:
     static constexpr int mirror_height = 30;
     // Internal resolution scale: 1 = 320x240 design, 2 = HD (double pixels).
     int pixel_scale() const { return pixel_scale_; }
+    // HUD and menu scale in design pixels (1 = SD size; independent of HD).
+    int ui_scale() const { return ui_scale_; }
     int fb_height() const { return height * pixel_scale_; }
     int fb_base_width() const { return base_width * pixel_scale_; }
     int fb_max_width() const { return max_width * pixel_scale_; }
@@ -248,6 +250,8 @@ private:
     void set_width(int w);
     // Switch internal resolution (1 or 2); rebuilds framebuffers.
     void set_pixel_scale(int scale);
+    // HUD/menu scale 1..3 (design pixels; independent of framebuffer HD).
+    void set_ui_scale(int scale);
     int screen_width() const;
     // The touch controls into overlay_, if shown.
     void draw_touch();
@@ -487,6 +491,7 @@ private:
     std::vector<uint32_t> car_night_;  // scratch: the car in the dark, kept out of its own headlights
     bool wide_ = false;                // the player chose a picture as wide as the screen
     int pixel_scale_ = 1;              // 1 SD (320x240), 2 HD (640x480)
+    int ui_scale_ = 1;                 // HUD/menu scale; default SD size even in HD
     PresentBackend present_backend_ = PresentBackend::Auto;
     SceneBackend scene_backend_ = SceneBackend::Auto; // preference; use_gles_ is effective
     Uint64 prev_counter_ = 0;

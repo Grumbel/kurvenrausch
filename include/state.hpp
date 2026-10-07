@@ -44,6 +44,7 @@ struct Choices {
     int engine_vol = 10; // 0 .. max_volume
     int music_vol = 10;
     int hd = 0;          // 1: HD framebuffer (pixel_scale 2), 0: SD
+    int ui_scale = 1;    // HUD/menu pixel scale (1 = SD size, independent of HD)
     int fullscreen = 0;  // 1: start in fullscreen
     int muted = 0;       // 1: sound off
     int present = 0;     // PresentBackend: 0 Auto, 1 SDL, 2 GL
