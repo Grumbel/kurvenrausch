@@ -2,6 +2,10 @@
 
 ## Current tip
 
+### Grok: ui_scale on lamps, fuel, nitro, tacho
+- Positions scaled but icon geometry stayed 1×. Pass scale into draw_lamps,
+  draw_fuel, draw_nitro, draw_tacho. Nitro cans slightly larger at base size.
+
 ### Grok: fix demo-track corniche name clash
 - Spain segment reused `const int corniche` already used for France's
   cliff road in `build_demo_track`. Rename Spain's to `costa`.

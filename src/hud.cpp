@@ -41,46 +41,46 @@ void text_center(Canvas& fb, int y, std::string_view s, Color c, int scale = 1) 
 // The dashboard lamps above the rev counter: green arrows for the indicators,
 // a blue headlight symbol. Always drawn; off lamps are greyed out so the
 // driver can still see where they sit.
-void draw_lamps(Canvas& fb, int x, int y, const HudState& hud) {
+void draw_lamps(Canvas& fb, int x, int y, const HudState& hud, int s) {
     const Color green{0x40, 0xf0, 0x60}, blue{0x50, 0x90, 0xff};
     const Color off{0x50, 0x54, 0x60}; // dim when the lamp is not lit
-    auto arrow = [&](int ax, int dir, bool on) { // 9 wide, 7 high, pointing `dir`
+    auto arrow = [&](int ax, int dir, bool on) { // 9×s wide, 7×s high, pointing `dir`
         // The whole shape in shadow a pixel down and right, then in colour:
         // drawn column by column, a shadow would cover the fill beside it.
         for (int pass = 0; pass < 2; ++pass) {
-            const int o = pass == 0 ? 1 : 0;
+            const int o = pass == 0 ? s : 0;
             const Color c = pass == 0 ? Shadow : (on ? green : off);
             for (int i = 0; i < 4; ++i) {
-                const int col = dir < 0 ? ax + i : ax + 8 - i;
-                fb.fill_rect(col + o, y + 3 - i + o, 1, 2 * i + 1, c);
+                const int col = dir < 0 ? ax + i * s : ax + (8 - i) * s;
+                fb.fill_rect(col + o, y + (3 - i) * s + o, s, (2 * i + 1) * s, c);
             }
-            fb.fill_rect((dir < 0 ? ax + 4 : ax) + o, y + 2 + o, 5, 3, c);
+            fb.fill_rect((dir < 0 ? ax + 4 * s : ax) + o, y + 2 * s + o, 5 * s, 3 * s, c);
         }
     };
     arrow(x, -1, hud.signal_left);
-    arrow(x + 12, 1, hud.signal_right);
+    arrow(x + 12 * s, 1, hud.signal_right);
     {
-        const int hx = x + 26;
+        const int hx = x + 26 * s;
         const Color c = hud.headlights ? blue : off;
-        fb.fill_rect(hx + 4, y, 4, 7, c);   // the lamp
-        fb.fill_rect(hx + 8, y + 1, 1, 5, c);
-        for (int r = 0; r < 3; ++r) fb.fill_rect(hx, y + 1 + 2 * r, 3, 1, c); // its beams
+        fb.fill_rect(hx + 4 * s, y, 4 * s, 7 * s, c); // the lamp
+        fb.fill_rect(hx + 8 * s, y + 1 * s, 1 * s, 5 * s, c);
+        for (int r = 0; r < 3; ++r) fb.fill_rect(hx, y + (1 + 2 * r) * s, 3 * s, 1 * s, c); // beams
     }
 }
 
 // Segmented rev counter. Speed is split into virtual gears; the needle
 // climbs through each gear and drops back on the shift.
-void draw_tacho(Canvas& fb, int x, int y, float speed_fraction) {
+void draw_tacho(Canvas& fb, int x, int y, float speed_fraction, int s) {
     const float rpm = drivetrain::rpm(speed_fraction);
 
     constexpr int segments = 20;
-    fb.fill_rect(x - 1, y - 1, segments * 4 + 1, 8, Shadow);
+    fb.fill_rect(x - 1 * s, y - 1 * s, segments * 4 * s + 1 * s, 8 * s, Shadow);
     for (int i = 0; i < segments; ++i) {
         const float t = static_cast<float>(i) / segments;
         const bool on = t < rpm;
         Color c = t < 0.6f ? Color{0x30, 0xe0, 0x40} : t < 0.85f ? Color{0xf8, 0xd0, 0x20} : Color{0xf0, 0x30, 0x20};
         if (!on) c = blend(c, Shadow, 0.75f);
-        fb.fill_rect(x + i * 4, y, 3, 6, c);
+        fb.fill_rect(x + i * 4 * s, y, 3 * s, 6 * s, c);
     }
 }
 
@@ -187,35 +187,36 @@ void draw_minimap(Canvas& fb, int x, int y, int size, const HudState& hud) {
 }
 
 // Fuel gauge: a pump symbol and a bar, red and blinking when low.
-void draw_fuel(Canvas& fb, int x, int y, float level, bool warning) {
+void draw_fuel(Canvas& fb, int x, int y, float level, bool warning, int s) {
     const Color icon = warning ? Color{0xf0, 0x30, 0x20} : Label;
-    fb.fill_rect(x, y + 1, 5, 7, icon); // the pump
-    fb.fill_rect(x + 1, y + 2, 3, 2, Shadow);
-    fb.fill_rect(x + 5, y + 2, 1, 1, icon); // hose
-    fb.fill_rect(x + 6, y + 3, 1, 4, icon);
-    const int bx = x + 9, w = 21;
-    fb.fill_rect(bx - 1, y + 1, w + 2, 7, Shadow);
-    const int filled = static_cast<int>(std::lround(std::clamp(level, 0.f, 1.f) * static_cast<float>(w)));
+    fb.fill_rect(x, y + 1 * s, 5 * s, 7 * s, icon); // the pump
+    fb.fill_rect(x + 1 * s, y + 2 * s, 3 * s, 2 * s, Shadow);
+    fb.fill_rect(x + 5 * s, y + 2 * s, 1 * s, 1 * s, icon); // hose
+    fb.fill_rect(x + 6 * s, y + 3 * s, 1 * s, 4 * s, icon);
+    const int bx = x + 9 * s, bw = 21 * s;
+    fb.fill_rect(bx - 1 * s, y + 1 * s, bw + 2 * s, 7 * s, Shadow);
+    const int filled = static_cast<int>(std::lround(std::clamp(level, 0.f, 1.f) * static_cast<float>(bw)));
     const Color c = level < Fuel::low ? Color{0xf0, 0x30, 0x20} : level < 0.5f ? Color{0xf8, 0xd0, 0x20}
                                                                                 : Color{0x30, 0xe0, 0x40};
-    if (filled > 0 && !(warning && level <= 0.f)) fb.fill_rect(bx, y + 2, filled, 5, c);
+    if (filled > 0 && !(warning && level <= 0.f)) fb.fill_rect(bx, y + 2 * s, filled, 5 * s, c);
 }
 
 // Nitro canisters, right-aligned at `right`: full ones, the one burning now
 // draining, and the empty ones.
-void draw_nitro(Canvas& fb, int right, int y, int count, int full, float burning) {
-    constexpr int w = 7, gap = 3, h = 14;
+void draw_nitro(Canvas& fb, int right, int y, int count, int full, float burning, int s) {
+    // A touch larger than the old 7×14 so the cans read at SD; then ui_scale.
+    const int w = 9 * s, gap = 3 * s, h = 16 * s;
     const Color glass{0x1c, 0x24, 0x3c}, fill{0x30, 0x90, 0xf0}, shine{0xb0, 0xe0, 0xff}, cap{0xc8, 0xc8, 0xd0};
     for (int i = 0; i < count; ++i) {
         const int x = right - (count - i) * (w + gap) + gap;
-        fb.fill_rect(x - 1, y + 2, w + 2, h - 1, Shadow);
-        fb.fill_rect(x + 2, y, 3, 3, cap);
-        fb.fill_rect(x, y + 3, w, h - 3, glass);
+        fb.fill_rect(x - 1 * s, y + 2 * s, w + 2 * s, h - 1 * s, Shadow);
+        fb.fill_rect(x + 2 * s, y, 5 * s, 3 * s, cap);
+        fb.fill_rect(x, y + 3 * s, w, h - 3 * s, glass);
         float level = i < full ? 1.f : (i == full ? burning : 0.f);
-        const int filled = static_cast<int>(std::lround(level * static_cast<float>(h - 4)));
+        const int filled = static_cast<int>(std::lround(level * static_cast<float>(h - 4 * s)));
         if (filled > 0) {
-            fb.fill_rect(x + 1, y + h - 1 - filled, w - 2, filled, fill);
-            fb.fill_rect(x + 1, y + h - 1 - filled, 1, filled, shine);
+            fb.fill_rect(x + 1 * s, y + h - 1 * s - filled, w - 2 * s, filled, fill);
+            fb.fill_rect(x + 1 * s, y + h - 1 * s - filled, 1 * s, filled, shine);
         }
     }
 }
@@ -300,14 +301,14 @@ void draw_hud(Canvas& fb, const HudState& hud, int ui_scale) {
     text_right(fb, 52 * s, h - 28 * s, std::to_string(kmh), Value, 3 * s);
     text(fb, 56 * s, h - 14 * s, "KM/H", Label, s);
     if (hud.reverse) text(fb, 86 * s, h - 21 * s, "R", Value, 2 * s);
-    draw_tacho(fb, 6 * s, h - 37 * s, hud.speed_fraction);
-    draw_lamps(fb, 6 * s, h - 47 * s, hud);
-    draw_fuel(fb, 56 * s, h - 28 * s, hud.fuel, hud.fuel_warning);
+    draw_tacho(fb, 6 * s, h - 37 * s, hud.speed_fraction, s);
+    draw_lamps(fb, 6 * s, h - 47 * s, hud, s);
+    draw_fuel(fb, 56 * s, h - 28 * s, hud.fuel, hud.fuel_warning, s);
 
     // Bottom right: nitro.
     if (hud.nitro_capacity > 0) {
         text_right(fb, w - 6 * s, h - 37 * s, "NITRO", Label, s);
-        draw_nitro(fb, w - 6 * s, h - 27 * s, hud.nitro_capacity, hud.nitro, hud.nitro_burn);
+        draw_nitro(fb, w - 6 * s, h - 27 * s, hud.nitro_capacity, hud.nitro, hud.nitro_burn, s);
     }
 
     if (hud.muted) text_right(fb, w - 6 * s, h - 9 * s, "MUTE", Label, s);
