@@ -1906,9 +1906,10 @@ Bitmap make_cliff_face(int variant, bool snowy) {
 // neighbouring columns blend without temporal flicker when scaled.
 Bitmap make_tunnel_wall() {
     Bitmap b(24, 64);
-    // Close tile pair — old tile/tile_d contrast shimmered under scaling.
-    const Color tile{0xc4, 0xbc, 0xb0}, tile_d{0xb8, 0xb0, 0xa4};
-    const Color kerb{0xe0, 0xdc, 0xd4}, upper{0x7c, 0x78, 0x70};
+    // Concrete courses: mid-grey so they read as rock, not washed-out white
+    // under daylight or fog. Mild alternate for courses; no dark joint lines.
+    const Color tile{0x8a, 0x84, 0x7a}, tile_d{0x7e, 0x78, 0x70};
+    const Color kerb{0x9c, 0x96, 0x8c}, upper{0x6a, 0x66, 0x60};
     for (int y = 0; y < b.h; ++y) {
         const float fy = static_cast<float>(y) / static_cast<float>(b.h - 1);
         Color row;

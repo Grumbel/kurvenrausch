@@ -1338,9 +1338,10 @@ void GlesRenderer::draw_backdrop(const RoadTheme& theme, const Background* backd
         auto height_at = [&](int x) -> float { return h[static_cast<size_t>(index_at(x))] * scale_mul * zoom; };
         auto slope_light = [&](int x) -> float {
             const int i = index_at(x);
-            const float slope =
-                h[static_cast<size_t>((i + 6) % period)] - h[static_cast<size_t>((i + period - 6) % period)];
-            return std::clamp(0.5f - slope * 0.08f, 0.f, 1.f);
+            constexpr int slope_span = 32;
+            const float slope = h[static_cast<size_t>((i + slope_span) % period)] -
+                                h[static_cast<size_t>((i + period - slope_span) % period)];
+            return std::clamp(0.5f - slope * 0.04f, 0.f, 1.f);
         };
         auto haze_at = [&](float alt) {
             return std::max(theme.haze, std::clamp(1.f - alt / zoom / (14.f * scale_mul + 1.f), 0.f, 1.f) * 0.75f);
@@ -1842,9 +1843,10 @@ void GlesRenderer::draw_sprites(const Track& track, const SpriteSheet& sprites, 
             const ScreenPoint& b = s.p2;
             const float fog_amount = 1.f - s.fog;
             auto fogc = [&](Color c) { return fogged(c, fog_air_, fog_amount, daylight_); };
-            const Color kerb = fogc(Color{0xe0, 0xdc, 0xd4});
-            const Color tile = fogc((s.index % 2) ? Color{0xc4, 0xbc, 0xb0} : Color{0xb8, 0xb0, 0xa4});
-            const Color upper = fogc(Color{0x7c, 0x78, 0x70});
+            // Match make_tunnel_wall: mid-grey concrete, not near-white kerb/tile.
+            const Color kerb = fogc(Color{0x9c, 0x96, 0x8c});
+            const Color tile = fogc((s.index % 2) ? Color{0x8a, 0x84, 0x7a} : Color{0x7e, 0x78, 0x70});
+            const Color upper = fogc(Color{0x6a, 0x66, 0x60});
             const Color bulk = fogc(Color{0x6c, 0x68, 0x62}); // solid rock outside the face
             const float ha = tunnel_height * a.scale * y_scale_;
             const float hb = tunnel_height * b.scale * y_scale_;
