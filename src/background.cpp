@@ -63,10 +63,13 @@ float wrap(float v, float period) {
 } // namespace
 
 Background::Background() {
+    // Broad harmonics only: fine cycles (was 23/41) broke slope lighting into
+    // tiny lit/shade segments. Silhouette still varies; shading follows the
+    // large ridges.
     mountains_ = profile(mountain_period,
-                         {{2, 1.f, 0.3f}, {5, 0.6f, 1.7f}, {11, 0.35f, 0.4f}, {23, 0.15f, 2.2f}, {41, 0.06f, 0.9f}},
+                         {{2, 1.f, 0.3f}, {5, 0.6f, 1.7f}, {9, 0.3f, 0.4f}, {14, 0.12f, 2.2f}},
                          6.f, 52.f);
-    hills_ = profile(hill_period, {{3, 1.f, 1.1f}, {7, 0.5f, 0.2f}, {13, 0.2f, 2.6f}}, 2.f, 20.f);
+    hills_ = profile(hill_period, {{3, 1.f, 1.1f}, {6, 0.45f, 0.2f}, {10, 0.18f, 2.6f}}, 2.f, 20.f);
 
     const RoadTheme theme; // clouds are shaded with the default palette
     cloud_bitmaps_.push_back(make_cloud(56, 20, {{{14, 13, 10, 7}}, {{28, 9, 13, 9}}, {{42, 13, 11, 7}}}, theme));
@@ -253,11 +256,13 @@ void Background::render(Framebuffer& fb, const RoadTheme& theme, const BackdropV
             const int i = static_cast<int>(wrap(layer_x(static_cast<float>(x), offset, static_cast<float>(period)),
                                                 static_cast<float>(period)));
             const float here = h[static_cast<size_t>(i)];
-            // Slope over a wide window, so the lighting follows the broad shape of
-            // the ridge instead of its fine wiggles.
-            const float slope = h[static_cast<size_t>((i + 6) % period)] -
-                                h[static_cast<size_t>((i + period - 6) % period)];
-            const float light = std::clamp(0.5f - slope * 0.08f, 0.f, 1.f);
+            // Slope over a wide window so lighting follows the broad ridge, not
+            // column-to-column noise (period ~1k; ±32 samples ≈ 1/16 of a cycle
+            // of the coarsest remaining harmonic).
+            constexpr int slope_span = 32;
+            const float slope = h[static_cast<size_t>((i + slope_span) % period)] -
+                                h[static_cast<size_t>((i + period - slope_span) % period)];
+            const float light = std::clamp(0.5f - slope * 0.04f, 0.f, 1.f);
             const int top = horizon - static_cast<int>(std::lround(here * scale * zoom));
             for (int y = top; y < horizon; ++y) {
                 const float alt = static_cast<float>(horizon - y);
