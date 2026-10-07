@@ -680,7 +680,10 @@ void Game::apply_scene_backend() {
     const bool was = use_gles_;
     use_gles_ = false;
     if (scene_backend_ == SceneBackend::Software) {
-        if (was) std::cout << "Kurvenrausch: software scene renderer\n";
+        if (was) {
+            std::cout << "Kurvenrausch: software scene renderer\n";
+            scene_dirty_ = true; // software path must repaint under the pause menu
+        }
         return;
     }
     if (!display_ || !display_->is_gl()) {
@@ -709,6 +712,7 @@ void Game::apply_scene_backend() {
     mirror_gles_.set_backdrop_view(1.f, true);
     gles_.set_size(width_, fb_height());
     use_gles_ = true;
+    scene_dirty_ = true; // new FBO is empty until the next full render
     if (!was) std::cout << "Kurvenrausch: GLES2 scene renderer\n";
 }
 
@@ -733,6 +737,7 @@ void Game::set_pixel_scale(int scale) {
     width_ = 0; // force set_width to rebuild
     set_width(screen_width());
     mirror_fb_ = Framebuffer(mir_width(), mir_height());
+    scene_dirty_ = true; // framebuffer (and GLES FBO) just rebuilt
 }
 
 void Game::set_ui_scale(int scale) {
@@ -2980,8 +2985,9 @@ void Game::render() {
         const Weather* weather_ptr = nullptr;
         if (debug_.weather && !track_.segment_at(world_.get<Transform>(player_).z + cam.player_z()).tunnel)
             weather_ptr = &weather_;
-        // Pause menus reuse the last scene FBO — no full road rebuild.
-        if (!paused_) {
+        // Pause menus reuse the last scene FBO — no full road rebuild, unless
+        // a renderer/resolution switch left the FBO empty (scene_dirty_).
+        if (!paused_ || scene_dirty_) {
             car_effects(scene_list_);
             scene_list_.set_layer(1);
             cockpit(scene_list_);
@@ -2992,8 +2998,10 @@ void Game::render() {
                                   mir_height());
             gles_.render(track_, view, sprites_, road_sprites_, look, scene_light, &background_, hour_, beam_ptr,
                          weather_ptr, &scene_list_);
+            scene_dirty_ = false;
         }
     } else {
+        scene_dirty_ = false;
         background_.render(fb_, look, hour_);
         road_.render(fb_, track_, view, sprites_, road_sprites_);
         car_effects(fb_canvas_);

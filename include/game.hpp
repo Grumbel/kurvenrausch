@@ -277,6 +277,9 @@ private:
     GlesRenderer gles_;
     GlesRenderer mirror_gles_; // the mirror's view, sharing gles_'s textures
     bool use_gles_ = false;
+    // After a renderer or resolution switch the scene FBO is empty; force one
+    // full redraw even while the pause menu is open (otherwise black until resume).
+    bool scene_dirty_ = false;
     std::vector<RoadSprite> road_sprites_;
     Framebuffer mirror_fb_;
     RoadRenderer mirror_road_;

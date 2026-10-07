@@ -2,6 +2,11 @@
 
 ## Current tip
 
+### Grok: redraw scene after video switch under pause
+- Switching Software/GLES or HD/SD while paused left a black screen until
+  resume: pause reuses the last GLES FBO, which was empty after invalidate.
+- `scene_dirty_` forces one full scene render even while paused.
+
 ### Grok: softer GLES mountain face transition
 - Mid-ridge lit/shade crease was still harsh. Wider slope span, neighbour
   light average, reduced mid-tone contrast; continuous snow lit/shade;
