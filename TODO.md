@@ -2,6 +2,18 @@
 
 ## Current tip
 
+### Grok: spare can, tunnel walls, mountain shade, UI scale
+- Spare can: no longer a fixed 0.15 tank. Sized from distance to the next
+  gas station (conservative cruise load + margin), clamped to 0.20 .. 0.55.
+- Tunnel walls: kerb/tile colours were near-white (`0xe0…` / `0xc4…`);
+  darkened to mid-grey concrete in `make_tunnel_wall` and the GLES bands.
+- Mountains: dropped high-frequency profile waves (23/41 cycles) that broke
+  slope lighting into tiny segments; slope window ±32 (was ±6), gentler gain.
+  Same slope fix on the GLES ridge path.
+- UI scale: independent of RESOLUTION (HD/SD). Default 1× = same size as SD
+  even in HD. VIDEO menu choice 1× / 2× / 3×; saved as `ui_scale` in choices.
+  Menu layout and HUD both use it (no longer height/240).
+
 ### Claude: lightbar, train sound, advance signs, the garage
 - The player car's layers (dirt, people, movie parts, lightbar) were drawn
   under the body (far-to-near order, layers had *farther* z): the
