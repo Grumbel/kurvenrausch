@@ -380,7 +380,7 @@ bool Game::init(bool fullscreen) {
     std::cout << "Kurvenrausch: " << track_.segments.size() << " segments, "
               << track_.length() << " units.\n"
               << "Controls: Arrows / WASD or gamepad to drive, P / Start to pause,\n"
-              << "          R restart, M mute, F8 renderer, F11 fullscreen, Esc to " << (web ? "pause" : "quit") << ".\n";
+              << "          R restart, M mute, F8 renderer, F11 fullscreen, Esc to pause.\n";
     return true;
 }
 
@@ -929,10 +929,10 @@ void Game::pause() {
 
 bool Game::update_pause(const InputState& input) {
     if (!paused_) {
-        // In a web page Esc pauses: there is nothing to quit to.
-        if (input.escape && !web) return false;
+        // Esc and P/Start both open the pause menu; only QUIT in that menu
+        // leaves the process (and QUIT is omitted on the web build).
         if (input.restart) reset();
-        if (input.pause || (input.escape && web)) pause();
+        if (input.pause || input.escape) pause();
         return true;
     }
     if (capturing_) {

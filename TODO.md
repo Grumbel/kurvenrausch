@@ -2,6 +2,10 @@
 
 ## Current tip
 
+### Grok: Esc opens the pause menu; Quit is menu-only
+- Esc while driving always pauses (native and web); it no longer exits the
+  process. Leave via PAUSED → QUIT. QUIT stays omitted on Emscripten/WASM.
+
 ### Grok: indicator and headlight lamps always on the HUD
 - Turn-signal arrows and the headlight icon were drawn only while lit. They
   are always present now; off state uses a dim grey so the slots stay visible.

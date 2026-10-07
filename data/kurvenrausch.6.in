@@ -242,7 +242,7 @@ Z	D\-pad down	hazard lights
 Tab	right stick click	mini map: around the car or the whole lap
 M		mute the sound
 F11, Alt+Enter		toggle fullscreen
-Esc		quit; in the pause menu, back a page
+Esc		pause; in the pause menu, back a page (Quit is a menu item on native builds)
 .TE
 .PP
 All but Esc, F8, F11 and Start can be rebound in the pause menu's
@@ -250,7 +250,7 @@ OPTIONS \(-> CONTROLS, two keys and two pad inputs per action.
 .PP
 The pause menu: RESUME, RESTART, RACE SETUP (track, start country, time of
 day, weather, traffic), OPTIONS (GAMEPLAY, VIDEO, AUDIO, CONTROLS, DEBUG),
-EXTRAS (the demo, lap records) and QUIT.
+EXTRAS (the demo, lap records) and, on native builds, QUIT.
 Arrow keys or D\-pad move, Enter or A picks, left and right change a
 setting, Esc or B go back; the mouse works too.
 Everything set there is kept for the next run.

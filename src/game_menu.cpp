@@ -4,7 +4,7 @@
 // The pause menu: its pages, built from the game's state, and what the
 // player does on them.
 //
-//   PAUSED      resume, restart, RACE SETUP, OPTIONS, EXTRAS, quit
+//   PAUSED      resume, restart, RACE SETUP, OPTIONS, EXTRAS, quit (native only)
 //   RACE SETUP  track, start in, time of day, weather, traffic, start race
 //   OPTIONS     GAMEPLAY  fuel, nitro, police, camera
 //               VIDEO     fullscreen, screen, resolution, renderer; HUD,
@@ -298,7 +298,7 @@ MenuPage Game::menu_page(MenuPageId id) const {
                 p.items.push_back(info("START", "PAUSE, MENU"));
                 p.items.push_back(info("D-PAD, A, B", "MENU"));
             } else {
-                p.items.push_back(info("ESC", web ? "PAUSE, BACK" : "QUIT, BACK"));
+                p.items.push_back(info("ESC", "PAUSE, BACK"));
                 p.items.push_back(info("F11, ALT+ENTER", "FULLSCREEN"));
                 p.items.push_back(info("F8", "RENDERER"));
             }

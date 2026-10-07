@@ -27,7 +27,7 @@ struct InputState {
 
     // One-shot events since the last poll.
     bool quit = false;    // the window was closed
-    bool escape = false;  // Esc: quits while driving, leaves the pause menu
+    bool escape = false;  // Esc: opens the pause menu while driving, backs out of it
     bool pause = false;   // P or Start: opens and closes the pause menu
     bool restart = false;
     MenuInput menu;       // navigating the pause menu (arrows, Enter, Esc, D-pad, A, B, ...)

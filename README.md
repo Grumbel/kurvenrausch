@@ -301,7 +301,7 @@ Without Nix, with Emscripten installed (it then fetches its SDL2 port):
 (`mk/wasm/shell.html`) scales the picture to the window, keeps the lap times
 and choices in the browser's storage (with buttons to download them and to
 load them elsewhere) and pauses the game when the tab is hidden. In the
-browser Esc pauses, and the pause menu has no Quit.
+browser Esc pauses (same as native), and the pause menu has no Quit.
 
 The `.wasm` is an Emscripten module: it imports the generated JavaScript
 runtime (minified names such as `a::a`), not WASI. Standalone runtimes
@@ -341,7 +341,7 @@ backend. Use `nix run .#kurvenrausch-wasm` (or any static file server on
 | M                |                          | Mute sound         |
 | F11 / Alt+Enter  |                          | Toggle fullscreen  |
 | F8               |                          | Switch renderer: GLES ↔ software |
-| Esc              |                          | Quit (in the pause menu: back a page) |
+| Esc              |                          | Pause (in the pause menu: back a page; Quit is a menu item) |
 
 All of these but Esc, F8, F11 and Start can be rebound in OPTIONS →
 CONTROLS, two keys and two pad inputs (buttons, triggers, stick directions)
