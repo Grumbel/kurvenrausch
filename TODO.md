@@ -2,6 +2,10 @@
 
 ## Current tip
 
+### Grok: GLES forecourt kerb outline
+- Software draws a thin `theme.rumble[0]` strip at the outer edge of each
+  lot's paving. GLES only filled the paving; add the same kerb band.
+
 ### Grok: GLES mountain snowcap altitude split
 - Ridge snow used `min(top, snow_y)` for the snow/rock boundary. Screen Y
   grows downward, so that zeroed the snow face whenever the peak sat above

@@ -1643,15 +1643,20 @@ void GlesRenderer::draw_segment(const Track& track, const Slice& s, const RoadTh
     const bool other_road = !std::isnan(oa) && !std::isnan(ob);
     const float oca = other_road ? a.x + oa * a.w : 0.f, ocb = other_road ? b.x + ob * b.w : 0.f;
 
-    // Forecourt paving
+    // Forecourt paving with a light kerb at the outer edge (matches software).
     const float court_a = track.forecourt_at(near), court_b = track.forecourt_at(near + direction_);
     if (court_a > 1.f || court_b > 1.f) {
         const float fa = std::max(court_a, 1.f), fb_ = std::max(court_b, 1.f);
         const float side = static_cast<float>(seg.court_side);
         const Color paving = fogc(blend(theme.road[band], Color{0xb4, 0xb0, 0xa8}, 0.3f));
-        const float a0 = a.x + side * 1.f * a.w, a1 = a.x + side * fa * a.w;
-        const float b0 = b.x + side * 1.f * b.w, b1 = b.x + side * fb_ * b.w;
-        push_trap(yb, std::min(b0, b1), std::max(b0, b1), ya, std::min(a0, a1), std::max(a0, a1), paving);
+        const Color kerb = fogc(theme.rumble[0]);
+        auto court_band = [&](float in_a, float out_a, float in_b, float out_b, Color c) {
+            const float a0 = a.x + side * in_a * a.w, a1 = a.x + side * out_a * a.w;
+            const float b0 = b.x + side * in_b * b.w, b1 = b.x + side * out_b * b.w;
+            push_trap(yb, std::min(b0, b1), std::max(b0, b1), ya, std::min(a0, a1), std::max(a0, a1), c);
+        };
+        court_band(1.f, fa, 1.f, fb_, paving);
+        court_band(fa, fa + 1.f / 40.f, fb_, fb_ + 1.f / 40.f, kerb);
     }
 
     const float ra = a.w / static_cast<float>(std::max(6, 2 * lanes));
