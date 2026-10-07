@@ -166,19 +166,31 @@ void Background::render(Framebuffer& fb, const RoadTheme& theme, const BackdropV
     }
     fb.fill_rect(0, horizon, w, fb.height() - horizon, atmosphere_air(theme));
 
-    // Stars at night, in a fixed field above the horizon (so the mirror
-    // shows them too). They are lights: they keep shining in the
-    // darkened picture (see apply_daylight()).
+    // Stars at night: fixed on the celestial sphere, scrolled by road bends
+    // (sky_offset_, no cloud drift) so they turn with the world. Lights: they
+    // keep shining in the darkened picture (see apply_daylight()).
     if (theme.stars > 0.02f) {
         uint32_t seed = 0x51a7f00du;
-        for (int i = 0; i < 90; ++i) {
+        const float period = sky_period;
+        const float offset = sky_offset_;
+        // Enough stars across the sky period that a 320-wide view still looks dense.
+        for (int i = 0; i < 280; ++i) {
             seed = seed * 1664525u + 1013904223u;
-            const int x = static_cast<int>((seed >> 8) % static_cast<uint32_t>(w));
+            const float u = static_cast<float>((seed >> 8) % 10000u) / 10000.f * period;
             seed = seed * 1664525u + 1013904223u;
-            const int y = static_cast<int>(static_cast<float>((seed >> 8) % 1000u) / 1000.f * static_cast<float>(horizon) * 0.9f);
+            const int y = static_cast<int>(static_cast<float>((seed >> 8) % 1000u) / 1000.f *
+                                           static_cast<float>(horizon) * 0.9f);
             const bool bright = (seed >> 28) < 4;
             if (static_cast<float>((seed >> 4) & 0xff) / 255.f > theme.stars) continue; // fewer at dusk
-            fb.put_pixel(x, y, glowing(bright ? Color{0xe8, 0xee, 0xff} : Color{0xb8, 0xc8, 0xff}));
+            const Color c = glowing(bright ? Color{0xe8, 0xee, 0xff} : Color{0xb8, 0xc8, 0xff});
+            const float x0 = view.mirror
+                                 ? half_w + (wrap(offset + period / 2.f - u, period) - period) * zoom
+                                 : wrap(u - offset, period) * zoom;
+            for (float rep : {x0, view.mirror ? x0 + period * zoom : x0 - period * zoom}) {
+                const int x = static_cast<int>(std::lround(rep));
+                if (x < 0 || x >= w) continue;
+                fb.put_pixel(x, y, c);
+            }
         }
     }
 

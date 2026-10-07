@@ -40,7 +40,10 @@ public:
 
     // Parallax state for the GLES backdrop path.
     static constexpr float sky_layer_period = 1280.f;
-    float sky_offset() const { return sky_offset_ + drift_; }
+    float sky_offset() const { return sky_offset_ + drift_; } // clouds: bend + wind drift
+    // Road-bend scroll only (no cloud wind). Stars / celestial sphere use this
+    // so they turn with the world when the road curves.
+    float sky_bend_offset() const { return sky_offset_; }
     float mountain_offset() const { return mountain_offset_; }
     float hill_offset() const { return hill_offset_; }
     const std::vector<float>& mountains() const { return mountains_; }

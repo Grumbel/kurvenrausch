@@ -2,6 +2,11 @@
 
 ## Current tip
 
+### Grok: stars scroll with the sky
+- Stars were seeded to fixed screen columns. They now live on the sky-layer
+  period and scroll with `sky_bend_offset()` (road bends only, no cloud wind
+  drift), software and GLES; denser field (280) so a 320-wide view stays full.
+
 ### Grok: spare can, tunnel walls, mountain shade, UI scale
 - Spare can: no longer a fixed 0.15 tank. Sized from distance to the next
   gas station (conservative cruise load + margin), clamped to 0.20 .. 0.55.

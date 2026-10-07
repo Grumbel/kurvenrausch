@@ -1377,19 +1377,32 @@ void GlesRenderer::draw_backdrop(const RoadTheme& theme, const Background* backd
         }
     };
 
-    // Stars as solid 2×2 traps.
+    auto wrap_period = [](float v, float p) {
+        v = std::fmod(v, p);
+        return v < 0.f ? v + p : v;
+    };
+
+    // Stars on the celestial sphere: scroll with road bends (no cloud drift).
     if (theme.stars > 0.02f) {
-        // Lights: they keep shining at night (no fog either).
         uint32_t seed = 0x51a7f00du;
-        for (int i = 0; i < 90; ++i) {
+        const float period = Background::sky_layer_period;
+        const float offset = backdrop ? backdrop->sky_bend_offset() : 0.f;
+        const float zoom = backdrop_zoom_;
+        for (int i = 0; i < 280; ++i) {
             seed = seed * 1664525u + 1013904223u;
-            const float x = static_cast<float>((seed >> 8) % static_cast<uint32_t>(width_));
+            const float u = static_cast<float>((seed >> 8) % 10000u) / 10000.f * period;
             seed = seed * 1664525u + 1013904223u;
             const float y = static_cast<float>((seed >> 8) % 1000u) / 1000.f * horizon * 0.9f;
             if (static_cast<float>((seed >> 4) & 0xff) / 255.f > theme.stars) continue;
             const bool bright = (seed >> 28) < 4;
             const Color c = glowing(bright ? Color{0xe8, 0xee, 0xff} : Color{0xb8, 0xc8, 0xff});
-            push_trap(y, x, x + 1.f, y + 1.f, x, x + 1.f, c);
+            const float x0 = backdrop_mirror_
+                                 ? half_w + (wrap_period(offset + period / 2.f - u, period) - period) * zoom
+                                 : wrap_period(u - offset, period) * zoom;
+            for (float rep : {x0, backdrop_mirror_ ? x0 + period * zoom : x0 - period * zoom}) {
+                if (rep < -1.f || rep >= wf + 1.f) continue;
+                push_trap(y, rep, rep + 1.f, y + 1.f, rep, rep + 1.f, c);
+            }
         }
         flush_solid();
     }
