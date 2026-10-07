@@ -1343,12 +1343,20 @@ void GlesRenderer::draw_backdrop(const RoadTheme& theme, const Background* backd
             return std::min(period - 1, static_cast<int>(p));
         };
         auto height_at = [&](int x) -> float { return h[static_cast<size_t>(index_at(x))] * scale_mul * zoom; };
-        auto slope_light = [&](int x) -> float {
+        // Raw slope → light, then low-pass so the lit/shade face change is not a hard crease.
+        auto slope_light_raw = [&](int x) -> float {
             const int i = index_at(x);
-            constexpr int slope_span = 32;
+            constexpr int slope_span = 48;
             const float slope = h[static_cast<size_t>((i + slope_span) % period)] -
                                 h[static_cast<size_t>((i + period - slope_span) % period)];
-            return std::clamp(0.5f - slope * 0.04f, 0.f, 1.f);
+            // Gentler gain than software's dithered response (0.04 → 0.028).
+            return std::clamp(0.5f - slope * 0.028f, 0.f, 1.f);
+        };
+        // Neighbour average + reduced mid-tone contrast: softens the central face transition.
+        auto slope_light = [&](int x) -> float {
+            const int wspan = std::max(step * 2, width_ / 40);
+            const float L = (slope_light_raw(x - wspan) + 2.f * slope_light_raw(x) + slope_light_raw(x + wspan)) * 0.25f;
+            return 0.5f + (L - 0.5f) * 0.55f;
         };
         // Screen-pixel altitude from the horizon (matches Background::render).
         auto haze_at = [&](float alt_px) {
@@ -1356,8 +1364,8 @@ void GlesRenderer::draw_backdrop(const RoadTheme& theme, const Background* backd
         };
         const bool do_snow = snow_line < 1.0e8f;
         const float snow_alt = snow_line * zoom; // altitude in screen pixels
-        // Soft snow line without Bayer: smoothstep over a few pixels of altitude.
-        const float soft = std::max(4.f, 6.f * zoom);
+        // Soft snow line without Bayer: wider smoothstep for a gentler altitude blend.
+        const float soft = std::max(8.f, 12.f * zoom);
         auto smoothstep = [](float e0, float e1, float x) {
             const float t = std::clamp((x - e0) / (e1 - e0), 0.f, 1.f);
             return t * t * (3.f - 2.f * t);
@@ -1366,15 +1374,15 @@ void GlesRenderer::draw_backdrop(const RoadTheme& theme, const Background* backd
         auto shade_at = [&](float light, float alt_px) {
             Color rock = blend(shade, lit, light);
             if (do_snow) {
-                const Color snowc = light > 0.45f ? theme.snow : blend(theme.snow, theme.mountain_shade, 0.5f);
-                // 1 above the snow line, 0 well below — soft edge, no dither.
+                // Continuous snow lit/shade (no hard threshold at 0.45).
+                const Color snowc = blend(blend(theme.snow, theme.mountain_shade, 0.5f), theme.snow, light);
                 const float snow_amt = smoothstep(snow_alt - soft, snow_alt + soft, alt_px);
                 rock = blend(rock, snowc, snow_amt);
             }
             return fogged(rock, fog_air_, haze_at(alt_px), daylight_);
         };
         // Vertical bands so altitude fog and the snow line are accurate under Gouraud.
-        constexpr int bands = 8;
+        constexpr int bands = 10;
         for (int x = 0; x < width_; x += step) {
             const int x_end = std::min(width_, x + step);
             const float h0 = height_at(x);

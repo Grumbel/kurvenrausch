@@ -2,6 +2,11 @@
 
 ## Current tip
 
+### Grok: softer GLES mountain face transition
+- Mid-ridge lit/shade crease was still harsh. Wider slope span, neighbour
+  light average, reduced mid-tone contrast; continuous snow lit/shade;
+  wider snow altitude smoothstep; 10 vertical bands.
+
 ### Grok: GLES mountains smooth-shaded (no strip seams)
 - Strip lighting used one average light per column → vertical seams. Now
   each edge keeps its own slope light so shared edges match.
