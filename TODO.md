@@ -2,6 +2,10 @@
 
 ## Current tip
 
+### Grok: fix demo-track corniche name clash
+- Spain segment reused `const int corniche` already used for France's
+  cliff road in `build_demo_track`. Rename Spain's to `costa`.
+
 ### Grok: Spain Costa del Sol zone
 - New zone SPAIN / COSTA DEL SOL (Decor::Andalusia): white houses, palms,
   limestone cliffs inland and rail over the Mediterranean.

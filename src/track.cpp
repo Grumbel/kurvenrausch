@@ -1679,11 +1679,11 @@ Track build_demo_track() {
 
     b.begin_zone(zone_spain());
     // Corniche: limestone cliff inland, the sea below the outer rail.
-    const int corniche = b.size();
+    const int costa = b.size();
     b.curve(Len::Medium, Bend::Hard, Hill::Low);
     b.curve(Len::Medium, -Bend::Hard, Hill::Medium);
     b.curve(Len::Short, Bend::Medium, -Hill::Low);
-    b.mark(corniche, b.size(), Edge::Cliff, Edge::Rail);
+    b.mark(costa, b.size(), Edge::Cliff, Edge::Rail);
     b.gas_station();
     b.curve(Len::Medium, -Bend::Medium, -Hill::Low);
     b.straight(Len::Short);
