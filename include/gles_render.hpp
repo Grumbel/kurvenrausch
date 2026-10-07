@@ -98,6 +98,8 @@ private:
     void push_trap_vcol(float y0, float x0l, float x0r, float y1, float x1l, float x1r, Color c0, Color c1);
     void push_solid_quad(float x0, float y0, float x1, float y1, float x2, float y2, float x3, float y3,
                          Color c);
+    void push_solid_quad_vcol(float x0, float y0, float x1, float y1, float x2, float y2, float x3, float y3,
+                              Color c0, Color c1, Color c2, Color c3);
     // Solid-looking quad via atlas white texel + vertex colour (same batch as sprites).
     void push_tint_quad(float x0, float y0, float x1, float y1, float x2, float y2, float x3, float y3,
                         Color c);

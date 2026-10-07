@@ -796,6 +796,12 @@ void GlesRenderer::push_trap_vcol(float y0, float x0l, float x0r, float y1, floa
 // General solid quad (two triangles). Vertices in order around the perimeter.
 void GlesRenderer::push_solid_quad(float x0, float y0, float x1, float y1, float x2, float y2, float x3, float y3,
                                    Color c) {
+    push_solid_quad_vcol(x0, y0, x1, y1, x2, y2, x3, y3, c, c, c, c);
+}
+
+// General solid quad with a colour per vertex (order matches push_solid_quad).
+void GlesRenderer::push_solid_quad_vcol(float x0, float y0, float x1, float y1, float x2, float y2, float x3,
+                                        float y3, Color c0, Color c1, Color c2, Color c3) {
     if (draw_clip_) {
         const float cy0 = static_cast<float>(draw_clip_y0_);
         const float cy1 = static_cast<float>(draw_clip_y1_);
@@ -806,12 +812,13 @@ void GlesRenderer::push_solid_quad(float x0, float y0, float x1, float y1, float
         const float xmin = std::min(std::min(x0, x1), std::min(x2, x3));
         const float xmax = std::max(std::max(x0, x1), std::max(x2, x3));
         if (ymax <= cy0 || ymin >= cy1 || xmax <= cx0 || xmin >= cx1) return;
-        // AABB reject only (above) — no vertex clamp.
     }
-    const float r = c.r / 255.f, gch = c.g / 255.f, b = c.b / 255.f, a = c.a / 255.f;
+    auto v = [](float x, float y, Color c) -> Vertex {
+        return {x, y, 0, 0, c.r / 255.f, c.g / 255.f, c.b / 255.f, c.a / 255.f};
+    };
     const Vertex verts[6] = {
-        {x0, y0, 0, 0, r, gch, b, a}, {x1, y1, 0, 0, r, gch, b, a}, {x2, y2, 0, 0, r, gch, b, a},
-        {x0, y0, 0, 0, r, gch, b, a}, {x2, y2, 0, 0, r, gch, b, a}, {x3, y3, 0, 0, r, gch, b, a},
+        v(x0, y0, c0), v(x1, y1, c1), v(x2, y2, c2),
+        v(x0, y0, c0), v(x2, y2, c2), v(x3, y3, c3),
     };
     solid_.insert(solid_.end(), verts, verts + 6);
 }
@@ -1343,11 +1350,14 @@ void GlesRenderer::draw_backdrop(const RoadTheme& theme, const Background* backd
                                 h[static_cast<size_t>((i + period - slope_span) % period)];
             return std::clamp(0.5f - slope * 0.04f, 0.f, 1.f);
         };
-        auto haze_at = [&](float alt) {
-            return std::max(theme.haze, std::clamp(1.f - alt / zoom / (14.f * scale_mul + 1.f), 0.f, 1.f) * 0.75f);
+        // Screen-pixel altitude from the horizon (matches Background::render).
+        auto haze_at = [&](float alt_px) {
+            return std::max(theme.haze, std::clamp(1.f - alt_px / (14.f * zoom), 0.f, 1.f) * 0.75f);
         };
         const bool do_snow = snow_line < 1.0e8f;
         const float snow_y = horizon - snow_line * zoom;
+        // Feather the snow line over a few pixels (software dithers with Bayer).
+        const float feather = std::max(3.f, 5.f * zoom);
         for (int x = 0; x < width_; x += step) {
             const float h0 = height_at(x);
             const float h1 = height_at(std::min(width_, x + step));
@@ -1357,26 +1367,36 @@ void GlesRenderer::draw_backdrop(const RoadTheme& theme, const Background* backd
             const float top0 = horizon - h0;
             const float top1 = horizon - h1;
             const float light = 0.5f * (slope_light(x) + slope_light(x + step));
-            const Color rock = blend(shade, lit, light);
-            const Color snowc = light > 0.45f ? theme.snow : blend(theme.snow, theme.mountain_shade, 0.5f);
-            // Quad order: top-left, top-right, bottom-right, bottom-left.
-            auto face = [&](float ty0, float ty1, float by0, float by1, Color base, float mid_alt) {
+            const Color rock_base = blend(shade, lit, light);
+            const Color snow_lit = theme.snow;
+            const Color snow_shade = blend(theme.snow, theme.mountain_shade, 0.5f);
+            const Color snow_base = light > 0.45f ? snow_lit : snow_shade;
+            // Vertex colours: vertical haze gradient (software fogs by altitude).
+            auto face_grad = [&](float ty0, float ty1, float by0, float by1, Color top_base, Color bot_base) {
                 if (std::max(by0, by1) <= std::min(ty0, ty1) + 0.01f) return;
-                const Color c = fogged(base, fog_air_, haze_at(mid_alt), daylight_);
-                push_solid_quad(x0, ty0, x1, ty1, x1, by1, x0, by0, c);
+                const float alt_t0 = horizon - ty0, alt_t1 = horizon - ty1;
+                const float alt_b0 = horizon - by0, alt_b1 = horizon - by1;
+                const Color ct0 = fogged(top_base, fog_air_, haze_at(alt_t0), daylight_);
+                const Color ct1 = fogged(top_base, fog_air_, haze_at(alt_t1), daylight_);
+                const Color cb1 = fogged(bot_base, fog_air_, haze_at(alt_b1), daylight_);
+                const Color cb0 = fogged(bot_base, fog_air_, haze_at(alt_b0), daylight_);
+                // Quad order: top-left, top-right, bottom-right, bottom-left.
+                push_solid_quad_vcol(x0, ty0, x1, ty1, x1, by1, x0, by0, ct0, ct1, cb1, cb0);
             };
             if (do_snow && (top0 < snow_y || top1 < snow_y)) {
-                // Screen Y grows downward. Peak is at top (smaller y); snow_line
-                // is at snow_y. Snow runs from the peak down to the snow line;
-                // rock fills from there to the horizon. Using min(top, snow_y)
-                // collapsed the snow face to zero height whenever the peak was
-                // above the line (software paints per-pixel by altitude).
+                // Peak → snow line: snow with haze toward the line.
                 const float st0 = std::max(top0, snow_y);
                 const float st1 = std::max(top1, snow_y);
-                face(top0, top1, st0, st1, snowc, (h0 + h1) * 0.25f + snow_line * 0.5f);
-                face(st0, st1, horizon, horizon, rock, snow_line * 0.5f);
+                // Soft edge: bottom of the snow blends toward rock (Bayer edge in software).
+                const Color snow_edge = blend(snow_base, rock_base, 0.45f);
+                face_grad(top0, top1, st0, st1, snow_base, snow_edge);
+                // Thin transition band under the line, then rock to the horizon.
+                const float ft0 = std::min(horizon, st0 + feather);
+                const float ft1 = std::min(horizon, st1 + feather);
+                face_grad(st0, st1, ft0, ft1, snow_edge, rock_base);
+                face_grad(ft0, ft1, horizon, horizon, rock_base, rock_base);
             } else {
-                face(top0, top1, horizon, horizon, rock, (h0 + h1) * 0.25f);
+                face_grad(top0, top1, horizon, horizon, rock_base, rock_base);
             }
         }
     };

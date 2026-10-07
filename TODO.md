@@ -2,6 +2,12 @@
 
 ## Current tip
 
+### Grok: GLES snowcap vertical haze + soft edge
+- Flat solid snow/rock quads lacked software's altitude fog and Bayer edge.
+- `push_solid_quad_vcol` for per-vertex colours; ridge faces fog by screen
+  altitude (haze formula matches Background::render). Snow bottoms blend
+  toward rock; a short feather band softens the snow line.
+
 ### Grok: GLES forecourt kerb outline
 - Software draws a thin `theme.rumble[0]` strip at the outer edge of each
   lot's paving. GLES only filled the paving; add the same kerb band.
