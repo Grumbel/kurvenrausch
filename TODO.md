@@ -2,6 +2,14 @@
 
 ## Current tip
 
+### Grok: GLES mountains smooth-shaded (no strip seams)
+- Strip lighting used one average light per column → vertical seams. Now
+  each edge keeps its own slope light so shared edges match.
+- Colour is continuous: lit/shade + soft snow (smoothstep, no Bayer) +
+  altitude haze, evaluated per vertex.
+- 8 vertical bands so the snow line and haze stay accurate under Gouraud;
+  finer horizontal step (width/200).
+
 ### Grok: GLES snowcap vertical haze + soft edge
 - Flat solid snow/rock quads lacked software's altitude fog and Bayer edge.
 - `push_solid_quad_vcol` for per-vertex colours; ridge faces fog by screen

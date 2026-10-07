@@ -1329,9 +1329,9 @@ void GlesRenderer::draw_backdrop(const RoadTheme& theme, const Background* backd
                       float snow_line) {
         if (h.empty()) return;
         const int period = static_cast<int>(h.size());
-        const int step = std::max(1, width_ / 100);
+        // Finer than width/100 so the silhouette and shade stay smooth on HD.
+        const int step = std::max(1, width_ / 200);
         const float zoom = backdrop_zoom_;
-        // The layer's sample at screen column x (Background::render's layer_x).
         auto index_at = [&](int x) {
             if (!backdrop_mirror_ && zoom == 1.f)
                 return ((static_cast<int>(std::lround(offset)) + x) % period + period) % period;
@@ -1355,48 +1355,54 @@ void GlesRenderer::draw_backdrop(const RoadTheme& theme, const Background* backd
             return std::max(theme.haze, std::clamp(1.f - alt_px / (14.f * zoom), 0.f, 1.f) * 0.75f);
         };
         const bool do_snow = snow_line < 1.0e8f;
-        const float snow_y = horizon - snow_line * zoom;
-        // Feather the snow line over a few pixels (software dithers with Bayer).
-        const float feather = std::max(3.f, 5.f * zoom);
+        const float snow_alt = snow_line * zoom; // altitude in screen pixels
+        // Soft snow line without Bayer: smoothstep over a few pixels of altitude.
+        const float soft = std::max(4.f, 6.f * zoom);
+        auto smoothstep = [](float e0, float e1, float x) {
+            const float t = std::clamp((x - e0) / (e1 - e0), 0.f, 1.f);
+            return t * t * (3.f - 2.f * t);
+        };
+        // Colour at a column edge for a given altitude: continuous lit/shade + snow.
+        auto shade_at = [&](float light, float alt_px) {
+            Color rock = blend(shade, lit, light);
+            if (do_snow) {
+                const Color snowc = light > 0.45f ? theme.snow : blend(theme.snow, theme.mountain_shade, 0.5f);
+                // 1 above the snow line, 0 well below — soft edge, no dither.
+                const float snow_amt = smoothstep(snow_alt - soft, snow_alt + soft, alt_px);
+                rock = blend(rock, snowc, snow_amt);
+            }
+            return fogged(rock, fog_air_, haze_at(alt_px), daylight_);
+        };
+        // Vertical bands so altitude fog and the snow line are accurate under Gouraud.
+        constexpr int bands = 8;
         for (int x = 0; x < width_; x += step) {
+            const int x_end = std::min(width_, x + step);
             const float h0 = height_at(x);
-            const float h1 = height_at(std::min(width_, x + step));
+            const float h1 = height_at(x_end);
             if (h0 < 0.5f && h1 < 0.5f) continue;
             const float x0 = static_cast<float>(x);
-            const float x1 = std::min(wf, static_cast<float>(x + step));
+            const float x1 = std::min(wf, static_cast<float>(x_end));
             const float top0 = horizon - h0;
             const float top1 = horizon - h1;
-            const float light = 0.5f * (slope_light(x) + slope_light(x + step));
-            const Color rock_base = blend(shade, lit, light);
-            const Color snow_lit = theme.snow;
-            const Color snow_shade = blend(theme.snow, theme.mountain_shade, 0.5f);
-            const Color snow_base = light > 0.45f ? snow_lit : snow_shade;
-            // Vertex colours: vertical haze gradient (software fogs by altitude).
-            auto face_grad = [&](float ty0, float ty1, float by0, float by1, Color top_base, Color bot_base) {
-                if (std::max(by0, by1) <= std::min(ty0, ty1) + 0.01f) return;
-                const float alt_t0 = horizon - ty0, alt_t1 = horizon - ty1;
-                const float alt_b0 = horizon - by0, alt_b1 = horizon - by1;
-                const Color ct0 = fogged(top_base, fog_air_, haze_at(alt_t0), daylight_);
-                const Color ct1 = fogged(top_base, fog_air_, haze_at(alt_t1), daylight_);
-                const Color cb1 = fogged(bot_base, fog_air_, haze_at(alt_b1), daylight_);
-                const Color cb0 = fogged(bot_base, fog_air_, haze_at(alt_b0), daylight_);
-                // Quad order: top-left, top-right, bottom-right, bottom-left.
-                push_solid_quad_vcol(x0, ty0, x1, ty1, x1, by1, x0, by0, ct0, ct1, cb1, cb0);
-            };
-            if (do_snow && (top0 < snow_y || top1 < snow_y)) {
-                // Peak → snow line: snow with haze toward the line.
-                const float st0 = std::max(top0, snow_y);
-                const float st1 = std::max(top1, snow_y);
-                // Soft edge: bottom of the snow blends toward rock (Bayer edge in software).
-                const Color snow_edge = blend(snow_base, rock_base, 0.45f);
-                face_grad(top0, top1, st0, st1, snow_base, snow_edge);
-                // Thin transition band under the line, then rock to the horizon.
-                const float ft0 = std::min(horizon, st0 + feather);
-                const float ft1 = std::min(horizon, st1 + feather);
-                face_grad(st0, st1, ft0, ft1, snow_edge, rock_base);
-                face_grad(ft0, ft1, horizon, horizon, rock_base, rock_base);
-            } else {
-                face_grad(top0, top1, horizon, horizon, rock_base, rock_base);
+            // Per-edge lighting so adjacent strips share the same edge colour (no seams).
+            const float light0 = slope_light(x);
+            const float light1 = slope_light(x_end);
+            for (int b = 0; b < bands; ++b) {
+                const float t0 = static_cast<float>(b) / static_cast<float>(bands);
+                const float t1 = static_cast<float>(b + 1) / static_cast<float>(bands);
+                const float y0a = top0 + (horizon - top0) * t0;
+                const float y0b = top0 + (horizon - top0) * t1;
+                const float y1a = top1 + (horizon - top1) * t0;
+                const float y1b = top1 + (horizon - top1) * t1;
+                if (std::max(y0b, y1b) <= std::min(y0a, y1a) + 0.01f) continue;
+                const float alt0a = horizon - y0a, alt0b = horizon - y0b;
+                const float alt1a = horizon - y1a, alt1b = horizon - y1b;
+                const Color c0a = shade_at(light0, alt0a);
+                const Color c1a = shade_at(light1, alt1a);
+                const Color c1b = shade_at(light1, alt1b);
+                const Color c0b = shade_at(light0, alt0b);
+                // Top-left, top-right, bottom-right, bottom-left.
+                push_solid_quad_vcol(x0, y0a, x1, y1a, x1, y1b, x0, y0b, c0a, c1a, c1b, c0b);
             }
         }
     };
