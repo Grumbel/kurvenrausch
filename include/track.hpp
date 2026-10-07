@@ -93,8 +93,15 @@ enum class Scenery : uint8_t {
     AdvanceSign,  // a lot ahead, and how far: its variant is advance_sign_variant()
     Garage,       // the player's own garage, beyond its forecourt
     GarageSign,   // the sign announcing it
+    SpeedLimit,   // circular speed limit (variant: index into speed_limit_kmh)
+    CurveLeft,    // chevron warning: tight left bend ahead
+    CurveRight,   // chevron warning: tight right bend ahead
     Count
 };
+
+// European-style speed limit plate values (km/h), selected by RoadsideObject::variant.
+constexpr int speed_limit_kinds = 4;
+constexpr int speed_limit_kmh[speed_limit_kinds] = {50, 80, 100, 120};
 
 struct SceneryInfo {
     float width;    // world units; the bitmap's aspect ratio gives the height

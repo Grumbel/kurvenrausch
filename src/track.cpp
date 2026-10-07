@@ -94,6 +94,9 @@ const SceneryInfo& scenery_info(Scenery kind) {
         /* AdvanceSign*/{1700.f, true,  false, false},
         /* Garage    */ {4800.f, true,  false, false},
         /* GarageSign*/ { 700.f, true,  false, false},
+        /* SpeedLimit*/ { 700.f, true,  false, false},
+        /* CurveLeft */ { 700.f, true,  false, false},
+        /* CurveRight*/ { 700.f, true,  false, false},
     };
     static_assert(sizeof(infos) / sizeof(infos[0]) == static_cast<size_t>(Scenery::Count),
                   "scenery_info() needs an entry for every Scenery kind");
@@ -783,16 +786,16 @@ public:
         scenery(from + Len::Short * 3 / 4, Scenery::Overpass, 0.f);
     }
 
-    void scenery(int index, Scenery kind, float offset) {
+    void scenery(int index, Scenery kind, float offset, uint8_t variant = 0) {
         if (index < 0 || index >= static_cast<int>(t_.segments.size())) return;
-        t_.segments[static_cast<size_t>(index)].scenery.push_back({kind, offset});
+        t_.segments[static_cast<size_t>(index)].scenery.push_back({kind, offset, variant});
     }
 
     // A segment at or a little (up to 20 segments, some 25 m) before `index` where a sign can stand on
     // `side`: on plain road (no lot, tunnel, crossing or fork, and on the
     // route being built), nothing else standing close by on that side;
     // -1 for none.
-    int free_for_sign(int index, int side) const {
+    int free_for_sign(int index, int side, bool allow_fork = false) const {
         for (int i = index; i > index - 20; --i) {
             if (i < route_start_ || i >= size()) continue;
             const Segment& s = t_.segments[static_cast<size_t>(i)];
@@ -800,7 +803,7 @@ public:
             const bool in_fork = std::any_of(t_.branches.begin(), t_.branches.end(), [&](const Branch& b) {
                 return i >= b.fork && i < b.fork + b.length;
             });
-            if (in_fork) continue;
+            if (in_fork && !allow_fork) continue;
             bool crowded = false;
             for (int j = std::max(0, i - 8); j <= std::min(size() - 1, i + 8) && !crowded; ++j) {
                 crowded = t_.segments[static_cast<size_t>(j)].forecourt > 0.f; // a lot and its tapers
@@ -1263,6 +1266,38 @@ Zone zone_san_francisco() {
 // Plants scenery along the road according to each zone's decor rules. Sides
 // that carry a rail or cliff stay free: nothing grows out of the rock or out
 // of the sea.
+
+// Speed limits and curve chevrons before tight bends; denser on harder curves.
+void place_road_signs(Track& track, TrackBuilder& b, int from, int to) {
+    const int n = static_cast<int>(track.segments.size());
+    from = std::max(0, from);
+    to = std::min(to, n);
+    int last = from - 50;
+    for (int i = from + 12; i < to - 8; ++i) {
+        float peak = 0.f;
+        for (int j = i; j < std::min(to, i + 14); ++j) {
+            const float c = track.segments[static_cast<size_t>(j)].curve;
+            if (std::abs(c) > std::abs(peak)) peak = c;
+        }
+        // Medium bends get a chevron; hard ones also a speed limit.
+        if (std::abs(peak) < Bend::Medium * 0.95f) continue;
+        if (i - last < 28) continue;
+        const int turn = peak > 0.f ? 1 : -1; // positive curve → right-hand bend
+        const int outside = -turn;            // sign on the outside of the bend
+        const int at = b.free_for_sign(i - 4, outside, true);
+        if (at < 0) continue;
+        const Scenery chevron = turn > 0 ? Scenery::CurveRight : Scenery::CurveLeft;
+        b.scenery(at, chevron, static_cast<float>(outside) * 1.18f);
+        if (std::abs(peak) >= Bend::Hard * 0.9f) {
+            // 80 km/h before a hard bend (variant index 1).
+            const int at_speed = b.free_for_sign(at - 10, outside, true);
+            if (at_speed >= 0)
+                b.scenery(at_speed, Scenery::SpeedLimit, static_cast<float>(outside) * 1.18f, 1);
+        }
+        last = i;
+    }
+}
+
 void decorate(Track& track, TrackBuilder& b, int from, int to, uint32_t seed) {
     Rng rng(seed);
     int last_mesa = -1000;
@@ -1555,11 +1590,14 @@ Track build_demo_track() {
     // The fast way or the scenic one.
     b.fork("AUTOBAHN", "LANDSTRASSE",
            [&] {
+               const int ab = b.size();
                b.straight(Len::Short);
+               b.scenery(ab + 4, Scenery::SpeedLimit, 1.2f, 3); // 120 km/h
                b.overpass();
                b.straight(Len::Short / 2);
                b.curve(Len::Long, -Bend::Easy, Hill::Low);
                b.curve(Len::Long, Bend::Easy, -Hill::Low);
+               b.mark(ab, b.size(), Edge::Rail, Edge::Rail);
            },
            [&] {
                b.curve(Len::Short, Bend::Hard, Hill::Low);
@@ -1735,11 +1773,13 @@ Track finish_route(Track& track, TrackBuilder& b) {
     // being in the track now; then along each left route.
     const int n = static_cast<int>(track.segments.size());
     decorate(track, b, 0, n, 0x6b75727au);
+    place_road_signs(track, b, 0, n);
     place_patches(track, 0, n, 0x77657473u);
     for (size_t i = 0; i < track.branches.size(); ++i) {
         const Branch& br = track.branches[i];
         track.choose_branch(i, 0);
         decorate(track, b, br.fork, br.end(), 0x6c656674u + static_cast<uint32_t>(i));
+        place_road_signs(track, b, br.fork, br.end());
         place_patches(track, br.fork, br.end(), 0x6c657774u + static_cast<uint32_t>(i));
         track.choose_branch(i, 1);
     }
@@ -1879,9 +1919,12 @@ Track build_track(int index) {
     b.chemical_plant();
     b.fork("AUTOBAHN", "LANDSTRASSE",
            [&] {
+               const int ab = b.size();
                b.straight(Len::Long);
+               b.scenery(ab + 6, Scenery::SpeedLimit, 1.2f, 3); // 120 km/h
                b.curve(Len::Long, -Bend::Easy, Hill::Low);
                b.curve(Len::Long, Bend::Easy, -Hill::Low);
+               b.mark(ab, b.size(), Edge::Rail, Edge::Rail);
            },
            [&] {
                b.curve(Len::Medium, Bend::Hard, Hill::Low);

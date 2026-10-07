@@ -4,6 +4,7 @@
 #include "sprites.hpp"
 
 #include <utility>
+#include <string>
 
 #include "font.hpp"
 
@@ -537,6 +538,51 @@ Bitmap make_fork_sign(int dir) {
     for (int i = 0; i < 12; ++i) {
         const int x = 32 + static_cast<int>(10.f * d) - (dir < 0 ? -i : i);
         paint::rect(b, x, 10 + i / 2, 1, 14 - i, white);
+    }
+    paint::outline(b, Outline);
+    return b;
+}
+
+// European circular speed limit: white disc, red rim, black km/h.
+Bitmap make_speed_limit(int kmh) {
+    Bitmap b(48, 72);
+    const Color post{0x8c, 0x8c, 0x94}, post_dark{0x68, 0x68, 0x70};
+    const Color white{0xf4, 0xf4, 0xf4}, red{0xd0, 0x1c, 0x1c}, black{0x14, 0x14, 0x18};
+    paint::rect(b, 21, 46, 6, 26, post);
+    paint::rect(b, 25, 46, 2, 26, post_dark);
+    paint::ellipse(b, 24.f, 24.f, 22.f, 22.f, red);
+    paint::ellipse(b, 24.f, 24.f, 16.f, 16.f, white);
+    const std::string num = std::to_string(kmh);
+    const int tw = font::text_width(num, 2);
+    paint::text(b, (48 - tw) / 2, 18, num, black, 2);
+    paint::outline(b, Outline);
+    return b;
+}
+
+// Warning chevron: yellow diamond, black arrows pointing into the bend.
+Bitmap make_curve_sign(int dir) {
+    Bitmap b(48, 72);
+    const Color post{0x8c, 0x8c, 0x94}, post_dark{0x68, 0x68, 0x70};
+    const Color yellow{0xf0, 0xc0, 0x18}, black{0x18, 0x18, 0x1c}, border{0x20, 0x20, 0x24};
+    paint::rect(b, 21, 46, 6, 26, post);
+    paint::rect(b, 25, 46, 2, 26, post_dark);
+    // Diamond (axis-aligned square rotated via four triangles of fill)
+    const int cx = 24, cy = 24;
+    for (int y = 0; y < 48; ++y) {
+        for (int x = 0; x < 48; ++x) {
+            const int dx = std::abs(x - cx), dy = std::abs(y - cy);
+            if (dx + dy <= 20) b.set(x, y, yellow);
+            else if (dx + dy <= 22) b.set(x, y, border);
+        }
+    }
+    const float d = static_cast<float>(dir);
+    // Three stacked chevrons pointing left (dir < 0) or right.
+    for (int k = 0; k < 3; ++k) {
+        const float y0 = 12.f + static_cast<float>(k) * 9.f;
+        const float x_tip = 24.f + 10.f * d;
+        const float x_base = 24.f - 6.f * d;
+        paint::stroke(b, x_base, y0, x_tip, y0 + 4.f, 2.5f, 2.5f, black);
+        paint::stroke(b, x_base, y0 + 8.f, x_tip, y0 + 4.f, 2.5f, 2.5f, black);
     }
     paint::outline(b, Outline);
     return b;
@@ -3592,6 +3638,11 @@ SpriteSheet::SpriteSheet() {
     scenery_[static_cast<size_t>(Scenery::FlatHouse)] = make_flat_house(Color{0xd8, 0xb8, 0x88}, Color{0x3c, 0x6c, 0x8c});
     scenery_[static_cast<size_t>(Scenery::SignLeft)] = make_fork_sign(-1);
     scenery_[static_cast<size_t>(Scenery::SignRight)] = make_fork_sign(1);
+    for (int i = 0; i < speed_limit_kinds; ++i)
+        speed_limit_[static_cast<size_t>(i)] = make_speed_limit(speed_limit_kmh[i]);
+    scenery_[static_cast<size_t>(Scenery::SpeedLimit)] = speed_limit_[0];
+    scenery_[static_cast<size_t>(Scenery::CurveLeft)] = make_curve_sign(-1);
+    scenery_[static_cast<size_t>(Scenery::CurveRight)] = make_curve_sign(1);
     scenery_[static_cast<size_t>(Scenery::Hedge)] = make_hedge();
     scenery_[static_cast<size_t>(Scenery::StoneWall)] = make_stone_wall();
     scenery_[static_cast<size_t>(Scenery::PhoneBox)] = make_phone_box();

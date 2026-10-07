@@ -2,6 +2,11 @@
 
 ## Current tip
 
+### Grok: roadside speed limits, curve chevrons, Autobahn rails
+- New scenery: SpeedLimit (50/80/100/120 via variant), CurveLeft, CurveRight.
+- Auto-place chevrons (and 80 km/h) before medium/hard bends on both tracks.
+- Autobahn routes get guardrails both sides and a 120 km/h plate at entry.
+
 ### Grok: redraw scene after video switch under pause
 - Switching Software/GLES or HD/SD while paused left a black screen until
   resume: pause reuses the last GLES FBO, which was empty after invalidate.

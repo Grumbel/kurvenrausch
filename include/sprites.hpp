@@ -158,10 +158,12 @@ public:
     // (the advance signs).
     const Bitmap& scenery(const RoadsideObject& obj, bool windows_lit = false) const {
         if (obj.kind == Scenery::AdvanceSign) return advance_sign_[obj.variant % advance_sign_.size()];
+        if (obj.kind == Scenery::SpeedLimit) return speed_limit_[obj.variant % speed_limit_.size()];
         return scenery(obj.kind, windows_lit);
     }
     const Bitmap& scenery_back(const RoadsideObject& obj, bool windows_lit = false) const {
         if (obj.kind == Scenery::AdvanceSign) return advance_sign_back_;
+        if (obj.kind == Scenery::SpeedLimit) return speed_limit_[obj.variant % speed_limit_.size()];
         return scenery_back(obj.kind, windows_lit);
     }
     // Rock faces for Edge::Cliff (not planted as scenery). Several slope
@@ -286,6 +288,7 @@ private:
     Bitmap billboard_back_;
     std::array<Bitmap, lot_kinds * advance_sign_distances> advance_sign_; // by advance_sign_variant()
     Bitmap advance_sign_back_;
+    std::array<Bitmap, speed_limit_kinds> speed_limit_;
     std::array<Bitmap, cliff_faces> cliff_faces_;
     std::array<Bitmap, cliff_faces> cliff_faces_snow_;
     Bitmap tunnel_wall_;
