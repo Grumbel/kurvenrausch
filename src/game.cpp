@@ -148,7 +148,14 @@ CarRange lot_range(Lot lot) {
 }
 // Stranded with an empty tank this long, the driver pours in a spare can.
 constexpr float stranded_seconds = 3.f;
-constexpr float spare_can = 0.15f;
+// Floor and ceiling for the emergency spare can: enough for a short hop, but
+// not a free half-tank. The actual pour is sized to the next gas station.
+constexpr float spare_can_min = 0.20f;
+constexpr float spare_can_max = 0.55f;
+// Cruise assumptions for sizing the can (slightly thirsty so we always make it).
+constexpr float spare_cruise_speed = 0.65f; // of top speed
+constexpr float spare_cruise_load = 0.75f;  // throttle/rpm load while limping there
+constexpr float spare_margin = 1.30f;       // headroom for hills, traffic, detours
 
 // Hitting something solid faster than this fraction of the top speed is a
 // crash with the tumbling animation; slower it is a knock that slows the car.
@@ -728,6 +735,10 @@ void Game::set_pixel_scale(int scale) {
     mirror_fb_ = Framebuffer(mir_width(), mir_height());
 }
 
+void Game::set_ui_scale(int scale) {
+    ui_scale_ = std::clamp(scale, 1, 3);
+}
+
 int Game::screen_width() const {
     if (!wide_) return fb_base_width();
     // Rounded to an even width, so the picture's centre is between pixels
@@ -935,7 +946,7 @@ bool Game::update_pause(const InputState& input) {
     const MenuPageId id = menu_stack_.empty() ? MenuPageId::Pause : menu_stack_.back();
     const MenuPage page = menu_page(id);
     MenuView& view = menu_views_[static_cast<size_t>(id)];
-    const MenuLayout layout = menu_layout(page, width_, fb_height());
+    const MenuLayout layout = menu_layout(page, width_, fb_height(), ui_scale_);
     const auto to_fb = [&](float wx, float wy, float& x, float& y) {
         float sx = 0.f, sy = 0.f;
         display_->touch_to_screen(wx, wy, sx, sy);
@@ -1949,7 +1960,20 @@ void Game::update_fuel(const InputState& input, float dt) {
         message_time_ = 1.f;
         if (vel.speed < 1.f) stranded_time_ += dt;
         if (stranded_time_ > stranded_seconds) {
-            fuel_.set(spare_can);
+            // Size the can for the next gas station at a conservative cruise, with
+            // a floor so a station just ahead still gets a useful pour and a
+            // ceiling so running dry is not a free half-tank.
+            const int n = static_cast<int>(track_.segments.size());
+            const int here = track_.index_at(world_.get<Transform>(player_).z +
+                                            world_.get<Camera>(camera_).player_z());
+            int ahead = n;
+            for (int start : lots_[static_cast<size_t>(Lot::Gas)])
+                ahead = std::min(ahead, ((start - here) % n + n) % n);
+            const float time = static_cast<float>(ahead) * track_.segment_length /
+                               (spare_cruise_speed * base_max_speed_);
+            const float need = Fuel::load(spare_cruise_load, spare_cruise_load) * time /
+                               Fuel::tank_seconds * spare_margin;
+            fuel_.set(std::clamp(need, spare_can_min, spare_can_max));
             stranded_time_ = 0.f;
             show_message("SPARE CAN", 2.f);
         }
@@ -3099,7 +3123,7 @@ void Game::render() {
         hud.banner = track_.zones[static_cast<size_t>(zone_)].country;
         hud.banner_sub = track_.zones[static_cast<size_t>(zone_)].region;
     }
-    if (debug_.hud) draw_hud(hud_canvas(), hud);
+    if (debug_.hud) draw_hud(hud_canvas(), hud, ui_scale_);
 }
 
 // The road behind the car, drawn into its own small framebuffer and set into

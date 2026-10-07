@@ -120,7 +120,7 @@ weather and road markings, fading smoothly into one another:
   lap and a quarter at full throttle); every zone has a gas station with a
   forecourt to pull onto, where the tank fills up while you stand by the
   pumps. Down to the reserve, a message says how far it is to the next one. Run dry and the engine sputters and dies; stranded, the driver pours
-  in a spare can after a few seconds
+  in a spare can after a few seconds (sized to reach the next gas station)
 - **Chemical plants**: in Germany, Korea, Arizona and Rotterdam; stand on
   the forecourt and the nitro canisters fill up again, one by one
 - **Car dealers**: stop on the forecourt and steer left or right to choose
