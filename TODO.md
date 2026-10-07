@@ -2,6 +2,12 @@
 
 ## Current tip
 
+### Grok: GLES mountain snowcap altitude split
+- Ridge snow used `min(top, snow_y)` for the snow/rock boundary. Screen Y
+  grows downward, so that zeroed the snow face whenever the peak sat above
+  the snow line. Use `max(top, snow_y)` so snow is peak→snow_line and rock
+  is snow_line→horizon (matches software per-pixel altitude test).
+
 ### Grok: Esc opens the pause menu; Quit is menu-only
 - Esc while driving always pauses (native and web); it no longer exits the
   process. Leave via PAUSED → QUIT. QUIT stays omitted on Emscripten/WASM.

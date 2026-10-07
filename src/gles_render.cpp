@@ -1366,9 +1366,13 @@ void GlesRenderer::draw_backdrop(const RoadTheme& theme, const Background* backd
                 push_solid_quad(x0, ty0, x1, ty1, x1, by1, x0, by0, c);
             };
             if (do_snow && (top0 < snow_y || top1 < snow_y)) {
-                // Snow cap above snow_line (horizontal altitude), rock below.
-                const float st0 = std::min(top0, snow_y);
-                const float st1 = std::min(top1, snow_y);
+                // Screen Y grows downward. Peak is at top (smaller y); snow_line
+                // is at snow_y. Snow runs from the peak down to the snow line;
+                // rock fills from there to the horizon. Using min(top, snow_y)
+                // collapsed the snow face to zero height whenever the peak was
+                // above the line (software paints per-pixel by altitude).
+                const float st0 = std::max(top0, snow_y);
+                const float st1 = std::max(top1, snow_y);
                 face(top0, top1, st0, st1, snowc, (h0 + h1) * 0.25f + snow_line * 0.5f);
                 face(st0, st1, horizon, horizon, rock, snow_line * 0.5f);
             } else {
