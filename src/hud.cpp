@@ -38,16 +38,18 @@ void text_center(Canvas& fb, int y, std::string_view s, Color c, int scale = 1) 
     text(fb, (fb.width() - font::text_width(s, scale)) / 2, y, s, c, scale);
 }
 
-// The dashboard lamps above the rev counter, shown only while lit: green
-// arrows for the indicators, a blue headlight symbol.
+// The dashboard lamps above the rev counter: green arrows for the indicators,
+// a blue headlight symbol. Always drawn; off lamps are greyed out so the
+// driver can still see where they sit.
 void draw_lamps(Canvas& fb, int x, int y, const HudState& hud) {
     const Color green{0x40, 0xf0, 0x60}, blue{0x50, 0x90, 0xff};
-    auto arrow = [&](int ax, int dir) { // 9 wide, 7 high, pointing `dir`
-        // The whole shape in shadow a pixel down and right, then in green:
-        // drawn column by column, a shadow would cover the green beside it.
+    const Color off{0x50, 0x54, 0x60}; // dim when the lamp is not lit
+    auto arrow = [&](int ax, int dir, bool on) { // 9 wide, 7 high, pointing `dir`
+        // The whole shape in shadow a pixel down and right, then in colour:
+        // drawn column by column, a shadow would cover the fill beside it.
         for (int pass = 0; pass < 2; ++pass) {
             const int o = pass == 0 ? 1 : 0;
-            const Color c = pass == 0 ? Shadow : green;
+            const Color c = pass == 0 ? Shadow : (on ? green : off);
             for (int i = 0; i < 4; ++i) {
                 const int col = dir < 0 ? ax + i : ax + 8 - i;
                 fb.fill_rect(col + o, y + 3 - i + o, 1, 2 * i + 1, c);
@@ -55,13 +57,14 @@ void draw_lamps(Canvas& fb, int x, int y, const HudState& hud) {
             fb.fill_rect((dir < 0 ? ax + 4 : ax) + o, y + 2 + o, 5, 3, c);
         }
     };
-    if (hud.signal_left) arrow(x, -1);
-    if (hud.signal_right) arrow(x + 12, 1);
-    if (hud.headlights) {
+    arrow(x, -1, hud.signal_left);
+    arrow(x + 12, 1, hud.signal_right);
+    {
         const int hx = x + 26;
-        fb.fill_rect(hx + 4, y, 4, 7, blue);   // the lamp
-        fb.fill_rect(hx + 8, y + 1, 1, 5, blue);
-        for (int r = 0; r < 3; ++r) fb.fill_rect(hx, y + 1 + 2 * r, 3, 1, blue); // its beams
+        const Color c = hud.headlights ? blue : off;
+        fb.fill_rect(hx + 4, y, 4, 7, c);   // the lamp
+        fb.fill_rect(hx + 8, y + 1, 1, 5, c);
+        for (int r = 0; r < 3; ++r) fb.fill_rect(hx, y + 1 + 2 * r, 3, 1, c); // its beams
     }
 }
 

@@ -2,6 +2,10 @@
 
 ## Current tip
 
+### Grok: indicator and headlight lamps always on the HUD
+- Turn-signal arrows and the headlight icon were drawn only while lit. They
+  are always present now; off state uses a dim grey so the slots stay visible.
+
 ### Grok: stars scroll with the sky
 - Stars were seeded to fixed screen columns. They now live on the sky-layer
   period and scroll with `sky_bend_offset()` (road bends only, no cloud wind
