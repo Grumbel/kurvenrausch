@@ -3635,7 +3635,8 @@ SpriteSheet::SpriteSheet() {
     scenery_[static_cast<size_t>(Scenery::Shop)] = make_shop(Color{0xd8, 0xa8, 0x84}, Color{0x2c, 0x7c, 0x48}, "CAFE");
     scenery_[static_cast<size_t>(Scenery::Apartment)] = make_apartment(Color{0xb8, 0xb4, 0xa8}, Color{0x8c, 0x88, 0x80});
     scenery_[static_cast<size_t>(Scenery::Tower)] = make_tower(Color{0x3c, 0x6c, 0xa0}, Color{0xa8, 0xb0, 0xb8});
-    scenery_[static_cast<size_t>(Scenery::FlatHouse)] = make_flat_house(Color{0xd8, 0xb8, 0x88}, Color{0x3c, 0x6c, 0x8c});
+    // Whitewashed walls and a blue door — Costa del Sol / warm-climate houses.
+    scenery_[static_cast<size_t>(Scenery::FlatHouse)] = make_flat_house(Color{0xf2, 0xee, 0xe6}, Color{0x2c, 0x58, 0x98});
     scenery_[static_cast<size_t>(Scenery::SignLeft)] = make_fork_sign(-1);
     scenery_[static_cast<size_t>(Scenery::SignRight)] = make_fork_sign(1);
     for (int i = 0; i < speed_limit_kinds; ++i)

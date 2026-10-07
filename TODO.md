@@ -2,6 +2,11 @@
 
 ## Current tip
 
+### Grok: Spain Costa del Sol zone
+- New zone SPAIN / COSTA DEL SOL (Decor::Andalusia): white houses, palms,
+  limestone cliffs inland and rail over the Mediterranean.
+- Demo: corniche after Tuscany. Grand Tour: MALAGA → coastal cliffs → MARBELLA.
+
 ### Grok: roadside speed limits, curve chevrons, Autobahn rails
 - New scenery: SpeedLimit (50/80/100/120 via variant), CurveLeft, CurveRight.
 - Auto-place chevrons (and 80 km/h) before medium/hard bends on both tracks.

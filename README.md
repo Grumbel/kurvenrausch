@@ -16,10 +16,10 @@ sound is synthesised on the fly: there are no asset files. Packaged with a
 
 ![Kurvenrausch on the Cote d'Azur corniche](docs/screenshot.png)
 
-One lap takes you around the world through sixteen zones, each with its own country, scenery,
+One lap takes you around the world through seventeen zones, each with its own country, scenery,
 weather and road markings, fading smoothly into one another:
 
-![The sixteen zones: France, England, the Netherlands, Germany, Switzerland, Italy, Egypt, Kenya, India, Korea, Japan, Australia, Arizona, California, San Francisco, Brazil](docs/zones.png)
+![The seventeen zones: France, England, the Netherlands, Germany, Switzerland, Italy, Spain, Egypt, Kenya, India, Korea, Japan, Australia, Arizona, California, San Francisco, Brazil](docs/zones.png)
 
 ## Features
 
@@ -27,11 +27,11 @@ weather and road markings, fading smoothly into one another:
   curves by accumulated lateral offset, hills and crests with correct
   occlusion, alternating rumble strips and grass bands, lane markings, a
   chequered start line, and distance fog (aerial perspective toward blue air)
-- **Sixteen zones** with blended looks: the Cote d'Azur (palms, sunny),
+- **Seventeen zones** with blended looks: the Cote d'Azur (palms, sunny),
   England (narrow lanes between hedgerows and stone walls, drizzle), the
   Netherlands (dead flat: windmills, tulip fields, a canal), the Black Forest
   (firs in the rain), the Alps (snowfall, chalets, a pass), Tuscany (cypress
-  avenues at sunset), Egypt (date palms along the Nile, pyramids), Kenya
+  avenues at sunset), Costa del Sol (white houses, sea cliffs), Egypt (date palms along the Nile, pyramids), Kenya
   (acacias, giraffes and Kilimanjaro under an orange sky), India (banyans,
   temples, cows, haze), Korea (red maples and hanok gates in autumn), Japan
   (cherry blossom, shrine gates, a snow-capped volcano), the Australian

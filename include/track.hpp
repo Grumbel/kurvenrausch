@@ -329,6 +329,7 @@ enum class Decor : uint8_t {
     Autumn,    // Korea: red maples, hanok gates
     Outback,   // Australia: gum trees, kangaroo signs, termite mounds, Uluru
     Jungle,    // Brazil: dense rainforest, banana plants
+    Andalusia, // Spain Costa del Sol: white houses, palms, cliffs above the sea
 };
 
 // What the buildings of a city (Decor::Town) are like.

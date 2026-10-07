@@ -837,7 +837,7 @@ private:
 
 } // namespace
 
-// ---- The six zones of the demo route ---------------------------------------
+// ---- Zones of the demo route ------------------------------------------------
 
 Zone zone_france() {
     Zone z{"FRANCE", "COTE D'AZUR", RoadTheme{}, 0, Decor::Riviera};
@@ -1166,6 +1166,43 @@ Zone zone_italy() {
     return z;
 }
 
+
+Zone zone_spain() {
+    Zone z{"SPAIN", "COSTA DEL SOL", RoadTheme{}, 0, Decor::Andalusia};
+    RoadTheme& t = z.theme;
+    t.sky_top = Color{0x28, 0x6c, 0xd0};
+    t.sky_horizon = Color{0xd0, 0xe8, 0xf8};
+    t.fog = Color{0xc8, 0xdc, 0xec};
+    t.grass[0] = Color{0x9c, 0xb0, 0x58}; // dry Mediterranean scrub
+    t.grass[1] = Color{0x8c, 0xa0, 0x4c};
+    t.road[0] = Color{0x68, 0x64, 0x60};
+    t.road[1] = Color{0x5e, 0x5a, 0x56};
+    t.rumble[0] = Color{0xe8, 0xe0, 0xd0};
+    t.rumble[1] = Color{0xc4, 0x3c, 0x28}; // red-and-white kerb flashes
+    t.mountain_lit = Color{0xb0, 0x9c, 0x88};
+    t.mountain_shade = Color{0x8c, 0x78, 0x68};
+    t.hill_lit = Color{0xa8, 0xb4, 0x70};
+    t.hill_shade = Color{0x8c, 0x98, 0x58};
+    t.cloud_tint = Color{0xf0, 0xf4, 0xf8};
+    t.cloud_tint_amount = 0.15f;
+    t.sun_amount = 0.85f;
+    t.fog_density = 4.f;
+    t.haze = 0.2f;
+    t.mountain_scale = 1.1f;
+    t.hill_scale = 0.9f;
+    t.snow_line = 1.0e9f;
+    t.lanes = 2;
+    t.rock[0] = Color{0x9c, 0x88, 0x70}; // pale limestone cliffs
+    t.rock[1] = Color{0xb8, 0xa4, 0x88};
+    t.rock[2] = Color{0xd0, 0xc0, 0xa4};
+    t.beyond[0] = Color{0x1c, 0x70, 0xb0}; // the Mediterranean
+    t.beyond[1] = Color{0x28, 0x84, 0xc4};
+    z.theme.showers = 0.15f;
+    z.theme.night_glow = 0.25f; // the coastal towns
+    return z;
+}
+
+
 Zone zone_arizona() {
     Zone z{"USA", "ARIZONA", RoadTheme{}, 0, Decor::Desert};
     RoadTheme& t = z.theme;
@@ -1486,6 +1523,16 @@ void decorate(Track& track, TrackBuilder& b, int from, int to, uint32_t seed) {
                 if (rng.chance(0.02f)) put(Scenery::RedRock, random_side(), rng.range(1.3f, 3.f));
                 if (i % 300 == 150) put(Scenery::BillboardUs, -1, 1.3f);
                 break;
+
+            case Decor::Andalusia:
+                // White houses terraced above the road, palms, the odd cypress.
+                if (i % 5 == 0) put(Scenery::FlatHouse, random_side(), rng.range(1.25f, 2.2f));
+                if (i % 11 == 0) put(Scenery::FlatHouse, random_side(), rng.range(1.4f, 2.6f));
+                if (i % 4 == 0) put(Scenery::Palm, random_side(), rng.range(1.15f, 2.4f));
+                if (rng.chance(0.04f)) put(Scenery::Cypress, random_side(), rng.range(1.2f, 2.8f));
+                if (rng.chance(0.05f)) put(Scenery::Bush, random_side(), rng.range(1.1f, 2.2f));
+                if (i % 180 == 90) put(Scenery::Billboard, i % 360 == 90 ? -1 : 1, 1.25f);
+                break;
         }
     }
 }
@@ -1537,7 +1584,7 @@ Track build_demo_track() {
     Track track;
     TrackBuilder b(track);
 
-    // The route: six zones, one lap through five regions of Europe and the USA.
+    // The route: Europe's coasts and mountains, then the wider world.
     // Section lengths are chosen so every zone is longer than its transition
     // and the height returns to zero at the end of the lap.
 
@@ -1629,6 +1676,18 @@ Track build_demo_track() {
     b.sports_dealer(); // Italian sports cars
     b.curve(Len::Medium, -Bend::Medium, -Hill::Low);
     b.curve(Len::Long, Bend::Easy, -Hill::Low);
+
+    b.begin_zone(zone_spain());
+    // Corniche: limestone cliff inland, the sea below the outer rail.
+    const int corniche = b.size();
+    b.curve(Len::Medium, Bend::Hard, Hill::Low);
+    b.curve(Len::Medium, -Bend::Hard, Hill::Medium);
+    b.curve(Len::Short, Bend::Medium, -Hill::Low);
+    b.mark(corniche, b.size(), Edge::Cliff, Edge::Rail);
+    b.gas_station();
+    b.curve(Len::Medium, -Bend::Medium, -Hill::Low);
+    b.straight(Len::Short);
+    b.motel(); // whitewashed rooms above the beach
 
     b.begin_zone(zone_egypt());
     // Along the Nile, past the pyramids.
@@ -1971,6 +2030,23 @@ Track build_track(int index) {
     streets(-1);
     b.sports_dealer();
     streets(1);
+
+    b.begin_zone(city(zone_spain(), "MALAGA", Scenery::Palm, TownStyle::Warm));
+    streets(1);
+    b.gas_station();
+    b.begin_zone(zone_spain());
+    // Coastal corniche: cliff on the mountain side, rail over the sea.
+    const int sol = b.size();
+    b.curve(Len::Medium, Bend::Hard, Hill::Low);
+    b.curve(Len::Medium, -Bend::Hard, Hill::Medium);
+    b.curve(Len::Medium, Bend::Medium, -Hill::Low);
+    b.mark(sol, b.size(), Edge::Cliff, Edge::Rail);
+    b.gas_station();
+    b.curve(Len::Long, -Bend::Easy, -Hill::Low);
+    b.begin_zone(city(zone_spain(), "MARBELLA", Scenery::Palm, TownStyle::Warm));
+    streets(-1);
+    b.motel();
+    b.sports_dealer();
 
     b.begin_zone(city(zone_egypt(), "CAIRO", Scenery::DatePalm, TownStyle::Warm));
     streets(1);
